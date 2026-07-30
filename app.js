@@ -34093,3 +34093,21 @@ function stabilizeMobileCharacterScroll(section = "") {
 
 window.openDeviceInterface = openDeviceInterface;
 window.phoneItems = phoneItems;
+
+// Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.
+window.addEventListener("runner-kl-world-reward", (event) => {
+  if (!state) return;
+  const amount = Number(event.detail?.amount || 0);
+  const claimId = String(event.detail?.claimId || "").trim();
+  const month = String(event.detail?.month || "").trim();
+  if (amount !== 100000 || !claimId) return;
+  const claimed = Array.isArray(state.runnerWorldRewardClaims) ? state.runnerWorldRewardClaims : [];
+  if (claimed.includes(claimId)) return;
+  state.runnerWorldRewardClaims = [...claimed.slice(-23), claimId];
+  if (window.LifeBuilderFinance?.creditIncome) window.LifeBuilderFinance.creditIncome(amount, "Runner.KL World Bonus", { feed: false });
+  else state.bank = Number(state.bank || 0) + amount;
+  if (typeof recordIncome === "function") recordIncome("other", amount);
+  if (typeof addFeed === "function") addFeed(`Runner.KL World Bonus${month ? ` ${month}` : ""}: ${euro.format(amount)} erhalten.`);
+  if (typeof queuePurchaseConfirmation === "function") queuePurchaseConfirmation({ kind: "use", title: "Runner.KL World Bonus", name: `${euro.format(amount)} · Monatsplatz 1`, icon: "🏆" });
+  save();
+});
