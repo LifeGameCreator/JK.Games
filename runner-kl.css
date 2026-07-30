@@ -49,3 +49,25 @@
 .runner-kl-card:has(.rkl-quality){max-height:min(88vh,760px);overflow:auto}
 
 @media(max-width:680px){.rkl-quality{align-items:stretch;flex-direction:column}.rkl-quality>div{width:100%}.runner-kl-loading.is-compact{bottom:15%!important}.runner-kl-weather .rkl-clouds{filter:blur(5px)}}
+
+/* V98 · Cottbus runner HUD, balanced Ultra lighting and resume countdown */
+.runner-kl-sunflare{opacity:.22;background:radial-gradient(circle at 76% 13%,#fff7d166 0 1%,#ffd56d22 4%,transparent 18%)}
+.runner-kl-vignette{background:linear-gradient(180deg,#0010182c 0,transparent 16%,transparent 65%,#0208078e 100%),radial-gradient(circle at 50% 42%,transparent 45%,#00000052 115%)}
+.rkl-top-left,.rkl-top-right{position:absolute;top:var(--rkl-safe-top);display:flex;align-items:flex-start;gap:8px;pointer-events:auto}
+.rkl-top-left{left:12px}.rkl-top-right{right:12px;flex-direction:column;align-items:flex-end}
+.rkl-top-left>button{width:54px;height:54px;border-radius:14px;border:2px solid #d8e5ff99;background:linear-gradient(#456893,#1b355b);box-shadow:0 6px 0 #0f213c,0 12px 24px #0008;color:white;font-size:28px;font-weight:1000}
+.rkl-score-box{display:flex;align-items:center;gap:16px;min-width:176px;height:54px;padding:0 18px;border-radius:14px;background:#07111bd9;border:1px solid #ffffff2d;box-shadow:0 10px 28px #0008;backdrop-filter:blur(10px)}
+.rkl-score-box b{font-size:25px;color:#ffd329}.rkl-score-box strong{font-size:24px;letter-spacing:.02em;text-shadow:0 2px 4px #000}
+.rkl-currency,.rkl-cards{min-width:128px;padding:9px 13px;border-radius:12px;background:#091019db;border:1px solid #ffffff25;box-shadow:0 8px 24px #0008;font-size:20px;text-align:right;backdrop-filter:blur(10px)}
+.rkl-toprun{width:116px;padding:9px;border-radius:13px;background:#070b10e6;border:1px solid #ffffff28;box-shadow:0 10px 28px #0009;text-align:center}.rkl-toprun small{display:block;font-size:11px;font-weight:1000}.rkl-toprun .rkl-avatar{display:block;width:54px;height:54px;margin:7px auto;border-radius:8px;background:radial-gradient(circle at 50% 30%,#8f959b 0 18%,transparent 19%),radial-gradient(ellipse at 50% 90%,#737b82 0 32%,transparent 33%),#111820;border:2px solid #879098}.rkl-toprun b{color:#ffd329;font-size:18px}
+.runner-kl-mission{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);width:min(330px,58vw);margin:0;padding:11px 15px;text-align:center;align-self:auto;background:linear-gradient(180deg,#0d1828eb,#070d17ef);border:1px solid #ffffff2b;border-radius:15px;box-shadow:0 12px 35px #0009}.runner-kl-mission b{font-size:12px}.runner-kl-mission small{display:block;margin-top:5px;color:#f3d26e;font-size:11px;letter-spacing:0}.runner-kl-mission>div{margin-top:7px;height:11px;border:2px solid #7284a1;background:#152238}
+.runner-kl-actions{position:absolute;left:12px;right:12px;bottom:var(--rkl-safe-bottom);align-items:flex-end}.runner-kl-actions>[data-rkl-close]{width:44px;height:44px}.runner-kl-board{margin-left:auto}
+.runner-kl-controls{display:none}
+.runner-kl-boostbar{top:auto;bottom:98px;left:18px;transform:none;flex-direction:column;align-items:flex-start}
+.rkl-countdown{position:absolute;inset:0;z-index:25;display:grid;place-items:center;background:#0206095c;backdrop-filter:blur(3px);font-size:clamp(90px,24vw,180px);font-weight:1000;color:#fff;text-shadow:0 8px 0 #203a68,0 14px 40px #000;pointer-events:none}.rkl-countdown[hidden]{display:none}
+.runner-kl-card{z-index:24}
+.runner-kl-weather[data-mode="sunny"]{background:linear-gradient(#3e8ed018,transparent 35%)}
+.runner-kl-weather[data-mode="cloudy"]{background:linear-gradient(#596b7430,transparent 65%)}
+.runner-kl-weather[data-mode="mist"]{background:linear-gradient(#dce7e733,#cfd8d824 45%,transparent 82%)}
+.runner-kl-overlay[data-quality="ultra"] canvas{filter:contrast(1.09) saturate(1.08)}
+@media(max-width:520px){.rkl-score-box{min-width:132px;padding:0 11px;gap:9px}.rkl-score-box strong{font-size:19px}.rkl-top-left>button{width:48px;height:48px}.rkl-score-box{height:48px}.rkl-currency,.rkl-cards{min-width:104px;font-size:16px}.rkl-toprun{width:92px}.rkl-toprun .rkl-avatar{width:44px;height:44px}.runner-kl-mission{width:min(300px,68vw)}}
