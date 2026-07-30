@@ -256,7 +256,7 @@
     setTimeout(() => C.overlay?.querySelector('[data-city-loader]')?.classList.add('is-finished'), 950);
     setTimeout(() => {
       const loader = C.overlay?.querySelector('[data-city-loader]');
-      if (loader) loader.hidden = true;
+      if (loader) loader.remove();
       if (C.state.rolls === 0 && C.state.completedBoards === 0) showWelcome();
     }, 1350);
   }
