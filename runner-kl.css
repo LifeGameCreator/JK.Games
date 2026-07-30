@@ -71,3 +71,12 @@
 .runner-kl-weather[data-mode="mist"]{background:linear-gradient(#dce7e733,#cfd8d824 45%,transparent 82%)}
 .runner-kl-overlay[data-quality="ultra"] canvas{filter:contrast(1.09) saturate(1.08)}
 @media(max-width:520px){.rkl-score-box{min-width:132px;padding:0 11px;gap:9px}.rkl-score-box strong{font-size:19px}.rkl-top-left>button{width:48px;height:48px}.rkl-score-box{height:48px}.rkl-currency,.rkl-cards{min-width:104px;font-size:16px}.rkl-toprun{width:92px}.rkl-toprun .rkl-avatar{width:44px;height:44px}.runner-kl-mission{width:min(300px,68vw)}}
+
+/* V99 · Filmic Ultra pass: no white wash, stronger depth and cleaner visibility */
+.runner-kl-sunflare{opacity:.055!important;mix-blend-mode:normal!important;background:radial-gradient(circle at 76% 13%,#ffd89a2b 0 1%,#ffb55d10 5%,transparent 16%)!important}
+.runner-kl-vignette{background:linear-gradient(180deg,#07131b3b 0,transparent 19%,transparent 62%,#030706a6 100%),radial-gradient(circle at 50% 42%,transparent 40%,#00000069 112%)!important}
+.runner-kl-weather[data-mode="sunny"]{background:linear-gradient(#23577a12,transparent 38%)!important}
+.runner-kl-weather[data-mode="cloudy"]{background:linear-gradient(#34475238,transparent 66%)!important}
+.runner-kl-weather[data-mode="mist"]{background:linear-gradient(#aebec02c,#889a9b18 45%,transparent 82%)!important}
+.runner-kl-overlay[data-quality="ultra"] canvas{filter:contrast(1.19) saturate(1.13) brightness(.88)!important}
+.runner-kl-overlay[data-quality="high"] canvas{filter:contrast(1.12) saturate(1.08) brightness(.91)}
