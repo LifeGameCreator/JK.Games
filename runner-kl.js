@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const STORAGE = 'jk-games-runner-kl-v4';
+const STORAGE = 'jk-games-runner-kl-v5';
 const ASSET_ROOT = './assets/cottbus/';
 const MODEL_PATHS = { male: `${ASSET_ROOT}player-male.glb`, female: `${ASSET_ROOT}player-female.glb` };
 const OUTFITS = {
@@ -27,7 +27,9 @@ const S = {
   spawnTimer:0, elapsed:0, loadingToken:0, resizeHandler:null, keyHandler:null,
   pointerStart:null, lastTap:0, dpr:1, lowPower:false, characterRig:null, characterTime:0,
   score:0, boardTokens:3, activeBoosts:{magnet:0,jetpack:0,sneakers:0,multiplier:0},
-  hoverboard:0, hoverCooldown:0, boardMesh:null, boostFx:null
+  hoverboard:0, hoverCooldown:0, boardMesh:null, boostFx:null,
+  quality:'ultra', weatherMode:'sunny', weatherClock:0, weatherDuration:24, weatherBlend:0,
+  rain:null, clouds:null, sun:null, hemi:null, fill:null, loadingProgress:0
 };
 
 function loadSave(){
@@ -38,9 +40,10 @@ function loadSave(){
     for(const id of ['maleStreet','femaleStreet']) if(!S.owned.includes(id)) S.owned.push(id);
     S.outfit=OUTFITS[d.outfit]&&S.owned.includes(d.outfit)?d.outfit:'maleStreet';
     S.boardTokens=Math.max(0,Number(d.boardTokens??3));
+    S.quality=['low','medium','high','ultra'].includes(d.quality)?d.quality:'ultra';
   }catch{S.wallet=0;S.best=0;S.owned=['maleStreet','femaleStreet'];S.outfit='maleStreet'}
 }
-function save(){try{localStorage.setItem(STORAGE,JSON.stringify({wallet:S.wallet,best:S.best,owned:S.owned,outfit:S.outfit,boardTokens:S.boardTokens}))}catch{}}
+function save(){try{localStorage.setItem(STORAGE,JSON.stringify({wallet:S.wallet,best:S.best,owned:S.owned,outfit:S.outfit,boardTokens:S.boardTokens,quality:S.quality}))}catch{}}
 
 function makeCanvasTexture(draw,size=512,repeatX=1,repeatY=1){
   const cv=document.createElement('canvas');cv.width=cv.height=size;const c=cv.getContext('2d');draw(c,size);
@@ -84,28 +87,31 @@ function mulberry32(a){return()=>{let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);
 
 function setupScene(){
   const canvas=S.overlay.querySelector('canvas');
-  S.scene=new THREE.Scene();S.scene.background=new THREE.Color(0x9fc5d8);S.scene.fog=new THREE.FogExp2(0xc4d0ce,.0092);
-  S.camera=new THREE.PerspectiveCamera(56,1,.1,240);S.camera.position.set(0,3.72,7.35);S.camera.lookAt(0,1.25,-14);
-  S.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
-  S.renderer.outputColorSpace=THREE.SRGBColorSpace;S.renderer.toneMapping=THREE.ACESFilmicToneMapping;S.renderer.toneMappingExposure=1.14;
-  S.renderer.shadowMap.enabled=true;S.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  S.lowPower=(navigator.hardwareConcurrency||8)<=4;
+  S.scene=new THREE.Scene();S.scene.background=new THREE.Color(0x9fc5d8);S.scene.fog=new THREE.FogExp2(0xc4d0ce,.0026);
+  S.camera=new THREE.PerspectiveCamera(56,1,.1,S.quality==='ultra'?320:240);S.camera.position.set(0,3.72,7.35);S.camera.lookAt(0,1.25,-14);
+  S.renderer=new THREE.WebGLRenderer({canvas,antialias:S.quality!=='low',alpha:false,powerPreference:'high-performance'});
+  S.renderer.outputColorSpace=THREE.SRGBColorSpace;S.renderer.toneMapping=THREE.ACESFilmicToneMapping;S.renderer.toneMappingExposure=S.quality==='ultra'?1.22:1.12;
+  S.renderer.shadowMap.enabled=S.quality!=='low';S.renderer.shadowMap.type=S.quality==='ultra'?THREE.PCFSoftShadowMap:THREE.PCFShadowMap;
   S.renderer.setClearColor(0xa9ccdd,1);
-  const pmrem=new THREE.PMREMGenerator(S.renderer);S.scene.environment=pmrem.fromScene(new RoomEnvironment(),.045).texture;pmrem.dispose();
+  const pmrem=new THREE.PMREMGenerator(S.renderer);S.scene.environment=pmrem.fromScene(new RoomEnvironment(),S.quality==='ultra'?.02:.055).texture;pmrem.dispose();
   S.composer=new EffectComposer(S.renderer);S.composer.addPass(new RenderPass(S.scene,S.camera));
-  S.bloom=new UnrealBloomPass(new THREE.Vector2(1,1),S.lowPower?.25:.52,.55,.86);S.composer.addPass(S.bloom);S.composer.addPass(new OutputPass());
-  S.lowPower=(navigator.hardwareConcurrency||8)<=4;resize();
-  S.scene.add(new THREE.HemisphereLight(0xe3f3ff,0x51463a,1.85));
-  const sun=new THREE.DirectionalLight(0xffdfad,3.75);sun.position.set(-22,32,16);sun.castShadow=true;sun.shadow.mapSize.set(S.lowPower?1024:2048,S.lowPower?1024:2048);sun.shadow.camera.left=-22;sun.shadow.camera.right=22;sun.shadow.camera.top=30;sun.shadow.camera.bottom=-8;sun.shadow.camera.far=90;S.scene.add(sun);
-  const fill=new THREE.DirectionalLight(0xaed7ff,.75);fill.position.set(20,10,-20);S.scene.add(fill);
+  S.bloom=new UnrealBloomPass(new THREE.Vector2(1,1),S.quality==='ultra'?.42:S.quality==='high'?.26:.12,.48,.91);S.composer.addPass(S.bloom);S.composer.addPass(new OutputPass());
+  resize();
+  S.hemi=new THREE.HemisphereLight(0xe3f3ff,0x51463a,S.quality==='ultra'?2.1:1.65);S.scene.add(S.hemi);
+  S.sun=new THREE.DirectionalLight(0xffdfad,S.quality==='ultra'?4.25:3.25);S.sun.position.set(-22,32,16);S.sun.castShadow=S.quality!=='low';const sm=S.quality==='ultra'?4096:S.quality==='high'?2048:1024;S.sun.shadow.mapSize.set(sm,sm);S.sun.shadow.camera.left=-22;S.sun.shadow.camera.right=22;S.sun.shadow.camera.top=30;S.sun.shadow.camera.bottom=-8;S.sun.shadow.camera.far=110;S.sun.shadow.bias=-.00018;S.sun.shadow.normalBias=.025;S.scene.add(S.sun);
+  S.fill=new THREE.DirectionalLight(0xaed7ff,S.quality==='ultra'?.95:.6);S.fill.position.set(20,10,-20);S.scene.add(S.fill);
   createWorld();
   addCinematicLighting();
+  createWeatherSystem();
+  applyQuality();
 }
 function addCinematicLighting(){
   const rim=new THREE.SpotLight(0xffc880,28,55,.45,.75,1.2);rim.position.set(-11,17,12);rim.target.position.set(0,1,-18);rim.castShadow=!S.lowPower;S.scene.add(rim,rim.target);
   const cool=new THREE.PointLight(0x8ccfff,5,28,2);cool.position.set(8,5,-16);S.scene.add(cool);
   const groundGlow=new THREE.RectAreaLight(0xffd7a0,2.2,10,4);groundGlow.position.set(-2,.8,4);groundGlow.rotation.x=-Math.PI/2;S.scene.add(groundGlow);
 }
-function resize(){if(!S.renderer||!S.overlay)return;const r=S.overlay.querySelector('.runner-kl-stage').getBoundingClientRect();S.dpr=Math.min(S.lowPower?1.35:1.75,window.devicePixelRatio||1);S.renderer.setPixelRatio(S.dpr);S.renderer.setSize(r.width,r.height,false);S.composer?.setPixelRatio?.(S.dpr);S.composer?.setSize?.(r.width,r.height);S.camera.aspect=r.width/r.height;S.camera.updateProjectionMatrix()}
+function resize(){if(!S.renderer||!S.overlay)return;const r=S.overlay.querySelector('.runner-kl-stage').getBoundingClientRect();const cap={low:1,medium:1.25,high:1.65,ultra:S.lowPower?1.75:2.25}[S.quality]||1.65;S.dpr=Math.min(cap,window.devicePixelRatio||1);S.renderer.setPixelRatio(S.dpr);S.renderer.setSize(r.width,r.height,false);S.composer?.setPixelRatio?.(S.dpr);S.composer?.setSize?.(r.width,r.height);S.camera.aspect=r.width/r.height;S.camera.updateProjectionMatrix()}
 
 function createWorld(){
   S.world=new THREE.Group();S.scene.add(S.world);
@@ -282,7 +288,8 @@ async function createPlayer(){
 }
 
 function decorateRunner(pivot,outfit){
-  createPremiumRunnerShell(pivot,outfit);
+  // The original rigged GLB remains the complete visible character; no duplicate outer shell.
+  S.characterRig=null;
   // Fine rim lights only illuminate the runner and preserve mobile performance.
   const warm=new THREE.PointLight(0xffc779,S.lowPower?1.0:1.8,5.5,2);warm.position.set(-1.2,2.7,1.4);warm.name='rklRunnerWarm';pivot.add(warm);
   const cool=new THREE.PointLight(0x91c8ff,S.lowPower?.65:1.15,4.5,2);cool.position.set(1.15,2.1,.2);cool.name='rklRunnerCool';pivot.add(cool);
@@ -358,7 +365,7 @@ function spawnRow(){
 }
 function clearObjects(){for(const o of S.objects){S.scene?.remove(o);o.traverse(n=>{n.geometry?.dispose?.();const ms=Array.isArray(n.material)?n.material:[n.material];ms.filter(Boolean).forEach(m=>{m.map?.dispose?.();m.dispose?.()})})}S.objects=[]}
 
-function resetGame(){clearObjects();S.running=true;S.paused=false;S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.55;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};S.hoverboard=0;S.hoverCooldown=0;if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}hideCard();updateHud();if(S.action)S.action.paused=false}
+function resetGame(){clearObjects();S.running=true;S.paused=false;const pb=S.overlay?.querySelector('[data-rkl-pause]');if(pb)pb.textContent='Ⅱ';S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.55;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};S.hoverboard=0;S.hoverCooldown=0;if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}hideCard();updateHud();if(S.action)S.action.paused=false}
 function input(kind){if(!S.running||S.paused||S.gameOver)return;if(kind==='left')S.lane=Math.max(0,S.lane-1);if(kind==='right')S.lane=Math.min(2,S.lane+1);S.targetX=(S.lane-1)*2.6;if(kind==='up'&&S.y<=.01){S.vy=8.3}if(kind==='down'&&S.y<.2){S.slide=.72}}
 function update(dt){
   if(!S.running||S.paused||S.gameOver)return;
@@ -381,7 +388,8 @@ function update(dt){
   if(S.activeBoosts.jetpack>0){S.y=THREE.MathUtils.damp(S.y,3.35,8,dt);S.vy=0}else if(S.y>0||S.vy!==0){S.y+=S.vy*dt;S.vy-=(S.activeBoosts.sneakers>0?15.2:19.5)*dt;if(S.y<=0){S.y=0;S.vy=0}}
   S.slide=Math.max(0,S.slide-dt);
   if(S.player){S.player.position.x=THREE.MathUtils.damp(S.player.position.x,S.targetX,13,dt);S.player.position.y=S.y;const cs=S.player.userData.contactShadow;if(cs){cs.material.opacity=THREE.MathUtils.clamp(.82-S.y*.35,.08,.82);cs.scale.setScalar(1+S.y*.12)}S.player.rotation.z=THREE.MathUtils.damp(S.player.rotation.z,(S.targetX-S.player.position.x)*-.06,9,dt);S.player.scale.y=THREE.MathUtils.damp(S.player.scale.y,S.slide>0?.58:1,13,dt);S.player.scale.x=THREE.MathUtils.damp(S.player.scale.x,S.slide>0?1.1:1,13,dt)}
-  if(S.mixer)S.mixer.update(dt*(S.speed/12));updatePremiumCharacter(dt);S.camera.position.x=THREE.MathUtils.damp(S.camera.position.x,(S.player?.position.x||0)*.22,4,dt);S.camera.position.y=THREE.MathUtils.damp(S.camera.position.y,3.72+S.y*.18,4,dt);S.camera.fov=THREE.MathUtils.damp(S.camera.fov,S.activeBoosts.jetpack>0?67:S.hoverboard>0?61:56,4,dt);S.camera.updateProjectionMatrix();S.camera.lookAt(S.camera.position.x*.22,1.26+S.y*.1,-15);const dust=S.scene.getObjectByName('rklDust');if(dust)dust.position.z=(dust.position.z+move*.12)%18;
+  if(S.mixer)S.mixer.update(dt*(S.speed/12));updatePremiumCharacter(dt);const px=S.player?.position.x||0;S.camera.position.x=THREE.MathUtils.damp(S.camera.position.x,px,8.5,dt);S.camera.position.y=THREE.MathUtils.damp(S.camera.position.y,3.72+S.y*.18,4,dt);S.camera.fov=THREE.MathUtils.damp(S.camera.fov,S.activeBoosts.jetpack>0?67:S.hoverboard>0?61:56,4,dt);S.camera.updateProjectionMatrix();S.camera.lookAt(px,1.26+S.y*.1,-15);const dust=S.scene.getObjectByName('rklDust');if(dust)dust.position.z=(dust.position.z+move*.12)%18;
+  updateWeather(dt);
   updateHud();updateBoostHud();
 }
 function endGame(){S.running=false;S.gameOver=true;S.best=Math.max(S.best,Math.floor(S.distance));save();if(S.action)S.action.paused=true;showCard(`<div class="rkl-kicker">RUNDE BEENDET</div><h1>${Math.floor(S.distance)} m</h1><div class="rkl-result"><span>Gesammelt<b>🪙 ${S.runCoins}</b></span><span>Punkte<b>${Math.floor(S.score)}</b></span><span>Bestwert<b>${S.best} m</b></span><span>Boards<b>🛹 ${S.boardTokens}</b></span></div><button data-rkl-retry>Noch einmal</button><button class="rkl-secondary" data-rkl-shop>Coin-Shop</button><button class="rkl-secondary" data-rkl-exit>Top Games</button>`);bindCard()}
@@ -390,22 +398,77 @@ function loop(){const dt=Math.min(.045,S.clock.getDelta());update(dt);render();S
 
 function showCard(html){const c=S.overlay?.querySelector('[data-rkl-card]');if(!c)return;c.innerHTML=html;c.hidden=false}
 function hideCard(){const c=S.overlay?.querySelector('[data-rkl-card]');if(c)c.hidden=true}
-function showLoading(text){const l=S.overlay?.querySelector('[data-rkl-loading]');if(l){l.querySelector('span').textContent=text;l.hidden=false}}
-function hideLoading(){const l=S.overlay?.querySelector('[data-rkl-loading]');if(l)l.hidden=true}
+function showLoading(text){const l=S.overlay?.querySelector('[data-rkl-loading]');if(l){const sp=l.querySelector('span');if(sp)sp.textContent=text;l.classList.add('is-compact');l.hidden=false}}
+function hideLoading(){const l=S.overlay?.querySelector('[data-rkl-loading]');if(l){l.hidden=true;l.classList.remove('is-compact')}}
 function updateHud(){if(!S.overlay)return;S.overlay.querySelector('[data-rkl-distance]').textContent=`${Math.floor(S.distance)} m`;S.overlay.querySelector('[data-rkl-coins]').textContent=S.runCoins;S.overlay.querySelector('[data-rkl-wallet]').textContent=S.wallet;const score=S.overlay.querySelector('[data-rkl-score]');if(score)score.textContent=Math.floor(S.score);const pr=S.overlay.querySelector('[data-rkl-progress]');if(pr)pr.style.width=Math.min(100,(S.wallet%500)/5)+'%';updateBoostHud()}
 function flashCoin(){const p=S.overlay?.querySelector('[data-rkl-wallet-pill]');if(!p)return;p.classList.remove('is-pulse');void p.offsetWidth;p.classList.add('is-pulse')}
 function outfitPreview(id){const o=OUTFITS[id];return `<div class="rkl-model-preview ${o.model}" style="--tint:#${o.tint.toString(16).padStart(6,'0')}"><i></i><b></b><em></em></div>`}
-function showStart(){showCard(`<div class="rkl-kicker">SPREMBERGER STRASSE · COTTBUS</div><h1>Runner.KL</h1><p class="rkl-lead">Sammle Power-ups, kombiniere Effekte und rette deinen Lauf mit dem Neonboard.</p><div class="rkl-boost-overview"><article><i>🧲</i><b>CB-Magnet</b><small>Zieht Münzen aus allen Spuren an.</small></article><article><i>🚀</i><b>Raketenrucksack</b><small>Fliegt über Hindernisse und sammelt sicher.</small></article><article><i>👟</i><b>Power-Schuhe</b><small>Höhere und längere Sprünge.</small></article><article><i>2×</i><b>Punkte-Turbo</b><small>Verdoppelt deine Punkte.</small></article><article><i>🌀</i><b>Sprungfeder</b><small>Katapultiert dich sofort nach oben.</small></article><article><i>🛹</i><b>Neonboard</b><small>Fängt eine Kollision ab. Doppeltippen zum Aktivieren.</small></article></div><div class="rkl-selected">${outfitPreview(S.outfit)}<span>Aktiver Läufer<b>${OUTFITS[S.outfit].name}</b><small>Neonboards: ${S.boardTokens}</small></span></div><button data-rkl-start>Spiel starten</button><button class="rkl-shop-btn" data-rkl-shop>Coin-Shop</button><button class="rkl-secondary" data-rkl-exit>Zurück zu Top Games</button>`);bindCard()}
+function showStart(){showCard(`<div class="rkl-kicker">SPREMBERGER STRASSE · COTTBUS</div><h1>Runner.KL</h1><p class="rkl-lead">Sammle Power-ups, kombiniere Effekte und rette deinen Lauf mit dem Neonboard.</p><div class="rkl-boost-overview"><article><i>🧲</i><b>CB-Magnet</b><small>Zieht Münzen aus allen Spuren an.</small></article><article><i>🚀</i><b>Raketenrucksack</b><small>Fliegt über Hindernisse und sammelt sicher.</small></article><article><i>👟</i><b>Power-Schuhe</b><small>Höhere und längere Sprünge.</small></article><article><i>2×</i><b>Punkte-Turbo</b><small>Verdoppelt deine Punkte.</small></article><article><i>🌀</i><b>Sprungfeder</b><small>Katapultiert dich sofort nach oben.</small></article><article><i>🛹</i><b>Neonboard</b><small>Fängt eine Kollision ab. Doppeltippen zum Aktivieren.</small></article></div><div class="rkl-selected">${outfitPreview(S.outfit)}<span>Aktiver Läufer<b>${OUTFITS[S.outfit].name}</b><small>Neonboards: ${S.boardTokens}</small></span></div><div class="rkl-quality"><span><b>Grafikmodus</b><small>Ultra aktiviert Schatten, Wetter, höhere Auflösung und maximale Sichtweite.</small></span><div>${['low','medium','high','ultra'].map(q=>`<button data-rkl-quality="${q}" class="${S.quality===q?'active':''}">${({low:'Niedrig',medium:'Mittel',high:'Hoch',ultra:'Ultra'})[q]}</button>`).join('')}</div></div><button data-rkl-start>Spiel starten</button><button class="rkl-shop-btn" data-rkl-shop>Coin-Shop</button><button class="rkl-secondary" data-rkl-exit>Zurück zu Top Games</button>`);bindCard()}
 function openShop(){S.paused=true;const cards=Object.entries(OUTFITS).map(([id,o])=>{const owned=S.owned.includes(id),active=S.outfit===id;return `<button class="rkl-shop-item ${active?'active':''}" data-rkl-outfit="${id}">${outfitPreview(id)}<span><strong>${o.name}</strong><small>${active?'Ausgewählt':owned?'Im Besitz':`🪙 ${o.price}`}</small></span></button>`}).join('');showCard(`<div class="rkl-shop-head"><div><div class="rkl-kicker">RUNNER.KL</div><h1>Coin-Shop</h1></div><div class="rkl-wallet">🪙 ${S.wallet}</div></div><p class="rkl-shop-note">Zwei Grundcharaktere sind kostenlos. Weitere Outfits werden dauerhaft mit CB-Coins freigeschaltet.</p><div class="rkl-shop-grid">${cards}</div><button class="rkl-secondary" data-rkl-back>Zurück</button>`);S.overlay.querySelectorAll('[data-rkl-outfit]').forEach(b=>b.onclick=()=>buyOutfit(b.dataset.rklOutfit));S.overlay.querySelector('[data-rkl-back]').onclick=()=>{S.paused=false;showStart()}}
 async function buyOutfit(id){const o=OUTFITS[id];if(!o)return;if(S.owned.includes(id)){S.outfit=id;save();await createPlayer();openShop();return}if(S.wallet<o.price){const n=S.overlay.querySelector('.rkl-shop-note');if(n)n.textContent=`Dir fehlen noch ${o.price-S.wallet} CB-Coins.`;return}S.wallet-=o.price;S.owned.push(id);S.outfit=id;save();updateHud();await createPlayer();openShop()}
-function bindCard(){S.overlay.querySelector('[data-rkl-start]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-retry]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-shop]')?.addEventListener('click',openShop);S.overlay.querySelector('[data-rkl-exit]')?.addEventListener('click',()=>{close();window.RunnerKL?.openHub?.()})}
+function bindCard(){S.overlay.querySelectorAll('[data-rkl-quality]').forEach(b=>b.addEventListener('click',()=>setQuality(b.dataset.rklQuality)));S.overlay.querySelector('[data-rkl-start]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-retry]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-shop]')?.addEventListener('click',openShop);S.overlay.querySelector('[data-rkl-exit]')?.addEventListener('click',()=>{close();window.RunnerKL?.openHub?.()})}
+
+function qualityLabel(q){return ({low:'Niedrig',medium:'Mittel',high:'Hoch',ultra:'Ultra'})[q]||'Hoch'}
+function setQuality(q){
+  if(!['low','medium','high','ultra'].includes(q)||S.quality===q)return;
+  S.quality=q;save();
+  showLoading(`Grafik ${qualityLabel(q)} wird vorbereitet …`);
+  setTimeout(()=>{close();open()},120);
+}
+function applyQuality(){
+  if(!S.renderer)return;
+  S.renderer.shadowMap.enabled=S.quality!=='low';
+  if(S.bloom){S.bloom.strength={low:.04,medium:.12,high:.26,ultra:.42}[S.quality];S.bloom.radius=S.quality==='ultra'?.52:.38}
+  S.scene.fog.density={low:.0065,medium:.0048,high:.0034,ultra:.0026}[S.quality];
+  S.camera.far=S.quality==='ultra'?320:S.quality==='high'?270:220;S.camera.updateProjectionMatrix();
+  resize();
+  S.overlay?.setAttribute('data-quality',S.quality);
+}
+function makeCloudTexture(){return makeCanvasTexture((c,s)=>{c.clearRect(0,0,s,s);const g=c.createRadialGradient(s*.5,s*.5,8,s*.5,s*.5,s*.48);g.addColorStop(0,'rgba(255,255,255,.95)');g.addColorStop(.55,'rgba(240,246,249,.72)');g.addColorStop(1,'rgba(225,235,240,0)');c.fillStyle=g;c.fillRect(0,0,s,s)},256,1,1)}
+function createWeatherSystem(){
+  S.clouds=new THREE.Group();S.clouds.name='rklClouds';S.scene.add(S.clouds);
+  const tex=makeCloudTexture(),count=S.quality==='ultra'?22:S.quality==='high'?12:6;
+  for(let i=0;i<count;i++){const mat=new THREE.SpriteMaterial({map:tex,transparent:true,opacity:.0,depthWrite:false,color:0xffffff});const sp=new THREE.Sprite(mat);sp.position.set((Math.random()-.5)*70,15+Math.random()*12,-25-Math.random()*150);const size=12+Math.random()*22;sp.scale.set(size,size*.38,1);sp.userData.speed=.12+Math.random()*.22;S.clouds.add(sp)}
+  if(S.quality==='ultra'||S.quality==='high'){
+    const n=S.quality==='ultra'?1800:700,pos=new Float32Array(n*3);for(let i=0;i<n;i++){pos[i*3]=(Math.random()-.5)*20;pos[i*3+1]=Math.random()*16;pos[i*3+2]=-Math.random()*70+8}
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const mat=new THREE.PointsMaterial({color:0xcfe6f3,size:S.quality==='ultra'?.055:.04,transparent:true,opacity:0,depthWrite:false});S.rain=new THREE.Points(geo,mat);S.rain.name='rklRain';S.scene.add(S.rain)
+  }
+  S.weatherMode='sunny';S.weatherClock=0;S.weatherDuration=18+Math.random()*14;S.weatherBlend=0;
+}
+function nextWeather(){
+  const order={sunny:['cloudy','sunny'],cloudy:['rain','sunny','mist'],rain:['cloudy','sunny'],mist:['sunny','cloudy']};const a=order[S.weatherMode]||['sunny'];S.weatherMode=a[Math.floor(Math.random()*a.length)];S.weatherClock=0;S.weatherDuration=16+Math.random()*18;const el=S.overlay?.querySelector('[data-rkl-weather]');if(el)el.dataset.mode=S.weatherMode;
+}
+function updateWeather(dt){
+  if(!S.scene)return;S.weatherClock+=dt;if(S.weatherClock>S.weatherDuration)nextWeather();
+  const mode=S.weatherMode,targetRain=mode==='rain'?1:0,targetCloud=mode==='cloudy'?.72:mode==='rain'?.95:mode==='mist'?.55:.18,targetFog=mode==='mist'?1:mode==='rain'?.52:mode==='cloudy'?.25:0;
+  S.weatherBlend=THREE.MathUtils.damp(S.weatherBlend,targetFog,.55,dt);
+  const base={low:.0065,medium:.0048,high:.0034,ultra:.0026}[S.quality];S.scene.fog.density=base+S.weatherBlend*(S.quality==='ultra'?.0055:.004);
+  const bg=new THREE.Color(mode==='rain'?0x718893:mode==='cloudy'?0x9eb2ba:mode==='mist'?0xb8c4c4:0x9fcbe2);S.scene.background.lerp(bg,Math.min(1,dt*.45));S.renderer.setClearColor(S.scene.background,1);
+  if(S.sun)S.sun.intensity=THREE.MathUtils.damp(S.sun.intensity,mode==='sunny'?(S.quality==='ultra'?4.25:3.25):mode==='rain'?1.15:2.15,.6,dt);
+  if(S.hemi)S.hemi.intensity=THREE.MathUtils.damp(S.hemi.intensity,mode==='rain'?1.2:S.quality==='ultra'?2.1:1.65,.6,dt);
+  if(S.clouds){for(const c of S.clouds.children){c.material.opacity=THREE.MathUtils.damp(c.material.opacity,targetCloud,.45,dt);c.position.x+=c.userData.speed*dt;if(c.position.x>42)c.position.x=-42}}
+  if(S.rain){S.rain.material.opacity=THREE.MathUtils.damp(S.rain.material.opacity,targetRain*.72,1.4,dt);const a=S.rain.geometry.attributes.position.array;for(let i=0;i<a.length;i+=3){a[i+1]-=26*dt;if(a[i+1]<0){a[i+1]=16;a[i]=(Math.random()-.5)*20;a[i+2]=-Math.random()*70+8}}S.rain.geometry.attributes.position.needsUpdate=true;S.rain.position.x=S.camera.position.x}
+  const w=S.overlay?.querySelector('[data-rkl-weather]');if(w){w.dataset.mode=mode;w.style.setProperty('--rain',targetRain);w.style.setProperty('--cloud',targetCloud)}
+}
+function togglePause(){
+  if(!S.running||S.gameOver)return;
+  S.paused=!S.paused;const b=S.overlay?.querySelector('[data-rkl-pause]');if(b)b.textContent=S.paused?'▶':'Ⅱ';
+  if(S.action)S.action.paused=S.paused;
+  if(S.paused){showCard(`<div class="rkl-kicker">SPIEL PAUSIERT</div><h1>Kurze Pause</h1><p class="rkl-lead">Dein Lauf ist angehalten. Wetter, Strecke und Hindernisse bleiben stehen.</p><button data-rkl-resume>Weiterspielen</button><button class="rkl-secondary" data-rkl-restart>Neu starten</button><button class="rkl-secondary" data-rkl-exit>Top Games</button>`);S.overlay.querySelector('[data-rkl-resume]').onclick=togglePause;S.overlay.querySelector('[data-rkl-restart]').onclick=resetGame;S.overlay.querySelector('[data-rkl-exit]').onclick=()=>{close();window.RunnerKL?.openHub?.()}}
+  else hideCard();
+}
+async function runInitialLoading(){
+  const l=S.overlay?.querySelector('[data-rkl-loading]'),bar=l?.querySelector('[data-rkl-loadbar]'),pc=l?.querySelector('[data-rkl-loadpercent]');if(!l){showStart();return}l.hidden=false;let v=0;const start=performance.now();
+  await new Promise(resolve=>{const tick=()=>{const elapsed=performance.now()-start;v=Math.min(94,v+1.2+Math.random()*4);if(bar)bar.style.width=v+'%';if(pc)pc.textContent=Math.floor(v)+'%';if(elapsed<1250)requestAnimationFrame(tick);else resolve()};tick()});
+  if(bar)bar.style.width='100%';if(pc)pc.textContent='100%';await new Promise(r=>setTimeout(r,220));l.classList.add('is-done');setTimeout(()=>{l.hidden=true;l.classList.remove('is-done');showStart()},320)
+}
 
 function open(){
-  if(S.overlay)return;loadSave();const el=document.createElement('div');el.className='runner-kl-overlay';el.innerHTML=`<div class="runner-kl-stage"><canvas aria-label="Runner.KL 3D-Spiel"></canvas><div class="runner-kl-vignette"></div><div class="runner-kl-sunflare"></div><div class="runner-kl-hud"><div class="runner-kl-top"><div class="runner-kl-pill"><small>STRECKE</small><b data-rkl-distance>0 m</b></div><div class="runner-kl-pill"><small>RUNDE</small><b>🪙 <span data-rkl-coins>0</span></b></div><div class="runner-kl-pill runner-kl-score"><small>PUNKTE</small><b data-rkl-score>0</b></div><div class="runner-kl-pill" data-rkl-wallet-pill><small>BESTAND</small><b>🪙 <span data-rkl-wallet>0</span></b></div><div class="runner-kl-brand"><small>JK.GAMES</small><b>Runner.KL</b></div></div><div class="runner-kl-mission"><small>TAGESMISSION</small><b>500 CB-Coins sammeln</b><div><i data-rkl-progress></i></div></div><div class="runner-kl-boostbar" data-rkl-boosts></div><div class="runner-kl-toast" data-rkl-toast></div><div class="runner-kl-actions"><button data-rkl-close>✕</button><button class="runner-kl-board" data-rkl-board><span>🛹</span><b>3</b></button><div class="runner-kl-controls"><button data-dir="up">↑</button><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div><button data-rkl-pause>Ⅱ</button></div></div><div class="runner-kl-loading" data-rkl-loading><i></i><span>3D-Welt wird geladen …</span></div><div class="runner-kl-card" data-rkl-card></div></div>`;document.body.append(el);S.overlay=el;setupScene();
-  el.querySelector('[data-rkl-close]').onclick=close;el.querySelector('[data-rkl-pause]').onclick=()=>{if(S.running)S.paused=!S.paused};el.querySelector('[data-rkl-board]').onclick=activateHoverboard;el.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>input(b.dataset.dir));
+  if(S.overlay)return;loadSave();const el=document.createElement('div');el.className='runner-kl-overlay';el.innerHTML=`<div class="runner-kl-stage"><canvas aria-label="Runner.KL 3D-Spiel"></canvas><div class="runner-kl-weather" data-rkl-weather><div class="rkl-clouds"></div><div class="rkl-rain"></div></div><div class="runner-kl-vignette"></div><div class="runner-kl-sunflare"></div><div class="runner-kl-hud"><div class="runner-kl-top"><div class="runner-kl-pill"><small>STRECKE</small><b data-rkl-distance>0 m</b></div><div class="runner-kl-pill"><small>RUNDE</small><b>🪙 <span data-rkl-coins>0</span></b></div><div class="runner-kl-pill runner-kl-score"><small>PUNKTE</small><b data-rkl-score>0</b></div><div class="runner-kl-pill" data-rkl-wallet-pill><small>BESTAND</small><b>🪙 <span data-rkl-wallet>0</span></b></div><div class="runner-kl-brand"><small>JK.GAMES</small><b>Runner.KL</b></div></div><div class="runner-kl-mission"><small>TAGESMISSION</small><b>500 CB-Coins sammeln</b><div><i data-rkl-progress></i></div></div><div class="runner-kl-boostbar" data-rkl-boosts></div><div class="runner-kl-toast" data-rkl-toast></div><div class="runner-kl-actions"><button data-rkl-close>✕</button><button class="runner-kl-board" data-rkl-board><span>🛹</span><b>3</b></button><div class="runner-kl-controls"><button data-dir="up">↑</button><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div><button data-rkl-pause>Ⅱ</button></div></div><div class="runner-kl-loading" data-rkl-loading><div class="rkl-loading-logo"><small>JK.GAMES</small><b>Runner.KL</b></div><div class="rkl-loading-city"></div><span>Spremberger Straße wird geladen …</span><div class="rkl-loading-track"><i data-rkl-loadbar></i></div><em data-rkl-loadpercent>0%</em></div><div class="runner-kl-card" data-rkl-card></div></div>`;document.body.append(el);S.overlay=el;setupScene();
+  el.querySelector('[data-rkl-close]').onclick=close;el.querySelector('[data-rkl-pause]').onclick=togglePause;el.querySelector('[data-rkl-board]').onclick=activateHoverboard;el.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>input(b.dataset.dir));
   const canvas=el.querySelector('canvas');canvas.addEventListener('pointerdown',e=>{const now=performance.now();if(now-S.lastTap<330)activateHoverboard();S.lastTap=now;S.pointerStart={x:e.clientX,y:e.clientY}});canvas.addEventListener('pointerup',e=>{if(!S.pointerStart)return;const dx=e.clientX-S.pointerStart.x,dy=e.clientY-S.pointerStart.y;S.pointerStart=null;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>24)input(dx>0?'right':'left');else if(Math.abs(dy)>24)input(dy>0?'down':'up')});
-  S.keyHandler=e=>{const m={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',' ':'up',ArrowDown:'down',s:'down'};if(e.key==='b'||e.key==='B'){e.preventDefault();activateHoverboard();return}if(m[e.key]){e.preventDefault();input(m[e.key])}};document.addEventListener('keydown',S.keyHandler);S.resizeHandler=resize;window.addEventListener('resize',resize,{passive:true});
-  showStart();updateHud();S.clock.start();loop();
+  S.keyHandler=e=>{const m={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',' ':'up',ArrowDown:'down',s:'down'};if(e.key==='Escape'||e.key==='p'||e.key==='P'){e.preventDefault();togglePause();return}if(e.key==='b'||e.key==='B'){e.preventDefault();activateHoverboard();return}if(m[e.key]){e.preventDefault();input(m[e.key])}};document.addEventListener('keydown',S.keyHandler);S.resizeHandler=resize;window.addEventListener('resize',resize,{passive:true});
+  runInitialLoading();updateHud();S.clock.start();loop();
 }
 function close(){if(!S.overlay)return;cancelAnimationFrame(S.raf);document.removeEventListener('keydown',S.keyHandler);window.removeEventListener('resize',S.resizeHandler);clearObjects();disposePlayer();for(const seg of S.segments){seg.traverse(o=>{o.geometry?.dispose?.();const ms=Array.isArray(o.material)?o.material:[o.material];ms.filter(Boolean).forEach(m=>{m.map?.dispose?.();m.dispose?.()})})}S.segments=[];S.composer?.dispose?.();S.composer=null;S.renderer?.dispose();S.overlay.remove();S.overlay=null;S.scene=null;S.renderer=null;S.running=false;S.paused=false}
 function openHub(){if(typeof window.openDeviceInterface==='function'&&typeof window.phoneItems==='function'){const item=window.phoneItems()?.[0];if(item)window.openDeviceInterface(item,'topgames',false)}else open()}
