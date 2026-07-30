@@ -521,7 +521,7 @@ function openShop(){
 }
 async function buyOutfit(id){const o=OUTFITS[id];if(!o)return;if(S.owned.includes(id)){S.outfit=id;save();await createPlayer();openShop();return}if(S.wallet<o.price){const n=S.overlay.querySelector('.rkl-shop-note');if(n)n.textContent=`Dir fehlen noch ${o.price-S.wallet} CB-Coins.`;return}S.wallet-=o.price;S.owned.push(id);S.outfit=id;save();updateHud();await createPlayer();openShop()}
 function buyBoardPack(id){const pack=BOARD_PACKS.find(v=>v.id===id);if(!pack)return;if(S.wallet<pack.price){const n=S.overlay.querySelector('.rkl-shop-note');if(n)n.textContent=`Dir fehlen noch ${pack.price-S.wallet} CB-Coins für ${pack.name}.`;return}S.wallet-=pack.price;S.boardTokens+=pack.amount;save();updateHud();showBoostToast('Neonboards gekauft',`${pack.amount} Board${pack.amount===1?'':'s'} wurden deinem Bestand hinzugefügt.`);openShop()}
-function bindCard(){S.overlay.querySelectorAll('[data-rkl-quality]').forEach(b=>b.addEventListener('click',()=>setQuality(b.dataset.rklQuality)));S.overlay.querySelector('[data-rkl-start]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-retry]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-shop]')?.addEventListener('click',openShop);S.overlay.querySelector('[data-rkl-world]')?.addEventListener('click',()=>{loadWorldData(true).then(openLeaderboard)});S.overlay.querySelector('[data-rkl-exit]')?.addEventListener('click',()=>{close();window.RunnerKL?.openHub?.()})}
+function bindCard(){S.overlay.querySelectorAll('[data-rkl-quality]').forEach(b=>b.addEventListener('click',()=>setQuality(b.dataset.rklQuality)));S.overlay.querySelector('[data-rkl-start]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-retry]')?.addEventListener('click',resetGame);S.overlay.querySelector('[data-rkl-shop]')?.addEventListener('click',openShop);S.overlay.querySelector('[data-rkl-world]')?.addEventListener('click',()=>{loadWorldData(true).then(openLeaderboard)});S.overlay.querySelector('[data-rkl-exit]')?.addEventListener('click',returnToTopGames)}
 
 function qualityLabel(q){return ({low:'Niedrig',medium:'Mittel',high:'Hoch',ultra:'Ultra'})[q]||'Hoch'}
 function setQuality(q){
@@ -557,7 +557,7 @@ function togglePause(){
   if(S.paused){resumeWithCountdown();return}
   S.paused=true;const b=S.overlay?.querySelector('[data-rkl-pause]');if(b)b.textContent='▶';if(S.action)S.action.paused=true;
   showCard(`<div class="rkl-kicker">RUNNER.KL</div><h1>Pause</h1><p class="rkl-lead">Der Lauf ist angehalten.</p><button data-rkl-resume>Weiter</button><button class="rkl-secondary" data-rkl-restart>Neu starten</button><button class="rkl-secondary" data-rkl-exit>Top Games</button>`);
-  S.overlay.querySelector('[data-rkl-resume]').onclick=resumeWithCountdown;S.overlay.querySelector('[data-rkl-restart]').onclick=resetGame;S.overlay.querySelector('[data-rkl-exit]').onclick=()=>{close();window.RunnerKL?.openHub?.()}
+  S.overlay.querySelector('[data-rkl-resume]').onclick=resumeWithCountdown;S.overlay.querySelector('[data-rkl-restart]').onclick=resetGame;S.overlay.querySelector('[data-rkl-exit]').onclick=returnToTopGames
 }
 async function runInitialLoading(){
   const l=S.overlay?.querySelector('[data-rkl-loading]'),bar=l?.querySelector('[data-rkl-loadbar]'),pc=l?.querySelector('[data-rkl-loadpercent]');if(!l){showStart();return}l.hidden=false;let v=0;const start=performance.now();
@@ -565,13 +565,28 @@ async function runInitialLoading(){
   if(bar)bar.style.width='100%';if(pc)pc.textContent='100%';await new Promise(r=>setTimeout(r,220));l.classList.add('is-done');setTimeout(()=>{l.hidden=true;l.classList.remove('is-done');showStart()},320)
 }
 
-function open(){
+function open(sourceDevice=''){
+  if(sourceDevice)S.sourceDevice=String(sourceDevice);
+  else if(typeof window.JKGamesOwnedPhoneItem==='function')S.sourceDevice=window.JKGamesOwnedPhoneItem()||S.sourceDevice||'';
   if(S.overlay)return;loadSave();S.lastBoostSignature='';S.lastHudSnapshot='';S.renderScale=1;const el=document.createElement('div');el.className='runner-kl-overlay';el.innerHTML=`<div class="runner-kl-stage"><canvas aria-label="Runner.KL 3D-Spiel"></canvas><div class="runner-kl-weather" data-rkl-weather><div class="rkl-clouds"></div><div class="rkl-rain"></div></div><div class="runner-kl-vignette"></div><div class="runner-kl-sunflare"></div><div class="runner-kl-hud"><div class="rkl-top-left"><button data-rkl-pause>Ⅱ</button><div class="rkl-score-box"><b>×<span data-rkl-mult>1</span></b><strong data-rkl-score>0</strong></div></div><div class="rkl-world-chip"><small>BEREICH</small><b data-rkl-world-name>ZENTRUM</b></div><div class="rkl-top-right"><div class="rkl-currency">🪙 <b data-rkl-wallet>0</b></div><div class="rkl-cards">🎫 <b data-rkl-distance>0 m</b></div><div class="rkl-toprun"><small>TOP RUN</small><span class="rkl-avatar"></span><b data-rkl-best>0</b></div></div><div class="runner-kl-mission"><b>SAMMLE 500 MÜNZEN</b><div><i data-rkl-progress></i></div><small><span data-rkl-coins>0</span> / 500</small></div><div class="runner-kl-boostbar" data-rkl-boosts></div><div class="runner-kl-toast" data-rkl-toast></div><div class="runner-kl-actions"><button data-rkl-close>✕</button><button class="runner-kl-board" data-rkl-board><span>🛹</span><b>3</b></button><div class="runner-kl-controls"><button data-dir="up">↑</button><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="right">→</button></div></div><div class="rkl-countdown" data-rkl-countdown hidden></div><div class="rkl-world-announce" data-rkl-world-announce></div></div><div class="runner-kl-loading" data-rkl-loading><div class="rkl-loading-logo"><small>JK.GAMES</small><b>Runner.KL</b></div><div class="rkl-loading-city"></div><span>Spremberger Straße wird geladen …</span><div class="rkl-loading-track"><i data-rkl-loadbar></i></div><em data-rkl-loadpercent>0%</em></div><div class="runner-kl-card" data-rkl-card></div></div>`;document.body.append(el);S.overlay=el;setupScene();
-  el.querySelector('[data-rkl-close]').onclick=close;el.querySelector('[data-rkl-pause]').onclick=togglePause;el.querySelector('[data-rkl-board]').onclick=activateHoverboard;el.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>input(b.dataset.dir));
+  el.querySelector('[data-rkl-close]').onclick=returnToTopGames;el.querySelector('[data-rkl-pause]').onclick=togglePause;el.querySelector('[data-rkl-board]').onclick=activateHoverboard;el.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>input(b.dataset.dir));
   const canvas=el.querySelector('canvas');canvas.addEventListener('pointerdown',e=>{const now=performance.now();if(now-S.lastTap<330)activateHoverboard();S.lastTap=now;S.pointerStart={x:e.clientX,y:e.clientY}});canvas.addEventListener('pointerup',e=>{if(!S.pointerStart)return;const dx=e.clientX-S.pointerStart.x,dy=e.clientY-S.pointerStart.y;S.pointerStart=null;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>24)input(dx>0?'right':'left');else if(Math.abs(dy)>24)input(dy>0?'down':'up')});
   S.keyHandler=e=>{const m={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',' ':'up',ArrowDown:'down',s:'down'};if(e.key==='Escape'||e.key==='p'||e.key==='P'){e.preventDefault();togglePause();return}if(e.key==='b'||e.key==='B'){e.preventDefault();activateHoverboard();return}if(m[e.key]){e.preventDefault();input(m[e.key])}};document.addEventListener('keydown',S.keyHandler);S.resizeHandler=resize;window.addEventListener('resize',resize,{passive:true});
   runInitialLoading();updateHud();S.clock.start();loop();
 }
 function close(){if(!S.overlay)return;if(S.saveDirty){S.saveDirty=false;save()}cancelAnimationFrame(S.raf);document.removeEventListener('keydown',S.keyHandler);window.removeEventListener('resize',S.resizeHandler);clearObjects();disposePlayer();S.cloudMaterial?.dispose?.();S.cloudMaterial=null;S.rain?.geometry?.dispose?.();S.rain?.material?.dispose?.();S.rain=null;S.segments=[];S.renderer?.dispose();disposeResources();S.overlay.remove();S.overlay=null;S.scene=null;S.renderer=null;S.running=false;S.paused=false}
-function openHub(){if(typeof window.openDeviceInterface==='function'&&typeof window.phoneItems==='function'){const item=window.phoneItems()?.[0];if(item)window.openDeviceInterface(item,'topgames',false)}else open()}
-window.RunnerKL={open,close,openHub};
+function openHub(){
+  if(typeof window.JKGamesOpenTopGames==='function')return window.JKGamesOpenTopGames(S.sourceDevice||'');
+  const item=typeof window.JKGamesOwnedPhoneItem==='function'?window.JKGamesOwnedPhoneItem():'';
+  if(item&&typeof window.openDeviceInterface==='function')return window.openDeviceInterface(item,'topgames',false);
+  return false;
+}
+function returnToTopGames(){
+  const source=S.sourceDevice||'';
+  close();
+  requestAnimationFrame(()=>{
+    if(typeof window.JKGamesOpenTopGames==='function')window.JKGamesOpenTopGames(source);
+    else openHub();
+  });
+}
+window.RunnerKL={open,close,openHub,returnToTopGames};

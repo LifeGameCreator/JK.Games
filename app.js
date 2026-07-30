@@ -16115,7 +16115,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL jetzt spielen. City.KL und Match.KL werden nach deiner Freigabe ergänzt."
+    description: "Runner.KL und City.KL jetzt spielen. Match.KL folgt nach deiner Freigabe."
   },
   {
     id: "finder",
@@ -16309,7 +16309,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL ist spielbar; City.KL und Match.KL folgen nach deiner Bestätigung." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL und City.KL sind spielbar; Match.KL folgt nach deiner Bestätigung." });
   }
   return apps.map((app) => {
     const missingTier = tier < app.min;
@@ -16598,8 +16598,15 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     render();
   });
   shell.querySelector("[data-open-runner-kl]")?.addEventListener("click", () => {
+    // V102: Das tatsächlich verwendete Smartphone an Runner.KL übergeben.
+    // So kann der Rücksprung exakt auf ein vorhandenes Gerät erfolgen.
     els.dialog.close();
-    window.RunnerKL?.open?.();
+    window.RunnerKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-city-kl]")?.addEventListener("click", () => {
+    // V103: City.KL übernimmt dasselbe Smartphone wie Top Games.
+    els.dialog.close();
+    window.CityKL?.open?.(item);
   });
   shell.querySelector("[data-device-open-games]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -18569,10 +18576,10 @@ function phoneSettingsViewHtml() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Alle neuen Spiele in einer App. Runner.KL ist vollständig spielbar.</p></div>
+      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL und City.KL sind jetzt vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
-        <button class="topgames-card locked" disabled><b>City.KL</b><small>Folgt nach deiner Bestätigung.</small></button>
+        <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Würfeln, Cottbus ausbauen und neue Stadtbereiche freischalten.</small></button>
         <button class="topgames-card locked" disabled><b>Match.KL</b><small>Folgt nach deiner Bestätigung.</small></button>
       </div>
     </div>`;
@@ -34093,6 +34100,23 @@ function stabilizeMobileCharacterScroll(section = "") {
 
 window.openDeviceInterface = openDeviceInterface;
 window.phoneItems = phoneItems;
+
+// Runner.KL V102 – sicherer Rücksprung auf das wirklich vorhandene Smartphone.
+// Frühere Versionen verwendeten phoneItems()[0] und öffneten dadurch immer das
+// Basic Phone, obwohl der Spieler beispielsweise ein Ultra-Smartphone besitzt.
+window.JKGamesOpenTopGames = function JKGamesOpenTopGames(preferredItem = "") {
+  const owned = ownedPhoneItem();
+  const preferredOwned = preferredItem && (state?.items || []).some((entry) => itemMatchesName(entry, preferredItem));
+  const item = preferredOwned && deviceTier(preferredItem) >= deviceTier(owned) ? preferredItem : owned;
+  if (!item) {
+    if (typeof addFeed === "function") addFeed("Du besitzt aktuell kein Smartphone.");
+    return false;
+  }
+  // Der höchste tatsächlich besessene Smartphone-Tier ist die Quelle der Wahrheit.
+  openDeviceInterface(item, "topgames", false);
+  return true;
+};
+window.JKGamesOwnedPhoneItem = ownedPhoneItem;
 
 // Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.
 window.addEventListener("runner-kl-world-reward", (event) => {
