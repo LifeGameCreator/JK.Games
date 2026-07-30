@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#13201b">
+    <meta name="color-scheme" content="dark">
+    <meta name="application-name" content="JK.Games">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="JK.Games">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>JK.Games</title>
+    <link rel="manifest" href="manifest.webmanifest?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="styles.css?v=20260729-jkgames-v87-finster-casino-trading-nosurvival">
+    <link rel="stylesheet" href="financial-crisis.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="online-settings-menu.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="mrdn-kl.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="battle-hub-kl.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="weed-kl.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="life-update-20260724.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="life-expansion-20260724b.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="pet-ui-v88.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="arena-kl.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="cottbus-3d.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="casino-v82.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="phone-v87.css?v=20260729-jkgames-v88-unified-shop-design">
+    <link rel="stylesheet" href="runner-kl.css?v=20260730-runner-kl-v96-boost-system">
+  </head>
+  <body class="jk-booting">
+    <div id="jkBootSplash" class="jk-boot-splash" role="status" aria-live="polite" aria-label="JK.Games wird geladen">
+      <img class="jk-boot-image" src="assets/jk-games-loading-cottbus-v53.png" alt="JK.Games – Historisches Cottbus">
+      <div class="jk-boot-shade"></div>
+      <div class="jk-boot-center">
+        <div class="jk-boot-spinner" aria-hidden="true"></div>
+        <p>JK.Games</p>
+        <h1>Spiel wird geladen</h1>
+        <div class="jk-boot-progress" aria-hidden="true"><span></span></div>
+        <strong id="jkBootStatus">Cottbus und dein Charakter werden vorbereitet.</strong>
+      </div>
+    </div>
+  <script>
+    (() => {
+      const splash = document.getElementById("jkBootSplash");
+      const status = document.getElementById("jkBootStatus");
+      const startedAt = performance.now();
+      const minimumVisibleMs = 4200;
+      let closed = false;
+      const messages = [
+        "Cottbus und dein Charakter werden vorbereitet.",
+        "Dein Spielstand wird geladen.",
+        "Apps und Online-Bereiche werden gestartet.",
+        "Gleich geht es los."
+      ];
+      const messageTimer = window.setInterval(() => {
+        if (!status || closed) return;
+        const elapsed = performance.now() - startedAt;
+        const index = Math.min(messages.length - 1, Math.floor(elapsed / (minimumVisibleMs / messages.length)));
+        status.textContent = messages[index];
+      }, 180);
+      const closeSplash = () => {
+        if (closed || !splash) return;
+        closed = true;
+        window.clearInterval(messageTimer);
+        splash.classList.add("is-leaving");
+        document.body.classList.remove("jk-booting");
+        window.setTimeout(() => splash.remove(), 420);
+      };
+      const scheduleClose = () => {
+        const remaining = Math.max(0, minimumVisibleMs - (performance.now() - startedAt));
+        window.setTimeout(closeSplash, remaining);
+      };
+      if (document.readyState === "complete") scheduleClose();
+      else window.addEventListener("load", scheduleClose, { once: true });
+      window.setTimeout(closeSplash, 5200);
+    })();
+  </script>
+    <div id="app" class="app-shell">
+      <section id="setupScreen" class="setup-screen">
+        <div id="startHero" class="hero compact-hero">
+          <img src="assets/jk-games-loading-cottbus-v53.png" alt="JK.Games – Historisches Cottbus">
+          <div class="hero-overlay">
+            <p class="eyebrow">Mobile Life Simulation</p>
+            <h1>JK.Games</h1>
+            <p>Starte in dein Leben, baue dir legal oder riskant etwas auf und entscheide jeden Tag, wohin dein Weg geht.</p>
+          </div>
+        </div>
+
+        <div class="start-actions">
+          <button id="openSlotsBtn" class="primary-button" type="button">Anmelden &amp; Spiel starten</button>
+          <button id="openSupportTicketBtn" class="secondary-button" type="button">Support-Ticket schreiben</button>
+        </div>
+
+        <div id="slotView" class="setup-view hidden">
+          <div class="setup-head">
+            <button class="icon-button" type="button" data-setup-back title="Zurück">&lt;</button>
+            <div>
+              <p class="eyebrow">Spielstände</p>
+              <h2>Wähle deinen Account</h2>
+            </div>
+          </div>
+          <div id="saveSlotGrid" class="save-slot-grid"></div>
+        </div>
+
+        <div id="settingsView" class="setup-view hidden settings-v62-view">
+          <div class="setup-head settings-v62-head">
+            <button class="icon-button" type="button" data-setup-back title="Zurück">&lt;</button>
+            <div>
+              <p class="eyebrow">JK.Games</p>
+              <h2>Einstellungen</h2>
+              <span>Spiel, Darstellung, Sound und Smartphone an einem Ort.</span>
+            </div>
+          </div>
+          <div class="settings-panel settings-v62-panel">
+            <section class="settings-v62-hero settings-wide">
+              <span class="settings-v62-logo">⚙</span>
+              <div><small>SYSTEM</small><h3>Dein Spiel. Deine Einstellung.</h3><p>Alle wichtigen Optionen übersichtlich, schnell und für PC sowie Handy optimiert.</p></div>
+            </section>
+
+            <section class="settings-v62-group settings-wide">
+              <header><span>◐</span><div><b>Darstellung</b><small>Grafikqualität und visuelle Leistung</small></div></header>
+              <label class="settings-v62-row settings-wide">
+                <span><b>Grafikqualität</b><small>Die Änderung lädt die Darstellung neu.</small></span>
+                <select id="graphicsQuality">
+                  <option value="minimum">Minimum</option>
+                  <option value="medium">Mittel</option>
+                  <option value="high">Hohe Grafik</option>
+                  <option value="diamond">Diamant-Grafik</option>
+                  <option value="ultra">Ultra</option>
+                </select>
+              </label>
+            </section>
+
+            <section class="settings-v62-group settings-wide">
+              <header><span>♫</span><div><b>Sound & Musik</b><small>Lautstärke und eigene Hintergrundmusik</small></div></header>
+              <label class="settings-v62-slider-row">
+                <span><b>Musik</b><small>Hintergrundlautstärke</small></span>
+                <input id="musicVolume" type="range" min="0" max="100" value="45">
+              </label>
+              <label class="settings-v62-slider-row">
+                <span><b>Effekte</b><small>Aktionen, Hinweise und Spiele</small></span>
+                <input id="effectVolume" type="range" min="0" max="100" value="65">
+              </label>
+              <label class="settings-v62-row settings-wide">
+                <span><b>Eigene YouTube-Musik</b><small>Füge einen YouTube-Link ein.</small></span>
+                <input id="customMusicLink" type="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=...">
+              </label>
+              <div class="settings-music-actions settings-wide">
+                <button id="playCustomMusicBtn" class="primary-button" type="button">Musik starten</button>
+                <button id="stopMusicBtn" class="secondary-button" type="button">Musik stoppen</button>
+              </div>
+              <div id="customMusicPlayer" class="custom-music-player hidden settings-wide"></div>
+            </section>
+
+            <section class="settings-v62-group settings-wide">
+              <header><span>👤</span><div><b>Spiel & Profil</b><small>Charakter und Update-Informationen</small></div></header>
+              <div class="settings-v62-actions">
+                <button id="changeCharacterBtn" class="secondary-button" type="button"><span>↔</span><b>Charakter wechseln</b></button>
+                <button id="whatsNewBtn" class="secondary-button whats-new-settings-button" type="button"><span>✦</span><b>Neuheiten</b></button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div id="loadingView" class="setup-view loading-view hidden">
+          <div class="loading-card jk-loading-card">
+            <div class="jk-loading-scene">
+              <img src="assets/jk-games-loading-cottbus-v53.png" alt="JK.Games – Historisches Cottbus">
+              <div class="jk-loading-shade"></div>
+              <div class="jk-loading-center" aria-live="polite">
+                <div class="jk-loading-spinner" aria-hidden="true"></div>
+                <p class="eyebrow">JK.Games lädt</p>
+                <h2>Dein Spiel wird vorbereitet</h2>
+                <strong id="loadingPercent">0%</strong>
+              </div>
+            </div>
+            <div class="jk-loading-footer">
+              <div class="loading-bar"><span id="loadingFill"></span></div>
+              <p id="loadingInfo">Cottbus, Charakter und Online-Dienste werden vorbereitet.</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="characterForm" class="setup-form setup-view hidden">
+          <div class="setup-head">
+            <button class="icon-button" type="button" data-slots-back title="Zurück">&lt;</button>
+            <div>
+              <p class="eyebrow">Charakter</p>
+              <h2>Neues Leben erstellen</h2>
+            </div>
+          </div>
+          <div class="field-row">
+            <label>
+              Vorname
+              <input required name="firstName" autocomplete="given-name" maxlength="30" placeholder="Mika">
+            </label>
+            <label>
+              Nachname
+              <input required name="lastName" autocomplete="family-name" maxlength="30" placeholder="Schneider">
+            </label>
+          </div>
+          <div class="field-row">
+            <label>
+              Geburtsdatum
+              <input required name="birthDate" type="date" value="2000-01-01">
+            </label>
+            <label>
+              Geschlecht
+              <select name="gender" required>
+                <option value="male">Mann</option>
+                <option value="female">Frau</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Startbank
+            <select name="bank">
+              <option>Sparbank</option>
+              <option>Deutsch Bank</option>
+              <option>VRR Bank</option>
+            </select>
+          </label>
+          <label>
+            Lebensstil
+            <select name="path">
+              <option value="balanced">Ausgeglichen</option>
+              <option value="career">Karrierefokus</option>
+              <option value="business">Unternehmer</option>
+              <option value="street">Riskante Straße</option>
+              <option value="craft">Handwerk & Auto</option>
+              <option value="tech">Tech & Online</option>
+              <option value="creative">Kreativ & Content</option>
+              <option value="social">Sozial & Netzwerk</option>
+              <option value="finance">Finanzen & Immobilien</option>
+              <option value="sport">Sport & Disziplin</option>
+            </select>
+          </label>
+          <label>
+            Startort
+            <select name="homeCity">
+              <option value="Essen">Essen</option>
+              <option value="Berlin">Berlin</option>
+              <option value="Hamburg">Hamburg</option>
+              <option value="München">München</option>
+              <option value="Köln">Köln</option>
+            </select>
+          </label>
+          <button class="primary-button" type="submit">Charakter erstellen</button>
+        </form>
+      </section>
+
+      <section id="gameScreen" class="game-screen hidden">
+        <header class="topbar">
+          <div>
+            <p id="dayLabel" class="eyebrow">Tag 1</p>
+            <h1 id="playerName">JK.Games</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="gameSettingsBtn" class="topbar-text-button" title="Einstellungen">Einstellungen</button>
+            <button id="resetBtn" class="icon-button" title="Spielstand löschen">↺</button>
+          </div>
+        </header>
+
+        <main class="dashboard">
+          <section class="status-panel">
+            <div class="portrait" aria-label="Charakterübersicht">
+              <div class="portrait-job"><span>Job</span><strong id="jobValue">Keiner</strong></div>
+              <div class="portrait-meta">
+                <div class="portrait-badge level"><small>Level</small><b>0</b></div>
+                <div class="portrait-badge age"><small>Alter</small><b id="ageBadge">18</b></div>
+              </div>
+              <img src="assets/jk-games-loading-cottbus-v53.png" alt="JK.Games – Historisches Cottbus">
+              <div class="portrait-debt"><span>Schulden</span><strong id="debtValue">0 €</strong></div>
+            </div>
+            <div class="meters">
+              <button class="meter status-action" type="button" data-open-inventory><span>Hunger</span><progress id="hungerMeter" max="100"></progress></button>
+              <button class="meter status-action" type="button" data-open-inventory><span>Energie</span><progress id="energyMeter" max="100"></progress></button>
+              <button class="meter status-action" type="button" data-open-inventory><span>Durst</span><progress id="thirstMeter" max="100"></progress></button>
+              <button class="meter status-action mood-meter" type="button" data-open-mood title="Stimmung" aria-label="Stimmung"><span>Stimmung</span><progress id="moodMeter" max="100"></progress></button>
+              <button class="mini-stat money status-action" type="button" data-open-bank><span>Bargeld</span><strong id="cashValue">0 €</strong></button>
+              <button class="mini-stat money status-action" type="button" data-open-bank><span>Konto</span><strong id="bankValue">0 €</strong></button>
+              <button class="home-shortcut" type="button" data-home-shortcut>
+                <span>Haus</span>
+                <b>⌂</b>
+              </button>
+              <button class="dashboard-shortcut casino" type="button" data-dashboard-tab="casino">
+                <span>Casino</span>
+                <b>▥</b>
+              </button>
+              <button class="dashboard-shortcut realestate" type="button" data-dashboard-tab="realestate">
+                <span><span class="desktop-label">Immobilien</span><span class="mobile-label">Immo</span></span>
+                <b>⌂⌂</b>
+              </button>
+              <button class="dashboard-shortcut c3d-central-entry" type="button" data-c3d-open aria-label="World.KL – Online-Welt betreten">
+                <span>World.KL</span>
+                <b>◉</b>
+              </button>
+            </div>
+            <button class="phone-shortcut" type="button" data-phone-shortcut disabled>
+              <span>Handy</span>
+              <b>Keins</b>
+            </button>
+          </section>
+
+          <nav class="tabs" aria-label="Spielbereiche">
+            <button class="active" data-tab="overview">Heute</button>
+            <button data-tab="work">Arbeit</button>
+          </nav>
+
+          <section id="character" class="tab-panel">
+            <div id="characterPanel" class="item-list"></div>
+          </section>
+
+          <section id="barber" class="tab-panel">
+            <div id="barberPanel" class="item-list"></div>
+          </section>
+
+          <section id="tattoo" class="tab-panel">
+            <div id="tattooPanel" class="item-list"></div>
+          </section>
+
+          <section id="overview" class="tab-panel active">
+            <div class="action-list" id="dailyActions"></div>
+            <div class="feed" id="eventFeed"></div>
+          </section>
+
+          <section id="work" class="tab-panel">
+            <div id="jobList" class="item-list"></div>
+          </section>
+
+          <section id="bank" class="tab-panel">
+            <div class="bank-card">
+              <p class="eyebrow" id="bankName">Bank</p>
+              <h2 id="accountIban">DE00 0000 0000 0000</h2>
+              <p id="creditInfo">Kreditrahmen: 0 €</p>
+            </div>
+            <div class="action-list" id="bankActions"></div>
+            <div id="investmentList" class="item-list"></div>
+          </section>
+
+          <section id="shop" class="tab-panel">
+            <div id="shopList" class="item-list"></div>
+          </section>
+
+          <section id="world" class="tab-panel">
+            <div class="map-toolbar unified-map-toolbar local-only-map-toolbar">
+              <div>
+                <p class="eyebrow">Lokale Karte</p>
+                <h2 id="locationLabel">Stadtkarte</h2>
+              </div>
+              <span class="airport-map-hint">Fernreisen starten ausschließlich am Flughafen.</span>
+            </div>
+            <div id="cityMap" class="city-map"></div>
+            <div id="routeList" class="item-list"></div>
+          </section>
+
+          <section id="map" class="tab-panel hidden">
+          </section>
+
+          <section id="games" class="tab-panel">
+            <div id="gameLibrary" class="item-list"></div>
+          </section>
+
+          <section id="casino" class="tab-panel">
+            <div class="casino-wallet">
+              <div>
+                <p class="eyebrow">Spielhalle</p>
+                <h2>Casino Entertainment</h2>
+              </div>
+            </div>
+            <div id="casinoList" class="item-list"></div>
+          </section>
+
+          <section id="inventory" class="tab-panel hidden">
+            <div id="inventoryList" class="item-list"></div>
+          </section>
+
+          <section id="realestate" class="tab-panel">
+            <div id="realEstateList" class="item-list"></div>
+          </section>
+        </main>
+      </section>
+
+      <dialog id="detailDialog">
+        <button id="closeDialog" class="icon-button close" type="button" title="Schließen">×</button>
+        <button id="dialogBack" class="dialog-back-button" type="button" hidden>← Zurück</button>
+        <h2 id="dialogTitle"></h2>
+        <p id="dialogText"></p>
+      </dialog>
+    </div>
+
+  <script src="webrtc-config.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="firebase-runtime.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="app.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
+  <script src="casino-v82.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="financial-crisis.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
+  <script src="online-events.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="support-tickets.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="online-settings-menu.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
+  <script src="mrdn-kl.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="battle-hub-kl.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="weed-kl.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="life-update-20260724.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
+  <script>
+    (() => {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      document.documentElement.classList.toggle('standalone-app', standalone);
+    })();
+  </script>
+  <script src="life-expansion-20260724b.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="pet-ui-v88.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="arena-kl-server-config.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="arena-kl.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+  <script src="phone-v87.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="runner-kl.js?v=20260730-runner-kl-v96-boost-system"></script>
+  <script type="module" src="cottbus-3d.js?v=20260729-jkgames-v88-unified-shop-design"></script>
+
+</body>
+</html>

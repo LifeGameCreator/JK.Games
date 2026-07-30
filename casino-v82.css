@@ -1,0 +1,355 @@
+/* ========================================================================== 
+   JK.Games V82 · neues Casino-Design
+   ========================================================================== */
+
+.casino-v82-game-panel {
+  width: min(96vw, 1480px) !important;
+  max-width: none !important;
+  height: min(94dvh, 920px) !important;
+  border-radius: 28px !important;
+  overflow: hidden !important;
+  background: #050807 !important;
+  box-shadow: 0 34px 100px rgba(0,0,0,.78), 0 0 0 1px rgba(255,255,255,.08) !important;
+}
+.casino-v82-game-panel .casino-world-panel-head { display:none !important; }
+.casino-v82-game-panel .casino-world-panel-scroll {
+  height: 100% !important;
+  max-height: none !important;
+  padding: 0 !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  background: #040706;
+}
+.casino-v82-game-panel .casino-world-panel-scroll::-webkit-scrollbar { width: 8px; }
+.casino-v82-game-panel .casino-world-panel-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 999px; }
+
+.c82-shell {
+  --gold:#f0c25f;
+  --green:#22d66f;
+  --blue:#1688ff;
+  --red:#ef3340;
+  --purple:#8a4fff;
+  min-height:100%;
+  color:#f5f8f6;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255,190,75,.13), transparent 34%),
+    linear-gradient(180deg, #101713 0%, #06100b 45%, #030504 100%);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  position:relative;
+  isolation:isolate;
+}
+.c82-shell * { box-sizing:border-box; }
+.c82-shell button, .c82-shell input, .c82-shell select { font:inherit; }
+.c82-shell button { cursor:pointer; touch-action:manipulation; }
+.c82-shell button:disabled { opacity:.38; cursor:not-allowed; filter:saturate(.35); }
+.c82-game-head {
+  position:sticky; top:0; z-index:30;
+  min-height:78px; display:grid; grid-template-columns:56px 1fr auto; align-items:center; gap:16px;
+  padding:12px 18px;
+  background:linear-gradient(180deg, rgba(5,9,7,.98), rgba(5,9,7,.90));
+  border-bottom:1px solid rgba(255,255,255,.09);
+  backdrop-filter:blur(18px);
+}
+.c82-game-head h2 { margin:1px 0 0; font-size:clamp(22px,3vw,38px); line-height:1; letter-spacing:-.03em; }
+.c82-game-head small { color:#9baf9f; letter-spacing:.17em; font-size:10px; font-weight:900; }
+.c82-back,.c82-icon-button {
+  width:48px;height:48px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));color:white;font-weight:900;font-size:24px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 8px 20px rgba(0,0,0,.28);
+}
+.c82-head-balance { display:flex; align-items:center; gap:12px; }
+.c82-head-balance>span { text-align:right; }
+.c82-head-balance small { display:block; color:#79a98a; letter-spacing:.13em; font-size:9px; }
+.c82-head-balance b { display:block; font-size:20px; white-space:nowrap; }
+.c82-icon-button { width:44px;height:44px;border-radius:50%;font-size:20px;color:#06140c;background:linear-gradient(#f8d986,#c99831); }
+.c82-message {
+  position:sticky; bottom:0; z-index:25; margin:0; padding:12px 20px; text-align:center;
+  border-top:1px solid rgba(255,255,255,.1); background:rgba(3,7,5,.92); color:#c8d7cc; font-weight:750; backdrop-filter:blur(15px);
+}
+.c82-info-backdrop { position:absolute; inset:0; z-index:80; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.76); backdrop-filter:blur(12px); }
+.c82-info-card { width:min(520px,95vw); border:1px solid rgba(240,194,95,.35); border-radius:24px; padding:26px; background:linear-gradient(145deg,#122019,#070c09); box-shadow:0 30px 90px #000; position:relative; }
+.c82-info-card>button { position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:50%;border:0;background:#212a25;color:white;font-size:24px; }
+.c82-info-card small { color:var(--gold);letter-spacing:.16em;font-weight:900; }
+.c82-info-card h3 { font-size:30px;margin:7px 0 12px; }
+.c82-info-card p { color:#b8c5bc;line-height:1.6; }
+.c82-info-card div { display:flex;justify-content:space-between;gap:20px;padding:12px 0;border-top:1px solid rgba(255,255,255,.08); }
+
+.c82-stake-panel { margin:14px 18px; padding:14px; border:1px solid rgba(255,255,255,.10); border-radius:20px; background:rgba(0,0,0,.28); }
+.c82-stake-heading { display:flex;justify-content:space-between;align-items:end;gap:14px;margin-bottom:12px; }
+.c82-stake-heading small { display:block;color:#8aa08f;font-size:9px;letter-spacing:.16em;font-weight:900; }
+.c82-stake-heading b { font-size:22px; }
+.c82-stake-heading em { color:#9caf9f;font-size:12px;font-style:normal; }
+.c82-chip-row { display:flex;gap:8px;overflow:auto;padding-bottom:5px;scrollbar-width:none; }
+.c82-chip-row::-webkit-scrollbar { display:none; }
+.c82-chip { flex:0 0 auto; min-width:76px; height:46px; border-radius:50%; border:5px dashed rgba(255,255,255,.45); color:white; font-weight:950; background:radial-gradient(circle,#2e7d46 0 45%,#174927 46% 100%); box-shadow:0 5px 12px #0008; }
+.c82-chip:nth-child(2n) { background:radial-gradient(circle,#b1262e 0 45%,#6a1219 46% 100%); }
+.c82-chip:nth-child(3n) { background:radial-gradient(circle,#254f9d 0 45%,#122c61 46% 100%); }
+.c82-chip.is-active { outline:3px solid var(--gold); transform:translateY(-2px); }
+.c82-custom-stake { display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px; }
+.c82-custom-stake input { min-width:0;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#07100b;color:white;padding:12px; }
+.c82-custom-stake button,.c82-bottom-actions button,.c82-main-action,.c82-leave-room { border:1px solid rgba(255,255,255,.12);border-radius:12px;background:linear-gradient(#195a36,#0c3920);color:white;padding:11px 16px;font-weight:900; }
+.c82-bottom-actions { display:flex;gap:10px;justify-content:center;padding:0 18px 16px; }
+.c82-bottom-actions button { min-width:170px; }
+
+/* Blackjack */
+.c82-blackjack-table {
+  min-height:680px; position:relative; overflow:hidden; padding:18px 240px 176px 240px;
+  background:
+    radial-gradient(ellipse at 50% 55%, rgba(15,107,58,.98), rgba(2,54,28,.98) 58%, #012615 59% 72%, #23150c 73% 77%, #080706 78%),
+    repeating-linear-gradient(90deg,transparent 0 50px,rgba(255,255,255,.012) 51px 52px);
+  border-bottom:14px solid #1b1009;
+}
+.c82-blackjack-table:before { content:"BLACK JACK PAYS 3 TO 2";position:absolute;left:50%;top:170px;transform:translateX(-50%) rotate(-2deg);font-family:Georgia,serif;font-size:clamp(22px,3vw,52px);color:rgba(255,255,255,.54);white-space:nowrap; }
+.c82-bj-rules { position:absolute;left:18px;top:26px;width:190px;padding:16px;border:1px solid rgba(255,255,255,.16);border-radius:16px;background:rgba(0,0,0,.45);display:grid;gap:10px; }
+.c82-bj-rules b { font-size:18px; }
+.c82-bj-rules span { color:#d5ddd7;font-size:13px; }
+.c82-bj-dealer,.c82-bj-player { text-align:center;position:relative;z-index:2; }
+.c82-bj-dealer { margin-bottom:145px; }
+.c82-bj-dealer small,.c82-bj-player small { display:block;color:#d8e9dd;letter-spacing:.15em;font-weight:900;margin-bottom:9px; }
+.c82-bj-dealer>b,.c82-bj-player>b { display:inline-grid;place-items:center;min-width:58px;height:42px;border-radius:10px;background:#050706;color:white;font-size:25px;border:1px solid rgba(255,255,255,.14); }
+.c82-card-row { display:flex;justify-content:center;min-height:145px; }
+.c82-card-row .c82-card + .c82-card { margin-left:-38px; }
+.c82-card { width:94px;height:138px;border-radius:10px;background:linear-gradient(145deg,#fff,#e9ecea);color:#151716;position:relative;display:block;border:1px solid #a8afa9;box-shadow:0 8px 14px #0008; }
+.c82-card b,.c82-card em { position:absolute;font:900 21px Georgia,serif; }
+.c82-card b { left:8px;top:6px; }
+.c82-card em { right:8px;bottom:6px;transform:rotate(180deg);font-style:normal; }
+.c82-card i { position:absolute;inset:0;display:grid;place-items:center;font:42px Georgia,serif;font-style:normal; }
+.c82-card.is-red { color:#d31626; }
+.c82-card.is-back { background:repeating-linear-gradient(45deg,#9d1520 0 5px,#d93c47 6px 10px);border:6px double white;color:white; }
+.c82-card.is-back i { font-size:38px;text-shadow:0 2px 0 #000; }
+.c82-bj-actions { display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:14px;margin-top:22px; }
+.c82-bj-actions button { border-radius:18px;border:2px solid rgba(255,255,255,.25);color:white;padding:13px 8px;font-size:18px;font-weight:950;box-shadow:inset 0 1px 0 #fff5,0 8px 18px #0008; }
+.c82-bj-actions button span { display:block;font-size:28px;margin-bottom:3px; }
+.c82-bj-actions .is-green { background:linear-gradient(#21964e,#0d5128); }
+.c82-bj-actions .is-blue { background:linear-gradient(#1678bc,#083d69); }
+.c82-bj-actions .is-gold { background:linear-gradient(#c4841a,#714405); }
+.c82-bj-actions .is-purple { background:linear-gradient(#7b4bb1,#40205f); }
+.c82-bj-side { position:absolute;right:18px;top:26px;width:195px;display:grid;gap:10px; }
+.c82-bj-side span { padding:13px;border-radius:14px;background:rgba(0,0,0,.48);border:1px solid rgba(255,255,255,.14); }
+.c82-bj-side small { display:block;color:#9eb6a4;font-size:9px;letter-spacing:.12em; }
+.c82-bj-side b { display:block;margin-top:3px;font-size:18px; }
+.c82-bj-bottom { position:absolute;left:18px;right:18px;bottom:10px;display:grid;grid-template-columns:1fr 210px;align-items:end;gap:14px; }
+.c82-bj-bottom .c82-stake-panel { margin:0; }
+.c82-new-round { height:74px;border-radius:18px;border:1px solid #ffffff30;background:linear-gradient(#333c36,#111713);color:white;font-size:18px;font-weight:950; }
+
+/* Poker */
+.c82-poker-menu { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:24px; }
+.c82-poker-menu section { min-height:300px;padding:28px;border:1px solid rgba(255,255,255,.12);border-radius:24px;background:radial-gradient(circle at 20% 0,rgba(25,123,72,.22),transparent 50%),#09120d;display:flex;flex-direction:column;align-items:flex-start; }
+.c82-poker-menu section>span { font-size:50px; }
+.c82-poker-menu small { color:var(--gold);letter-spacing:.15em;font-weight:900;margin-top:16px; }
+.c82-poker-menu h3 { font-size:30px;margin:4px 0 8px; }
+.c82-poker-menu p { color:#aebdb3;line-height:1.55;flex:1; }
+.c82-poker-menu label { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+.c82-poker-menu select { background:#020604;color:white;border:1px solid #ffffff24;border-radius:10px;padding:8px 12px; }
+.c82-poker-menu button { width:100%;border:0;border-radius:13px;padding:14px;background:linear-gradient(#168b54,#075b32);color:white;font-weight:950; }
+.c82-poker-table { min-height:650px;position:relative;margin:18px;border-radius:46%/18%;border:16px solid #28150e;background:radial-gradient(ellipse,#08713f,#034526 68%,#042416 69%);box-shadow:inset 0 0 0 4px #9b5d25,inset 0 0 80px #0009,0 20px 45px #0008;overflow:hidden; }
+.c82-poker-table:after { content:"TEXAS HOLD’EM";position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);font:800 clamp(22px,3vw,50px) Georgia,serif;color:#d9a953;opacity:.85;white-space:nowrap; }
+.c82-poker-pot { position:absolute;left:50%;top:13%;transform:translateX(-50%);z-index:3;background:#061811d9;border:1px solid #ffffff25;border-radius:999px;padding:10px 34px;text-align:center; }
+.c82-poker-pot small { display:block;color:#b5c9bb;font-size:9px;letter-spacing:.14em; }
+.c82-poker-pot b { display:block;color:#ffca42;font-size:24px; }
+.c82-community-cards { position:absolute;left:50%;top:36%;transform:translateX(-50%);z-index:4;display:flex; }
+.c82-community-cards .c82-card { width:72px;height:104px; }
+.c82-community-cards .c82-card+.c82-card { margin-left:7px; }
+.c82-poker-seat { position:absolute;z-index:6;width:150px;text-align:center;color:white; }
+.c82-poker-seat .c82-avatar { margin:auto;width:72px;height:72px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#293b51,#111a25);border:4px solid #c79b43;font-size:25px;font-weight:950;box-shadow:0 8px 20px #0009; }
+.c82-poker-seat>b { display:block;background:#06100ce8;border-radius:10px 10px 0 0;padding:4px 8px;margin-top:-4px; }
+.c82-poker-seat>span { display:block;background:#06100ce8;color:#b7f250;border-radius:0 0 10px 10px;padding:2px 8px;font-weight:800; }
+.c82-poker-seat>em { position:absolute;inset:0;display:grid;place-items:center;background:#0009;border-radius:20px;color:#ff6565;font-weight:950;font-style:normal; }
+.c82-mini-cards { display:flex;justify-content:center;margin-top:6px; }
+.c82-mini-cards .c82-card { width:42px;height:60px;border-radius:5px; }
+.c82-mini-cards .c82-card+.c82-card { margin-left:-12px; }
+.c82-mini-cards .c82-card b,.c82-mini-cards .c82-card em { font-size:11px; }
+.c82-mini-cards .c82-card i { font-size:17px; }
+.c82-poker-seat.is-you .c82-avatar { outline:5px solid #2eff66;box-shadow:0 0 28px #27ff69; }
+.c82-poker-seat.is-folded { opacity:.42;filter:grayscale(.6); }
+.c82-poker-seat.seat-0 { left:50%;bottom:2%;transform:translateX(-50%); }
+.c82-poker-seat.seat-1 { left:4%;bottom:17%; }
+.c82-poker-seat.seat-2 { left:8%;top:7%; }
+.c82-poker-seat.seat-3 { left:50%;top:2%;transform:translateX(-50%); }
+.c82-poker-seat.seat-4 { right:8%;top:7%; }
+.c82-poker-seat.seat-5 { right:4%;bottom:17%; }
+.c82-poker-actions { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:0 18px 14px; }
+.c82-poker-actions button { min-height:64px;border-radius:16px;border:2px solid #ffffff25;background:linear-gradient(#137bc7,#064778);color:white;font-size:18px;font-weight:950; }
+.c82-poker-actions .raise { background:linear-gradient(#d49b24,#895506); }
+.c82-poker-actions .fold { background:linear-gradient(#dc3443,#7f111a); }
+.c82-online-lobby,.c82-online-room { padding:22px; }
+.c82-online-status { min-height:200px;display:flex;align-items:center;justify-content:center;gap:18px;border:1px solid #ffffff20;border-radius:22px;background:#07110c; }
+.c82-online-status .pulse { width:20px;height:20px;border-radius:50%;background:#32e980;box-shadow:0 0 24px #32e980;animation:c82pulse 1.2s infinite; }
+.c82-online-status small,.c82-room-code small { display:block;color:#80aa8d;font-size:9px;letter-spacing:.14em; }
+.c82-online-status b { display:block;font-size:24px; }
+.c82-online-actions { display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px; }
+.c82-online-actions button,.c82-leave-room,.c82-main-action { min-height:52px; }
+.c82-room-code { display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px; }
+.c82-room-code>span { padding:12px 16px;border:1px solid #ffffff18;border-radius:14px;background:#07110d; }
+.c82-room-code b { display:block;font-size:20px; }
+.c82-online-room .c82-poker-table { min-height:560px;margin:0 0 14px; }
+.c82-lobby-player-list { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px; }
+.c82-lobby-player-list span { padding:8px 12px;border-radius:999px;background:#15241b;color:#d8e5dc; }
+.c82-lobby-player-list b { color:#f4ca6b; }
+.c82-main-action,.c82-leave-room { width:100%;margin:8px 0; }
+
+/* Slots */
+.c82-shell.is-slots { background:radial-gradient(circle at 50% 0,#21133e,#070511 52%,#020204); }
+.c82-slot-machine { width:min(760px,94%);margin:18px auto;padding:18px;border-radius:34px;background:linear-gradient(145deg,#17151d,#020204 45%,#18121f);border:6px solid #27222d;box-shadow:0 0 0 2px #f3aa26,0 0 38px #ff761f55,inset 0 0 34px #000; }
+.c82-slot-machine:before { content:"V82 JACKPOT";display:block;text-align:center;padding:8px 0 14px;color:#ffd25d;font:950 clamp(25px,4vw,48px) Georgia,serif;text-shadow:0 0 16px #ff8800; }
+.c82-slot-paytable { display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:14px; }
+.c82-slot-paytable div { padding:8px;border:1px solid #eaa829;border-radius:10px;background:#030204;text-align:center;box-shadow:inset 0 0 12px #ff8c0020; }
+.c82-slot-paytable b { display:block;color:#ff3737;font-size:23px; }
+.c82-slot-paytable span { display:block;font-size:9px;color:#f5d481; }
+.c82-slot-reels { display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:8px;border:6px solid #a36e1f;border-radius:14px;background:#09070e;overflow:hidden; }
+.c82-slot-reels span { min-height:74px;display:grid;place-items:center;background:linear-gradient(#17131d,#08070c);border:1px solid #ffffff14;font-size:35px;font-weight:950;color:#ffd25c;text-shadow:0 2px 0 #000,0 0 14px currentColor; }
+.c82-slot-reels span.symbol-bar { font-size:18px;color:#f3f3f3; }
+.c82-slot-reels span.symbol-diamond { color:#4ccfff; }
+.c82-slot-reels span.symbol-7 { color:#ff283b;font-size:45px; }
+.c82-slot-reels.is-spinning span { animation:c82slot .22s linear infinite;filter:blur(1px); }
+.c82-slot-display { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0; }
+.c82-slot-display span { padding:8px;border:2px solid #795517;border-radius:9px;background:#090700;text-align:center; }
+.c82-slot-display small { display:block;color:#f8c85d;font-size:9px;letter-spacing:.13em; }
+.c82-slot-display b { display:block;color:#ff3535;font:900 24px monospace;text-shadow:0 0 10px #f00; }
+.c82-slot-buttons { display:grid;grid-template-columns:1.3fr .7fr .7fr .9fr 1.3fr;gap:10px; }
+.c82-slot-buttons button { min-height:58px;border-radius:14px;border:3px solid #ffffff3a;color:white;font-weight:950;box-shadow:inset 0 1px 0 #fff6,0 8px 16px #000a; }
+.c82-slot-buttons .start { background:linear-gradient(#2bc969,#087634); }
+.c82-slot-buttons button:not(.start):not(.risk):not(.auto) { background:linear-gradient(#e6a72b,#9b5d04);font-size:28px; }
+.c82-slot-buttons .risk { background:linear-gradient(#e52f47,#8b0a1b); }
+.c82-slot-buttons .auto { background:linear-gradient(#267feb,#0a428e); }
+.c82-slot-buttons .auto.is-active { box-shadow:0 0 22px #238cff; }
+.c82-slot-cash { display:grid;grid-template-columns:1fr 150px 150px;gap:12px;align-items:center;margin-top:16px;padding:14px;border-top:1px solid #ffffff17; }
+.c82-slot-cash small { display:block;color:#ceb56e;font-size:9px;letter-spacing:.12em;margin-bottom:7px; }
+.c82-slot-cash>div:first-child>div { display:flex;gap:6px;overflow:auto; }
+.c82-slot-cash button { min-width:72px;padding:10px;border-radius:10px;border:1px solid #ffffff20;background:#17231b;color:white;font-weight:900; }
+.c82-slot-inlet { height:80px;border-radius:12px;background:#020203;border:2px solid #26354f;box-shadow:inset 0 0 18px #005fffaa;text-align:center;padding:9px; }
+.c82-slot-inlet span { font-size:9px;color:#7daaff; }
+.c82-slot-inlet i { display:block;height:12px;margin-top:18px;background:#091d47;box-shadow:0 0 14px #1171ff; }
+
+/* High or Lower */
+.c82-shell.is-highlow { background:radial-gradient(circle at 50% 0,#244a31,#07180e 58%,#030604); }
+.c82-highlow-table { min-height:560px;padding:24px;position:relative;background:radial-gradient(ellipse at center,#0a773d,#034622 70%,#24150b 71% 75%,#050504 76%); }
+.c82-highlow-stats { display:flex;justify-content:space-between;gap:10px; }
+.c82-highlow-stats span,.c82-highlow-win { padding:12px 20px;border:1px solid #e3b84966;border-radius:14px;background:#07110bd9;text-align:center; }
+.c82-highlow-stats small,.c82-highlow-win small { display:block;color:#d2bb72;font-size:9px;letter-spacing:.14em; }
+.c82-highlow-stats b { display:block;font-size:24px; }
+.c82-highlow-cards { display:flex;align-items:center;justify-content:center;gap:60px;margin:44px 0 24px; }
+.c82-highlow-cards>div { text-align:center; }
+.c82-highlow-cards small { display:block;color:#d6e7da;font-weight:850;margin-bottom:8px; }
+.c82-highlow-cards .c82-card { width:160px;height:230px; }
+.c82-highlow-cards .c82-card b,.c82-highlow-cards .c82-card em { font-size:34px; }
+.c82-highlow-cards .c82-card i { font-size:74px; }
+.c82-highlow-cards>b { color:#e3be68;font:900 46px Georgia,serif; }
+.c82-highlow-win { width:min(390px,90%);margin:0 auto 18px; }
+.c82-highlow-win>b { display:block;color:#ffd86c;font-size:34px; }
+.c82-highlow-win>div { display:flex;gap:5px;justify-content:center;margin-top:8px; }
+.c82-highlow-win i { width:18px;height:8px;border-radius:999px;background:#213429; }
+.c82-highlow-win i.done { background:#6bff55;box-shadow:0 0 8px #5cff4a; }
+.c82-highlow-buttons { display:grid;grid-template-columns:1fr 1fr;gap:22px;width:min(840px,94%);margin:auto; }
+.c82-highlow-buttons button { min-height:96px;border-radius:22px;border:3px solid #ffffff55;color:white;font-size:clamp(22px,4vw,44px);font-weight:950;box-shadow:inset 0 2px 0 #fff8,0 12px 25px #0008; }
+.c82-highlow-buttons .higher { background:linear-gradient(#42e83f,#119319); }
+.c82-highlow-buttons .lower { background:linear-gradient(#ff4444,#b40d18); }
+
+/* Roulette */
+.c82-shell.is-roulette { background:radial-gradient(circle at 50% 0,#3b160c,#090604 58%,#020202); }
+.c82-roulette-layout { display:grid;grid-template-columns:minmax(320px,.85fr) minmax(520px,1.7fr) 210px;gap:16px;padding:18px;align-items:center; }
+.c82-wheel-wrap { text-align:center; }
+.c82-wheel { --wheel-rotation:0deg;width:min(36vw,440px);aspect-ratio:1;margin:auto;border-radius:50%;position:relative;background:repeating-conic-gradient(#c3282c 0 4.86deg,#121313 4.86deg 9.72deg);border:18px solid #7b411a;box-shadow:0 0 0 6px #e9a83c,0 18px 40px #000,inset 0 0 0 18px #30150b;transform:rotate(var(--wheel-rotation));transition:transform 3.2s cubic-bezier(.08,.7,.12,1); }
+.c82-wheel:before { content:"";position:absolute;inset:25%;border-radius:50%;background:radial-gradient(circle,#c78923 0 14%,#6e370d 15% 34%,#211108 35% 100%);border:4px solid #f2bf58; }
+.c82-wheel.is-spinning { transform:rotate(var(--wheel-rotation)); }
+.c82-wheel-numbers i { position:absolute;left:50%;top:50%;width:26px;margin-left:-13px;height:48%;transform-origin:50% 100%;transform:translateY(-100%) rotate(calc(var(--i) * 9.7297deg));color:white;font-size:10px;font-style:normal;font-weight:900; }
+.c82-wheel-center { position:absolute;inset:39%;display:grid;place-items:center;border-radius:50%;background:#d69c36;color:#402008;font-size:48px;box-shadow:0 0 20px #ffc550; }
+.c82-ball { position:absolute;left:50%;top:5%;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:white;box-shadow:0 0 10px white; }
+.c82-wheel.is-spinning .c82-ball { animation:c82ball 3.1s cubic-bezier(.13,.6,.2,1); }
+.c82-hot-numbers { margin-top:18px;display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap; }
+.c82-hot-numbers small { color:#d1a859;margin-right:6px; }
+.c82-hot-numbers b { width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:white; }
+.c82-hot-numbers .red { background:#b81e2b; }.c82-hot-numbers .black { background:#161819; }.c82-hot-numbers .green { background:#13833e; }
+.c82-roulette-board { padding:8px;border:2px solid #c7973d;border-radius:12px;background:#0b4a28; }
+.c82-number-grid { display:grid;grid-template-columns:repeat(12,1fr);gap:2px; }
+.c82-number-grid button,.c82-outside-grid button { min-height:48px;position:relative;border:1px solid #e3c77f;color:white;background:#111;font-weight:900; }
+.c82-number-grid button.red,.c82-outside-grid button.red { background:#b6242b; }
+.c82-number-grid button.black,.c82-outside-grid button.black { background:#171919; }
+.c82-number-grid button.zero { grid-row:span 3;background:#087438; }
+.c82-number-grid button.has-chip,.c82-outside-grid button.has-chip { outline:3px solid #fff;z-index:2; }
+.c82-number-grid button i,.c82-outside-grid button i { position:absolute;left:50%;bottom:2px;transform:translateX(-50%);font-size:8px;background:#f0d47a;color:#111;padding:2px 4px;border-radius:999px;font-style:normal;white-space:nowrap; }
+.c82-outside-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:2px;margin-top:2px; }
+.c82-outside-grid button { background:#0c4a2a; }
+.c82-roulette-control { display:grid;gap:12px; }
+.c82-roulette-control>span { padding:14px;border-radius:15px;background:#08110d;border:1px solid #d3a74c;text-align:center; }
+.c82-roulette-control small { display:block;color:#d1b46d;font-size:9px;letter-spacing:.13em; }
+.c82-roulette-control b { display:block;font-size:26px; }
+.c82-chip-column { display:grid;grid-template-columns:1fr 1fr;gap:7px; }
+.c82-chip-column button { min-height:44px;border-radius:50%;border:5px dashed #ffffff66;background:#234c9e;color:white;font-weight:900; }
+.c82-chip-column button:nth-child(2n) { background:#a2202a; }
+.c82-chip-column button.is-active { outline:3px solid #ffd152; }
+.c82-roulette-control>button { min-height:56px;border-radius:14px;border:1px solid #ffffff2a;background:#181e1a;color:white;font-weight:950; }
+.c82-roulette-control>button.spin { min-height:100px;border-radius:50%;background:linear-gradient(#61e852,#188827);font-size:20px;box-shadow:0 0 22px #40e14a77; }
+
+/* map buttons stay invisible and exactly on the mapped labels */
+.casino-map-hotspot { background:transparent !important;border:0 !important;box-shadow:none !important;color:transparent !important;opacity:0 !important; }
+.casino-map-hotspot:focus-visible { opacity:.14 !important;outline:2px solid #fff !important; }
+
+@keyframes c82pulse { 50% { transform:scale(.65);opacity:.45; } }
+@keyframes c82slot { to { transform:translateY(12px); } }
+@keyframes c82ball { 0% { transform:rotate(0deg) translateY(0); } 75% { transform:rotate(-1800deg) translateY(58px); } 100% { transform:rotate(-2160deg) translateY(90px); } }
+
+@media (max-width: 980px) {
+  .casino-v82-game-panel { width:100vw !important;height:100dvh !important;border-radius:0 !important; }
+  .c82-game-head { grid-template-columns:48px 1fr auto;padding:10px; }
+  .c82-head-balance>span { display:none; }
+  .c82-blackjack-table { padding:18px 12px 200px;min-height:740px; }
+  .c82-bj-rules,.c82-bj-side { position:static;width:auto;display:flex;overflow:auto;margin-bottom:12px; }
+  .c82-bj-rules span,.c82-bj-side span { flex:0 0 auto; }
+  .c82-bj-dealer { margin-bottom:90px; }
+  .c82-blackjack-table:before { top:275px;font-size:24px; }
+  .c82-bj-actions { grid-template-columns:1fr 1fr; }
+  .c82-bj-bottom { grid-template-columns:1fr; }
+  .c82-new-round { height:54px; }
+  .c82-poker-menu { grid-template-columns:1fr;padding:12px; }
+  .c82-poker-table { min-height:620px;margin:8px;border-width:8px;border-radius:30px; }
+  .c82-poker-seat { width:110px; }
+  .c82-poker-seat .c82-avatar { width:54px;height:54px;font-size:18px; }
+  .c82-poker-seat.seat-1 { left:0;bottom:18%; }.c82-poker-seat.seat-2 { left:0;top:9%; }.c82-poker-seat.seat-4 { right:0;top:9%; }.c82-poker-seat.seat-5 { right:0;bottom:18%; }
+  .c82-community-cards .c82-card { width:48px;height:72px; }
+  .c82-community-cards .c82-card b,.c82-community-cards .c82-card em { font-size:12px; }.c82-community-cards .c82-card i { font-size:20px; }
+  .c82-room-code { grid-template-columns:1fr; }
+  .c82-online-actions { grid-template-columns:1fr; }
+  .c82-slot-machine { width:calc(100% - 16px);margin:8px;padding:10px;border-width:3px; }
+  .c82-slot-paytable { grid-template-columns:repeat(2,1fr); }
+  .c82-slot-reels span { min-height:54px;font-size:25px; }
+  .c82-slot-buttons { grid-template-columns:1fr 1fr 1fr; }
+  .c82-slot-buttons .start,.c82-slot-buttons .auto { grid-column:span 1; }
+  .c82-slot-cash { grid-template-columns:1fr; }
+  .c82-slot-inlet { display:none; }
+  .c82-highlow-table { padding:14px;min-height:620px; }
+  .c82-highlow-stats { overflow:auto; }
+  .c82-highlow-stats span { min-width:120px; }
+  .c82-highlow-cards { gap:20px;margin:50px 0 25px; }
+  .c82-highlow-cards .c82-card { width:118px;height:172px; }
+  .c82-highlow-buttons { gap:10px; }
+  .c82-highlow-buttons button { min-height:76px;font-size:24px; }
+  .c82-roulette-layout { grid-template-columns:1fr;padding:10px; }
+  .c82-wheel { width:min(78vw,380px); }
+  .c82-number-grid { grid-template-columns:repeat(6,1fr); }
+  .c82-outside-grid { grid-template-columns:repeat(3,1fr); }
+  .c82-roulette-control { grid-template-columns:1fr 1fr; }
+  .c82-roulette-control>span,.c82-chip-column { grid-column:1/-1; }
+  .c82-chip-column { grid-template-columns:repeat(4,1fr); }
+  .c82-roulette-control>button.spin { min-height:68px;border-radius:16px; }
+}
+
+@media (max-width: 560px) {
+  .c82-game-head h2 { font-size:21px; }
+  .c82-card { width:72px;height:108px; }
+  .c82-bj-actions button { font-size:14px; }
+  .c82-stake-heading { align-items:flex-start;flex-direction:column; }
+  .c82-custom-stake { grid-template-columns:1fr; }
+  .c82-poker-table { min-height:560px; }
+  .c82-poker-seat { width:86px;font-size:11px; }
+  .c82-poker-seat .c82-avatar { width:44px;height:44px; }
+  .c82-poker-pot { top:16%;padding:8px 16px; }
+  .c82-community-cards { top:38%; }
+  .c82-poker-actions { grid-template-columns:1fr; }
+  .c82-highlow-cards>b { font-size:26px; }
+  .c82-highlow-cards .c82-card { width:98px;height:146px; }
+  .c82-slot-display b { font-size:17px; }
+  .c82-slot-buttons { grid-template-columns:repeat(2,1fr); }
+  .c82-slot-buttons .start,.c82-slot-buttons .auto { grid-column:span 2; }
+  .c82-number-grid button,.c82-outside-grid button { min-height:42px;font-size:11px; }
+}

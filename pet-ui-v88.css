@@ -1,0 +1,484 @@
+.device-app-view>p:empty{display:none}
+.device-active-mrdn-kl .device-app-view>h3+p,.device-active-aergermensch-kl .device-app-view>h3+p,.device-active-grundstueck-kampf .device-app-view>h3+p,.device-active-paket-chaos .device-app-view>h3+p,.device-active-reaktions-battle .device-app-view>h3+p{display:none}
+.portrait-avatar-wrap{position:relative}
+.portrait-pet-quick{position:absolute;left:61%;bottom:20px;z-index:12;display:grid;place-items:center;width:44px;height:44px;padding:0;border:2px solid transparent;border-radius:50%;background:transparent;color:inherit;box-shadow:none;cursor:pointer;pointer-events:auto;touch-action:manipulation;transition:border-color .15s ease,background .15s ease,transform .15s ease}
+.portrait-avatar-wrap.with-partner .portrait-pet-quick{left:39%;bottom:20px}
+.portrait-pet-quick>span{display:block;font-size:33px;line-height:1;filter:drop-shadow(0 3px 5px rgba(0,0,0,.55));pointer-events:none}
+.portrait-pet-quick:hover,.portrait-pet-quick:focus-visible,.portrait-pet-quick:active,.portrait-pet-quick.is-pressed{border-color:rgba(240,214,96,.92);background:rgba(255,255,255,.08);outline:0;transform:translateY(-2px) scale(1.05)}
+.character-couple{position:relative}
+.character-pet-chip{position:absolute;left:calc(50% + 22px);bottom:72px;z-index:12;display:grid;place-items:center;width:52px;min-width:52px;height:52px;padding:0;border:2px solid transparent;border-radius:50%;background:transparent;box-shadow:none;cursor:pointer;pointer-events:auto;touch-action:manipulation;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.character-avatar-stack.with-partner .character-pet-chip{left:calc(25% + 18px)}
+.character-avatar-stack.with-partner .character-partner-pet-chip{left:calc(75% + 18px)}
+.character-pet-chip:hover,.character-pet-chip:focus-visible,.character-pet-chip:active{border-color:rgba(240,214,96,.88);background:rgba(255,255,255,.07);outline:0;transform:translateY(-2px) scale(1.04)}
+.character-pet-chip .character-pet-emoji{font-size:38px;line-height:1;filter:drop-shadow(0 3px 5px rgba(0,0,0,.55));pointer-events:none}
+.character-partner-pet-chip{width:48px;min-width:48px}.character-partner-pet-chip .character-pet-emoji{font-size:34px}
+.lbpet-character-selector{grid-column:1/-1;display:grid;gap:10px;margin:8px 0 14px;padding:13px;border:1px solid rgba(126,244,187,.2);border-radius:18px;background:linear-gradient(145deg,rgba(9,32,23,.9),rgba(11,23,18,.86))}
+.lbpet-character-selector h4,.lbpet-character-selector small{margin:0}.lbpet-character-selector>div:first-child small{font-size:10px;letter-spacing:.15em;color:#8fdab1}.lbpet-character-selector h4{font-size:17px}
+.lbpet-character-options{display:flex;gap:9px;overflow-x:auto;padding-bottom:3px;scrollbar-width:thin}.lbpet-character-options button{display:grid;grid-template-columns:38px minmax(75px,1fr);grid-template-rows:auto auto;gap:1px 8px;align-items:center;min-width:150px;padding:9px 11px;text-align:left;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.04)}.lbpet-character-options button>span{grid-row:1/3;font-size:31px}.lbpet-character-options button>b{font-size:13px}.lbpet-character-options button>small{font-size:9px;letter-spacing:.08em;opacity:.65}.lbpet-character-options button.active{border-color:rgba(240,214,96,.8);background:rgba(240,214,96,.11)}.lbpet-character-options button.active>small{color:#f0d660;opacity:1}
+.lbpet-overlay-v16{z-index:10050}.lbpet-shell-v16{max-width:1180px}.lbpet-shell-v16>header{align-items:center}.lbpet-shell-v16>header>button{min-width:44px}.lbpet-refresh{white-space:nowrap}
+.lbpet-shelter-hero{margin-bottom:14px}.lbpet-section{display:grid;gap:12px;margin-top:15px}.lbpet-section-head{display:flex;justify-content:space-between;gap:18px;align-items:end;padding:0 2px}.lbpet-section-head small{font-size:10px;letter-spacing:.14em;color:#8fdab1}.lbpet-section-head h3{margin:2px 0 0}.lbpet-section-head p{max-width:470px;margin:0;opacity:.7;text-align:right;font-size:12px}
+.lbpet-offer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.lbpet-offer-card{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px 12px;align-items:start;padding:14px;border:1px solid rgba(126,244,187,.14);border-radius:18px;background:rgba(8,27,19,.8)}.lbpet-offer-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:rgba(255,255,255,.06);font-size:34px}.lbpet-offer-card h3{margin:2px 0 3px}.lbpet-offer-card p,.lbpet-offer-card small{margin:0;opacity:.75}.lbpet-offer-card button{grid-column:2;justify-self:start}
+.lbpet-shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px}.lbpet-shop-card{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px 12px;align-items:start;padding:14px;border-radius:18px;background:rgba(12,26,19,.82);border:1px solid rgba(120,255,195,.14)}.lbpet-shop-card>span{display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:rgba(255,255,255,.06);font-size:30px}.lbpet-shop-card strong{display:block;margin:2px 0}.lbpet-shop-card p,.lbpet-shop-card small{margin:0;opacity:.72}.lbpet-shop-card button{grid-column:2;justify-self:start}
+.lbpet-tabs{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin}.lbpet-tabs button{position:relative;display:grid;grid-template-columns:36px minmax(70px,1fr);grid-template-rows:auto auto;align-items:center;gap:1px 8px;min-width:145px;padding:9px 11px;text-align:left;border:1px solid rgba(255,255,255,.1);border-radius:15px;background:rgba(255,255,255,.04)}.lbpet-tabs button>span{grid-row:1/3;font-size:30px}.lbpet-tabs button>small{font-weight:700}.lbpet-tabs button>b{font-size:8px;letter-spacing:.08em;color:#f0d660}.lbpet-tabs button.active{border-color:rgba(240,214,96,.75);background:rgba(240,214,96,.1)}
+.lbpet-pet-hero{display:grid;grid-template-columns:150px minmax(0,1fr);gap:20px;align-items:center;padding:20px;border:1px solid rgba(126,244,187,.16);border-radius:24px;background:radial-gradient(circle at 10% 20%,rgba(73,183,126,.16),transparent 45%),rgba(7,25,18,.9)}.lbpet-pet-hero.is-active{border-color:rgba(240,214,96,.35)}.lbpet-big-pet{display:grid;place-items:center;min-height:140px;border-radius:22px;background:rgba(255,255,255,.05);font-size:92px;filter:drop-shadow(0 10px 18px rgba(0,0,0,.35))}.lbpet-pet-copy h3{font-size:28px;margin:3px 0}.lbpet-pet-copy p{margin:0 0 11px;opacity:.8}.lbpet-pet-copy>small{color:#9ed8b8}.lbpet-level{display:grid;grid-template-columns:1fr auto;gap:5px 12px;align-items:center}.lbpet-level>i{grid-column:1/-1;display:block;height:8px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.08)}.lbpet-level>i>em{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#5bd690,#f0d660)}.lbpet-hero-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.lbpet-hero-buttons .ghost{background:transparent}
+.lbpet-meter-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}.lbpet-meter{display:grid;grid-template-columns:1fr auto;gap:6px;padding:11px 12px;border:1px solid rgba(255,255,255,.08);border-radius:15px;background:rgba(255,255,255,.035)}.lbpet-meter>span{font-size:12px}.lbpet-meter>b{font-size:12px}.lbpet-meter>i{grid-column:1/-1;height:6px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.07)}.lbpet-meter>i>em{display:block;height:100%;background:linear-gradient(90deg,#4bcf86,#e9d25c)}
+.lbpet-action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}.lbpet-action-card{display:grid;grid-template-columns:42px minmax(0,1fr);grid-template-rows:auto auto;gap:1px 9px;align-items:center;min-height:70px;padding:11px 12px;text-align:left;border:1px solid rgba(126,244,187,.14);border-radius:15px;background:rgba(10,31,22,.82)}.lbpet-action-card>span{grid-row:1/3;font-size:30px}.lbpet-action-card>strong{font-size:13px}.lbpet-action-card>small{font-size:10px;opacity:.7}.lbpet-action-card:disabled{opacity:.42;filter:saturate(.45)}
+.lbpet-stock{display:flex;flex-wrap:wrap;gap:7px;margin-top:3px}.lbpet-stock span{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.055);font-size:11px}.lbpet-stock b{color:#f0d660}
+@media (max-width:900px){.portrait-pet-quick{left:63%;bottom:24px;width:40px;height:40px}.portrait-avatar-wrap.with-partner .portrait-pet-quick{left:40%;bottom:24px}.portrait-pet-quick>span{font-size:30px}.character-pet-chip{left:calc(50% + 18px);bottom:68px;width:46px;min-width:46px;height:46px}.character-avatar-stack.with-partner .character-pet-chip{left:calc(25% + 14px)}.character-avatar-stack.with-partner .character-partner-pet-chip{left:calc(75% + 14px)}.character-pet-chip .character-pet-emoji{font-size:34px}.lbpet-section-head{display:grid;gap:4px}.lbpet-section-head p{text-align:left}.lbpet-pet-hero{grid-template-columns:94px minmax(0,1fr);gap:12px;padding:14px}.lbpet-big-pet{min-height:100px;font-size:65px}.lbpet-pet-copy h3{font-size:22px}.lbpet-meter-grid{grid-template-columns:repeat(2,1fr)}.lbpet-shop-grid,.lbpet-offer-grid{grid-template-columns:1fr}.lbpet-character-selector{margin-left:-2px;margin-right:-2px}}
+@media (max-width:520px){.lbpet-shell-v16>header{grid-template-columns:auto minmax(0,1fr) auto}.lbpet-shell-v16>header h2{font-size:18px}.lbpet-shell-v16>header>button:last-child{font-size:10px;padding:8px}.lbpet-pet-hero{grid-template-columns:1fr}.lbpet-big-pet{min-height:92px}.lbpet-meter-grid{grid-template-columns:1fr 1fr}.lbpet-action-grid{grid-template-columns:1fr}.lbpet-shop-card,.lbpet-offer-card{grid-template-columns:48px minmax(0,1fr)}.lbpet-shop-card>span,.lbpet-offer-icon{width:48px;height:48px}.lbpet-character-options button{min-width:135px}}
+
+/* V16: Persönliches Tiermenü ohne direkten Shop-Zugang */
+.lbpet-local-only{align-self:center;padding:7px 10px;border:1px solid rgba(125,235,190,.2);border-radius:999px;color:#8fe6bc;font-size:.66rem;font-weight:900;letter-spacing:.12em;background:rgba(25,95,70,.16)}
+.lbpet-map-shop-hint{margin:0;padding:12px 14px;border:1px solid rgba(245,190,75,.2);border-radius:14px;background:rgba(70,48,12,.2);color:#e8d39b;font-size:.76rem;line-height:1.5}
+
+/* V16: Einstellungen, Spielstandwahl und Charaktererstellung liegen als Setup-Ebene
+   über dem Spiel. Das Haustier darf durch diese Ebene nicht hindurchscheinen. */
+#setupScreen:not(.hidden) ~ #gameScreen .portrait-pet-quick,
+body:has(#setupScreen:not(.hidden)) .portrait-pet-quick{display:none!important;pointer-events:none!important}
+
+/* V36: Tierheim-Kaufbestätigung, Rückgabe und FeinAnzeigen.KL */
+.lbpet-hero-buttons .lbpet-market-button{
+  border-color:rgba(240,214,96,.5);
+  background:linear-gradient(145deg,rgba(101,76,16,.72),rgba(52,39,10,.86));
+  color:#ffe89a;
+}
+.lbpet-hero-buttons .lbpet-return-button{
+  border-color:rgba(239,119,109,.38);
+  background:rgba(91,27,25,.3);
+  color:#ffc1bb;
+}
+.lbpet-hero-buttons .lbpet-market-button:hover,
+.lbpet-hero-buttons .lbpet-market-button:focus-visible{
+  border-color:rgba(240,214,96,.9);
+  background:linear-gradient(145deg,rgba(132,99,18,.82),rgba(67,49,11,.94));
+}
+.lbpet-hero-buttons .lbpet-return-button:hover,
+.lbpet-hero-buttons .lbpet-return-button:focus-visible{
+  border-color:rgba(239,119,109,.8);
+  background:rgba(113,33,29,.5);
+}
+@media (max-width:520px){
+  .lbpet-hero-buttons{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .lbpet-hero-buttons button{width:100%;min-width:0;white-space:normal;line-height:1.25}
+  .lbpet-hero-buttons .lbpet-market-button,
+  .lbpet-hero-buttons .lbpet-return-button{grid-column:1/-1}
+}
+
+
+/* V86: Tierheim-Shop sofort sichtbar und schnell erreichbar. */
+.lbpet-shelter-shortcuts-v86 {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 0 14px;
+  background: linear-gradient(180deg, rgba(6, 16, 18, .98) 70%, rgba(6, 16, 18, 0));
+}
+
+.lbpet-shelter-shortcuts-v86 button {
+  min-height: 46px;
+  border: 1px solid rgba(104, 239, 184, .22);
+  border-radius: 15px;
+  color: #eafff7;
+  font-weight: 900;
+  background: rgba(15, 52, 48, .82);
+}
+
+.lbpet-shelter-shortcuts-v86 button:active {
+  transform: scale(.98);
+}
+
+@media (max-width: 520px) {
+  .lbpet-shelter-shortcuts-v86 {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ========================================================================== 
+   JK.Games V88 · Einheitliches Shop-Design für Tierheim und Online-Märkte
+   Stadtkarte, Supermarkt, Hauptbahnhof und Tankstelle bleiben unverändert.
+   ========================================================================== */
+.lbpet-shell-v16 {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(91, 150, 225, .18);
+  background: #070d0d;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .56);
+}
+.lbpet-shell-v16 > header {
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(5, 11, 12, .96);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.lbpet-shell-v16 > header small { color: #6ca8ff; }
+.lbpet-shell-v16 > header > button {
+  border: 1px solid rgba(76, 139, 231, .18);
+  color: #8bbcff;
+  background: rgba(29, 94, 188, .12);
+}
+.lbpet-shelter-main-v88 {
+  background: linear-gradient(180deg, #07110f, #050908);
+}
+.lbpet-shelter-shortcuts-v86 {
+  top: -1px;
+  padding: 10px 0 12px;
+  background: linear-gradient(180deg, rgba(7, 17, 15, .99) 72%, rgba(7, 17, 15, 0));
+}
+.lbpet-shelter-shortcuts-v86 button {
+  min-height: 42px;
+  border-color: rgba(75, 143, 235, .2);
+  color: #eff7ff;
+  background: linear-gradient(145deg, rgba(22, 70, 139, .64), rgba(10, 33, 65, .78));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .025);
+}
+.lbpet-market-v88 {
+  display: grid;
+  gap: 10px;
+  scroll-margin-top: 66px;
+}
+.lbpet-market-hero-v88 {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 18px;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: 24px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(73, 197, 255, .48), transparent 35%),
+    radial-gradient(circle at 10% 100%, rgba(44, 218, 178, .22), transparent 42%),
+    linear-gradient(145deg, #102863, #462096 56%, #0f8ea8);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.lbpet-market-hero-v88::after {
+  content: "";
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  right: -70px;
+  bottom: -105px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 50%;
+}
+.lbpet-market-hero-copy-v88 { min-width: 0; }
+.lbpet-market-hero-copy-v88 > small {
+  color: rgba(255, 255, 255, .72);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .17em;
+}
+.lbpet-market-hero-copy-v88 h3 {
+  margin: 4px 0 5px;
+  font-size: clamp(24px, 4vw, 38px);
+  letter-spacing: -.04em;
+}
+.lbpet-market-hero-copy-v88 p {
+  max-width: 640px;
+  margin: 0;
+  color: rgba(255, 255, 255, .72);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.lbpet-market-hero-icon-v88 {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 23px;
+  background: rgba(255, 255, 255, .12);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .22);
+  font-size: 42px;
+  backdrop-filter: blur(12px);
+}
+.lbpet-market-stats-v88 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .15);
+}
+.lbpet-market-stats-v88 span {
+  display: grid;
+  gap: 3px;
+  color: rgba(255, 255, 255, .56);
+  font-size: 10px;
+}
+.lbpet-market-stats-v88 b { color: #fff; font-size: 15px; }
+.lbpet-market-search-v88 {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  min-height: 50px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .015);
+}
+.lbpet-market-search-v88 span { color: #78adff; font-size: 24px; }
+.lbpet-market-search-v88 input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #fff;
+  background: transparent;
+  font-size: 14px;
+}
+.lbpet-market-search-v88 input::placeholder { color: rgba(255, 255, 255, .38); }
+.lbpet-market-tabs-v88 {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 0 0 3px;
+  scrollbar-width: none;
+}
+.lbpet-market-tabs-v88::-webkit-scrollbar { display: none; }
+.lbpet-market-tabs-v88 button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, .64);
+  background: rgba(255, 255, 255, .045);
+  font-size: 11px;
+  font-weight: 850;
+}
+.lbpet-market-tabs-v88 button.active {
+  border-color: #4e9cff;
+  color: #fff;
+  background: #1763ca;
+  box-shadow: 0 8px 22px rgba(23, 99, 202, .25);
+}
+.lbpet-market-list-v88 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 9px;
+}
+.lbpet-market-card-v88,
+.lbpet-market-offer-v88 {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid rgba(117, 156, 190, .14);
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(18, 34, 32, .98), rgba(8, 17, 16, .98));
+  box-shadow: 0 9px 22px rgba(0, 0, 0, .16);
+}
+.lbpet-market-card-v88[hidden] { display: none !important; }
+.lbpet-market-card-icon-v88,
+.lbpet-market-offer-v88 .lbpet-offer-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  color: #8fc0ff;
+  background: rgba(31, 102, 217, .14);
+  font-size: 28px;
+}
+.lbpet-market-card-v88 > div,
+.lbpet-market-offer-v88 > div { min-width: 0; }
+.lbpet-market-card-v88 small,
+.lbpet-market-offer-v88 small {
+  display: block;
+  overflow: hidden;
+  color: #6ea9ff;
+  font-size: 9px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lbpet-market-card-v88 small b { color: #b7d6ff; }
+.lbpet-market-card-v88 h4,
+.lbpet-market-offer-v88 h3 { margin: 3px 0; color: #fff; font-size: 15px; }
+.lbpet-market-card-v88 p,
+.lbpet-market-offer-v88 p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: rgba(255, 255, 255, .48);
+  font-size: 11px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.lbpet-market-card-v88 strong,
+.lbpet-market-offer-v88 strong { display: block; margin-top: 5px; color: #fff; font-size: 14px; }
+.lbpet-market-card-v88 > button,
+.lbpet-market-offer-v88 > button {
+  grid-column: auto;
+  justify-self: stretch;
+  min-width: 80px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: #1768d4;
+  font-size: 11px;
+  font-weight: 900;
+}
+.lbpet-market-card-v88 > button:hover,
+.lbpet-market-offer-v88 > button:hover { background: #2278ec; }
+.lbpet-market-empty-v88 {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  min-height: 190px;
+  color: rgba(255, 255, 255, .52);
+  text-align: center;
+}
+.lbpet-market-empty-v88[hidden] { display: none; }
+.lbpet-market-empty-v88 span { font-size: 34px; }
+.lbpet-market-empty-v88 b { color: #fff; }
+.lbpet-adoption-section-v88 {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  scroll-margin-top: 66px;
+}
+.lbpet-adoption-section-v88 .lbpet-offer-grid {
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 9px;
+}
+.lbpet-market-sheet-v88 {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+  background: rgba(0, 0, 0, .54);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.lbpet-market-sheet-card-v88 {
+  display: grid;
+  width: min(520px, 100%);
+  max-height: calc(100% - 20px);
+  margin: 0 auto;
+  padding: 12px 16px 17px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 26px;
+  color: #fff;
+  background: linear-gradient(165deg, #142221, #07100f);
+  box-shadow: 0 -22px 60px rgba(0, 0, 0, .55);
+}
+.lbpet-market-sheet-handle-v88 {
+  justify-self: center;
+  width: 48px;
+  height: 5px;
+  margin-bottom: 12px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .28);
+}
+.lbpet-market-sheet-title-v88 { display: flex; align-items: center; gap: 11px; }
+.lbpet-market-sheet-title-v88 > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  background: rgba(31, 102, 217, .16);
+  font-size: 27px;
+}
+.lbpet-market-sheet-title-v88 small { color: #6faaff; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.lbpet-market-sheet-title-v88 h3 { margin: 2px 0 0; font-size: 21px; }
+.lbpet-market-sheet-card-v88 > p { margin: 11px 0; color: rgba(255, 255, 255, .55); font-size: 12px; line-height: 1.5; }
+.lbpet-market-sheet-card-v88 label {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  align-items: center;
+  margin: 4px 0 8px;
+  color: rgba(255, 255, 255, .72);
+  font-size: 12px;
+}
+.lbpet-market-sheet-card-v88 input {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, .06);
+}
+.lbpet-market-sheet-stock-v88,
+.lbpet-market-sheet-price-v88 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .68);
+  font-size: 12px;
+}
+.lbpet-market-sheet-price-v88 b { color: #fff; font-size: 20px; }
+.lbpet-market-sheet-card-v88 > button {
+  min-height: 46px;
+  margin-top: 7px;
+  border: 0;
+  border-radius: 13px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+.lbpet-market-sheet-card-v88 > button.cash { background: #147d5d; }
+.lbpet-market-sheet-card-v88 > button.cancel { color: rgba(255, 255, 255, .72); background: rgba(255, 255, 255, .07); }
+.lbpet-market-sheet-card-v88 > button:disabled { opacity: .38; }
+
+@media (max-width: 720px) {
+  .lbpet-market-hero-v88 { padding: 15px; border-radius: 20px; }
+  .lbpet-market-hero-icon-v88 { width: 62px; height: 62px; border-radius: 19px; font-size: 34px; }
+  .lbpet-market-list-v88,
+  .lbpet-adoption-section-v88 .lbpet-offer-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .lbpet-shell-v16 > main { padding-left: 9px; padding-right: 9px; }
+  .lbpet-shelter-shortcuts-v86 { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .lbpet-shelter-shortcuts-v86 button { min-height: 38px; padding: 6px; font-size: 10px; }
+  .lbpet-market-hero-v88 { grid-template-columns: minmax(0, 1fr) 54px; gap: 8px; }
+  .lbpet-market-hero-copy-v88 h3 { font-size: 23px; }
+  .lbpet-market-hero-copy-v88 p { font-size: 10px; }
+  .lbpet-market-hero-icon-v88 { width: 54px; height: 54px; border-radius: 16px; font-size: 29px; }
+  .lbpet-market-stats-v88 { gap: 5px; }
+  .lbpet-market-stats-v88 span { font-size: 8px; }
+  .lbpet-market-stats-v88 b { font-size: 12px; }
+  .lbpet-market-search-v88 { min-height: 42px; grid-template-columns: 30px minmax(0, 1fr); }
+  .lbpet-market-search-v88 span { font-size: 19px; }
+  .lbpet-market-search-v88 input { font-size: 12px; }
+  .lbpet-market-tabs-v88 button { min-height: 32px; padding: 5px 9px; font-size: 9px; }
+  .lbpet-market-card-v88,
+  .lbpet-market-offer-v88 { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px; padding: 10px; border-radius: 15px; }
+  .lbpet-market-card-icon-v88,
+  .lbpet-market-offer-v88 .lbpet-offer-icon { width: 44px; height: 44px; border-radius: 13px; font-size: 23px; }
+  .lbpet-market-card-v88 small,
+  .lbpet-market-offer-v88 small { font-size: 7px; }
+  .lbpet-market-card-v88 h4,
+  .lbpet-market-offer-v88 h3 { font-size: 12px; }
+  .lbpet-market-card-v88 p,
+  .lbpet-market-offer-v88 p { font-size: 9px; -webkit-line-clamp: 1; }
+  .lbpet-market-card-v88 strong,
+  .lbpet-market-offer-v88 strong { font-size: 11px; }
+  .lbpet-market-card-v88 > button,
+  .lbpet-market-offer-v88 > button { min-width: 58px; min-height: 32px; padding: 5px 7px; font-size: 8px; }
+  .lbpet-market-sheet-v88 { padding: 7px; }
+  .lbpet-market-sheet-card-v88 { padding: 9px 12px 13px; border-radius: 22px; }
+}

@@ -1,0 +1,77 @@
+/* JK.Games Finanzen & Wohnhilfe · 2026-07-24 */
+.financial-crisis-dialog {
+  width: min(1080px, 96vw) !important;
+  max-height: min(920px, 94dvh) !important;
+  overflow: hidden !important;
+}
+.financial-crisis-dialog > #dialogText { margin-bottom: 10px; }
+.fc-center { display: grid; gap: 12px; min-height: 0; max-height: calc(94dvh - 145px); overflow-y: auto; overflow-x: hidden; padding: 2px 4px max(24px, env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+.fc-tabs { position: sticky; z-index: 6; top: -2px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 7px; padding: 7px; border: 1px solid rgba(112,239,183,.18); border-radius: 15px; background: rgba(5,19,14,.97); backdrop-filter: blur(14px); }
+.fc-tabs button { min-height: 42px; border: 1px solid rgba(255,255,255,.09); border-radius: 11px; background: rgba(255,255,255,.045); color: rgba(255,255,255,.72); font-weight: 900; }
+.fc-tabs button.active { border-color: rgba(104,235,170,.48); background: rgba(91,226,155,.14); color: #7cf0b5; box-shadow: 0 0 20px rgba(73,222,150,.08); }
+.fc-grid { display: grid; gap: 10px; }
+.fc-grid.two { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.fc-card { min-width: 0; display: grid; gap: 8px; padding: 15px; border: 1px solid rgba(255,255,255,.09); border-radius: 17px; background: linear-gradient(150deg, rgba(20,45,35,.94), rgba(5,15,12,.98)); box-shadow: 0 14px 34px rgba(0,0,0,.2); }
+.fc-card > small { color: #76eeb1; font-size: .64rem; font-weight: 950; letter-spacing: .1em; }
+.fc-card h3, .fc-card p { margin: 0; }
+.fc-card h3 { color: #fff; font-size: 1.05rem; }
+.fc-card p { color: rgba(233,255,244,.65); font-size: .73rem; line-height: 1.5; }
+.fc-card > strong { color: #f7d66d; font-size: 1.35rem; }
+.fc-card > span { color: rgba(255,255,255,.55); font-size: .7rem; }
+.fc-card button { min-height: 42px; border: 1px solid rgba(112,239,183,.24); border-radius: 11px; background: rgba(112,239,183,.1); color: #8bf5c0; font-weight: 950; }
+.fc-card button.primary { background: #68e7a6; color: #07140d; }
+.fc-card button:disabled { opacity: .42; filter: saturate(.35); }
+.fc-card.action { grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; }
+.fc-card.action > span { width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid rgba(112,239,183,.22); border-radius: 14px; background: rgba(112,239,183,.09); color: #fff; font-size: 1.3rem; }
+.fc-card.action > div { min-width: 0; display: grid; gap: 4px; }
+.fc-card.action > button { min-width: 112px; }
+.fc-card.action.selected { border-color: rgba(118,238,177,.52); box-shadow: 0 0 0 2px rgba(118,238,177,.08), 0 18px 44px rgba(0,0,0,.25); }
+.fc-card.danger-card { border-color: rgba(255,113,105,.25); background: linear-gradient(150deg, rgba(58,24,25,.94), rgba(15,6,8,.98)); }
+.fc-card.danger-card > small { color: #ff9a90; }
+.fc-card.danger-card button { border-color: rgba(255,113,105,.3); background: rgba(255,113,105,.12); color: #ffaaa2; }
+.fc-meter { height: 12px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }
+.fc-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#65e4a2,#efd25f 48%,#ff7b6e); transition: width .25s ease; }
+.fc-shelter-layout { display: grid; gap: 10px; }
+.fc-card.selected-shelter { grid-template-columns: 1fr auto; align-items: center; border-color: rgba(112,239,183,.38); }
+.fc-card.selected-shelter > small, .fc-card.selected-shelter > h3, .fc-card.selected-shelter > p { grid-column: 1; }
+.fc-card.selected-shelter > strong, .fc-card.selected-shelter > button { grid-column: 2; }
+.fc-note { margin: 0; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 13px; color: rgba(255,255,255,.58); background: rgba(255,255,255,.025); font-size: .7rem; line-height: 1.45; }
+.fc-bank-panel { border-color: rgba(112,239,183,.24) !important; }
+.fc-bank-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 9px 0; }
+.fc-bank-summary span { display: grid; gap: 3px; padding: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(0,0,0,.16); }
+.fc-bank-summary small { color: rgba(255,255,255,.55); font-size: .61rem; }
+.fc-bank-summary b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f7d66d; }
+.fc-global-banner { width: 100%; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid rgba(255,198,87,.28); border-radius: 15px; background: linear-gradient(100deg,rgba(69,42,12,.95),rgba(21,18,11,.95)); color: #fff; text-align: left; box-shadow: 0 10px 32px rgba(0,0,0,.18); }
+.fc-global-banner > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: rgba(255,199,86,.14); color: #ffd46a; font-size: 1.15rem; font-weight: 950; }
+.fc-global-banner > div { min-width: 0; display: grid; gap: 3px; }
+.fc-global-banner b { font-size: .83rem; }
+.fc-global-banner small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255,255,255,.63); font-size: .64rem; }
+.fc-global-banner i { color: #ffd46a; font-size: .66rem; font-style: normal; font-weight: 950; }
+.fc-daily-card { border-color: rgba(255,199,86,.25) !important; background: linear-gradient(145deg,rgba(62,43,16,.92),rgba(20,16,9,.95)) !important; }
+.fc-daily-card small { color: #ffd46a; font-weight: 950; letter-spacing: .08em; }
+body.fc-bank-negative #bankValue { color: #ff8b7e !important; }
+body.fc-homeless .home-shortcut { border-color: rgba(255,199,86,.42) !important; box-shadow: 0 0 18px rgba(255,199,86,.1); }
+
+@media (max-width: 700px) {
+  .financial-crisis-dialog { width: 100vw !important; height: 100dvh !important; max-width: none !important; max-height: none !important; inset: 0 !important; margin: 0 !important; padding: max(58px, calc(env(safe-area-inset-top) + 48px)) 8px max(8px, env(safe-area-inset-bottom)) !important; border-radius: 0 !important; }
+  .financial-crisis-dialog > .close { top: max(10px, env(safe-area-inset-top)) !important; right: 10px !important; }
+  .financial-crisis-dialog > #dialogTitle { margin-top: 0 !important; font-size: 1.15rem !important; }
+  .financial-crisis-dialog > #dialogText { font-size: .68rem !important; }
+  .fc-center { max-height: calc(100dvh - max(150px, calc(env(safe-area-inset-top) + 138px))); padding-inline: 0; }
+  .fc-tabs { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; padding: 5px; }
+  .fc-tabs button { min-height: 38px; padding: 5px 3px; font-size: clamp(.58rem,2.8vw,.7rem); }
+  .fc-grid.two { grid-template-columns: 1fr; }
+  .fc-card { padding: 12px; border-radius: 15px; }
+  .fc-card.action { grid-template-columns: 42px minmax(0,1fr); }
+  .fc-card.action > span { width: 42px; height: 42px; border-radius: 12px; }
+  .fc-card.action > button { grid-column: 1 / -1; width: 100%; min-width: 0; min-height: 44px; }
+  .fc-card.selected-shelter { grid-template-columns: 1fr; }
+  .fc-card.selected-shelter > strong, .fc-card.selected-shelter > button { grid-column: 1; }
+  .fc-bank-summary { grid-template-columns: 1fr 1fr; }
+  .fc-bank-summary span:last-child { grid-column: 1 / -1; }
+  .fc-global-banner { grid-template-columns: 38px minmax(0,1fr); padding: 8px; }
+  .fc-global-banner > span { width: 38px; height: 38px; }
+  .fc-global-banner > i { grid-column: 1 / -1; text-align: right; }
+}
+
+.fc-center-exit{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.09)}
