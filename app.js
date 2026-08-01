@@ -4037,6 +4037,7 @@ function settleMoodAfterSleep(completedDay = state?.day || 1) {
 function nextDay(reason, options = {}) {
   const completedDay = state.day || 1;
   settleMoodAfterSleep(completedDay);
+  try { window.LifeBuilderExpansion?.advancePetDay?.(completedDay); } catch (error) { console.warn("Haustier-Tageswechsel", error); }
   state.day += 1;
   settleTenantRentAfterSleep();
   settleFinderAfterSleep();
@@ -4135,42 +4136,10 @@ function updateHealthForNewDay() {
 
 function applyRealtimeNeedsHealth() {
   if (!state) return;
-  const now = Date.now();
-  const storedNeedsAt = Number(state.lastNeedsHealthAt || 0);
-  // Schutz für ältere oder beschädigte Zeitwerte: Ein ungültiger bzw. in der
-  // Zukunft liegender Zeitanker darf Hunger, Durst, Energie und Leben nicht
-  // dauerhaft einfrieren.
-  if (!Number.isFinite(storedNeedsAt) || storedNeedsAt <= 0 || storedNeedsAt > now) {
-    state.lastNeedsHealthAt = now;
-    return;
-  }
-  const elapsedMinutes = Math.floor((now - storedNeedsAt) / minute);
-  if (elapsedMinutes <= 0) return;
-  state.lastNeedsHealthAt = storedNeedsAt + elapsedMinutes * minute;
-  state.health ??= 100;
-  state.mood = clamp(Number(state.mood ?? 78));
-  const before = state.health;
-  const beforeHunger = Number(state.hunger ?? 100);
-  const beforeThirst = Number(state.thirst ?? 100);
-  const beforeEnergy = Number(state.energy ?? 100);
-  const moodImpact = moodImpactProfile();
-  if (moodImpact.hungerMinute) state.hunger = clamp(beforeHunger - elapsedMinutes * moodImpact.hungerMinute);
-  if (moodImpact.thirstMinute) state.thirst = clamp(beforeThirst - elapsedMinutes * moodImpact.thirstMinute);
-  if (moodImpact.energyMinute) state.energy = clamp(beforeEnergy - elapsedMinutes * moodImpact.energyMinute);
-  if (moodImpact.healthMinute) state.health = clamp(state.health - elapsedMinutes * moodImpact.healthMinute);
-  const hunger = Number(state.hunger ?? 100);
-  const thirst = Number(state.thirst ?? 100);
-  if (hunger <= 0 || thirst <= 0) {
-    state.health = clamp(state.health - elapsedMinutes);
-    if (state.health <= 25 && state.illness !== "severe") state.illness = "sick";
-    addFeed("Du hast Hunger oder Durst komplett leer. Gesundheit -1% pro Minute.");
-  } else if (hunger <= 20 || thirst <= 20) {
-    if (state.health > 90) state.health = Math.max(90, clamp(state.health - elapsedMinutes * .15));
-  } else if (hunger <= 50 || thirst <= 50) {
-    if (state.health > 95) state.health = Math.max(95, clamp(state.health - elapsedMinutes * .05));
-  }
-  notifyHealthDrop(before, state.health, "Status");
-  if (state.health !== before || state.hunger !== beforeHunger || state.thirst !== beforeThirst || state.energy !== beforeEnergy) save();
+  // V110: Charakterwerte sinken ausschließlich beim Tageswechsel durch Schlafen.
+  // Der Zeitanker bleibt nur aus Kompatibilitätsgründen erhalten, damit ältere
+  // Spielstände keine nachträglichen Echtzeit-Abzüge erhalten.
+  state.lastNeedsHealthAt = Date.now();
 }
 
 function notifyHealthDrop(before, after, source = "Leben") {

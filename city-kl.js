@@ -569,7 +569,211 @@
     return `translate3d(${x}px,${y}px,0) rotateX(-16deg) rotateY(${side * 17}deg) rotateZ(${side * 6}deg)`;
   }
 
-  async function animateDice(result) {
+  let cityThreePromise = null;
+
+  function loadCityThree() {
+    if (!cityThreePromise) cityThreePromise = import('three').catch(() => null);
+    return cityThreePromise;
+  }
+
+  function makeDiceFaceTexture(THREE, value) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 256, 256);
+    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(.55, '#f4f5f4');
+    gradient.addColorStop(1, '#cbd1d4');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(7, 7, 242, 242, 36);
+    ctx.fill();
+    ctx.strokeStyle = '#aeb7bc';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 228, 228, 30);
+    ctx.stroke();
+    const positions = {
+      1: [[128,128]],
+      2: [[72,72],[184,184]],
+      3: [[72,72],[128,128],[184,184]],
+      4: [[72,72],[184,72],[72,184],[184,184]],
+      5: [[72,72],[184,72],[128,128],[72,184],[184,184]],
+      6: [[72,66],[184,66],[72,128],[184,128],[72,190],[184,190]]
+    }[value] || [[128,128]];
+    positions.forEach(([x,y]) => {
+      const pip = ctx.createRadialGradient(x-5,y-6,2,x,y,23);
+      pip.addColorStop(0,'#56616a');
+      pip.addColorStop(.25,'#1e2931');
+      pip.addColorStop(1,'#05080a');
+      ctx.fillStyle = pip;
+      ctx.beginPath();
+      ctx.arc(x,y,22,0,Math.PI*2);
+      ctx.fill();
+    });
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return texture;
+  }
+
+  function diceTopQuaternion(THREE, value, index) {
+    const base = new THREE.Quaternion();
+    if (value === 6) base.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI);
+    else if (value === 2) base.setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI / 2);
+    else if (value === 5) base.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI / 2);
+    else if (value === 3) base.setFromAxisAngle(new THREE.Vector3(0,0,1), Math.PI / 2);
+    else if (value === 4) base.setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI / 2);
+    const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), index === 0 ? -.23 : .27);
+    return yaw.multiply(base);
+  }
+
+  function disposeDiceScene(renderer, scene) {
+    scene.traverse((node) => {
+      node.geometry?.dispose?.();
+      const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+      materials.forEach((material) => {
+        material.map?.dispose?.();
+        material.dispose?.();
+      });
+    });
+    renderer.dispose();
+    renderer.forceContextLoss?.();
+  }
+
+  async function animateDiceWebGL(result) {
+    const THREE = await loadCityThree();
+    const layer = C.overlay?.querySelector('[data-city-dice-throw]');
+    const total = C.overlay?.querySelector('[data-roll-total]');
+    if (!THREE || !layer) return false;
+
+    const player = activePlayer();
+    const playerIndex = Math.max(0, C.game.players.indexOf(player));
+    layer.hidden = false;
+    layer.className = 'city-kl-dice-throw city-kl-dice-webgl throwing';
+    layer.style.setProperty('--throw-color', player?.color || '#ffffff');
+    layer.innerHTML = `<canvas class="city-kl-dice-canvas" data-city-dice-canvas aria-label="Zwei dreidimensionale Würfel"></canvas><div class="city-kl-dice-total" data-city-dice-total><small>${escapeHtml(player?.name || 'Spieler')}</small><b>?</b></div>`;
+    const canvas = layer.querySelector('[data-city-dice-canvas]');
+    const totalBadge = layer.querySelector('[data-city-dice-total]');
+    const bounds = layer.getBoundingClientRect();
+    const width = Math.max(260, Math.min(560, Math.round(bounds.width || 420)));
+    const height = Math.max(220, Math.min(420, Math.round(bounds.height || 320)));
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+    } catch {
+      layer.hidden = true;
+      layer.innerHTML = '';
+      return false;
+    }
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(width, height, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(34, width / height, .1, 50);
+    camera.position.set(0, 5.6, 8.4);
+    camera.lookAt(0, .55, 0);
+    scene.add(new THREE.HemisphereLight(0xeaf7ff, 0x14212b, 2.2));
+    const key = new THREE.DirectionalLight(0xffffff, 4.2);
+    key.position.set(-4, 8, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024,1024);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(player?.color || '#72e5bd', 2.1);
+    rim.position.set(5, 3, -4);
+    scene.add(rim);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 9), new THREE.ShadowMaterial({ color: 0x061015, opacity: .42 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const faceOrder = [3,4,1,6,2,5];
+    const faceMaterials = faceOrder.map((face) => new THREE.MeshStandardMaterial({
+      map: makeDiceFaceTexture(THREE, face), roughness: .26, metalness: .015
+    }));
+    const geometry = new THREE.BoxGeometry(1.35,1.35,1.35,2,2,2);
+    const bevelLike = new THREE.EdgesGeometry(geometry, 25);
+    const starts = [
+      [0,4.3],[-4.4,.5],[0,-4.2],[4.4,.5]
+    ][playerIndex % 4];
+    const dice = result.map((value,index) => {
+      const mesh = new THREE.Mesh(geometry, faceMaterials);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const edge = new THREE.LineSegments(bevelLike, new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.32}));
+      mesh.add(edge);
+      mesh.position.set(starts[0] + (index ? .55 : -.55), 1.4 + index * .35, starts[1]);
+      scene.add(mesh);
+      return {
+        mesh,
+        start: mesh.position.clone(),
+        target: new THREE.Vector3(index === 0 ? -.88 : .88, .70, index === 0 ? .18 : -.12),
+        finalQ: diceTopQuaternion(THREE, value, index),
+        spin: new THREE.Vector3(11.5 + index * 1.4, 14.2 - index, 8.8 + value * .35),
+        phase: index * .055
+      };
+    });
+
+    const totalValue = result[0] + result[1];
+    const started = performance.now();
+    const duration = 1380;
+    await new Promise((resolve) => {
+      const frame = (now) => {
+        const raw = Math.min(1, (now - started) / duration);
+        dice.forEach((die,index) => {
+          const t = Math.max(0, Math.min(1, (raw - die.phase) / (1 - die.phase)));
+          const travel = 1 - Math.pow(1 - Math.min(1,t/.78), 3);
+          die.mesh.position.lerpVectors(die.start, die.target, travel);
+          die.mesh.position.y = .70 + Math.sin(Math.PI * travel) * 3.05;
+          if (t > .78) {
+            const bounce = (t - .78) / .22;
+            die.mesh.position.y = .70 + Math.abs(Math.sin(bounce * Math.PI * 2.2)) * (1 - bounce) * .42;
+          }
+          const spinQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            die.spin.x * t,
+            die.spin.y * t,
+            die.spin.z * t,
+            'XYZ'
+          ));
+          const settle = Math.max(0, Math.min(1, (t - .70) / .30));
+          const smoothSettle = settle * settle * (3 - 2 * settle);
+          die.mesh.quaternion.copy(spinQ).slerp(die.finalQ, smoothSettle);
+        });
+        renderer.render(scene,camera);
+        if (raw < 1) requestAnimationFrame(frame);
+        else resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+
+    dice.forEach((die) => { die.mesh.position.copy(die.target); die.mesh.quaternion.copy(die.finalQ); });
+    renderer.render(scene,camera);
+    if (totalBadge) totalBadge.innerHTML = `<small>${escapeHtml(player?.name || 'Spieler')} würfelt</small><b>${result[0]} + ${result[1]} = ${totalValue}</b>`;
+    layer.classList.remove('throwing');
+    layer.classList.add('landed');
+    if (total) total.textContent = String(totalValue);
+    await delay(1250);
+    layer.classList.add('leaving');
+    await delay(280);
+    disposeDiceScene(renderer,scene);
+    layer.hidden = true;
+    layer.className = 'city-kl-dice-throw';
+    layer.innerHTML = '';
+    return true;
+  }
+
+  async function animateDiceFallback(result) {
     const layer = C.overlay?.querySelector('[data-city-dice-throw]');
     const total = C.overlay?.querySelector('[data-roll-total]');
     if (!layer) {
@@ -580,56 +784,37 @@
 
     const player = activePlayer();
     const playerIndex = Math.max(0, C.game.players.indexOf(player));
-    const starts = [
-      [-220, 145],
-      [-230, -120],
-      [220, -125],
-      [230, 140]
-    ][playerIndex % 4];
-
+    const starts = [[-220,145],[-230,-120],[220,-125],[230,140]][playerIndex % 4];
     layer.hidden = false;
     layer.className = 'city-kl-dice-throw throwing';
     layer.style.setProperty('--throw-color', player?.color || '#ffffff');
-    layer.innerHTML = `${diceCubeHtml(1, result[0])}${diceCubeHtml(2, result[1])}<div class="city-kl-dice-total" data-city-dice-total><small>${escapeHtml(player?.name || 'Spieler')}</small><b>?</b></div>`;
+    layer.innerHTML = `${diceCubeHtml(1,result[0])}${diceCubeHtml(2,result[1])}<div class="city-kl-dice-total" data-city-dice-total><small>${escapeHtml(player?.name || 'Spieler')}</small><b>?</b></div>`;
     const cubes = [...layer.querySelectorAll('[data-city-dice-cube]')];
     const totalBadge = layer.querySelector('[data-city-dice-total]');
     const totalValue = result[0] + result[1];
-
-    const animations = cubes.map((cube, index) => {
-      const side = index === 0 ? -1 : 1;
-      const finalX = side * 54;
-      const finalY = index === 0 ? 8 : -4;
-      const spinX = 1260 + result[index] * 120 + index * 170;
-      const spinY = 1530 + result[index] * 90 - index * 130;
-      const spinZ = 620 + result[index] * 45 + index * 80;
+    const animations = cubes.map((cube,index) => {
+      const side=index===0?-1:1;
+      const spinX=1260+result[index]*120+index*170;
+      const spinY=1530+result[index]*90-index*130;
+      const spinZ=620+result[index]*45+index*80;
       return cube.animate([
-        { opacity: 0, transform: `translate3d(${starts[0] + side * 30}px,${starts[1]}px,240px) rotateX(0deg) rotateY(0deg) rotateZ(0deg)` },
-        { opacity: 1, offset: .06 },
-        { transform: `translate3d(${side * 105}px,-105px,150px) rotateX(${spinX * .42}deg) rotateY(${spinY * .42}deg) rotateZ(${spinZ * .42}deg)`, offset: .42 },
-        { transform: `translate3d(${side * 76}px,-34px,58px) rotateX(${spinX * .78}deg) rotateY(${spinY * .78}deg) rotateZ(${spinZ * .78}deg)`, offset: .72 },
-        { transform: `translate3d(${finalX}px,${finalY + 15}px,10px) rotateX(${spinX}deg) rotateY(${spinY}deg) rotateZ(${spinZ}deg)`, offset: .9 },
-        { opacity: 1, transform: diceLandingTransform(index) }
-      ], { duration: 1180, easing: 'cubic-bezier(.16,.78,.2,1)', fill: 'forwards' });
+        {opacity:0,transform:`translate3d(${starts[0]+side*30}px,${starts[1]}px,240px) rotateX(0deg) rotateY(0deg) rotateZ(0deg)`},
+        {opacity:1,offset:.06},
+        {transform:`translate3d(${side*105}px,-105px,150px) rotateX(${spinX*.42}deg) rotateY(${spinY*.42}deg) rotateZ(${spinZ*.42}deg)`,offset:.42},
+        {transform:`translate3d(${side*76}px,-34px,58px) rotateX(${spinX*.78}deg) rotateY(${spinY*.78}deg) rotateZ(${spinZ*.78}deg)`,offset:.72},
+        {opacity:1,transform:diceLandingTransform(index)}
+      ],{duration:1180,easing:'cubic-bezier(.16,.78,.2,1)',fill:'forwards'});
     });
+    await Promise.all(animations.map(animation=>animation.finished.catch(()=>undefined)));
+    animations.forEach((animation,index)=>{animation.cancel();cubes[index].style.transform=diceLandingTransform(index);cubes[index].classList.add('settled')});
+    if(totalBadge)totalBadge.innerHTML=`<small>${escapeHtml(player?.name || 'Spieler')} würfelt</small><b>${result[0]} + ${result[1]} = ${totalValue}</b>`;
+    layer.classList.remove('throwing');layer.classList.add('landed');if(total)total.textContent=String(totalValue);
+    await delay(1100);layer.classList.add('leaving');await delay(280);layer.hidden=true;layer.className='city-kl-dice-throw';layer.innerHTML='';
+  }
 
-    await Promise.all(animations.map(animation => animation.finished.catch(() => undefined)));
-    animations.forEach((animation, index) => {
-      animation.cancel();
-      cubes[index].style.transform = diceLandingTransform(index);
-      cubes[index].classList.add('settled');
-    });
-
-    if (totalBadge) totalBadge.innerHTML = `<small>${escapeHtml(player?.name || 'Spieler')} würfelt</small><b>${result[0]} + ${result[1]} = ${totalValue}</b>`;
-    layer.classList.remove('throwing');
-    layer.classList.add('landed');
-    if (total) total.textContent = String(totalValue);
-
-    await delay(1150);
-    layer.classList.add('leaving');
-    await delay(300);
-    layer.hidden = true;
-    layer.className = 'city-kl-dice-throw';
-    layer.innerHTML = '';
+  async function animateDice(result) {
+    const rendered = await animateDiceWebGL(result).catch(() => false);
+    if (!rendered) await animateDiceFallback(result);
   }
 
   async function movePlayer(player, steps) {

@@ -829,44 +829,45 @@
     new MutationObserver(addButton).observe(document.body, { childList: true, subtree: true });
   }
 
-  function decayPets({ saveChanges = true } = {}) {
+  function decayPets({ saveChanges = false } = {}) {
     const data = ensureState();
     if (!data) return false;
-    const current = now();
-    const storedLast = Number(data.petLastTickAt || 0);
-    // Alte Spielstände hatten teilweise noch keinen Zeitanker. Ohne diese
-    // Initialisierung wurde bei jedem Tick wieder "jetzt" verwendet und die
-    // Tierwerte konnten deshalb niemals sinken.
-    if (!Number.isFinite(storedLast) || storedLast <= 0 || storedLast > current) {
-      data.petLastTickAt = current;
-      if (saveChanges) { try { save(); } catch { /* no active save */ } }
-      return false;
-    }
-    const elapsedMinutes = Math.min(72 * 60, Math.floor((current - storedLast) / 60_000));
-    if (elapsedMinutes < 1) return false;
+    // V110: Haustierwerte werden nicht mehr nach echter Zeit berechnet.
+    // Der Zeitanker wird nur neutralisiert, damit alte Spielstände keine
+    // nachträglichen Minuten- oder Offline-Abzüge erhalten.
+    data.petLastTickAt = now();
+    if (saveChanges) { try { save(); } catch { /* kein aktiver Spielstand */ } }
+    return false;
+  }
+
+  function advancePetsForNewDay(completedDay) {
+    const data = ensureState();
+    if (!data) return false;
+    const day = Math.max(1, Number(completedDay || data.day || 1));
+    if (Number(data.petLastDecayDay || 0) >= day) return false;
     let changed = false;
     data.pets.forEach((pet) => {
       if (!pet) return;
-      const before = [petNeed(pet, "hunger"), petNeed(pet, "thirst"), petNeed(pet, "happiness"), petNeed(pet, "care")];
-      const beforeToilet = pet.type === "dog" ? clamp(pet.toiletNeed ?? 25, 0, 100) : 0;
-      // Langsame, aber sichtbar funktionierende Echtzeit-Abnahme. Die Werte
-      // werden über den verstrichenen Zeitstempel berechnet, daher läuft kein
-      // schwerer Dauertimer pro Tier und auch geschlossene Apps werden korrekt
-      // nachgeholt.
-      pet.hunger = clamp(before[0] - elapsedMinutes * 0.065, 0, 100);
-      pet.thirst = clamp(before[1] - elapsedMinutes * 0.085, 0, 100);
-      pet.happiness = clamp(before[2] - elapsedMinutes * 0.028, 0, 100);
-      pet.care = clamp(before[3] - elapsedMinutes * 0.014, 0, 100);
-      if (pet.type === "dog") pet.toiletNeed = clamp(beforeToilet + elapsedMinutes * 0.12, 0, 100);
-      if (pet.hunger !== before[0] || pet.thirst !== before[1] || pet.happiness !== before[2] || pet.care !== before[3] || (pet.type === "dog" && pet.toiletNeed !== beforeToilet)) changed = true;
+      const before = {
+        hunger: petNeed(pet, 'hunger'),
+        thirst: petNeed(pet, 'thirst'),
+        happiness: petNeed(pet, 'happiness'),
+        care: petNeed(pet, 'care'),
+        toiletNeed: pet.type === 'dog' ? clamp(pet.toiletNeed ?? 25, 0, 100) : 0
+      };
+      pet.hunger = clamp(before.hunger - 9, 0, 100);
+      pet.thirst = clamp(before.thirst - 11, 0, 100);
+      pet.happiness = clamp(before.happiness - 5, 0, 100);
+      pet.care = clamp(before.care - 3, 0, 100);
+      if (pet.type === 'dog') pet.toiletNeed = clamp(before.toiletNeed + 15, 0, 100);
+      if (pet.hunger !== before.hunger || pet.thirst !== before.thirst || pet.happiness !== before.happiness || pet.care !== before.care || (pet.type === 'dog' && pet.toiletNeed !== before.toiletNeed)) changed = true;
     });
-    data.petLastTickAt = storedLast + elapsedMinutes * 60_000;
-    if (changed) {
-      try { window.LifeBuilderPetUI?.refreshOpenPetMeters?.(); } catch { /* Menü kann geschlossen sein */ }
-      if (saveChanges) { try { save(); } catch { /* no active save */ } }
-    }
+    data.petLastDecayDay = day;
+    data.petLastTickAt = now();
+    try { window.LifeBuilderPetUI?.refreshOpenPetMeters?.(); } catch { /* Menü kann geschlossen sein */ }
     return changed;
   }
+
 
   let installed = false;
   function init() {
@@ -885,14 +886,12 @@
     // V52: technische Telefon-Diagnose nicht mehr in der sichtbaren Telefon-App einblenden.
     installSettingsLogout();
     if (typeof state !== "undefined" && state) { ensureState(); decayPets(); refreshBotAuctions(); }
-    window.setInterval(() => { if (typeof state !== "undefined" && state) decayPets(); }, 60_000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden && typeof state !== "undefined" && state) decayPets(); });
-    window.addEventListener("focus", () => { if (typeof state !== "undefined" && state) decayPets(); });
     window.LifeBuilderExpansion = {
       version: VERSION,
       openPetShelter: (...args) => window.LifeBuilderPetUI?.openPetShelter?.(...args) || openPetShelter(...args),
       openPetHome: (...args) => window.LifeBuilderPetUI?.openPetHome?.(...args),
       refreshPetNeeds: () => decayPets(),
+      advancePetDay: (completedDay) => advancePetsForNewDay(completedDay),
       openAuction, listPetOnFineAnzeigen, openSpecial, specialCount: SPECIAL_TOTAL,
       debug: { getSpecialItems: () => SPECIAL.slice(), getPetTypes: () => PET_TYPES.slice(), refreshBotAuctions: (force = false) => refreshBotAuctions(force) }
     };

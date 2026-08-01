@@ -20219,3 +20219,41 @@ body.phone-v65-open {
     right: 17px;
   }
 }
+
+/* V110 · Hauptscreen: Freundin vollständig rahmenlos, Klickfläche bleibt erhalten */
+.portrait-avatar-wrap.with-partner .portrait-partner-quick,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:hover,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:focus,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:focus-visible,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:active,
+.portrait-avatar-wrap.with-partner .portrait-partner-figure,
+.portrait-avatar-wrap.with-partner .portrait-partner-figure:hover,
+.portrait-avatar-wrap.with-partner .portrait-partner-figure:focus,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar:hover,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar:focus,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar svg,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar svg:hover {
+  border:0!important;
+  border-color:transparent!important;
+  outline:0!important;
+  outline-offset:0!important;
+  box-shadow:none!important;
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  filter:none!important;
+}
+.portrait-avatar-wrap.with-partner .portrait-partner-quick::before,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick::after,
+.portrait-avatar-wrap.with-partner .portrait-partner-figure::before,
+.portrait-avatar-wrap.with-partner .portrait-partner-figure::after,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar::before,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick .finder-avatar::after {
+  content:none!important;
+  display:none!important;
+}
+.portrait-avatar-wrap.with-partner .portrait-partner-quick{
+  cursor:pointer!important;
+  -webkit-tap-highlight-color:transparent!important;
+}

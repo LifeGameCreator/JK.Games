@@ -39,7 +39,7 @@ const S = {
   quality:'ultra', weatherMode:'sunny', weatherClock:0, weatherDuration:24, weatherBlend:0,
   rain:null, clouds:null, cloudMaterial:null, sun:null, hemi:null, fill:null, loadingProgress:0, onTrain:null, impactFx:[], pauseCountdown:false, jetRig:null,
   contactShadow:null, hudClock:0, saveClock:0, saveDirty:false, weatherTick:0, perfTime:0, perfFrames:0, renderScale:1, lastBoostSignature:'', lastHudSnapshot:'',
-  worldIndex:0,worldTheme:WORLD_THEMES[0],worldAnnounceClock:0,effectiveSpeed:12,runStartedAt:0,remoteRunId:'',remoteBusy:false,worldData:null,worldDataLoaded:false,worldDataError:'',rewardClaiming:false,
+  worldIndex:0,worldTheme:WORLD_THEMES[0],worldAnnounceClock:0,effectiveSpeed:12,runStartedAt:0,remoteRunId:'',remoteBusy:false,worldData:null,worldDataLoaded:false,worldDataError:'',rewardClaiming:false,nextTramDistance:120,
   characterRoot:null,characterBones:null,baseTexture:null,
   resources:{textures:new Map(),materials:new Map(),geometries:new Map()}
 };
@@ -458,9 +458,15 @@ function createImpactFX(x,y,z){
 function updateImpactFX(dt){for(let i=S.impactFx.length-1;i>=0;i--){const fx=S.impactFx[i];fx.life-=dt;for(const m of fx.group.children){if(m.userData.ring){m.scale.addScalar(dt*4);m.material.opacity=Math.max(0,fx.life)}else{m.position.addScaledVector(m.userData.v,dt);m.userData.v.y-=5*dt;m.material.opacity=Math.max(0,fx.life*1.5)}}if(fx.life<=0){S.scene.remove(fx.group);fx.group.traverse(n=>{n.geometry?.dispose?.();n.material?.dispose?.()});S.impactFx.splice(i,1)}}}
 function spawnRow(){
   const profile=difficultyProfile(),z=-86,r=Math.random(),lane=Math.floor(Math.random()*3);
-  if(r<profile.obstacle){
-    const zone=Math.floor(S.distance/5000),tramChance=zone===0?.09:.19,kind=Math.random();const make=()=>kind<tramChance?makeTram():kind<.66?makeBarrier():makeBollards();const first=make();first.position.set((lane-1)*2.6,0,z);first.userData.lane=lane;S.scene.add(first);S.objects.push(first);
-    if(zone>0&&profile.obstacle>.43&&Math.random()<.22){const free=[0,1,2].filter(v=>v!==lane),lane2=free[Math.floor(Math.random()*free.length)],second=Math.random()<.25?makeTram():makeBarrier();second.position.set((lane2-1)*2.6,0,z-(Math.random()<.5?0:2.2));second.userData.lane=lane2;S.scene.add(second);S.objects.push(second)}
+  const forceTram=S.distance>=S.nextTramDistance;
+  if(forceTram||r<profile.obstacle){
+    const zone=Math.floor(S.distance/5000),tramChance=zone===0?.16:.24,kind=forceTram?0:Math.random();
+    const make=()=>kind<tramChance?makeTram():kind<.67?makeBarrier():makeBollards();
+    const first=make();first.position.set((lane-1)*2.6,0,z);first.userData.lane=lane;S.scene.add(first);S.objects.push(first);
+    if(first.userData.type==='tram'){
+      S.nextTramDistance=S.distance+420+Math.random()*260;
+    }
+    if(!forceTram&&zone>0&&profile.obstacle>.43&&Math.random()<.22){const free=[0,1,2].filter(v=>v!==lane),lane2=free[Math.floor(Math.random()*free.length)],second=Math.random()<.18?makeTram():makeBarrier();second.position.set((lane2-1)*2.6,0,z-(Math.random()<.5?0:2.2));second.userData.lane=lane2;S.scene.add(second);S.objects.push(second)}
   }else if(r<profile.obstacle+profile.boost){
     const types=['magnet','jetpack','sneakers','multiplier','pogo'],type=types[Math.floor(Math.random()*types.length)],o=makeBoost(type);o.position.set((lane-1)*2.6,1.05,z);o.userData.lane=lane;S.scene.add(o);S.objects.push(o)
   }else{
@@ -469,7 +475,7 @@ function spawnRow(){
 }
 function clearObjects(){for(const o of S.objects)releaseObject(o);S.objects=[]}
 
-function resetGame(){clearObjects();S.running=true;S.paused=false;const pb=S.overlay?.querySelector('[data-rkl-pause]');if(pb)pb.textContent='Ⅱ';S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.effectiveSpeed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.9;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};S.hoverboard=0;S.hoverCooldown=0;S.onTrain=null;S.pauseCountdown=false;S.hudClock=0;S.saveClock=0;S.perfTime=0;S.perfFrames=0;S.worldIndex=0;S.worldTheme=WORLD_THEMES[0];S.runStartedAt=Date.now();clearJetpackRig();if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}applyWorldTheme(0,false);hideCard();updateHud();if(S.action){S.action.paused=false;S.action.reset().play()}beginRemoteRun()}
+function resetGame(){clearObjects();S.running=true;S.paused=false;const pb=S.overlay?.querySelector('[data-rkl-pause]');if(pb)pb.textContent='Ⅱ';S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.effectiveSpeed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.9;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};S.hoverboard=0;S.hoverCooldown=0;S.onTrain=null;S.pauseCountdown=false;S.hudClock=0;S.saveClock=0;S.perfTime=0;S.perfFrames=0;S.worldIndex=0;S.worldTheme=WORLD_THEMES[0];S.nextTramDistance=120;S.runStartedAt=Date.now();clearJetpackRig();if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}applyWorldTheme(0,false);hideCard();updateHud();if(S.action){S.action.paused=false;S.action.reset().play()}beginRemoteRun()}
 function input(kind){if(!S.running||S.paused||S.gameOver)return;if(kind==='left')S.lane=Math.max(0,S.lane-1);if(kind==='right')S.lane=Math.min(2,S.lane+1);S.targetX=(S.lane-1)*2.6;if(kind==='up'&&(S.y<=.01||S.onTrain)){S.vy=S.activeBoosts.sneakers>0?10.8:8.7;S.onTrain=null}if(kind==='down'&&S.y<.2){S.slide=.72}}
 function update(dt){
   if(!S.running||S.paused||S.gameOver)return;S.elapsed+=dt;S.hudClock+=dt;S.saveClock+=dt;
