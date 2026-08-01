@@ -384,11 +384,11 @@ class Cottbus3DGame {
       central.disabled = false;
       central.removeAttribute('disabled');
       central.removeAttribute('aria-disabled');
-      central.setAttribute('aria-label', 'World.KL – Online-Welt betreten');
-      central.title = 'World.KL Online-Welt betreten';
+      central.setAttribute('aria-label', 'Center – Online-Welt betreten');
+      central.title = 'Center – Online-Welt betreten';
       const label = central.querySelector('span');
       const icon = central.querySelector('b');
-      if (label && label.textContent !== 'World.KL') label.textContent = 'World.KL';
+      if (label && label.textContent !== 'Center') label.textContent = 'Center';
       if (icon && icon.textContent !== '◉') icon.textContent = '◉';
     };
     const queueInstall = () => {

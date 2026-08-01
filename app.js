@@ -4889,7 +4889,7 @@ function updateHomeShortcut() {
   }
   shortcut.disabled = false;
   const html = isHotelDashboardAvailable()
-    ? `<span>Hotelzimmer</span><b>H</b>`
+    ? `<span>Hotel</span><b>H</b>`
     : isHomeDashboardAvailable()
       ? usesEmergencyShelter()
         ? `<span class="home-shortcut-label"><span class="desktop-label">Notunterkunft</span><span class="mobile-label">Notunt.</span></span><b>⌂</b>`
@@ -18579,7 +18579,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
       <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL und City.KL sind jetzt vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
-        <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Würfeln, Cottbus ausbauen und neue Stadtbereiche freischalten.</small></button>
+        <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
         <button class="topgames-card locked" disabled><b>Match.KL</b><small>Folgt nach deiner Bestätigung.</small></button>
       </div>
     </div>`;

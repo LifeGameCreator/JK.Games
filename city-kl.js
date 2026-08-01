@@ -1,742 +1,1253 @@
 (() => {
   'use strict';
 
-  const STORAGE_KEY = 'jk-games-city-kl-v1';
-  const MAX_SHIELDS = 5;
-  const BOARD_SIZE = 24;
-  const ROLL_REGEN_MS = 30 * 60 * 1000;
-  const MAX_DICE = 100;
+  const STORAGE_KEY = 'jk-games-city-kl-property-v2';
+  const SAVE_VERSION = 2;
+  const START_CASH = 1500;
+  const START_BONUS = 200;
+  const JAIL_INDEX = 8;
+  const FREE_PARKING_INDEX = 16;
+  const GO_TO_JAIL_INDEX = 24;
+  const BOARD_SIZE = 32;
 
-  const BOARDS = [
-    {
-      id: 'zentrum',
-      name: 'Cottbus Zentrum',
-      subtitle: 'Spremberger Straße',
-      sky: '#4fc3ff',
-      glow: '#f5c35b',
-      grass: '#4dbb72',
-      road: '#30465c',
-      accent: '#f5c35b',
-      landmarks: [
-        { id: 'spremberger-turm', name: 'Spremberger Turm', icon: '♜' },
-        { id: 'altmarkt', name: 'Altmarkt', icon: '◆' },
-        { id: 'staatstheater', name: 'Staatstheater', icon: '♬' },
-        { id: 'blechen-carre', name: 'Blechen Carré', icon: '▦' }
-      ]
-    },
-    {
-      id: 'branitz',
-      name: 'Branitzer Park',
-      subtitle: 'Pücklers Gartenreich',
-      sky: '#63c4e8',
-      glow: '#f2cf7c',
-      grass: '#3f9f58',
-      road: '#3d4e4b',
-      accent: '#f2cf7c',
-      landmarks: [
-        { id: 'schloss-branitz', name: 'Schloss Branitz', icon: '♛' },
-        { id: 'seepyramide', name: 'Seepyramide', icon: '▲' },
-        { id: 'parksee', name: 'Parksee', icon: '≈' },
-        { id: 'orangerie', name: 'Orangerie', icon: '✦' }
-      ]
-    },
-    {
-      id: 'sandow',
-      name: 'Sandow City',
-      subtitle: 'Spree & Stadtleben',
-      sky: '#6f8fd4',
-      glow: '#ff9f6e',
-      grass: '#45a16a',
-      road: '#343f58',
-      accent: '#ff9f6e',
-      landmarks: [
-        { id: 'spreepromenade', name: 'Spreepromenade', icon: '≋' },
-        { id: 'sandower-bruecke', name: 'Sandower Brücke', icon: '⌒' },
-        { id: 'stadion', name: 'Stadion', icon: '◉' },
-        { id: 'stadtvillen', name: 'Stadtvillen', icon: '▤' }
-      ]
-    },
-    {
-      id: 'lausitz',
-      name: 'Lausitz Zukunft',
-      subtitle: 'Neue Energie',
-      sky: '#39445f',
-      glow: '#58e6d2',
-      grass: '#2f845e',
-      road: '#232d3d',
-      accent: '#58e6d2',
-      landmarks: [
-        { id: 'energiecampus', name: 'Energiecampus', icon: '⚡' },
-        { id: 'innovationspark', name: 'Innovationspark', icon: '⬡' },
-        { id: 'solarquartier', name: 'Solarquartier', icon: '☀' },
-        { id: 'zukunftsbahnhof', name: 'Zukunftsbahnhof', icon: '▰' }
-      ]
-    }
-  ];
-
-  const TILE_PATTERN = [
-    'start', 'coins', 'build', 'chance', 'coins', 'shield',
-    'attack', 'coins', 'dice', 'heist', 'build', 'coins',
-    'bonus', 'coins', 'chance', 'shield', 'attack', 'coins',
-    'dice', 'heist', 'build', 'coins', 'jackpot', 'coins'
-  ];
-
-  const TILE_META = {
-    start: { icon: '★', label: 'Start', cls: 'start' },
-    coins: { icon: 'CB', label: 'City Coins', cls: 'coins' },
-    build: { icon: '⌂', label: 'Bauen', cls: 'build' },
-    chance: { icon: '?', label: 'City Karte', cls: 'chance' },
-    shield: { icon: '⬟', label: 'Schutzschild', cls: 'shield' },
-    attack: { icon: '⚒', label: 'Abriss', cls: 'attack' },
-    dice: { icon: '⚄', label: 'Würfel', cls: 'dice' },
-    heist: { icon: '▣', label: 'Bankraub', cls: 'heist' },
-    bonus: { icon: '✦', label: 'Bonus', cls: 'bonus' },
-    jackpot: { icon: '♛', label: 'City Jackpot', cls: 'jackpot' }
+  const GROUPS = {
+    brown: { name: 'Altstadt-Braun', color: '#8a593b', houseCost: 50 },
+    lightblue: { name: 'Spree-Blau', color: '#79d5ec', houseCost: 50 },
+    pink: { name: 'City-Pink', color: '#dc67b8', houseCost: 100 },
+    orange: { name: 'Lausitz-Orange', color: '#f09a3e', houseCost: 100 },
+    red: { name: 'Zentrum-Rot', color: '#df4a4f', houseCost: 150 },
+    yellow: { name: 'Branitz-Gold', color: '#efcf45', houseCost: 150 }
   };
 
-  const DEFAULT_STATE = {
-    coins: 15000,
-    dice: 50,
-    shields: 0,
-    position: 0,
-    boardIndex: 0,
-    boardLevel: 1,
-    netWorth: 0,
-    stars: 0,
-    multiplier: 1,
-    landmarks: [0, 0, 0, 0],
-    lastDiceAt: Date.now(),
-    rolls: 0,
-    totalCoins: 0,
-    bestHeist: 0,
-    sound: true,
-    completedBoards: 0
-  };
+  const BOARD = [
+    { type: 'start', name: 'START', icon: '★', text: '+200 CB beim Vorbeiziehen' },
+    { type: 'street', name: 'Mühlenstraße', group: 'brown', price: 60, rent: [4, 20, 60, 180, 320] },
+    { type: 'chest', name: 'City-Kasse', icon: '🎁' },
+    { type: 'street', name: 'Sandower Hauptstraße', group: 'brown', price: 60, rent: [6, 30, 90, 270, 400] },
+    { type: 'tax', name: 'Gewerbesteuer', amount: 100, icon: '🧾' },
+    { type: 'station', name: 'Straßenbahn-Depot', price: 200, icon: '🚋' },
+    { type: 'street', name: 'Bahnhofstraße', group: 'lightblue', price: 100, rent: [8, 40, 100, 300, 450] },
+    { type: 'street', name: 'Karl-Liebknecht-Straße', group: 'lightblue', price: 100, rent: [8, 40, 100, 300, 450] },
+    { type: 'jail', name: 'Gefängnis', icon: '🔒', text: 'Nur zu Besuch' },
+    { type: 'street', name: 'Berliner Straße', group: 'lightblue', price: 120, rent: [10, 50, 150, 450, 625] },
+    { type: 'chance', name: 'Ereignis', icon: '?' },
+    { type: 'street', name: 'Straße der Jugend', group: 'pink', price: 140, rent: [12, 60, 180, 500, 700] },
+    { type: 'utility', name: 'Stadtwerke Cottbus', price: 150, icon: '⚡' },
+    { type: 'street', name: 'Gelsenkirchener Allee', group: 'pink', price: 140, rent: [12, 60, 180, 500, 700] },
+    { type: 'street', name: 'Thiemstraße', group: 'pink', price: 160, rent: [14, 70, 200, 550, 750] },
+    { type: 'station', name: 'Cottbus Hauptbahnhof', price: 200, icon: '🚉' },
+    { type: 'parking', name: 'Freiparken', icon: '🅿', text: 'City-Pot gewinnen' },
+    { type: 'street', name: 'Sielower Chaussee', group: 'orange', price: 180, rent: [16, 80, 220, 600, 800] },
+    { type: 'chest', name: 'City-Kasse', icon: '🎁' },
+    { type: 'street', name: 'Madlower Hauptstraße', group: 'orange', price: 180, rent: [16, 80, 220, 600, 800] },
+    { type: 'street', name: 'Lausitzer Straße', group: 'orange', price: 200, rent: [18, 90, 250, 700, 875] },
+    { type: 'station', name: 'Busbahnhof', price: 200, icon: '🚌' },
+    { type: 'street', name: 'Brandenburger Platz', group: 'red', price: 220, rent: [20, 100, 300, 750, 925] },
+    { type: 'street', name: 'Spremberger Straße', group: 'red', price: 240, rent: [22, 110, 330, 800, 975] },
+    { type: 'gojail', name: 'Ab ins Gefängnis', icon: '🚓' },
+    { type: 'street', name: 'Altmarkt', group: 'red', price: 240, rent: [22, 110, 330, 800, 975] },
+    { type: 'chance', name: 'Ereignis', icon: '?' },
+    { type: 'street', name: 'Schlossstraße', group: 'yellow', price: 260, rent: [24, 120, 360, 850, 1025] },
+    { type: 'utility', name: 'Energie Cottbus', price: 150, icon: '💡' },
+    { type: 'street', name: 'Branitzer Allee', group: 'yellow', price: 280, rent: [26, 130, 390, 900, 1100] },
+    { type: 'street', name: 'Pyramidenstraße', group: 'yellow', price: 300, rent: [28, 150, 450, 1000, 1200] },
+    { type: 'station', name: 'Lausitz-Park-Halt', price: 200, icon: '🚆' }
+  ];
+
+  const TOKENS = [
+    { id: 'car', icon: '🚗', name: 'Sportwagen' },
+    { id: 'dog', icon: '🐕', name: 'Stadthund' },
+    { id: 'bike', icon: '🏍️', name: 'Motorrad' },
+    { id: 'hat', icon: '🎩', name: 'Zylinder' }
+  ];
+
+  const BOT_PROFILES = [
+    { id: 'nina', name: 'Nina', token: '🐆', color: '#ff75ba', style: 'balanced' },
+    { id: 'rico', name: 'Rico', token: '🚙', color: '#4eb6ff', style: 'aggressive' },
+    { id: 'max', name: 'Max', token: '🦊', color: '#ffae4c', style: 'careful' }
+  ];
+
+  const CHANCE_CARDS = [
+    { title: 'Grüne Welle', text: 'Fahre direkt bis START.', action: 'move', target: 0 },
+    { title: 'Schnelle Straßenbahn', text: 'Rücke 4 Felder vor.', action: 'relative', amount: 4 },
+    { title: 'Baustellenumleitung', text: 'Gehe 3 Felder zurück.', action: 'relative', amount: -3 },
+    { title: 'Knöllchen', text: 'Zahle 50 CB.', action: 'cash', amount: -50 },
+    { title: 'Stadtfest', text: 'Erhalte 120 CB.', action: 'cash', amount: 120 },
+    { title: 'Polizeikontrolle', text: 'Gehe direkt ins Gefängnis.', action: 'jail' },
+    { title: 'Immobilienbonus', text: 'Erhalte 25 CB pro eigener Straße.', action: 'perProperty', amount: 25 },
+    { title: 'Straßenschäden', text: 'Zahle 20 CB pro Haus.', action: 'perHouse', amount: -20 }
+  ];
+
+  const CHEST_CARDS = [
+    { title: 'Bürgerbonus', text: 'Die Stadt zahlt dir 100 CB.', action: 'cash', amount: 100 },
+    { title: 'Versicherungsbeitrag', text: 'Zahle 60 CB.', action: 'cash', amount: -60 },
+    { title: 'Geburtstagsrunde', text: 'Jeder Mitspieler zahlt dir 25 CB.', action: 'fromPlayers', amount: 25 },
+    { title: 'Werkstattrechnung', text: 'Zahle 80 CB.', action: 'cash', amount: -80 },
+    { title: 'Freifahrtschein', text: 'Du kommst kostenlos aus dem Gefängnis.', action: 'jailCard' },
+    { title: 'Jobbonus', text: 'Erhalte 150 CB.', action: 'cash', amount: 150 },
+    { title: 'Zur Spremberger Straße', text: 'Ziehe zur Spremberger Straße.', action: 'move', target: 23 },
+    { title: 'Straßenreinigung', text: 'Zahle 15 CB pro Haus.', action: 'perHouse', amount: -15 }
+  ];
 
   const C = {
     overlay: null,
     sourceDevice: '',
-    state: { ...DEFAULT_STATE },
-    rolling: false,
-    autoRoll: false,
-    autoTimer: 0,
-    saveTimer: 0,
+    game: null,
+    busy: false,
+    timers: new Set(),
     resizeHandler: null,
-    visibilityHandler: null,
-    boardTiles: [],
-    token: null,
-    currentCard: null
+    tileElements: [],
+    playerElements: new Map(),
+    modalLocked: false,
+    modalHideTimer: 0
   };
 
-  function cloneDefault() {
-    return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  function createPlayer(id, name, token, color, isBot, style = 'balanced') {
+    return {
+      id, name, token, color, isBot, style,
+      cash: START_CASH,
+      position: 0,
+      inJail: false,
+      jailAttempts: 0,
+      jailCards: 0,
+      bankrupt: false,
+      properties: [],
+      doublesStreak: 0
+    };
   }
 
-  function load() {
-    const base = cloneDefault();
+  function newGame(botCount = 3, tokenId = 'car', difficulty = 'normal') {
+    const token = TOKENS.find(item => item.id === tokenId) || TOKENS[0];
+    const bots = BOT_PROFILES.slice(0, Math.max(1, Math.min(3, Number(botCount) || 3)));
+    return {
+      version: SAVE_VERSION,
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      difficulty,
+      currentPlayer: 0,
+      phase: 'roll',
+      cityPot: 0,
+      lastRoll: [1, 1],
+      turn: 1,
+      winner: null,
+      properties: BOARD.map(() => ({ owner: null, houses: 0, mortgaged: false })),
+      players: [
+        createPlayer('human', 'Du', token.icon, '#68e4b6', false, 'human'),
+        ...bots.map(bot => createPlayer(bot.id, bot.name, bot.token, bot.color, true, bot.style))
+      ],
+      log: ['Das Cottbus-Immobilienrennen beginnt.']
+    };
+  }
+
+  function activePlayer() {
+    return C.game?.players?.[C.game.currentPlayer] || null;
+  }
+
+  function getPlayer(id) {
+    return C.game?.players?.find(player => player.id === id) || null;
+  }
+
+  function propertyState(index) {
+    return C.game?.properties?.[index] || null;
+  }
+
+  function isOwnable(tile) {
+    return tile && ['street', 'station', 'utility'].includes(tile.type);
+  }
+
+  function saveGame() {
+    if (!C.game) return;
+    C.game.updatedAt = Date.now();
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(C.game)); } catch {}
+  }
+
+  function loadGame() {
     try {
-      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      C.state = { ...base, ...data };
-      C.state.landmarks = Array.isArray(data.landmarks) && data.landmarks.length === 4
-        ? data.landmarks.map(v => Math.max(0, Math.min(5, Number(v) || 0)))
-        : [0, 0, 0, 0];
-      C.state.boardIndex = Math.max(0, Number(C.state.boardIndex || 0)) % BOARDS.length;
-      C.state.position = Math.max(0, Number(C.state.position || 0)) % BOARD_SIZE;
-      C.state.dice = Math.max(0, Math.min(MAX_DICE, Number(C.state.dice || 0)));
-      C.state.coins = Math.max(0, Number(C.state.coins || 0));
-      C.state.shields = Math.max(0, Math.min(MAX_SHIELDS, Number(C.state.shields || 0)));
-      regenerateDice();
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!data || data.version !== SAVE_VERSION || !Array.isArray(data.players) || !Array.isArray(data.properties)) return null;
+      data.players.forEach(player => {
+        player.properties = Array.isArray(player.properties) ? player.properties : [];
+        player.doublesStreak = Number(player.doublesStreak || 0);
+        player.jailCards = Number(player.jailCards || 0);
+      });
+      data.log = Array.isArray(data.log) ? data.log.slice(-20) : [];
+      data.phase = 'roll';
+      data.winner = data.winner || null;
+      let guard = 0;
+      while (data.players[data.currentPlayer]?.bankrupt && guard++ < data.players.length) data.currentPlayer = (data.currentPlayer + 1) % data.players.length;
+      return data;
     } catch {
-      C.state = base;
+      return null;
     }
   }
 
-  function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(C.state)); } catch {}
+  function deleteSave() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   }
 
-  function queueSave() {
-    clearTimeout(C.saveTimer);
-    C.saveTimer = setTimeout(save, 250);
+  function setTimer(fn, ms) {
+    const id = setTimeout(() => {
+      C.timers.delete(id);
+      fn();
+    }, ms);
+    C.timers.add(id);
+    return id;
   }
 
-  function regenerateDice() {
-    const now = Date.now();
-    const elapsed = Math.max(0, now - Number(C.state.lastDiceAt || now));
-    const gained = Math.floor(elapsed / ROLL_REGEN_MS);
-    if (gained > 0) {
-      C.state.dice = Math.min(MAX_DICE, C.state.dice + gained);
-      C.state.lastDiceAt = Number(C.state.lastDiceAt || now) + gained * ROLL_REGEN_MS;
-      save();
-    }
+  function clearTimers() {
+    C.timers.forEach(id => clearTimeout(id));
+    C.timers.clear();
   }
 
-  function board() {
-    return BOARDS[C.state.boardIndex] || BOARDS[0];
-  }
-
-  function formatNumber(value) {
-    return Math.floor(Number(value || 0)).toLocaleString('de-DE');
+  function formatMoney(value) {
+    return `${Math.max(0, Math.floor(Number(value || 0))).toLocaleString('de-DE')} CB`;
   }
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
 
-  function tileCoordinates(index) {
-    const n = index % BOARD_SIZE;
-    // 7 x 7 perimeter, 24 tiles: start bottom center, clockwise.
-    const route = [
-      [6,3], [6,2], [6,1], [6,0], [5,0], [4,0], [3,0], [2,0], [1,0], [0,0],
-      [0,1], [0,2], [0,3], [0,4], [0,5], [0,6], [1,6], [2,6], [3,6], [4,6],
-      [5,6], [6,6], [6,5], [6,4]
-    ];
-    return route[n];
+  function boardCoordinate(index) {
+    const route = [];
+    for (let col = 8; col >= 0; col--) route.push([8, col]);
+    for (let row = 7; row >= 0; row--) route.push([row, 0]);
+    for (let col = 1; col <= 8; col++) route.push([0, col]);
+    for (let row = 1; row <= 7; row++) route.push([row, 8]);
+    return route[index % BOARD_SIZE];
   }
 
-  function renderShell() {
-    if (C.resizeHandler) window.removeEventListener('resize', C.resizeHandler);
-    if (C.visibilityHandler) document.removeEventListener('visibilitychange', C.visibilityHandler);
-    const theme = board();
+  function renderLanding() {
+    const saved = loadGame();
     C.overlay.innerHTML = `
-      <div class="city-kl-stage" style="--city-sky:${theme.sky};--city-glow:${theme.glow};--city-grass:${theme.grass};--city-road:${theme.road};--city-accent:${theme.accent}">
-        <div class="city-kl-sky"><i></i><i></i><i></i></div>
-        <header class="city-kl-hud">
-          <button type="button" class="city-kl-icon-button" data-city-close aria-label="Zurück zu Top Games">×</button>
-          <div class="city-kl-brand"><small>JK.GAMES</small><b>City.KL</b></div>
-          <div class="city-kl-hud-stat city-kl-level"><small>STADT</small><b data-city-board-level>${C.state.boardLevel}</b></div>
-          <div class="city-kl-hud-stat"><small>VERMÖGEN</small><b><span data-city-networth>${formatNumber(C.state.netWorth)}</span> ★</b></div>
-          <div class="city-kl-hud-stat city-kl-coins"><small>CITY COINS</small><b><span class="city-coin-mini">CB</span><span data-city-coins>${formatNumber(C.state.coins)}</span></b></div>
+      <div class="city-kl-stage city-kl-landing">
+        <div class="city-kl-bg city-kl-bg-one"></div><div class="city-kl-bg city-kl-bg-two"></div>
+        <header class="city-kl-topbar">
+          <button class="city-kl-back" type="button" data-city-close>×</button>
+          <div><small>JK.GAMES · COTTBUS</small><b>City.KL</b></div>
         </header>
-
-        <main class="city-kl-main">
-          <section class="city-kl-board-wrap">
-            <div class="city-kl-board" data-city-board>
-              <div class="city-kl-center">
-                <div class="city-kl-center-heading"><small data-city-subtitle>${escapeHtml(theme.subtitle)}</small><h1 data-city-board-name>${escapeHtml(theme.name)}</h1></div>
-                <div class="city-kl-landmarks" data-city-landmarks></div>
-                <button type="button" class="city-kl-build-button" data-city-build><span>⌂</span><b>Stadt ausbauen</b><small data-city-build-cost>ab 0 CB</small></button>
-              </div>
-              <div class="city-kl-token" data-city-token><span></span><i></i></div>
-            </div>
-          </section>
+        <main class="city-kl-start-card">
+          <div class="city-kl-start-logo"><span>🏙️</span><div><small>DAS COTTBUS-BRETTSPIEL</small><h1>City.KL</h1></div></div>
+          <p>Kaufe Straßen, kassiere Miete, baue Häuser und besiege bis zu drei Bots. Jeder Spieler startet mit ${formatMoney(START_CASH)}.</p>
+          <div class="city-kl-rule-preview">
+            <span><i>🏠</i><b>Straßen kaufen</b><small>Freie Grundstücke gehören dir nach dem Kauf.</small></span>
+            <span><i>💸</i><b>Miete kassieren</b><small>Mit Häusern steigen deine Einnahmen.</small></span>
+            <span><i>🤖</i><b>Gegen Bots</b><small>Nina, Rico und Max spielen selbstständig.</small></span>
+            <span><i>🏆</i><b>Letzter gewinnt</b><small>Treibe alle Gegner in den Bankrott.</small></span>
+          </div>
+          <div class="city-kl-start-options">
+            <label><span>Gegner</span><select data-city-bots><option value="1">1 Bot</option><option value="2">2 Bots</option><option value="3" selected>3 Bots</option></select></label>
+            <label><span>Schwierigkeit</span><select data-city-difficulty><option value="easy">Leicht</option><option value="normal" selected>Normal</option><option value="hard">Schwer</option></select></label>
+          </div>
+          <div class="city-kl-token-select" data-city-token-select>
+            ${TOKENS.map((item, index) => `<button type="button" class="${index === 0 ? 'active' : ''}" data-token="${item.id}"><span>${item.icon}</span><small>${item.name}</small></button>`).join('')}
+          </div>
+          <div class="city-kl-start-actions">
+            <button type="button" class="primary" data-city-new>Neues Spiel starten</button>
+            ${saved ? '<button type="button" class="secondary" data-city-continue>Spiel fortsetzen</button>' : ''}
+          </div>
         </main>
-
-        <aside class="city-kl-side-panel">
-          <button type="button" data-city-album><span>★</span><b>Stadtalbum</b><small>${C.state.stars}/20 Sterne</small></button>
-          <button type="button" data-city-info><span>i</span><b>Spielinfo</b><small>Regeln & Felder</small></button>
-        </aside>
-
-        <footer class="city-kl-controls">
-          <div class="city-kl-shields" data-city-shields></div>
-          <button type="button" class="city-kl-auto" data-city-auto><small>AUTO</small><b>Aus</b></button>
-          <button type="button" class="city-kl-roll" data-city-roll>
-            <span class="city-kl-dice" data-city-dice-face>⚄</span>
-            <strong>WÜRFELN</strong>
-            <small><b data-city-dice>${C.state.dice}</b> Würfel</small>
-          </button>
-          <button type="button" class="city-kl-multiplier" data-city-multiplier><small>EINSATZ</small><b>×<span data-city-multiplier-value>${C.state.multiplier}</span></b></button>
-        </footer>
-
-        <div class="city-kl-toast" data-city-toast></div>
-        <div class="city-kl-modal" data-city-modal hidden></div>
-        <div class="city-kl-loader" data-city-loader>
-          <div class="city-kl-loader-logo"><small>JK.GAMES</small><b>City.KL</b></div>
-          <div class="city-kl-loader-city"><i></i><i></i><i></i><i></i><i></i></div>
-          <strong>Cottbus wird aufgebaut …</strong>
-          <div><span></span></div>
-        </div>
       </div>`;
 
-    bindShell();
-    buildBoardTiles();
-    renderLandmarks();
-    updateHud();
-    requestAnimationFrame(positionToken);
-    setTimeout(() => C.overlay?.querySelector('[data-city-loader]')?.classList.add('is-finished'), 950);
-    setTimeout(() => {
-      const loader = C.overlay?.querySelector('[data-city-loader]');
-      if (loader) loader.remove();
-      if (C.state.rolls === 0 && C.state.completedBoards === 0) showWelcome();
-    }, 1350);
-  }
-
-  function buildBoardTiles() {
-    const boardEl = C.overlay.querySelector('[data-city-board]');
-    C.boardTiles = [];
-    TILE_PATTERN.forEach((type, index) => {
-      const meta = TILE_META[type];
-      const [row, col] = tileCoordinates(index);
-      const tile = document.createElement('div');
-      tile.className = `city-kl-tile city-kl-tile-${meta.cls}`;
-      tile.dataset.cityTile = String(index);
-      tile.dataset.type = type;
-      tile.style.gridRow = String(row + 1);
-      tile.style.gridColumn = String(col + 1);
-      tile.innerHTML = `<span>${meta.icon}</span><small>${meta.label}</small>`;
-      boardEl.append(tile);
-      C.boardTiles.push(tile);
+    let selectedToken = 'car';
+    C.overlay.querySelectorAll('[data-token]').forEach(button => {
+      button.addEventListener('click', () => {
+        selectedToken = button.dataset.token || 'car';
+        C.overlay.querySelectorAll('[data-token]').forEach(item => item.classList.toggle('active', item === button));
+      });
     });
-  }
-
-  function landmarkCost(index, level = C.state.landmarks[index]) {
-    const boardFactor = 1 + C.state.completedBoards * 0.68;
-    return Math.floor((900 + index * 380) * Math.pow(1.72, level) * boardFactor / 50) * 50;
-  }
-
-  function renderLandmarks() {
-    const holder = C.overlay?.querySelector('[data-city-landmarks]');
-    if (!holder) return;
-    const theme = board();
-    holder.innerHTML = theme.landmarks.map((landmark, index) => {
-      const level = C.state.landmarks[index];
-      const classes = ['tiny', 'small', 'medium', 'large', 'tower', 'max'][level];
-      return `<button type="button" class="city-kl-landmark ${classes}" data-city-landmark="${index}">
-        <div class="city-kl-building"><i></i><i></i><i></i><span>${landmark.icon}</span></div>
-        <b>${escapeHtml(landmark.name)}</b>
-        <small>Stufe ${level}/5</small>
-      </button>`;
-    }).join('');
-    holder.querySelectorAll('[data-city-landmark]').forEach(button => {
-      button.addEventListener('click', () => openBuild(Number(button.dataset.cityLandmark)));
-    });
-    const available = C.state.landmarks.map((level, i) => level < 5 ? landmarkCost(i, level) : Infinity);
-    const min = Math.min(...available);
-    const cost = C.overlay.querySelector('[data-city-build-cost]');
-    if (cost) cost.textContent = Number.isFinite(min) ? `ab ${formatNumber(min)} CB` : 'Stadt komplett';
-  }
-
-  function updateHud() {
-    if (!C.overlay) return;
-    regenerateDice();
-    setText('[data-city-board-level]', C.state.boardLevel);
-    setText('[data-city-networth]', formatNumber(C.state.netWorth));
-    setText('[data-city-coins]', formatNumber(C.state.coins));
-    setText('[data-city-dice]', C.state.dice);
-    setText('[data-city-multiplier-value]', C.state.multiplier);
-    const albumInfo = C.overlay.querySelector('[data-city-album] small');
-    if (albumInfo) albumInfo.textContent = `${C.state.stars}/20 Sterne`;
-    const auto = C.overlay.querySelector('[data-city-auto]');
-    if (auto) {
-      auto.classList.toggle('active', C.autoRoll);
-      const b = auto.querySelector('b');
-      if (b) b.textContent = C.autoRoll ? 'An' : 'Aus';
-    }
-    renderShields();
-    const roll = C.overlay.querySelector('[data-city-roll]');
-    if (roll) roll.disabled = C.rolling || C.state.dice < C.state.multiplier;
-  }
-
-  function setText(selector, value) {
-    const el = C.overlay?.querySelector(selector);
-    if (el && el.textContent !== String(value)) el.textContent = String(value);
-  }
-
-  function renderShields() {
-    const holder = C.overlay?.querySelector('[data-city-shields]');
-    if (!holder) return;
-    holder.innerHTML = `<small>SCHUTZ</small><div>${Array.from({ length: MAX_SHIELDS }, (_, i) => `<i class="${i < C.state.shields ? 'active' : ''}">⬟</i>`).join('')}</div>`;
-  }
-
-  function positionToken() {
-    if (!C.overlay) return;
-    const boardEl = C.overlay.querySelector('[data-city-board]');
-    const tile = C.boardTiles[C.state.position];
-    const token = C.overlay.querySelector('[data-city-token]');
-    if (!boardEl || !tile || !token) return;
-    const boardRect = boardEl.getBoundingClientRect();
-    const tileRect = tile.getBoundingClientRect();
-    token.style.left = `${tileRect.left - boardRect.left + tileRect.width / 2}px`;
-    token.style.top = `${tileRect.top - boardRect.top + tileRect.height / 2}px`;
-    token.dataset.position = String(C.state.position);
-    C.token = token;
-  }
-
-  function bindShell() {
     C.overlay.querySelector('[data-city-close]')?.addEventListener('click', returnToTopGames);
-    C.overlay.querySelector('[data-city-roll]')?.addEventListener('click', rollDice);
-    C.overlay.querySelector('[data-city-auto]')?.addEventListener('click', toggleAuto);
-    C.overlay.querySelector('[data-city-multiplier]')?.addEventListener('click', cycleMultiplier);
-    C.overlay.querySelector('[data-city-build]')?.addEventListener('click', () => openBuild());
-    C.overlay.querySelector('[data-city-info]')?.addEventListener('click', openInfo);
-    C.overlay.querySelector('[data-city-album]')?.addEventListener('click', openAlbum);
-    C.resizeHandler = () => requestAnimationFrame(positionToken);
+    C.overlay.querySelector('[data-city-new]')?.addEventListener('click', () => {
+      const bots = Number(C.overlay.querySelector('[data-city-bots]')?.value || 3);
+      const difficulty = C.overlay.querySelector('[data-city-difficulty]')?.value || 'normal';
+      C.game = newGame(bots, selectedToken, difficulty);
+      saveGame();
+      renderGame();
+    });
+    C.overlay.querySelector('[data-city-continue]')?.addEventListener('click', () => {
+      C.game = saved;
+      renderGame();
+    });
+  }
+
+  function renderGame() {
+    clearTimers();
+    C.busy = false;
+    C.modalLocked = false;
+    const current = activePlayer();
+    C.overlay.innerHTML = `
+      <div class="city-kl-stage city-kl-game">
+        <header class="city-kl-topbar city-kl-gamebar">
+          <button class="city-kl-back" type="button" data-city-close>×</button>
+          <div class="city-kl-title"><small>COTTBUS IMMOBILIENRENNEN</small><b>City.KL</b></div>
+          <div class="city-kl-turn-badge"><small>AM ZUG</small><b data-city-turn-name>${escapeHtml(current?.name || '')}</b></div>
+          <button class="city-kl-menu-button" type="button" data-city-menu>☰</button>
+        </header>
+
+        <aside class="city-kl-players" data-city-players></aside>
+
+        <main class="city-kl-board-area">
+          <div class="city-kl-board" data-city-board>
+            <section class="city-kl-center-panel">
+              <div class="city-kl-center-logo"><small>JK.GAMES</small><h1>CITY.KL</h1><span>Cottbus</span></div>
+              <div class="city-kl-last-roll"><small>LETZTER WURF</small><b data-roll-total>2</b></div>
+              <div class="city-kl-turn-info" data-city-turn-info>Du bist am Zug.</div>
+              <button class="city-kl-roll-button" type="button" data-city-roll><span>WÜRFELN</span><small>2 Würfel</small></button>
+              <button class="city-kl-bail-button" type="button" data-city-bail hidden>50 CB Kaution zahlen</button>
+              <div class="city-kl-pot"><small>FREIPARKEN-POT</small><b data-city-pot>${formatMoney(C.game.cityPot)}</b></div>
+            </section>
+            <div class="city-kl-dice-throw" data-city-dice-throw hidden aria-live="polite"></div>
+          </div>
+        </main>
+
+        <footer class="city-kl-actions">
+          <button type="button" data-city-properties><span>🏘️</span><b>Meine Straßen</b></button>
+          <button type="button" data-city-log><span>📜</span><b>Spielverlauf</b></button>
+          <button type="button" data-city-help><span>?</span><b>Regeln</b></button>
+        </footer>
+        <div class="city-kl-toast" data-city-toast></div>
+        <div class="city-kl-modal" data-city-modal hidden></div>
+      </div>`;
+
+    buildBoard();
+    bindGame();
+    updateAll();
+    requestAnimationFrame(positionAllPlayers);
+    if (activePlayer()?.isBot) scheduleBotTurn(700);
+  }
+
+  function buildBoard() {
+    const boardEl = C.overlay.querySelector('[data-city-board]');
+    C.tileElements = [];
+    BOARD.forEach((tile, index) => {
+      const [row, col] = boardCoordinate(index);
+      const el = document.createElement('div');
+      const corner = [0, 8, 16, 24].includes(index);
+      el.className = `city-kl-tile city-kl-type-${tile.type}${corner ? ' city-kl-corner' : ''}`;
+      el.dataset.tile = String(index);
+      el.style.gridRow = String(row + 1);
+      el.style.gridColumn = String(col + 1);
+      if (tile.group) el.style.setProperty('--tile-group', GROUPS[tile.group].color);
+      el.innerHTML = tileHtml(tile, index);
+      el.addEventListener('click', () => openTileInfo(index));
+      boardEl.append(el);
+      C.tileElements.push(el);
+    });
+
+    const tokensLayer = document.createElement('div');
+    tokensLayer.className = 'city-kl-tokens-layer';
+    tokensLayer.dataset.tokensLayer = '';
+    boardEl.append(tokensLayer);
+    C.playerElements.clear();
+    C.game.players.forEach(player => {
+      const token = document.createElement('div');
+      token.className = `city-kl-player-token${player.bankrupt ? ' bankrupt' : ''}`;
+      token.dataset.playerId = player.id;
+      token.style.setProperty('--player-color', player.color);
+      token.innerHTML = `<span>${player.token}</span><small>${escapeHtml(player.name)}</small>`;
+      tokensLayer.append(token);
+      C.playerElements.set(player.id, token);
+    });
+  }
+
+  function tileHtml(tile, index) {
+    const prop = propertyState(index);
+    const owner = prop?.owner ? getPlayer(prop.owner) : null;
+    const ownerMark = owner ? `<i class="city-kl-owner-dot" style="--owner:${owner.color}" title="${escapeHtml(owner.name)}"></i>` : '';
+    const houses = prop?.houses > 0 ? `<div class="city-kl-houses">${Array.from({ length: prop.houses }, () => '<i></i>').join('')}</div>` : '';
+    if (tile.type === 'street') {
+      return `<div class="city-kl-colorbar"></div>${ownerMark}<b>${escapeHtml(tile.name)}</b><small>${formatMoney(tile.price)}</small>${houses}`;
+    }
+    if (isOwnable(tile)) return `${ownerMark}<span class="city-kl-tile-icon">${tile.icon || '◆'}</span><b>${escapeHtml(tile.name)}</b><small>${formatMoney(tile.price)}</small>`;
+    return `<span class="city-kl-tile-icon">${tile.icon || '◆'}</span><b>${escapeHtml(tile.name)}</b><small>${escapeHtml(tile.text || '')}</small>`;
+  }
+
+  function refreshTile(index) {
+    const tile = BOARD[index];
+    const el = C.tileElements[index];
+    if (tile && el) el.innerHTML = tileHtml(tile, index);
+  }
+
+  function bindGame() {
+    C.overlay.querySelector('[data-city-close]')?.addEventListener('click', returnToTopGames);
+    C.overlay.querySelector('[data-city-menu]')?.addEventListener('click', openMenu);
+    C.overlay.querySelector('[data-city-roll]')?.addEventListener('click', humanRoll);
+    C.overlay.querySelector('[data-city-bail]')?.addEventListener('click', payBail);
+    C.overlay.querySelector('[data-city-properties]')?.addEventListener('click', openProperties);
+    C.overlay.querySelector('[data-city-log]')?.addEventListener('click', openLog);
+    C.overlay.querySelector('[data-city-help]')?.addEventListener('click', openRules);
+    C.resizeHandler = () => requestAnimationFrame(positionAllPlayers);
     window.addEventListener('resize', C.resizeHandler, { passive: true });
-    C.visibilityHandler = () => {
-      if (!document.hidden) {
-        regenerateDice();
-        updateHud();
+  }
+
+  function updateAll() {
+    updatePlayersPanel();
+    updateTurnControls();
+    updateBoardOwners();
+    positionAllPlayers();
+    const pot = C.overlay?.querySelector('[data-city-pot]');
+    if (pot) pot.textContent = formatMoney(C.game.cityPot);
+    saveGame();
+  }
+
+  function updatePlayersPanel() {
+    const holder = C.overlay?.querySelector('[data-city-players]');
+    if (!holder) return;
+    holder.innerHTML = C.game.players.map((player, index) => {
+      const propertyCount = player.properties.length;
+      return `<article class="${index === C.game.currentPlayer ? 'active ' : ''}${player.bankrupt ? 'bankrupt' : ''}" style="--player:${player.color}">
+        <div class="city-kl-avatar">${player.token}</div>
+        <div><b>${escapeHtml(player.name)}</b><small>${player.isBot ? 'BOT' : 'SPIELER'} · ${propertyCount} Straßen</small></div>
+        <strong>${player.bankrupt ? 'BANKROTT' : formatMoney(player.cash)}</strong>
+        ${player.inJail ? '<i class="city-kl-jailed">🔒</i>' : ''}
+      </article>`;
+    }).join('');
+  }
+
+  function updateTurnControls() {
+    const player = activePlayer();
+    const roll = C.overlay?.querySelector('[data-city-roll]');
+    const bail = C.overlay?.querySelector('[data-city-bail]');
+    const name = C.overlay?.querySelector('[data-city-turn-name]');
+    const info = C.overlay?.querySelector('[data-city-turn-info]');
+    if (name) name.textContent = player?.name || '';
+    if (roll) roll.disabled = C.busy || !player || player.isBot || player.bankrupt || C.game.phase !== 'roll';
+    if (bail) {
+      bail.hidden = !(player && !player.isBot && player.inJail && player.cash >= 50 && !C.busy);
+      bail.disabled = C.busy;
+    }
+    if (info) {
+      if (!player) info.textContent = '';
+      else if (player.bankrupt) info.textContent = `${player.name} ist ausgeschieden.`;
+      else if (player.inJail) info.textContent = player.isBot ? `${player.name} sitzt im Gefängnis.` : 'Du sitzt im Gefängnis: Würfle einen Pasch oder zahle Kaution.';
+      else if (player.isBot) info.textContent = `${player.name} überlegt …`;
+      else info.textContent = 'Du bist am Zug. Würfle mit zwei Würfeln.';
+    }
+  }
+
+  function updateBoardOwners() {
+    BOARD.forEach((tile, index) => {
+      if (isOwnable(tile)) refreshTile(index);
+    });
+  }
+
+  function positionAllPlayers() {
+    if (!C.overlay) return;
+    const boardEl = C.overlay.querySelector('[data-city-board]');
+    if (!boardEl) return;
+    const boardRect = boardEl.getBoundingClientRect();
+    const positions = new Map();
+    C.game.players.forEach(player => {
+      if (player.bankrupt) return;
+      const list = positions.get(player.position) || [];
+      list.push(player);
+      positions.set(player.position, list);
+    });
+    positions.forEach((players, tileIndex) => {
+      const tileEl = C.tileElements[tileIndex];
+      if (!tileEl) return;
+      const rect = tileEl.getBoundingClientRect();
+      players.forEach((player, offset) => {
+        const token = C.playerElements.get(player.id);
+        if (!token) return;
+        const angle = (Math.PI * 2 * offset) / Math.max(1, players.length);
+        const spread = players.length > 1 ? Math.min(rect.width, rect.height) * 0.2 : 0;
+        token.style.left = `${rect.left - boardRect.left + rect.width / 2 + Math.cos(angle) * spread}px`;
+        token.style.top = `${rect.top - boardRect.top + rect.height / 2 + Math.sin(angle) * spread}px`;
+        token.classList.toggle('current', player === activePlayer());
+      });
+    });
+  }
+
+  function humanRoll() {
+    const player = activePlayer();
+    if (!player || player.isBot || C.busy || C.game.phase !== 'roll') return;
+    performTurnRoll(player);
+  }
+
+  async function performTurnRoll(player) {
+    if (C.busy || player.bankrupt) return;
+    C.busy = true;
+    C.game.phase = 'moving';
+    updateTurnControls();
+
+    const dice = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+    const isDouble = dice[0] === dice[1];
+    await animateDice(dice);
+    C.game.lastRoll = dice;
+
+    if (player.inJail) {
+      if (isDouble) {
+        player.inJail = false;
+        player.jailAttempts = 0;
+        addLog(`${player.name} würfelt einen Pasch und kommt frei.`);
+        showToast('Pasch!', `${player.name} kommt aus dem Gefängnis.`);
+      } else if (player.jailCards > 0 && (player.isBot || player.jailAttempts >= 1)) {
+        player.jailCards--;
+        player.inJail = false;
+        player.jailAttempts = 0;
+        addLog(`${player.name} nutzt einen Freifahrtschein.`);
+      } else {
+        player.jailAttempts++;
+        if (player.jailAttempts >= 3) {
+          await transferCash(player, null, 50, 'Kaution');
+          if (!player.bankrupt) {
+            player.inJail = false;
+            player.jailAttempts = 0;
+            showToast('Kaution', `${player.name} zahlt 50 CB und kommt frei.`);
+          }
+        } else {
+          addLog(`${player.name} bleibt im Gefängnis (${player.jailAttempts}/3).`);
+          C.busy = false;
+          await endTurn(false);
+          return;
+        }
       }
-    };
-    document.addEventListener('visibilitychange', C.visibilityHandler);
-  }
+    }
 
-  function showWelcome() {
-    showModal(`
-      <div class="city-kl-kicker">WILLKOMMEN IN COTTBUS</div>
-      <h2>Baue deine eigene Stadt</h2>
-      <p>Würfle, sammle City Coins, sichere deine Gebäude mit Schilden und entwickle vier Wahrzeichen bis Stufe 5.</p>
-      <div class="city-kl-feature-grid">
-        <span><i>⚄</i><b>Würfeln</b><small>Ziehe über das endlose Stadtbrett.</small></span>
-        <span><i>⌂</i><b>Ausbauen</b><small>Steigere dein Vermögen und deine Sterne.</small></span>
-        <span><i>⬟</i><b>Schützen</b><small>Blockiere Angriffe auf deine Stadt.</small></span>
-        <span><i>♛</i><b>Neue Bereiche</b><small>Schalte weitere Cottbus-Welten frei.</small></span>
-      </div>
-      <button type="button" data-city-modal-close>Stadt betreten</button>
-    `);
-  }
-
-  function rollDice() {
-    if (C.rolling) return;
-    regenerateDice();
-    const mult = C.state.multiplier;
-    if (C.state.dice < mult) {
-      showToast('Keine Würfel', 'Deine Würfel laden sich alle 30 Minuten wieder auf.');
-      C.autoRoll = false;
-      updateHud();
+    if (isDouble) player.doublesStreak = Number(player.doublesStreak || 0) + 1;
+    else player.doublesStreak = 0;
+    if (player.doublesStreak >= 3) {
+      player.doublesStreak = 0;
+      await sendToJail(player, 'Drei Pasche hintereinander');
+      C.busy = false;
+      await endTurn(false);
       return;
     }
-    C.rolling = true;
-    C.state.dice -= mult;
-    C.state.rolls += mult;
-    const face = C.overlay.querySelector('[data-city-dice-face]');
-    const rollButton = C.overlay.querySelector('[data-city-roll]');
-    rollButton?.classList.add('is-rolling');
-    updateHud();
 
-    const result = 1 + Math.floor(Math.random() * 6);
-    let ticks = 0;
-    const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    const spin = setInterval(() => {
-      if (face) face.textContent = faces[Math.floor(Math.random() * faces.length)];
-      ticks++;
-      if (ticks >= 8) {
-        clearInterval(spin);
-        if (face) face.textContent = faces[result - 1];
-        moveToken(result, mult).finally(() => {
-          C.rolling = false;
-          rollButton?.classList.remove('is-rolling');
-          updateHud();
-          queueSave();
-          scheduleAutoRoll();
-        });
-      }
-    }, 70);
-  }
-
-  async function moveToken(steps, multiplier) {
-    for (let step = 0; step < steps; step++) {
-      const previous = C.state.position;
-      C.state.position = (C.state.position + 1) % BOARD_SIZE;
-      if (previous > C.state.position) {
-        const lapReward = 700 * multiplier * Math.max(1, C.state.boardLevel);
-        addCoins(lapReward, false);
-        showToast('Runde geschafft', `+${formatNumber(lapReward)} CB für eine komplette Stadtrunde.`);
-      }
-      C.boardTiles.forEach(tile => tile.classList.remove('is-current'));
-      C.boardTiles[C.state.position]?.classList.add('is-current');
-      positionToken();
-      C.token?.classList.add('is-moving');
-      await delay(190);
-      C.token?.classList.remove('is-moving');
+    const total = dice[0] + dice[1];
+    await movePlayer(player, total);
+    await resolveLanding(player, total);
+    C.busy = false;
+    if (C.game.winner || player.bankrupt) {
+      await endTurn(false);
+      return;
     }
-    await delay(120);
-    resolveTile(TILE_PATTERN[C.state.position], multiplier);
+    const extraTurn = isDouble && !player.inJail;
+    await endTurn(extraTurn);
   }
 
-  function resolveTile(type, multiplier) {
-    const meta = TILE_META[type];
-    C.boardTiles[C.state.position]?.classList.add('is-hit');
-    setTimeout(() => C.boardTiles[C.state.position]?.classList.remove('is-hit'), 650);
+  function dicePips(value) {
+    const active = {
+      1: [5],
+      2: [1, 9],
+      3: [1, 5, 9],
+      4: [1, 3, 7, 9],
+      5: [1, 3, 5, 7, 9],
+      6: [1, 3, 4, 6, 7, 9]
+    }[value] || [5];
+    return Array.from({ length: 9 }, (_, index) => `<i class="${active.includes(index + 1) ? 'active' : ''}"></i>`).join('');
+  }
 
-    switch (type) {
-      case 'start': {
-        const reward = 500 * multiplier;
-        addCoins(reward);
-        showToast(meta.label, `+${formatNumber(reward)} CB`);
-        break;
+  function diceCubeHtml(index) {
+    return `<div class="city-kl-dice-cube city-kl-dice-cube-${index}" data-city-dice-cube="${index}">
+      <span class="city-kl-dice-face front">${dicePips(1)}</span>
+      <span class="city-kl-dice-face back">${dicePips(6)}</span>
+      <span class="city-kl-dice-face right">${dicePips(3)}</span>
+      <span class="city-kl-dice-face left">${dicePips(4)}</span>
+      <span class="city-kl-dice-face top">${dicePips(2)}</span>
+      <span class="city-kl-dice-face bottom">${dicePips(5)}</span>
+    </div>`;
+  }
+
+  function diceFinalRotation(value, extraZ = 0) {
+    const rotations = {
+      1: [-12, 12],
+      2: [-102, 10],
+      3: [-12, -78],
+      4: [-12, 102],
+      5: [78, 10],
+      6: [-12, 192]
+    };
+    const [x, y] = rotations[value] || rotations[1];
+    return `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${extraZ}deg)`;
+  }
+
+  async function animateDice(result) {
+    const layer = C.overlay?.querySelector('[data-city-dice-throw]');
+    const total = C.overlay?.querySelector('[data-roll-total]');
+    if (!layer) {
+      if (total) total.textContent = String(result[0] + result[1]);
+      await delay(450);
+      return;
+    }
+
+    const player = activePlayer();
+    const playerIndex = Math.max(0, C.game.players.indexOf(player));
+    const starts = [
+      [-170, 120],
+      [-190, -95],
+      [175, -105],
+      [190, 105]
+    ][playerIndex % 4];
+
+    layer.hidden = false;
+    layer.className = 'city-kl-dice-throw throwing';
+    layer.style.setProperty('--throw-color', player?.color || '#ffffff');
+    layer.innerHTML = `${diceCubeHtml(1)}${diceCubeHtml(2)}<div class="city-kl-dice-total" data-city-dice-total>?</div>`;
+    const cubes = [...layer.querySelectorAll('[data-city-dice-cube]')];
+    const totalBadge = layer.querySelector('[data-city-dice-total]');
+    const animations = cubes.map((cube, index) => {
+      const side = index === 0 ? -1 : 1;
+      const finalX = side * 39;
+      const finalY = index === 0 ? 5 : -5;
+      const finalRotation = diceFinalRotation(result[index], side * 7);
+      return cube.animate([
+        { opacity: 0, transform: `translate3d(${starts[0] + side * 24}px,${starts[1]}px,180px) rotateX(0deg) rotateY(0deg) rotateZ(0deg)` },
+        { opacity: 1, offset: .08 },
+        { transform: `translate3d(${side * 76}px,-72px,90px) rotateX(${430 + index * 140}deg) rotateY(${620 - index * 110}deg) rotateZ(${220 + index * 90}deg)`, offset: .62 },
+        { transform: `translate3d(${finalX}px,${finalY + 10}px,8px) rotateX(${780 + index * 95}deg) rotateY(${920 - index * 65}deg) rotateZ(${340 + index * 70}deg)`, offset: .86 },
+        { opacity: 1, transform: `translate3d(${finalX}px,${finalY}px,0) ${finalRotation}` }
+      ], { duration: 980, easing: 'cubic-bezier(.18,.8,.22,1)', fill: 'forwards' });
+    });
+
+    await delay(1000);
+    animations.forEach((animation, index) => {
+      animation.cancel();
+      const side = index === 0 ? -1 : 1;
+      cubes[index].style.transform = `translate3d(${side * 39}px,${index === 0 ? 5 : -5}px,0) ${diceFinalRotation(result[index], side * 7)}`;
+      cubes[index].classList.add('settled');
+    });
+    if (totalBadge) totalBadge.textContent = String(result[0] + result[1]);
+    layer.classList.remove('throwing');
+    layer.classList.add('landed');
+    if (total) total.textContent = String(result[0] + result[1]);
+
+    await delay(820);
+    layer.classList.add('leaving');
+    await delay(260);
+    layer.hidden = true;
+    layer.className = 'city-kl-dice-throw';
+    layer.innerHTML = '';
+  }
+
+  async function movePlayer(player, steps) {
+    for (let i = 0; i < steps; i++) {
+      const old = player.position;
+      player.position = (player.position + 1) % BOARD_SIZE;
+      if (player.position < old) {
+        player.cash += START_BONUS;
+        addLog(`${player.name} zieht über START und erhält ${formatMoney(START_BONUS)}.`);
+        showToast('START passiert', `${player.name} erhält ${formatMoney(START_BONUS)}.`);
       }
-      case 'coins': {
-        const reward = (350 + Math.floor(Math.random() * 450)) * multiplier * Math.max(1, C.state.boardLevel);
-        addCoins(reward);
-        showCoinBurst(reward);
+      positionAllPlayers();
+      const token = C.playerElements.get(player.id);
+      token?.classList.add('moving');
+      await delay(145);
+      token?.classList.remove('moving');
+    }
+    updatePlayersPanel();
+  }
+
+  async function moveTo(player, target, collectStart = true) {
+    const old = player.position;
+    player.position = target;
+    if (collectStart && target < old) {
+      player.cash += START_BONUS;
+      addLog(`${player.name} erhält beim Vorbeiziehen an START ${formatMoney(START_BONUS)}.`);
+    }
+    positionAllPlayers();
+    await delay(400);
+  }
+
+  async function resolveLanding(player, diceTotal) {
+    if (player.bankrupt) return;
+    const index = player.position;
+    const tile = BOARD[index];
+    C.tileElements[index]?.classList.add('hit');
+    setTimer(() => C.tileElements[index]?.classList.remove('hit'), 650);
+    addLog(`${player.name} landet auf ${tile.name}.`);
+
+    if (isOwnable(tile)) {
+      await resolveProperty(player, index, diceTotal);
+      return;
+    }
+
+    switch (tile.type) {
+      case 'start':
+        showToast('START', 'Sicher gelandet.');
         break;
-      }
-      case 'build': {
-        const reward = 250 * multiplier;
-        addCoins(reward, false);
-        showToast('Bauplatz', `+${formatNumber(reward)} CB und dein nächster Ausbau wird angezeigt.`);
-        setTimeout(() => openBuild(), 500);
+      case 'tax':
+        C.game.cityPot += tile.amount;
+        await transferCash(player, null, tile.amount, tile.name);
+        showToast(tile.name, `${player.name} zahlt ${formatMoney(tile.amount)} in den City-Pot.`);
         break;
-      }
       case 'chance':
-        resolveChance(multiplier);
+        await drawCard(player, CHANCE_CARDS, 'Ereignis');
         break;
-      case 'shield': {
-        if (C.state.shields < MAX_SHIELDS) {
-          C.state.shields++;
-          showToast('Schutzschild', `Deine Stadt ist jetzt mit ${C.state.shields}/${MAX_SHIELDS} Schilden geschützt.`);
+      case 'chest':
+        await drawCard(player, CHEST_CARDS, 'City-Kasse');
+        break;
+      case 'jail':
+        showToast('Nur zu Besuch', `${player.name} besucht das Gefängnis.`);
+        break;
+      case 'parking': {
+        const reward = Math.max(50, C.game.cityPot);
+        C.game.cityPot = 0;
+        player.cash += reward;
+        addLog(`${player.name} gewinnt ${formatMoney(reward)} aus dem Freiparken-Pot.`);
+        showToast('Freiparken', `${player.name} gewinnt ${formatMoney(reward)}.`);
+        break;
+      }
+      case 'gojail':
+        await sendToJail(player, 'Polizeifeld');
+        break;
+    }
+    updateAll();
+  }
+
+  async function resolveProperty(player, index, diceTotal) {
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    if (!prop.owner) {
+      if (player.isBot) {
+        if (shouldBotBuy(player, tile)) {
+          buyProperty(player, index);
+          showToast('Straße gekauft', `${player.name} kauft ${tile.name}.`);
+          await delay(650);
         } else {
-          const reward = 650 * multiplier;
-          addCoins(reward, false);
-          showToast('Schilde voll', `+${formatNumber(reward)} CB als Ersatz.`);
+          addLog(`${player.name} lehnt ${tile.name} ab.`);
+          await botAuction(index, player);
+        }
+      } else {
+        await askHumanPurchase(index);
+      }
+      return;
+    }
+    if (prop.owner === player.id || prop.mortgaged) {
+      showToast(tile.name, prop.owner === player.id ? 'Diese Straße gehört dir.' : 'Die Straße ist beliehen. Keine Miete.');
+      return;
+    }
+    const owner = getPlayer(prop.owner);
+    if (!owner || owner.bankrupt) return;
+    const rent = calculateRent(index, diceTotal);
+    await transferCash(player, owner, rent, `Miete für ${tile.name}`);
+    if (!player.bankrupt) showToast('Miete fällig', `${player.name} zahlt ${formatMoney(rent)} an ${owner.name}.`);
+  }
+
+  function calculateRent(index, diceTotal = 7) {
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    const owner = getPlayer(prop.owner);
+    if (!owner) return 0;
+    if (tile.type === 'station') {
+      const count = owner.properties.filter(i => BOARD[i].type === 'station' && !propertyState(i).mortgaged).length;
+      return 25 * Math.pow(2, Math.max(0, count - 1));
+    }
+    if (tile.type === 'utility') {
+      const count = owner.properties.filter(i => BOARD[i].type === 'utility' && !propertyState(i).mortgaged).length;
+      return Math.max(1, diceTotal) * (count >= 2 ? 10 : 4);
+    }
+    if (tile.type === 'street') {
+      let rent = tile.rent[Math.max(0, Math.min(tile.rent.length - 1, prop.houses))];
+      if (prop.houses === 0 && ownsGroup(owner, tile.group)) rent *= 2;
+      return rent;
+    }
+    return 0;
+  }
+
+  function ownsGroup(player, group) {
+    const indices = BOARD.map((tile, index) => tile.type === 'street' && tile.group === group ? index : -1).filter(index => index >= 0);
+    return indices.length > 0 && indices.every(index => propertyState(index).owner === player.id && !propertyState(index).mortgaged);
+  }
+
+  function shouldBotBuy(player, tile) {
+    const reserve = player.style === 'aggressive' ? 180 : player.style === 'careful' ? 450 : 300;
+    const difficultyFactor = C.game.difficulty === 'hard' ? 0.9 : C.game.difficulty === 'easy' ? 1.15 : 1;
+    if (player.cash - tile.price < reserve * difficultyFactor) return false;
+    if (tile.type === 'street') {
+      const ownedInGroup = player.properties.filter(index => BOARD[index].group === tile.group).length;
+      return Math.random() < Math.min(0.96, 0.66 + ownedInGroup * 0.17 + (player.style === 'aggressive' ? 0.12 : 0));
+    }
+    return Math.random() < (player.style === 'careful' ? 0.62 : 0.8);
+  }
+
+  function buyProperty(player, index, priceOverride = null) {
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    const price = priceOverride == null ? tile.price : priceOverride;
+    if (!isOwnable(tile) || prop.owner || player.cash < price) return false;
+    player.cash -= price;
+    prop.owner = player.id;
+    prop.houses = 0;
+    prop.mortgaged = false;
+    player.properties.push(index);
+    addLog(`${player.name} kauft ${tile.name} für ${formatMoney(price)}.`);
+    refreshTile(index);
+    updatePlayersPanel();
+    return true;
+  }
+
+  function askHumanPurchase(index) {
+    return new Promise(resolve => {
+      const tile = BOARD[index];
+      showModal(`
+        <div class="city-kl-property-card" style="--property:${tile.group ? GROUPS[tile.group].color : '#4ab3d7'}">
+          <div class="city-kl-property-color"></div>
+          <small>FREIE IMMOBILIE</small>
+          <h2>${escapeHtml(tile.name)}</h2>
+          <strong>${formatMoney(tile.price)}</strong>
+          <div class="city-kl-rent-table">${propertyRentPreview(tile)}</div>
+        </div>
+        <p>Du besitzt ${formatMoney(activePlayer().cash)}. Möchtest du diese Immobilie kaufen?</p>
+        <div class="city-kl-modal-actions">
+          <button type="button" class="primary" data-buy ${activePlayer().cash < tile.price ? 'disabled' : ''}>Kaufen</button>
+          <button type="button" class="secondary" data-auction>Auktion</button>
+        </div>`, true);
+      const modal = C.overlay.querySelector('[data-city-modal]');
+      modal.querySelector('[data-buy]')?.addEventListener('click', () => {
+        buyProperty(activePlayer(), index);
+        closeModal();
+        showToast('Gekauft', `${tile.name} gehört jetzt dir.`);
+        resolve();
+      });
+      modal.querySelector('[data-auction]')?.addEventListener('click', async () => {
+        closeModal();
+        await runAuction(index);
+        resolve();
+      });
+    });
+  }
+
+  function propertyRentPreview(tile) {
+    if (tile.type === 'street') {
+      return tile.rent.map((rent, index) => `<span><small>${index === 0 ? 'Grundmiete' : `${index} Haus${index > 1 ? 'er' : ''}`}</small><b>${formatMoney(rent)}</b></span>`).join('');
+    }
+    if (tile.type === 'station') return '<span><small>1 Bahnhof</small><b>25 CB</b></span><span><small>4 Bahnhöfe</small><b>200 CB</b></span>';
+    return '<span><small>1 Versorger</small><b>4× Würfel</b></span><span><small>2 Versorger</small><b>10× Würfel</b></span>';
+  }
+
+  async function runAuction(index) {
+    const tile = BOARD[index];
+    const bidders = C.game.players.filter(player => !player.bankrupt && player.cash >= Math.max(10, Math.floor(tile.price * 0.35)));
+    if (!bidders.length) return;
+    let best = null;
+    let bid = Math.max(10, Math.floor(tile.price * 0.35 / 10) * 10);
+    bidders.forEach(player => {
+      const max = Math.min(player.cash - 50, Math.floor(tile.price * (player.isBot ? 0.75 + Math.random() * 0.45 : 0.85)));
+      if (max >= bid && (!best || max > best.max)) best = { player, max };
+    });
+    if (!best) return;
+    bid = Math.max(bid, Math.min(best.max, Math.floor(tile.price * (0.65 + Math.random() * 0.25) / 10) * 10));
+    buyProperty(best.player, index, bid);
+    showToast('Auktion beendet', `${best.player.name} erhält ${tile.name} für ${formatMoney(bid)}.`);
+    await delay(700);
+  }
+
+  async function botAuction(index, decliningPlayer) {
+    const candidates = C.game.players.filter(player => player !== decliningPlayer && !player.bankrupt && player.cash > BOARD[index].price * 0.55);
+    if (!candidates.length) return;
+    const winner = candidates.sort((a, b) => b.cash - a.cash)[0];
+    const price = Math.min(winner.cash - 100, Math.max(10, Math.floor(BOARD[index].price * (0.55 + Math.random() * 0.28) / 10) * 10));
+    if (price > 0) {
+      buyProperty(winner, index, price);
+      showToast('Bot-Auktion', `${winner.name} kauft ${BOARD[index].name} für ${formatMoney(price)}.`);
+      await delay(600);
+    }
+  }
+
+  async function drawCard(player, deck, deckName) {
+    const card = deck[Math.floor(Math.random() * deck.length)];
+    await showCard(deckName, card, player.isBot);
+    await applyCard(player, card);
+  }
+
+  function showCard(deckName, card, autoContinue = false) {
+    return new Promise(resolve => {
+      showModal(`
+        <div class="city-kl-card-icon">${deckName === 'Ereignis' ? '?' : '🎁'}</div>
+        <small class="city-kl-kicker">${escapeHtml(deckName)}</small>
+        <h2>${escapeHtml(card.title)}</h2>
+        <p>${escapeHtml(card.text)}</p>
+        <button type="button" class="primary" data-card-ok>Weiter</button>`, true);
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        closeModal();
+        resolve();
+      };
+      C.overlay.querySelector('[data-card-ok]')?.addEventListener('click', done);
+      if (autoContinue) setTimer(done, 950);
+    });
+  }
+
+  async function applyCard(player, card) {
+    switch (card.action) {
+      case 'cash':
+        if (card.amount >= 0) player.cash += card.amount;
+        else await transferCash(player, null, Math.abs(card.amount), card.title);
+        break;
+      case 'move':
+        await moveTo(player, card.target, true);
+        await resolveLanding(player, C.game.lastRoll.reduce((a, b) => a + b, 0));
+        break;
+      case 'relative': {
+        let target = (player.position + card.amount) % BOARD_SIZE;
+        if (target < 0) target += BOARD_SIZE;
+        await moveTo(player, target, card.amount > 0 && target < player.position);
+        await resolveLanding(player, C.game.lastRoll.reduce((a, b) => a + b, 0));
+        break;
+      }
+      case 'jail':
+        await sendToJail(player, card.title);
+        break;
+      case 'jailCard':
+        player.jailCards++;
+        break;
+      case 'perProperty':
+        player.cash += player.properties.length * card.amount;
+        break;
+      case 'perHouse': {
+        const houses = player.properties.reduce((sum, index) => sum + propertyState(index).houses, 0);
+        const amount = houses * Math.abs(card.amount);
+        if (card.amount < 0) await transferCash(player, null, amount, card.title);
+        else player.cash += amount;
+        break;
+      }
+      case 'fromPlayers':
+        for (const other of C.game.players) {
+          if (other === player || other.bankrupt) continue;
+          await transferCash(other, player, card.amount, card.title);
         }
         break;
-      }
-      case 'attack':
-        resolveAttack(multiplier);
-        break;
-      case 'dice': {
-        const reward = 3 * multiplier;
-        C.state.dice = Math.min(MAX_DICE, C.state.dice + reward);
-        showToast('Würfelbonus', `+${reward} Würfel`);
-        break;
-      }
-      case 'heist':
-        resolveHeist(multiplier);
-        break;
-      case 'bonus': {
-        const coins = 900 * multiplier;
-        addCoins(coins, false);
-        C.state.dice = Math.min(MAX_DICE, C.state.dice + 2 * multiplier);
-        showToast('City Bonus', `+${formatNumber(coins)} CB und +${2 * multiplier} Würfel`);
-        break;
-      }
-      case 'jackpot': {
-        const reward = (2500 + Math.floor(Math.random() * 2000)) * multiplier;
-        addCoins(reward, false);
-        C.state.dice = Math.min(MAX_DICE, C.state.dice + 5);
-        showModal(`<div class="city-kl-jackpot-icon">♛</div><div class="city-kl-kicker">CITY JACKPOT</div><h2>${formatNumber(reward)} CB</h2><p>Du hast den großen Cottbus-Stadtbonus getroffen und zusätzlich 5 Würfel erhalten.</p><button type="button" data-city-modal-close>Abholen</button>`);
-        break;
-      }
     }
-    updateHud();
-    queueSave();
+    updateAll();
   }
 
-  function resolveChance(multiplier) {
-    const cards = [
-      { title: 'Straßenfest', text: 'Deine Innenstadt ist voll. Die Geschäfte zahlen Extra-Miete.', coins: 800 },
-      { title: 'Baustellenfund', text: 'Beim Ausbau wurde ein alter Stadtschatz entdeckt.', coins: 1250 },
-      { title: 'Touristenbus', text: 'Neue Gäste besuchen deine Wahrzeichen.', coins: 650, dice: 2 },
-      { title: 'Reparaturkosten', text: 'Ein Unwetter beschädigt mehrere Dächer.', coins: -450 },
-      { title: 'Stadtförderung', text: 'Dein nachhaltiges Viertel wird gefördert.', coins: 1500 },
-      { title: 'Würfel-Lieferung', text: 'Der Spieleladen schenkt dir neue Würfel.', dice: 5 }
-    ];
-    const card = cards[Math.floor(Math.random() * cards.length)];
-    const amount = Number(card.coins || 0) * multiplier;
-    if (amount >= 0) addCoins(amount, false);
-    else C.state.coins = Math.max(0, C.state.coins + amount);
-    if (card.dice) C.state.dice = Math.min(MAX_DICE, C.state.dice + card.dice * multiplier);
-    const rewardText = [amount ? `${amount > 0 ? '+' : ''}${formatNumber(amount)} CB` : '', card.dice ? `+${card.dice * multiplier} Würfel` : ''].filter(Boolean).join(' · ');
-    showModal(`<div class="city-kl-card-icon">?</div><div class="city-kl-kicker">CITY KARTE</div><h2>${escapeHtml(card.title)}</h2><p>${escapeHtml(card.text)}</p><strong class="city-kl-card-reward">${escapeHtml(rewardText)}</strong><button type="button" data-city-modal-close>Weiter</button>`);
+  async function sendToJail(player, reason) {
+    player.position = JAIL_INDEX;
+    player.inJail = true;
+    player.jailAttempts = 0;
+    player.doublesStreak = 0;
+    addLog(`${player.name} muss ins Gefängnis (${reason}).`);
+    positionAllPlayers();
+    showToast('Gefängnis', `${player.name} muss ins Gefängnis.`);
+    await delay(500);
   }
 
-  function resolveAttack(multiplier) {
-    const targets = ['Parkstadt Nord', 'Spree-Viertel', 'Altstadt-KI', 'Lausitz-Town'];
-    const target = targets[Math.floor(Math.random() * targets.length)];
-    const blocked = Math.random() < 0.38;
-    const reward = (blocked ? 450 : 1200 + Math.floor(Math.random() * 800)) * multiplier;
-    addCoins(reward, false);
-    showModal(`
-      <div class="city-kl-attack-scene ${blocked ? 'blocked' : 'success'}"><i>⚒</i><span></span></div>
-      <div class="city-kl-kicker">STADTANGRIFF</div>
-      <h2>${blocked ? 'Schild getroffen' : 'Gebäude beschädigt'}</h2>
-      <p>${escapeHtml(target)} ${blocked ? 'hat deinen Angriff mit einem Schild blockiert.' : 'konnte den Angriff nicht abwehren.'}</p>
-      <strong class="city-kl-card-reward">+${formatNumber(reward)} CB</strong>
-      <button type="button" data-city-modal-close>Beute sichern</button>
-    `);
+  function payBail() {
+    const player = activePlayer();
+    if (!player || player.isBot || !player.inJail || player.cash < 50 || C.busy) return;
+    player.cash -= 50;
+    player.inJail = false;
+    player.jailAttempts = 0;
+    addLog(`${player.name} zahlt 50 CB Kaution.`);
+    updateAll();
+    showToast('Kaution bezahlt', 'Du kannst jetzt normal würfeln.');
   }
 
-  function resolveHeist(multiplier) {
-    const vaults = [
-      { name: 'Kleine Kasse', factor: 1, icon: '▣' },
-      { name: 'Goldtresor', factor: 2.1, icon: '◆' },
-      { name: 'Mega-Tresor', factor: 4.4, icon: '♛' }
-    ];
-    const choice = Math.random();
-    const vault = choice > 0.88 ? vaults[2] : choice > 0.55 ? vaults[1] : vaults[0];
-    const reward = Math.floor((700 + Math.random() * 750) * vault.factor * multiplier);
-    C.state.bestHeist = Math.max(C.state.bestHeist, reward);
-    addCoins(reward, false);
-    showModal(`
-      <div class="city-kl-heist-vault"><span>${vault.icon}</span><i></i></div>
-      <div class="city-kl-kicker">BANKRAUB</div>
-      <h2>${escapeHtml(vault.name)}</h2>
-      <p>Der Tresor ist offen. Deine Beute wird direkt deiner Stadtkasse gutgeschrieben.</p>
-      <strong class="city-kl-card-reward">+${formatNumber(reward)} CB</strong>
-      <button type="button" data-city-modal-close>Beute nehmen</button>
-    `);
-  }
-
-  function addCoins(amount, animate = true) {
+  async function transferCash(from, to, amount, reason) {
     amount = Math.max(0, Math.floor(Number(amount || 0)));
-    C.state.coins += amount;
-    C.state.totalCoins += amount;
-    if (animate) pulseHudCoins();
+    if (!from || from.bankrupt || amount <= 0) return;
+    if (from.cash < amount) await raiseCash(from, amount);
+    const paid = Math.min(from.cash, amount);
+    from.cash -= paid;
+    if (to && !to.bankrupt) to.cash += paid;
+    addLog(`${from.name} zahlt ${formatMoney(paid)}${to ? ` an ${to.name}` : ''} (${reason}).`);
+    if (paid < amount) bankruptPlayer(from, to);
+    updatePlayersPanel();
   }
 
-  function pulseHudCoins() {
-    const el = C.overlay?.querySelector('.city-kl-coins');
-    if (!el) return;
-    el.classList.remove('pulse');
-    void el.offsetWidth;
-    el.classList.add('pulse');
-  }
-
-  function showCoinBurst(amount) {
-    const stage = C.overlay?.querySelector('.city-kl-stage');
-    if (!stage) return;
-    const burst = document.createElement('div');
-    burst.className = 'city-kl-coin-burst';
-    burst.innerHTML = `<div>${Array.from({ length: 9 }, (_, i) => `<i style="--i:${i}">CB</i>`).join('')}</div><strong>+${formatNumber(amount)} CB</strong>`;
-    stage.append(burst);
-    setTimeout(() => burst.remove(), 1150);
-    pulseHudCoins();
-  }
-
-  function nextBuildIndex() {
-    let best = -1;
-    let min = Infinity;
-    C.state.landmarks.forEach((level, index) => {
-      if (level < 5) {
-        const cost = landmarkCost(index, level);
-        if (cost < min) { min = cost; best = index; }
+  async function raiseCash(player, targetAmount) {
+    const buildProperties = player.properties.filter(index => propertyState(index).houses > 0);
+    for (const index of buildProperties) {
+      while (propertyState(index).houses > 0 && player.cash < targetAmount) {
+        const group = BOARD[index].group;
+        player.cash += Math.floor(GROUPS[group].houseCost / 2);
+        propertyState(index).houses--;
+        addLog(`${player.name} verkauft ein Haus auf ${BOARD[index].name}.`);
+        refreshTile(index);
       }
-    });
-    return best;
+    }
+    const mortgageable = player.properties
+      .filter(index => !propertyState(index).mortgaged && propertyState(index).houses === 0)
+      .sort((a, b) => BOARD[b].price - BOARD[a].price);
+    for (const index of mortgageable) {
+      if (player.cash >= targetAmount) break;
+      const value = Math.floor(BOARD[index].price / 2);
+      propertyState(index).mortgaged = true;
+      player.cash += value;
+      addLog(`${player.name} beleiht ${BOARD[index].name} für ${formatMoney(value)}.`);
+    }
   }
 
-  function openBuild(preselected = -1) {
-    const theme = board();
-    const index = preselected >= 0 ? preselected : nextBuildIndex();
-    if (index < 0) {
-      completeBoard();
+  function bankruptPlayer(player, creditor) {
+    if (player.bankrupt) return;
+    player.bankrupt = true;
+    player.cash = 0;
+    player.inJail = false;
+    addLog(`${player.name} ist bankrott.`);
+    player.properties.forEach(index => {
+      const prop = propertyState(index);
+      if (creditor && !creditor.bankrupt) {
+        prop.owner = creditor.id;
+        creditor.properties.push(index);
+      } else {
+        prop.owner = null;
+        prop.houses = 0;
+        prop.mortgaged = false;
+      }
+      refreshTile(index);
+    });
+    player.properties = [];
+    C.playerElements.get(player.id)?.classList.add('bankrupt');
+    const survivors = C.game.players.filter(item => !item.bankrupt);
+    if (survivors.length === 1) {
+      C.game.winner = survivors[0].id;
+      setTimer(() => showWinner(survivors[0]), 600);
+    } else {
+      showToast('Bankrott', `${player.name} scheidet aus.`);
+    }
+  }
+
+  async function endTurn(extraTurn) {
+    if (C.game.winner) return;
+    const player = activePlayer();
+    if (!player?.bankrupt && player?.isBot) botManage(player);
+    if (extraTurn && player && !player.bankrupt) {
+      addLog(`${player.name} hat einen Pasch und ist erneut am Zug.`);
+      C.game.phase = 'roll';
+      C.busy = false;
+      updateAll();
+      if (player.isBot) scheduleBotTurn(650);
+      else showToast('Pasch!', 'Du darfst noch einmal würfeln.');
       return;
     }
-    const landmark = theme.landmarks[index];
-    const level = C.state.landmarks[index];
-    const cost = landmarkCost(index, level);
-    const preview = Array.from({ length: 5 }, (_, i) => `<i class="${i < level ? 'done' : i === level ? 'next' : ''}"></i>`).join('');
-    showModal(`
-      <div class="city-kl-build-preview"><span>${landmark.icon}</span><div>${preview}</div></div>
-      <div class="city-kl-kicker">STADTAUSBAU</div>
-      <h2>${escapeHtml(landmark.name)}</h2>
-      <p>Stufe ${level}/5 · Jeder Ausbau erhöht dein Vermögen und bringt einen Stadtstern.</p>
-      <strong class="city-kl-build-price"><span class="city-coin-mini">CB</span>${formatNumber(cost)}</strong>
-      <div class="city-kl-modal-actions">
-        <button type="button" data-city-buy-build="${index}" ${C.state.coins < cost ? 'disabled' : ''}>Jetzt ausbauen</button>
-        <button type="button" class="secondary" data-city-modal-close>Später</button>
-      </div>
-      ${C.state.coins < cost ? `<small class="city-kl-missing">Dir fehlen ${formatNumber(cost - C.state.coins)} CB.</small>` : ''}
-    `);
-    C.overlay.querySelector('[data-city-buy-build]')?.addEventListener('click', event => buyBuild(Number(event.currentTarget.dataset.cityBuyBuild)));
+    let next = C.game.currentPlayer;
+    do {
+      next = (next + 1) % C.game.players.length;
+    } while (C.game.players[next].bankrupt && next !== C.game.currentPlayer);
+    if (next <= C.game.currentPlayer) C.game.turn++;
+    C.game.currentPlayer = next;
+    C.game.phase = 'roll';
+    C.busy = false;
+    updateAll();
+    if (activePlayer()?.isBot) scheduleBotTurn(750);
   }
 
-  function buyBuild(index) {
-    const level = C.state.landmarks[index];
-    if (level >= 5) return;
-    const cost = landmarkCost(index, level);
-    if (C.state.coins < cost) return;
-    C.state.coins -= cost;
-    C.state.landmarks[index] = level + 1;
-    C.state.netWorth += Math.floor(cost * 1.35);
-    C.state.stars += 1;
+  function scheduleBotTurn(ms = 700) {
+    setTimer(() => {
+      const bot = activePlayer();
+      if (!bot || !bot.isBot || bot.bankrupt || C.busy || C.game.winner) return;
+      if (bot.inJail && bot.cash > 600 && Math.random() < 0.45) {
+        bot.cash -= 50;
+        bot.inJail = false;
+        bot.jailAttempts = 0;
+        addLog(`${bot.name} zahlt 50 CB Kaution.`);
+      }
+      updateAll();
+      performTurnRoll(bot);
+    }, ms);
+  }
+
+  function botManage(bot) {
+    if (bot.bankrupt) return;
+    const reserve = bot.style === 'aggressive' ? 250 : bot.style === 'careful' ? 550 : 380;
+    const groups = Object.keys(GROUPS).filter(group => ownsGroup(bot, group));
+    for (const group of groups) {
+      const indices = bot.properties.filter(index => BOARD[index].group === group);
+      let safety = 0;
+      while (bot.cash > reserve + GROUPS[group].houseCost && safety++ < 3) {
+        const target = indices.sort((a, b) => propertyState(a).houses - propertyState(b).houses)[0];
+        if (propertyState(target).houses >= 4) break;
+        bot.cash -= GROUPS[group].houseCost;
+        propertyState(target).houses++;
+        addLog(`${bot.name} baut ein Haus auf ${BOARD[target].name}.`);
+        refreshTile(target);
+        if (Math.random() > (C.game.difficulty === 'hard' ? 0.25 : 0.55)) continue;
+        break;
+      }
+    }
+  }
+
+  function openProperties() {
+    const player = getPlayer('human');
+    const cards = player.properties.length ? player.properties.map(index => {
+      const tile = BOARD[index];
+      const prop = propertyState(index);
+      const complete = tile.group && ownsGroup(player, tile.group);
+      const canBuild = tile.type === 'street' && complete && !prop.mortgaged && prop.houses < 4 && player.cash >= GROUPS[tile.group].houseCost && canBuildEvenly(player, tile.group, index);
+      const mortgageValue = Math.floor(tile.price / 2);
+      return `<article class="city-kl-owned-card" style="--property:${tile.group ? GROUPS[tile.group].color : '#4ab3d7'}">
+        <div></div><h3>${escapeHtml(tile.name)}</h3>
+        <p>${prop.mortgaged ? 'Beliehen · keine Miete' : `Miete: ${formatMoney(calculateRent(index, 7))}`}</p>
+        ${tile.type === 'street' ? `<small>${complete ? 'Farbgruppe vollständig' : 'Farbgruppe noch unvollständig'} · ${prop.houses}/4 Häuser</small>` : '<small>Sonderimmobilie</small>'}
+        <div class="city-kl-card-actions">
+          ${tile.type === 'street' ? `<button data-build-house="${index}" ${canBuild ? '' : 'disabled'}>Haus bauen · ${formatMoney(GROUPS[tile.group].houseCost)}</button>` : ''}
+          <button class="secondary" data-mortgage="${index}" ${prop.houses > 0 ? 'disabled' : ''}>${prop.mortgaged ? `Auslösen · ${formatMoney(Math.ceil(mortgageValue * 1.1))}` : `Beleihen · ${formatMoney(mortgageValue)}`}</button>
+        </div>
+      </article>`;
+    }).join('') : '<p class="city-kl-empty">Du besitzt noch keine Straße. Kaufe freie Felder, auf denen du landest.</p>';
+
+    showModal(`
+      <small class="city-kl-kicker">IMMOBILIENVERWALTUNG</small>
+      <h2>Meine Straßen</h2>
+      <p>Häuser sind erst möglich, wenn dir die komplette Farbgruppe gehört. Innerhalb einer Gruppe muss gleichmäßig gebaut werden.</p>
+      <div class="city-kl-owned-list">${cards}</div>
+      <button type="button" class="secondary" data-modal-close>Schließen</button>`);
+
+    C.overlay.querySelectorAll('[data-build-house]').forEach(button => button.addEventListener('click', () => buildHouse(Number(button.dataset.buildHouse))));
+    C.overlay.querySelectorAll('[data-mortgage]').forEach(button => button.addEventListener('click', () => toggleMortgage(Number(button.dataset.mortgage))));
+  }
+
+  function canBuildEvenly(player, group, targetIndex) {
+    const indices = player.properties.filter(index => BOARD[index].group === group);
+    const min = Math.min(...indices.map(index => propertyState(index).houses));
+    return propertyState(targetIndex).houses <= min;
+  }
+
+  function buildHouse(index) {
+    const player = getPlayer('human');
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    if (!player || tile.type !== 'street' || !ownsGroup(player, tile.group) || prop.houses >= 4 || prop.mortgaged) return;
+    const cost = GROUPS[tile.group].houseCost;
+    if (player.cash < cost || !canBuildEvenly(player, tile.group, index)) return;
+    player.cash -= cost;
+    prop.houses++;
+    addLog(`Du baust ein Haus auf ${tile.name}.`);
+    refreshTile(index);
+    updateAll();
     closeModal();
-    renderLandmarks();
-    updateHud();
-    const landmarkEl = C.overlay.querySelector(`[data-city-landmark="${index}"]`);
-    landmarkEl?.classList.add('is-upgrading');
-    showToast('Ausbau abgeschlossen', `${board().landmarks[index].name} erreicht Stufe ${level + 1}.`);
-    setTimeout(() => landmarkEl?.classList.remove('is-upgrading'), 1000);
-    if (C.state.landmarks.every(v => v >= 5)) setTimeout(completeBoard, 950);
-    queueSave();
+    showToast('Haus gebaut', `${tile.name} hat jetzt ${prop.houses} Haus${prop.houses === 1 ? '' : 'er'}.`);
   }
 
-  function completeBoard() {
-    const oldBoard = board();
-    const reward = 15000 * Math.max(1, C.state.boardLevel);
-    C.state.coins += reward;
-    C.state.dice = Math.min(MAX_DICE, C.state.dice + 25);
-    C.state.completedBoards += 1;
-    C.state.boardLevel += 1;
-    C.state.boardIndex = (C.state.boardIndex + 1) % BOARDS.length;
-    C.state.landmarks = [0, 0, 0, 0];
-    C.state.position = 0;
-    queueSave();
+  function toggleMortgage(index) {
+    const player = getPlayer('human');
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    if (!player || prop.owner !== player.id || prop.houses > 0) return;
+    const value = Math.floor(tile.price / 2);
+    if (!prop.mortgaged) {
+      prop.mortgaged = true;
+      player.cash += value;
+      addLog(`Du beleihst ${tile.name} für ${formatMoney(value)}.`);
+    } else {
+      const cost = Math.ceil(value * 1.1);
+      if (player.cash < cost) return;
+      player.cash -= cost;
+      prop.mortgaged = false;
+      addLog(`Du löst ${tile.name} für ${formatMoney(cost)} aus.`);
+    }
+    refreshTile(index);
+    updateAll();
+    closeModal();
+    showToast('Immobilie aktualisiert', tile.name);
+  }
+
+  function openTileInfo(index) {
+    const tile = BOARD[index];
+    const prop = propertyState(index);
+    const owner = prop?.owner ? getPlayer(prop.owner) : null;
     showModal(`
-      <div class="city-kl-complete-city"><span>★</span><i></i><i></i><i></i></div>
-      <div class="city-kl-kicker">STADT KOMPLETT</div>
-      <h2>${escapeHtml(oldBoard.name)} abgeschlossen</h2>
-      <p>Alle Wahrzeichen stehen auf Stufe 5. Du erhältst ${formatNumber(reward)} CB und 25 Würfel.</p>
-      <button type="button" data-city-next-board>Nächste Stadt öffnen</button>
-    `, false);
-    C.overlay.querySelector('[data-city-next-board]')?.addEventListener('click', () => {
+      <div class="city-kl-property-card" style="--property:${tile.group ? GROUPS[tile.group].color : '#4ab3d7'}">
+        <div class="city-kl-property-color"></div>
+        <small>FELD ${index}</small><h2>${escapeHtml(tile.name)}</h2>
+        ${isOwnable(tile) ? `<strong>${formatMoney(tile.price)}</strong><div class="city-kl-rent-table">${propertyRentPreview(tile)}</div>` : `<span class="city-kl-big-icon">${tile.icon || '◆'}</span><p>${escapeHtml(tile.text || '')}</p>`}
+      </div>
+      ${isOwnable(tile) ? `<p>${owner ? `Besitzer: <b style="color:${owner.color}">${escapeHtml(owner.name)}</b>${prop.mortgaged ? ' · beliehen' : ''}` : 'Diese Immobilie ist noch frei.'}</p>` : ''}
+      <button type="button" class="secondary" data-modal-close>Schließen</button>`);
+  }
+
+  function openLog() {
+    showModal(`
+      <small class="city-kl-kicker">SPIELVERLAUF</small><h2>Letzte Aktionen</h2>
+      <div class="city-kl-log-list">${C.game.log.slice().reverse().map(item => `<p>${escapeHtml(item)}</p>`).join('')}</div>
+      <button type="button" class="secondary" data-modal-close>Schließen</button>`);
+  }
+
+  function openRules() {
+    showModal(`
+      <small class="city-kl-kicker">SPIELREGELN</small><h2>So funktioniert City.KL</h2>
+      <div class="city-kl-rules-list">
+        <p><b>1.</b> Alle Spieler starten mit ${formatMoney(START_CASH)} und würfeln der Reihe nach mit zwei Würfeln.</p>
+        <p><b>2.</b> Landest du auf einer freien Straße, kannst du sie kaufen. Lehnst du ab, wird sie versteigert.</p>
+        <p><b>3.</b> Landet ein Gegner auf deiner Immobilie, zahlt er Miete. Komplette Farbgruppen verdoppeln die Grundmiete.</p>
+        <p><b>4.</b> Mit einer kompletten Farbgruppe kannst du bis zu vier Häuser pro Straße bauen.</p>
+        <p><b>5.</b> Ein Pasch gibt einen weiteren Zug. Drei Pasche hintereinander führen ins Gefängnis.</p>
+        <p><b>6.</b> Wer seine Schulden nicht mehr zahlen kann, geht bankrott. Der letzte aktive Spieler gewinnt.</p>
+      </div>
+      <button type="button" class="primary" data-modal-close>Verstanden</button>`);
+  }
+
+  function openMenu() {
+    showModal(`
+      <small class="city-kl-kicker">SPIELMENÜ</small><h2>City.KL</h2>
+      <p>Dein Spiel wird automatisch auf diesem Gerät gespeichert.</p>
+      <div class="city-kl-menu-actions">
+        <button type="button" class="primary" data-modal-close>Weiterspielen</button>
+        <button type="button" class="secondary" data-restart>Neues Spiel</button>
+        <button type="button" class="danger" data-exit>Zu Top Games</button>
+      </div>`);
+    C.overlay.querySelector('[data-restart]')?.addEventListener('click', () => {
       closeModal();
-      renderShell();
+      showConfirm('Neues Spiel starten?', 'Der aktuelle Spielstand wird gelöscht.', () => {
+        deleteSave();
+        C.game = null;
+        renderLanding();
+      });
+    });
+    C.overlay.querySelector('[data-exit]')?.addEventListener('click', returnToTopGames);
+  }
+
+  function showWinner(winner) {
+    C.game.phase = 'finished';
+    updateAll();
+    showModal(`
+      <div class="city-kl-winner">🏆</div>
+      <small class="city-kl-kicker">SPIEL BEENDET</small>
+      <h2>${winner.id === 'human' ? 'Du hast gewonnen!' : `${escapeHtml(winner.name)} gewinnt`}</h2>
+      <p>${winner.id === 'human' ? 'Du hast alle Bots in den Bankrott getrieben und kontrollierst Cottbus.' : 'Dein Unternehmen ist ausgeschieden. Starte eine neue Runde und hole dir Cottbus zurück.'}</p>
+      <div class="city-kl-modal-actions">
+        <button type="button" class="primary" data-new-after-win>Neues Spiel</button>
+        <button type="button" class="secondary" data-exit-after-win>Top Games</button>
+      </div>`, true);
+    C.overlay.querySelector('[data-new-after-win]')?.addEventListener('click', () => {
+      deleteSave();
+      C.game = null;
+      renderLanding();
+    });
+    C.overlay.querySelector('[data-exit-after-win]')?.addEventListener('click', returnToTopGames);
+  }
+
+  function showConfirm(title, text, onConfirm) {
+    showModal(`
+      <small class="city-kl-kicker">BESTÄTIGEN</small><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p>
+      <div class="city-kl-modal-actions"><button type="button" class="danger" data-confirm>Ja, löschen</button><button type="button" class="secondary" data-modal-close>Abbrechen</button></div>`);
+    C.overlay.querySelector('[data-confirm]')?.addEventListener('click', () => {
+      closeModal();
+      onConfirm();
     });
   }
 
-  function cycleMultiplier() {
-    if (C.rolling) return;
-    const options = [1, 2, 3, 5, 10];
-    const available = options.filter(v => v <= Math.max(1, C.state.dice));
-    const current = available.indexOf(C.state.multiplier);
-    C.state.multiplier = available[(current + 1) % available.length] || 1;
-    updateHud();
-    queueSave();
-  }
-
-  function toggleAuto() {
-    C.autoRoll = !C.autoRoll;
-    updateHud();
-    if (C.autoRoll) scheduleAutoRoll(200);
-    else clearTimeout(C.autoTimer);
-  }
-
-  function scheduleAutoRoll(delayMs = 650) {
-    clearTimeout(C.autoTimer);
-    if (!C.autoRoll || C.rolling || C.currentCard || !C.overlay) return;
-    if (C.state.dice < C.state.multiplier) {
-      C.autoRoll = false;
-      updateHud();
-      return;
+  function showModal(html, locked = false) {
+    const modal = C.overlay?.querySelector('[data-city-modal]');
+    if (!modal) return;
+    if (C.modalHideTimer) {
+      clearTimeout(C.modalHideTimer);
+      C.timers.delete(C.modalHideTimer);
+      C.modalHideTimer = 0;
     }
-    C.autoTimer = setTimeout(rollDice, delayMs);
+    C.modalLocked = locked;
+    modal.innerHTML = `<div class="city-kl-modal-backdrop"></div><section>${html}</section>`;
+    modal.hidden = false;
+    requestAnimationFrame(() => modal.classList.add('open'));
+    modal.querySelectorAll('[data-modal-close]').forEach(button => button.addEventListener('click', closeModal));
+    if (!locked) modal.querySelector('.city-kl-modal-backdrop')?.addEventListener('click', closeModal);
   }
 
-  function openInfo() {
-    showModal(`
-      <div class="city-kl-kicker">SO FUNKTIONIERT CITY.KL</div>
-      <h2>Deine Cottbus-Stadt</h2>
-      <div class="city-kl-info-list">
-        <span><i>⚄</i><b>Würfeln</b><small>Jeder Wurf kostet Würfel entsprechend deinem Multiplikator.</small></span>
-        <span><i>CB</i><b>City Coins</b><small>Verdiene Coins auf dem Brett und investiere sie in Wahrzeichen.</small></span>
-        <span><i>⬟</i><b>Schilde</b><small>Bis zu fünf Schilde schützen deine Stadt vor Angriffen.</small></span>
-        <span><i>⌂</i><b>Ausbau</b><small>Vier Wahrzeichen mit je fünf Stufen schließen eine Stadt ab.</small></span>
-        <span><i>×</i><b>Multiplikator</b><small>Höherer Einsatz erhöht Belohnungen und Würfelverbrauch.</small></span>
-        <span><i>↻</i><b>Endlos</b><small>Nach einer fertigen Stadt beginnt der nächste Cottbus-Bereich.</small></span>
-      </div>
-      <button type="button" data-city-modal-close>Verstanden</button>
-    `);
-  }
-
-  function openAlbum() {
-    const progress = C.state.landmarks.reduce((sum, level) => sum + level, 0);
-    showModal(`
-      <div class="city-kl-album-star">★</div>
-      <div class="city-kl-kicker">STADTALBUM</div>
-      <h2>${C.state.stars} Sterne gesammelt</h2>
-      <p>Jede Landmarken-Stufe bringt einen Stern. Eine vollständige Stadt enthält 20 Sterne.</p>
-      <div class="city-kl-album-progress"><i style="width:${Math.min(100, progress / 20 * 100)}%"></i></div>
-      <div class="city-kl-stat-grid">
-        <span><small>Städte fertig</small><b>${C.state.completedBoards}</b></span>
-        <span><small>Würfe</small><b>${formatNumber(C.state.rolls)}</b></span>
-        <span><small>Coins verdient</small><b>${formatNumber(C.state.totalCoins)}</b></span>
-        <span><small>Bester Raub</small><b>${formatNumber(C.state.bestHeist)}</b></span>
-      </div>
-      <button type="button" data-city-modal-close>Zurück</button>
-    `);
+  function closeModal() {
+    const modal = C.overlay?.querySelector('[data-city-modal]');
+    if (!modal) return;
+    modal.classList.remove('open');
+    if (C.modalHideTimer) { clearTimeout(C.modalHideTimer); C.timers.delete(C.modalHideTimer); }
+    C.modalHideTimer = setTimer(() => {
+      if (!modal) return;
+      modal.hidden = true;
+      modal.innerHTML = '';
+      C.modalHideTimer = 0;
+    }, 170);
+    C.modalLocked = false;
   }
 
   function showToast(title, text) {
@@ -746,60 +1257,41 @@
     toast.classList.remove('show');
     void toast.offsetWidth;
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2500);
+    setTimer(() => toast.classList.remove('show'), 2500);
   }
 
-  function showModal(html, closable = true) {
-    clearTimeout(C.autoTimer);
-    const modal = C.overlay?.querySelector('[data-city-modal]');
-    if (!modal) return;
-    C.currentCard = true;
-    modal.innerHTML = `<div class="city-kl-modal-backdrop"></div><section>${html}</section>`;
-    modal.hidden = false;
-    modal.classList.add('open');
-    modal.querySelectorAll('[data-city-modal-close]').forEach(button => button.addEventListener('click', closeModal));
-    if (closable) modal.querySelector('.city-kl-modal-backdrop')?.addEventListener('click', closeModal);
-  }
-
-  function closeModal() {
-    const modal = C.overlay?.querySelector('[data-city-modal]');
-    if (!modal) return;
-    modal.classList.remove('open');
-    setTimeout(() => { if (modal) { modal.hidden = true; modal.innerHTML = ''; } }, 180);
-    C.currentCard = null;
-    scheduleAutoRoll();
+  function addLog(message) {
+    if (!C.game) return;
+    C.game.log.push(message);
+    if (C.game.log.length > 30) C.game.log.shift();
   }
 
   function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimer(resolve, ms));
   }
 
   function open(sourceDevice = '') {
     if (sourceDevice) C.sourceDevice = String(sourceDevice);
     else if (typeof window.JKGamesOwnedPhoneItem === 'function') C.sourceDevice = window.JKGamesOwnedPhoneItem() || C.sourceDevice || '';
     if (C.overlay) return;
-    load();
-    const overlay = document.createElement('div');
-    overlay.className = 'city-kl-overlay';
-    document.body.append(overlay);
-    C.overlay = overlay;
-    renderShell();
+    C.overlay = document.createElement('div');
+    C.overlay.className = 'city-kl-overlay';
+    document.body.append(C.overlay);
+    renderLanding();
   }
 
   function close() {
-    if (!C.overlay) return;
-    clearTimeout(C.autoTimer);
-    clearTimeout(C.saveTimer);
-    save();
-    window.removeEventListener('resize', C.resizeHandler);
-    document.removeEventListener('visibilitychange', C.visibilityHandler);
-    C.overlay.remove();
+    clearTimers();
+    if (C.game) saveGame();
+    if (C.resizeHandler) window.removeEventListener('resize', C.resizeHandler);
+    C.resizeHandler = null;
+    C.overlay?.remove();
     C.overlay = null;
-    C.boardTiles = [];
-    C.token = null;
-    C.rolling = false;
-    C.autoRoll = false;
-    C.currentCard = null;
+    C.game = null;
+    C.tileElements = [];
+    C.playerElements.clear();
+    C.busy = false;
+    C.modalHideTimer = 0;
   }
 
   function returnToTopGames() {
