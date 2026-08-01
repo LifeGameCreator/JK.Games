@@ -43,7 +43,7 @@
     { type: 'street', name: 'Lausitzer Straße', group: 'orange', price: 200, rent: [18, 90, 250, 700, 875] },
     { type: 'station', name: 'Busbahnhof', price: 200, icon: '🚌' },
     { type: 'street', name: 'Brandenburger Platz', group: 'red', price: 220, rent: [20, 100, 300, 750, 925] },
-    { type: 'street', name: 'Spremberger Straße', group: 'red', price: 240, rent: [22, 110, 330, 800, 975] },
+    { type: 'street', name: 'Cottbus Zentrum', group: 'red', price: 240, rent: [22, 110, 330, 800, 975] },
     { type: 'gojail', name: 'Ab ins Gefängnis', icon: '🚓' },
     { type: 'street', name: 'Altmarkt', group: 'red', price: 240, rent: [22, 110, 330, 800, 975] },
     { type: 'chance', name: 'Ereignis', icon: '?' },
@@ -85,7 +85,7 @@
     { title: 'Werkstattrechnung', text: 'Zahle 80 CB.', action: 'cash', amount: -80 },
     { title: 'Freifahrtschein', text: 'Du kommst kostenlos aus dem Gefängnis.', action: 'jailCard' },
     { title: 'Jobbonus', text: 'Erhalte 150 CB.', action: 'cash', amount: 150 },
-    { title: 'Zur Spremberger Straße', text: 'Ziehe zur Spremberger Straße.', action: 'move', target: 23 },
+    { title: 'Zum Cottbus Zentrum', text: 'Ziehe direkt zum Cottbus Zentrum.', action: 'move', target: 23 },
     { title: 'Straßenreinigung', text: 'Zahle 15 CB pro Haus.', action: 'perHouse', amount: -15 }
   ];
 
@@ -289,7 +289,7 @@
           <div class="city-kl-board" data-city-board>
             <section class="city-kl-center-panel">
               <div class="city-kl-center-logo"><small>JK.GAMES</small><h1>CITY.KL</h1><span>Cottbus</span></div>
-              <div class="city-kl-last-roll"><small>LETZTER WURF</small><b data-roll-total>2</b></div>
+              <div class="city-kl-last-roll"><small>LETZTER WURF</small><b data-roll-total>–</b></div>
               <div class="city-kl-turn-info" data-city-turn-info>Du bist am Zug.</div>
               <button class="city-kl-roll-button" type="button" data-city-roll><span>WÜRFELN</span><small>2 Würfel</small></button>
               <button class="city-kl-bail-button" type="button" data-city-bail hidden>50 CB Kaution zahlen</button>
@@ -538,28 +538,35 @@
     return Array.from({ length: 9 }, (_, index) => `<i class="${active.includes(index + 1) ? 'active' : ''}"></i>`).join('');
   }
 
-  function diceCubeHtml(index) {
-    return `<div class="city-kl-dice-cube city-kl-dice-cube-${index}" data-city-dice-cube="${index}">
-      <span class="city-kl-dice-face front">${dicePips(1)}</span>
-      <span class="city-kl-dice-face back">${dicePips(6)}</span>
-      <span class="city-kl-dice-face right">${dicePips(3)}</span>
-      <span class="city-kl-dice-face left">${dicePips(4)}</span>
-      <span class="city-kl-dice-face top">${dicePips(2)}</span>
-      <span class="city-kl-dice-face bottom">${dicePips(5)}</span>
+  function diceFaceLayout(value) {
+    const layouts = {
+      1: { front: 1, back: 6, right: 3, left: 4, top: 2, bottom: 5 },
+      2: { front: 2, back: 5, right: 3, left: 4, top: 6, bottom: 1 },
+      3: { front: 3, back: 4, right: 6, left: 1, top: 2, bottom: 5 },
+      4: { front: 4, back: 3, right: 1, left: 6, top: 2, bottom: 5 },
+      5: { front: 5, back: 2, right: 3, left: 4, top: 1, bottom: 6 },
+      6: { front: 6, back: 1, right: 4, left: 3, top: 2, bottom: 5 }
+    };
+    return layouts[value] || layouts[1];
+  }
+
+  function diceCubeHtml(index, value) {
+    const faces = diceFaceLayout(value);
+    return `<div class="city-kl-dice-cube city-kl-dice-cube-${index}" data-city-dice-cube="${index}" data-result="${value}" role="img" aria-label="Würfel ${index}: ${value}">
+      <span class="city-kl-dice-face front">${dicePips(faces.front)}</span>
+      <span class="city-kl-dice-face back">${dicePips(faces.back)}</span>
+      <span class="city-kl-dice-face right">${dicePips(faces.right)}</span>
+      <span class="city-kl-dice-face left">${dicePips(faces.left)}</span>
+      <span class="city-kl-dice-face top">${dicePips(faces.top)}</span>
+      <span class="city-kl-dice-face bottom">${dicePips(faces.bottom)}</span>
     </div>`;
   }
 
-  function diceFinalRotation(value, extraZ = 0) {
-    const rotations = {
-      1: [-12, 12],
-      2: [-102, 10],
-      3: [-12, -78],
-      4: [-12, 102],
-      5: [78, 10],
-      6: [-12, 192]
-    };
-    const [x, y] = rotations[value] || rotations[1];
-    return `rotateX(${x}deg) rotateY(${y}deg) rotateZ(${extraZ}deg)`;
+  function diceLandingTransform(index) {
+    const side = index === 0 ? -1 : 1;
+    const x = side * 54;
+    const y = index === 0 ? 8 : -4;
+    return `translate3d(${x}px,${y}px,0) rotateX(-16deg) rotateY(${side * 17}deg) rotateZ(${side * 6}deg)`;
   }
 
   async function animateDice(result) {
@@ -574,47 +581,52 @@
     const player = activePlayer();
     const playerIndex = Math.max(0, C.game.players.indexOf(player));
     const starts = [
-      [-170, 120],
-      [-190, -95],
-      [175, -105],
-      [190, 105]
+      [-220, 145],
+      [-230, -120],
+      [220, -125],
+      [230, 140]
     ][playerIndex % 4];
 
     layer.hidden = false;
     layer.className = 'city-kl-dice-throw throwing';
     layer.style.setProperty('--throw-color', player?.color || '#ffffff');
-    layer.innerHTML = `${diceCubeHtml(1)}${diceCubeHtml(2)}<div class="city-kl-dice-total" data-city-dice-total>?</div>`;
+    layer.innerHTML = `${diceCubeHtml(1, result[0])}${diceCubeHtml(2, result[1])}<div class="city-kl-dice-total" data-city-dice-total><small>${escapeHtml(player?.name || 'Spieler')}</small><b>?</b></div>`;
     const cubes = [...layer.querySelectorAll('[data-city-dice-cube]')];
     const totalBadge = layer.querySelector('[data-city-dice-total]');
+    const totalValue = result[0] + result[1];
+
     const animations = cubes.map((cube, index) => {
       const side = index === 0 ? -1 : 1;
-      const finalX = side * 39;
-      const finalY = index === 0 ? 5 : -5;
-      const finalRotation = diceFinalRotation(result[index], side * 7);
+      const finalX = side * 54;
+      const finalY = index === 0 ? 8 : -4;
+      const spinX = 1260 + result[index] * 120 + index * 170;
+      const spinY = 1530 + result[index] * 90 - index * 130;
+      const spinZ = 620 + result[index] * 45 + index * 80;
       return cube.animate([
-        { opacity: 0, transform: `translate3d(${starts[0] + side * 24}px,${starts[1]}px,180px) rotateX(0deg) rotateY(0deg) rotateZ(0deg)` },
-        { opacity: 1, offset: .08 },
-        { transform: `translate3d(${side * 76}px,-72px,90px) rotateX(${430 + index * 140}deg) rotateY(${620 - index * 110}deg) rotateZ(${220 + index * 90}deg)`, offset: .62 },
-        { transform: `translate3d(${finalX}px,${finalY + 10}px,8px) rotateX(${780 + index * 95}deg) rotateY(${920 - index * 65}deg) rotateZ(${340 + index * 70}deg)`, offset: .86 },
-        { opacity: 1, transform: `translate3d(${finalX}px,${finalY}px,0) ${finalRotation}` }
-      ], { duration: 980, easing: 'cubic-bezier(.18,.8,.22,1)', fill: 'forwards' });
+        { opacity: 0, transform: `translate3d(${starts[0] + side * 30}px,${starts[1]}px,240px) rotateX(0deg) rotateY(0deg) rotateZ(0deg)` },
+        { opacity: 1, offset: .06 },
+        { transform: `translate3d(${side * 105}px,-105px,150px) rotateX(${spinX * .42}deg) rotateY(${spinY * .42}deg) rotateZ(${spinZ * .42}deg)`, offset: .42 },
+        { transform: `translate3d(${side * 76}px,-34px,58px) rotateX(${spinX * .78}deg) rotateY(${spinY * .78}deg) rotateZ(${spinZ * .78}deg)`, offset: .72 },
+        { transform: `translate3d(${finalX}px,${finalY + 15}px,10px) rotateX(${spinX}deg) rotateY(${spinY}deg) rotateZ(${spinZ}deg)`, offset: .9 },
+        { opacity: 1, transform: diceLandingTransform(index) }
+      ], { duration: 1180, easing: 'cubic-bezier(.16,.78,.2,1)', fill: 'forwards' });
     });
 
-    await delay(1000);
+    await Promise.all(animations.map(animation => animation.finished.catch(() => undefined)));
     animations.forEach((animation, index) => {
       animation.cancel();
-      const side = index === 0 ? -1 : 1;
-      cubes[index].style.transform = `translate3d(${side * 39}px,${index === 0 ? 5 : -5}px,0) ${diceFinalRotation(result[index], side * 7)}`;
+      cubes[index].style.transform = diceLandingTransform(index);
       cubes[index].classList.add('settled');
     });
-    if (totalBadge) totalBadge.textContent = String(result[0] + result[1]);
+
+    if (totalBadge) totalBadge.innerHTML = `<small>${escapeHtml(player?.name || 'Spieler')} würfelt</small><b>${result[0]} + ${result[1]} = ${totalValue}</b>`;
     layer.classList.remove('throwing');
     layer.classList.add('landed');
-    if (total) total.textContent = String(result[0] + result[1]);
+    if (total) total.textContent = String(totalValue);
 
-    await delay(820);
+    await delay(1150);
     layer.classList.add('leaving');
-    await delay(260);
+    await delay(300);
     layer.hidden = true;
     layer.className = 'city-kl-dice-throw';
     layer.innerHTML = '';

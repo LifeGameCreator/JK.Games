@@ -66,3 +66,43 @@
   .city-kl-last-roll small{display:none}
   .city-kl-last-roll b{height:26px;min-width:27px;font-size:12px}
 }
+
+
+/* V107 · large physical-looking 3D dice with the real rolled values */
+.city-kl-last-roll{transform:none;background:#f5efe0;border-color:#73572a2e;box-shadow:0 5px 13px #16221c2b}
+.city-kl-last-roll small{color:#73572a}
+.city-kl-last-roll b{background:linear-gradient(145deg,#283f3d,#112724);min-width:36px}
+.city-kl-dice-throw{inset:7%;perspective:1200px;transform-style:preserve-3d;filter:drop-shadow(0 22px 18px #031016b8)}
+.city-kl-dice-throw:before{top:61%;width:235px;height:70px;background:radial-gradient(ellipse,#06151d9c 0,#06151d3f 47%,transparent 74%)}
+.city-kl-dice-cube{width:76px;height:76px;transform-style:preserve-3d;will-change:transform,opacity;filter:saturate(.9)}
+.city-kl-dice-cube.settled{transition:transform .14s ease-out;filter:drop-shadow(0 8px 6px #0711167d)}
+.city-kl-dice-face{gap:6px;padding:12px;border:2px solid #aeb5b9;border-radius:17px;background:linear-gradient(145deg,#fff 0,#f5f5f2 36%,#d8dcde 78%,#c4cace 100%);box-shadow:inset 4px 4px 8px #fff,inset -5px -5px 10px #a7afb4,0 0 0 1px #ffffffbf;backface-visibility:hidden}
+.city-kl-dice-face:after{content:"";position:absolute;inset:5px;border-radius:12px;border:1px solid #ffffff9c;pointer-events:none}
+.city-kl-dice-face i{width:11px;height:11px}
+.city-kl-dice-face i.active{background:radial-gradient(circle at 35% 30%,#38444b 0,#11191e 48%,#020506 100%);box-shadow:inset 2px 2px 3px #000b,0 1px 1px #fff9}
+.city-kl-dice-face.front{transform:translateZ(38px)}
+.city-kl-dice-face.back{transform:rotateY(180deg) translateZ(38px)}
+.city-kl-dice-face.right{transform:rotateY(90deg) translateZ(38px)}
+.city-kl-dice-face.left{transform:rotateY(-90deg) translateZ(38px)}
+.city-kl-dice-face.top{transform:rotateX(90deg) translateZ(38px)}
+.city-kl-dice-face.bottom{transform:rotateX(-90deg) translateZ(38px)}
+.city-kl-dice-total{top:77%;height:auto;min-height:46px;min-width:150px;display:flex;flex-direction:column;gap:1px;padding:6px 16px;border-radius:16px;line-height:1.05;text-align:center}
+.city-kl-dice-total small{font-size:7px;font-weight:1000;letter-spacing:.11em;text-transform:uppercase;color:#eafff7}
+.city-kl-dice-total b{font-size:17px}
+.city-kl-dice-throw.throwing .city-kl-dice-total{opacity:0}
+.city-kl-dice-throw.landed .city-kl-dice-cube{animation:cityDiceLandV107 .38s cubic-bezier(.2,.9,.25,1)}
+@keyframes cityDiceLandV107{0%{margin-top:-14px;filter:brightness(1.25)}45%{margin-top:5px}72%{margin-top:-3px}100%{margin-top:0;filter:brightness(1)}}
+@media(max-width:680px){
+  .city-kl-dice-throw{inset:11% 7%;perspective:850px}
+  .city-kl-dice-cube{width:58px;height:58px}
+  .city-kl-dice-face{padding:9px;gap:4px;border-radius:13px}
+  .city-kl-dice-face i{width:8px;height:8px}
+  .city-kl-dice-face.front{transform:translateZ(29px)}
+  .city-kl-dice-face.back{transform:rotateY(180deg) translateZ(29px)}
+  .city-kl-dice-face.right{transform:rotateY(90deg) translateZ(29px)}
+  .city-kl-dice-face.left{transform:rotateY(-90deg) translateZ(29px)}
+  .city-kl-dice-face.top{transform:rotateX(90deg) translateZ(29px)}
+  .city-kl-dice-face.bottom{transform:rotateX(-90deg) translateZ(29px)}
+  .city-kl-dice-total{top:79%;min-width:130px;min-height:40px;padding:5px 11px}
+  .city-kl-dice-total b{font-size:14px}
+}
