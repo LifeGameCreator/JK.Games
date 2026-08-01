@@ -4,3 +4,48 @@
 @media(max-height:720px) and (min-width:700px){.mkl-board-wrap{max-width:560px}.mkl-game-layout{grid-template-columns:minmax(0,1fr) 250px}.mkl-game-head{margin-bottom:6px}.mkl-game-card{padding:8px}}
 @media(prefers-reduced-motion:reduce){.match-kl-overlay *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .topgames-card.match{background:linear-gradient(145deg,#742d82,#153b65 58%,#0e5d55);border-color:#72e8ff66;box-shadow:inset 0 1px rgba(255,255,255,.08),0 10px 24px rgba(91,55,184,.16)}.topgames-card.match:hover{filter:brightness(1.1)}
+
+/* V111 · Spielfeld bleibt beim Verschieben dauerhaft im DOM.
+   Dadurch gibt es keinen schwarzen Neuaufbau des kompletten Match.KL-Bildschirms. */
+.mkl-board-wrap,
+.mkl-board {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.mkl-board {
+  contain: layout paint;
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+.mkl-cell {
+  contain: layout style;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.mkl-piece {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.mkl-game-exit-btn {
+  display: grid !important;
+  place-items: center;
+  font-size: 28px !important;
+  line-height: 1;
+}
+.mkl-exit-warning {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 205, 88, .28);
+  border-radius: 14px;
+  color: #ffe289;
+  background: rgba(255, 187, 48, .08);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+@media(max-width:620px) {
+  .mkl-game-head-left .mkl-game-exit-btn {
+    display: grid !important;
+  }
+}

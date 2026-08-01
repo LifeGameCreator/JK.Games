@@ -480,7 +480,7 @@
         <div class="mkl-resource"><i>🪙</i><b>${M.save.coins}</b><small>Match Coins</small></div>
         <div class="mkl-resource"><i>⭐</i><b>${totalStars()}</b><small>Sterne</small></div>
       </div>
-      ${showBack ? '<button class="mkl-icon-btn" data-mkl-home title="Zurück">←</button>' : '<button class="mkl-icon-btn" data-mkl-exit title="Top Games">×</button>'}
+      ${showBack ? '<button type="button" class="mkl-icon-btn" data-mkl-home title="Zurück">←</button>' : '<button type="button" class="mkl-icon-btn" data-mkl-exit title="Top Games">×</button>'}
     </header>`;
   }
 
@@ -502,18 +502,18 @@
       <div class="mkl-page">
         <section class="mkl-card mkl-hero">
           <div class="mkl-hero-copy"><small class="mkl-kicker">COTTBUS MATCH-3 ABENTEUER</small><h1>Match<span>.KL</span></h1><p>Verbinde leuchtende Cottbus-Steine, erschaffe starke Spezialobjekte, löse Missionen und restauriere die Stadt auf einer großen Levelkarte.</p>
-            <div class="mkl-hero-actions"><button class="mkl-primary" data-mkl-continue>Level ${current} spielen</button><button class="mkl-secondary" data-mkl-map>Levelkarte</button></div>
+            <div class="mkl-hero-actions"><button type="button" class="mkl-primary" data-mkl-continue>Level ${current} spielen</button><button type="button" class="mkl-secondary" data-mkl-map>Levelkarte</button></div>
           </div><div class="mkl-hero-board"><div class="mkl-preview-grid">${previewPieces()}</div></div>
         </section>
         <section class="mkl-home-grid">
-          <button class="mkl-menu-card" data-mkl-map><i>🗺️</i><b>Levelkarte</b><small>80 Level in acht Cottbuser Bereichen.</small></button>
-          <button class="mkl-menu-card" data-mkl-daily><i>🎯</i><b>Tagesaufgaben</b><small>Schließe Missionen ab und verdiene Match Coins.</small>${dailyReady ? '<em>FERTIG</em>' : ''}</button>
-          <button class="mkl-menu-card" data-mkl-projects><i>🏗️</i><b>Stadt restaurieren</b><small>Verwende Sterne für Plätze, Parks und Gebäude.</small></button>
-          <button class="mkl-menu-card" data-mkl-shop><i>🛍️</i><b>Booster-Shop</b><small>Hammer, Bomben, Linien und zusätzliche Züge.</small></button>
-          <button class="mkl-menu-card" data-mkl-event><i>🏆</i><b>Cottbus-Cup</b><small>Wöchentliche Punkte durch gewonnene Level.</small></button>
-          <button class="mkl-menu-card" data-mkl-rules><i>💡</i><b>So funktioniert es</b><small>Kombinationen, Spezialsteine und Hindernisse.</small></button>
-          <button class="mkl-menu-card" data-mkl-gift><i>🎁</i><b>Tagesgeschenk</b><small>Jeden Tag kostenlose Match Coins und Booster.</small>${giftReady ? '<em>ABHOLEN</em>' : ''}</button>
-          <button class="mkl-menu-card" data-mkl-exit><i>📱</i><b>Top Games</b><small>Zurück zum Smartphone und zu den anderen Spielen.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-map><i>🗺️</i><b>Levelkarte</b><small>80 Level in acht Cottbuser Bereichen.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-daily><i>🎯</i><b>Tagesaufgaben</b><small>Schließe Missionen ab und verdiene Match Coins.</small>${dailyReady ? '<em>FERTIG</em>' : ''}</button>
+          <button type="button" class="mkl-menu-card" data-mkl-projects><i>🏗️</i><b>Stadt restaurieren</b><small>Verwende Sterne für Plätze, Parks und Gebäude.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-shop><i>🛍️</i><b>Booster-Shop</b><small>Hammer, Bomben, Linien und zusätzliche Züge.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-event><i>🏆</i><b>Cottbus-Cup</b><small>Wöchentliche Punkte durch gewonnene Level.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-rules><i>💡</i><b>So funktioniert es</b><small>Kombinationen, Spezialsteine und Hindernisse.</small></button>
+          <button type="button" class="mkl-menu-card" data-mkl-gift><i>🎁</i><b>Tagesgeschenk</b><small>Jeden Tag kostenlose Match Coins und Booster.</small>${giftReady ? '<em>ABHOLEN</em>' : ''}</button>
+          <button type="button" class="mkl-menu-card" data-mkl-exit><i>📱</i><b>Top Games</b><small>Zurück zum Smartphone und zu den anderen Spielen.</small></button>
         </section>
       </div></div></main>`;
     bindCommon();
@@ -545,7 +545,7 @@
           const level = start + offset;
           const open = level <= M.save.unlockedLevel;
           const stars = Number(M.save.stars[level] || 0);
-          return `<button class="mkl-level-node ${level === M.save.unlockedLevel ? 'current' : ''}" data-mkl-level="${level}" ${open ? '' : 'disabled'}><strong>${open ? level : '🔒'}</strong>${starsHtml(stars)}</button>`;
+          return `<button type="button" class="mkl-level-node ${level === M.save.unlockedLevel ? 'current' : ''}" data-mkl-level="${level}" ${open ? '' : 'disabled'}><strong>${open ? level : '🔒'}</strong>${starsHtml(stars)}</button>`;
         }).join('')}</div></section>`;
       }).join('')}</div></div></div></main>`;
     bindCommon();
@@ -560,8 +560,8 @@
     M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar(`Level ${level.number}`, true)}<div class="mkl-page">
       <div class="mkl-region-banner" style="--region-bg:${level.region.bg}"><small class="mkl-kicker">${level.region.icon} ${escapeHtml(level.region.name)}</small><h3>Level ${level.number}</h3><p>${escapeHtml(level.region.subtitle)} · ${level.moves} Züge</p></div>
       <div class="mkl-prelevel"><section class="mkl-card mkl-level-info"><small class="mkl-kicker">DEINE AUFGABEN</small><h2>Bereit für Level ${level.number}?</h2><div class="mkl-goal-list">${level.goals.map(goal => `<article class="mkl-goal-card"><i>${goalIcon(goal)}</i><div><b>${escapeHtml(goalLabel(goal))}</b><small>${goal.target.toLocaleString('de-DE')} erreichen</small></div></article>`).join('')}</div>
-      <div class="mkl-hero-actions"><button class="mkl-primary" data-mkl-start-level>Level starten</button><button class="mkl-secondary" data-mkl-map>Zur Levelkarte</button></div></section>
-      <aside class="mkl-card mkl-boost-select"><small class="mkl-kicker">START-BOOSTER</small><h3>Vor dem Level auswählen</h3><div class="mkl-boost-options">${['startBomb','startRocket'].map(id => `<button class="mkl-boost-option ${selected[id] ? 'selected' : ''}" data-mkl-preboost="${id}"><i>${BOOSTERS[id].icon}</i><span><b>${BOOSTERS[id].name}</b><small>${BOOSTERS[id].text}</small></span><em>${M.save.boosters[id]}</em></button>`).join('')}</div><p class="mkl-hint-line">Ausgewählte Start-Booster werden erst beim Start verbraucht.</p></aside></div></div></div></main>`;
+      <div class="mkl-hero-actions"><button type="button" class="mkl-primary" data-mkl-start-level>Level starten</button><button type="button" class="mkl-secondary" data-mkl-map>Zur Levelkarte</button></div></section>
+      <aside class="mkl-card mkl-boost-select"><small class="mkl-kicker">START-BOOSTER</small><h3>Vor dem Level auswählen</h3><div class="mkl-boost-options">${['startBomb','startRocket'].map(id => `<button type="button" class="mkl-boost-option ${selected[id] ? 'selected' : ''}" data-mkl-preboost="${id}"><i>${BOOSTERS[id].icon}</i><span><b>${BOOSTERS[id].name}</b><small>${BOOSTERS[id].text}</small></span><em>${M.save.boosters[id]}</em></button>`).join('')}</div><p class="mkl-hint-line">Ausgewählte Start-Booster werden erst beim Start verbraucht.</p></aside></div></div></div></main>`;
     bindCommon();
     M.shell.querySelector('[data-mkl-map]')?.addEventListener('click', renderMap);
     M.shell.querySelectorAll('[data-mkl-preboost]').forEach(button => button.addEventListener('click', () => {
@@ -604,31 +604,77 @@
   function renderGame() {
     const region = M.level.region;
     M.shell.innerHTML = `<main class="match-kl-screen mkl-game-screen"><div class="mkl-screen"><div class="mkl-game-layout">
-      <section class="mkl-card mkl-game-card"><header class="mkl-game-head"><div class="mkl-game-head-left"><button class="mkl-icon-btn" data-mkl-game-menu>Ⅱ</button><div class="mkl-counter"><small>ZÜGE</small><b data-mkl-moves>${M.moves}</b></div></div><div class="mkl-level-title"><small>${escapeHtml(region.name).toUpperCase()}</small><b>LEVEL ${M.level.number}</b></div><div class="mkl-game-head-right"><div class="mkl-counter"><small>PUNKTE</small><b data-mkl-score>0</b></div></div></header>
+      <section class="mkl-card mkl-game-card"><header class="mkl-game-head"><div class="mkl-game-head-left"><button type="button" class="mkl-icon-btn mkl-game-exit-btn" data-mkl-game-menu title="Level verlassen" aria-label="Level verlassen">×</button><div class="mkl-counter"><small>ZÜGE</small><b data-mkl-moves>${M.moves}</b></div></div><div class="mkl-level-title"><small>${escapeHtml(region.name).toUpperCase()}</small><b>LEVEL ${M.level.number}</b></div><div class="mkl-game-head-right"><div class="mkl-counter"><small>PUNKTE</small><b data-mkl-score>0</b></div></div></header>
       <div class="mkl-board-wrap" style="--region-bg:${region.bg}"><div class="mkl-board ${M.level.conveyor ? 'conveyor' : ''} ${M.level.regionIndex === 7 ? 'night' : ''}" data-mkl-board></div><div class="mkl-particle-layer" data-mkl-particles></div></div></section>
-      <aside class="mkl-sidepanel"><section class="mkl-card mkl-goals-panel"><h3>🎯 Aufgaben</h3><div data-mkl-goals></div></section><section class="mkl-card mkl-boost-panel"><h3>✨ Booster</h3><div class="mkl-booster-grid">${['hammer','row','col','bomb','shuffle','moves'].map(id => `<button class="mkl-booster-btn" data-mkl-booster="${id}"><i>${BOOSTERS[id].icon}</i><b>${BOOSTERS[id].name}</b><em data-mkl-count-${id}>${M.save.boosters[id]}</em></button>`).join('')}</div><p class="mkl-hint-line">Booster auswählen und anschließend ein Feld berühren. Mischen und +5 Züge wirken sofort.</p></section></aside>
+      <aside class="mkl-sidepanel"><section class="mkl-card mkl-goals-panel"><h3>🎯 Aufgaben</h3><div data-mkl-goals></div></section><section class="mkl-card mkl-boost-panel"><h3>✨ Booster</h3><div class="mkl-booster-grid">${['hammer','row','col','bomb','shuffle','moves'].map(id => `<button type="button" class="mkl-booster-btn" data-mkl-booster="${id}"><i>${BOOSTERS[id].icon}</i><b>${BOOSTERS[id].name}</b><em data-mkl-count-${id}>${M.save.boosters[id]}</em></button>`).join('')}</div><p class="mkl-hint-line">Booster auswählen und anschließend ein Feld berühren. Mischen und +5 Züge wirken sofort.</p></section></aside>
       </div></div></main>`;
     renderBoard(); updateHud(); bindGame();
     if (M.save.settings.hints) setTimer(showHint, 6000);
   }
 
-  function cellHtml(cell, index) {
+  function cellContentHtml(cell) {
     const meta = cell.piece ? pieceMeta(cell.piece) : null;
     const piece = meta ? `<span class="mkl-piece type-${meta.id} ${cell.special ? `special-${cell.special}` : ''}">${cell.special === 'color' ? '' : meta.icon}</span>` : '';
     const blocker = cell.blocker ? `<span class="mkl-blocker ${cell.blocker}">${isSolid(cell) ? (cell.blocker === 'crate' ? '╳' : '▧') : ''}</span>${cell.hp > 1 ? `<span class="mkl-hp">${cell.hp}</span>` : ''}` : '';
     const ingredient = cell.ingredient ? '<span class="mkl-ingredient">📦</span>' : '';
-    return `<button class="mkl-cell ${index === M.selected ? 'selected' : ''}" data-mkl-cell="${index}" aria-label="${meta ? escapeHtml(meta.label) : 'Hindernis'}">${piece}${blocker}${ingredient}</button>`;
+    return `${piece}${blocker}${ingredient}`;
+  }
+
+  function cellSignature(cell) {
+    return [cell?.piece || '', cell?.special || '', cell?.blocker || '', Number(cell?.hp || 0), cell?.ingredient ? 1 : 0].join('|');
+  }
+
+  function cellHtml(cell, index) {
+    const meta = cell.piece ? pieceMeta(cell.piece) : null;
+    return `<button type="button" class="mkl-cell ${index === M.selected ? 'selected' : ''}" data-mkl-cell="${index}" data-mkl-signature="${cellSignature(cell)}" aria-label="${meta ? escapeHtml(meta.label) : 'Hindernis'}">${cellContentHtml(cell)}</button>`;
+  }
+
+  function syncCellElement(button, cell, index) {
+    if (!button) return;
+    const meta = cell.piece ? pieceMeta(cell.piece) : null;
+    button.classList.remove('clearing', 'falling', 'invalid', 'hint');
+    button.classList.toggle('selected', index === M.selected);
+    button.setAttribute('aria-label', meta ? meta.label : 'Hindernis');
+    const signature = cellSignature(cell);
+    if (button.dataset.mklSignature !== signature) {
+      button.dataset.mklSignature = signature;
+      button.innerHTML = cellContentHtml(cell);
+    }
+  }
+
+  function bindBoardEvents(board) {
+    if (board.dataset.mklBound === '1') return;
+    board.dataset.mklBound = '1';
+    board.addEventListener('click', event => {
+      const button = event.target.closest('[data-mkl-cell]');
+      if (!button || !board.contains(button)) return;
+      event.preventDefault();
+      handleCell(Number(button.dataset.mklCell));
+    });
+    board.addEventListener('pointerdown', event => {
+      const button = event.target.closest('[data-mkl-cell]');
+      if (!button || !board.contains(button) || event.button > 0) return;
+      M.pointerStart = { index: Number(button.dataset.mklCell), x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+    });
+    board.addEventListener('pointerup', event => {
+      const button = event.target.closest('[data-mkl-cell]');
+      if (!button || !board.contains(button)) { M.pointerStart = null; return; }
+      handleSwipe(event, Number(button.dataset.mklCell));
+    });
+    board.addEventListener('pointercancel', () => { M.pointerStart = null; });
   }
 
   function renderBoard() {
     const board = M.shell?.querySelector('[data-mkl-board]');
     if (!board) return;
-    board.innerHTML = M.board.map(cellHtml).join('');
-    board.querySelectorAll('[data-mkl-cell]').forEach(button => {
-      button.addEventListener('click', () => handleCell(Number(button.dataset.mklCell)));
-      button.addEventListener('pointerdown', event => { M.pointerStart = { index: Number(button.dataset.mklCell), x: event.clientX, y: event.clientY }; });
-      button.addEventListener('pointerup', event => handleSwipe(event, Number(button.dataset.mklCell)));
-    });
+    if (board.children.length !== CELL_COUNT) {
+      board.innerHTML = M.board.map(cellHtml).join('');
+    } else {
+      for (let index = 0; index < CELL_COUNT; index += 1) {
+        syncCellElement(board.children[index], M.board[index], index);
+      }
+    }
+    bindBoardEvents(board);
   }
 
   function handleSwipe(event, index) {
@@ -1089,7 +1135,7 @@
     if (M.level.number % 5 === 0) M.save.boosters.hammer += 1;
     save();
     playWinSound(); flashBoard(); await delay(500);
-    showModal(`<div class="mkl-result-stars">${[1,2,3].map(star => `<span class="${star <= stars ? 'on' : ''}">★</span>`).join('')}</div><small class="mkl-kicker">LEVEL ${M.level.number} GESCHAFFT</small><h2>Starke Runde!</h2><div class="mkl-result-score">${M.score.toLocaleString('de-DE')} Punkte</div><div class="mkl-stats-grid"><div class="mkl-stat"><small>Belohnung</small><b>🪙 ${reward}</b></div><div class="mkl-stat"><small>Restzüge</small><b>${M.moves}</b></div><div class="mkl-stat"><small>Beste Kombo</small><b>×${M.stats.largestCombo || 1}</b></div></div><div class="mkl-modal-actions"><button class="mkl-primary" data-mkl-next-level>${M.level.number < MAX_LEVEL ? `Level ${M.level.number + 1}` : 'Levelkarte'}</button><button class="mkl-secondary" data-mkl-map-after>Levelkarte</button><button class="mkl-secondary" data-mkl-home-after>Hauptmenü</button></div>`, true);
+    showModal(`<div class="mkl-result-stars">${[1,2,3].map(star => `<span class="${star <= stars ? 'on' : ''}">★</span>`).join('')}</div><small class="mkl-kicker">LEVEL ${M.level.number} GESCHAFFT</small><h2>Starke Runde!</h2><div class="mkl-result-score">${M.score.toLocaleString('de-DE')} Punkte</div><div class="mkl-stats-grid"><div class="mkl-stat"><small>Belohnung</small><b>🪙 ${reward}</b></div><div class="mkl-stat"><small>Restzüge</small><b>${M.moves}</b></div><div class="mkl-stat"><small>Beste Kombo</small><b>×${M.stats.largestCombo || 1}</b></div></div><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-next-level>${M.level.number < MAX_LEVEL ? `Level ${M.level.number + 1}` : 'Levelkarte'}</button><button type="button" class="mkl-secondary" data-mkl-map-after>Levelkarte</button><button type="button" class="mkl-secondary" data-mkl-home-after>Hauptmenü</button></div>`, true);
     M.modal.querySelector('[data-mkl-next-level]')?.addEventListener('click', () => { closeModal(); M.level.number < MAX_LEVEL ? renderPreLevel(M.level.number + 1) : renderMap(); });
     M.modal.querySelector('[data-mkl-map-after]')?.addEventListener('click', () => { closeModal(); renderMap(); });
     M.modal.querySelector('[data-mkl-home-after]')?.addEventListener('click', () => { closeModal(); renderHome(); });
@@ -1101,25 +1147,35 @@
     if (M.save.lives === MAX_LIVES - 1) M.save.lifeAnchor = Date.now();
     save();
     playTone(100, .45);
-    showModal(`<div style="text-align:center;font-size:58px">💔</div><small class="mkl-kicker">KEINE ZÜGE MEHR</small><h2>Fast geschafft</h2><p>Du kannst das Level erneut versuchen oder mit einem +5-Züge-Booster weiterspielen.</p><div class="mkl-stats-grid"><div class="mkl-stat"><small>Punkte</small><b>${M.score.toLocaleString('de-DE')}</b></div><div class="mkl-stat"><small>Leben</small><b>${M.save.lives}/${MAX_LIVES}</b></div><div class="mkl-stat"><small>+5 Züge</small><b>${M.save.boosters.moves}</b></div></div><div class="mkl-modal-actions">${M.save.boosters.moves > 0 ? '<button class="mkl-primary" data-mkl-continue-moves>+5 Züge benutzen</button>' : ''}<button class="mkl-secondary" data-mkl-retry>Erneut versuchen</button><button class="mkl-secondary" data-mkl-map-after>Levelkarte</button></div>`, true);
+    showModal(`<div style="text-align:center;font-size:58px">💔</div><small class="mkl-kicker">KEINE ZÜGE MEHR</small><h2>Fast geschafft</h2><p>Du kannst das Level erneut versuchen oder mit einem +5-Züge-Booster weiterspielen.</p><div class="mkl-stats-grid"><div class="mkl-stat"><small>Punkte</small><b>${M.score.toLocaleString('de-DE')}</b></div><div class="mkl-stat"><small>Leben</small><b>${M.save.lives}/${MAX_LIVES}</b></div><div class="mkl-stat"><small>+5 Züge</small><b>${M.save.boosters.moves}</b></div></div><div class="mkl-modal-actions">${M.save.boosters.moves > 0 ? '<button type="button" class="mkl-primary" data-mkl-continue-moves>+5 Züge benutzen</button>' : ''}<button type="button" class="mkl-secondary" data-mkl-retry>Erneut versuchen</button><button type="button" class="mkl-secondary" data-mkl-map-after>Levelkarte</button></div>`, true);
     M.modal.querySelector('[data-mkl-continue-moves]')?.addEventListener('click', () => { M.save.boosters.moves -= 1; M.moves = 5; M.busy = false; closeModal(); updateHud(); save(); });
     M.modal.querySelector('[data-mkl-retry]')?.addEventListener('click', () => { closeModal(); renderPreLevel(M.level.number); });
     M.modal.querySelector('[data-mkl-map-after]')?.addEventListener('click', () => { closeModal(); renderMap(); });
   }
 
   function showNoLives() {
-    showModal(`<div style="text-align:center;font-size:58px">❤️</div><small class="mkl-kicker">LEBEN LADEN SICH AUF</small><h2>Keine Herzen verfügbar</h2><p>In ${lifeText()} erhältst du automatisch ein neues Herz. Im Booster-Shop kannst du außerdem alle Leben auffüllen.</p><div class="mkl-modal-actions"><button class="mkl-primary" data-mkl-shop-modal>Zum Shop</button><button class="mkl-secondary" data-mkl-modal-close>Schließen</button></div>`);
+    showModal(`<div style="text-align:center;font-size:58px">❤️</div><small class="mkl-kicker">LEBEN LADEN SICH AUF</small><h2>Keine Herzen verfügbar</h2><p>In ${lifeText()} erhältst du automatisch ein neues Herz. Im Booster-Shop kannst du außerdem alle Leben auffüllen.</p><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-shop-modal>Zum Shop</button><button type="button" class="mkl-secondary" data-mkl-modal-close>Schließen</button></div>`);
     M.modal.querySelector('[data-mkl-shop-modal]')?.addEventListener('click', () => { closeModal(); renderShop(); });
+  }
+
+  function abandonCurrentLevel(destination) {
+    closeModal();
+    M.selected = -1;
+    M.activeBooster = '';
+    M.busy = false;
+    M.pointerStart = null;
+    if (destination === 'topgames') returnToTopGames();
+    else renderMap();
   }
 
   function showGameMenu() {
     if (M.busy) return;
     M.busy = true;
-    showModal(`<small class="mkl-kicker">SPIEL PAUSIERT</small><h2>Match.KL</h2><p>Dein aktuelles Spielfeld bleibt erhalten, solange du in diesem Menü bleibst.</p><div class="mkl-modal-actions"><button class="mkl-primary" data-mkl-resume>Weiterspielen</button><button class="mkl-secondary" data-mkl-restart>Level neu starten</button><button class="mkl-secondary" data-mkl-map-quit>Levelkarte</button><button class="mkl-danger" data-mkl-topgames>Top Games</button></div>`, true);
+    showModal(`<small class="mkl-kicker">AKTUELLES LEVEL</small><h2>Spiel wirklich verlassen?</h2><p>Wenn du das Level jetzt verlässt, geht der Fortschritt dieser Runde verloren. Beim nächsten Start musst du das Level vollständig von vorne spielen.</p><div class="mkl-exit-warning">⚠️ Züge, Punkte und aktuelle Kombinationen werden nicht gespeichert.</div><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-resume>Nein, weiterspielen</button><button type="button" class="mkl-secondary" data-mkl-restart>Level neu starten</button><button type="button" class="mkl-secondary" data-mkl-map-quit>Ja, zur Levelkarte</button><button type="button" class="mkl-danger" data-mkl-topgames>Ja, zu Top Games</button></div>`, true);
     M.modal.querySelector('[data-mkl-resume]')?.addEventListener('click', () => { closeModal(); M.busy = false; });
-    M.modal.querySelector('[data-mkl-restart]')?.addEventListener('click', () => { closeModal(); renderPreLevel(M.level.number); });
-    M.modal.querySelector('[data-mkl-map-quit]')?.addEventListener('click', () => { closeModal(); renderMap(); });
-    M.modal.querySelector('[data-mkl-topgames]')?.addEventListener('click', returnToTopGames);
+    M.modal.querySelector('[data-mkl-restart]')?.addEventListener('click', () => { closeModal(); M.busy = false; startLevel(M.level.number); });
+    M.modal.querySelector('[data-mkl-map-quit]')?.addEventListener('click', () => abandonCurrentLevel('map'));
+    M.modal.querySelector('[data-mkl-topgames]')?.addEventListener('click', () => abandonCurrentLevel('topgames'));
   }
 
   function showModal(html, locked = false) {
@@ -1148,7 +1204,7 @@
 
   function renderDaily() {
     ensureDaily();
-    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Tagesaufgaben', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">JEDEN TAG NEU</small><h2>Deine Missionen</h2></div><p>Abgeschlossene Aufgaben geben dir Match Coins.</p></div><div class="mkl-daily-grid">${M.save.daily.tasks.map(task => `<article class="mkl-daily-task"><i style="font-style:normal;font-size:36px">🎯</i><b>${escapeHtml(task.label)}</b><small>${task.value} von ${task.target}</small><div class="mkl-task-progress"><i style="width:${clamp(task.value / task.target * 100,0,100)}%"></i></div><button class="${task.value >= task.target && !task.claimed ? 'mkl-primary' : 'mkl-secondary'}" data-mkl-claim-task="${task.id}" ${task.value >= task.target && !task.claimed ? '' : 'disabled'}>${task.claimed ? 'Abgeholt' : `🪙 ${task.reward} abholen`}</button></article>`).join('')}</div></div></div></main>`;
+    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Tagesaufgaben', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">JEDEN TAG NEU</small><h2>Deine Missionen</h2></div><p>Abgeschlossene Aufgaben geben dir Match Coins.</p></div><div class="mkl-daily-grid">${M.save.daily.tasks.map(task => `<article class="mkl-daily-task"><i style="font-style:normal;font-size:36px">🎯</i><b>${escapeHtml(task.label)}</b><small>${task.value} von ${task.target}</small><div class="mkl-task-progress"><i style="width:${clamp(task.value / task.target * 100,0,100)}%"></i></div><button type="button" class="${task.value >= task.target && !task.claimed ? 'mkl-primary' : 'mkl-secondary'}" data-mkl-claim-task="${task.id}" ${task.value >= task.target && !task.claimed ? '' : 'disabled'}>${task.claimed ? 'Abgeholt' : `🪙 ${task.reward} abholen`}</button></article>`).join('')}</div></div></div></main>`;
     bindCommon();
     M.shell.querySelectorAll('[data-mkl-claim-task]').forEach(button => button.addEventListener('click', () => {
       const task = M.save.daily.tasks.find(item => item.id === button.dataset.mklClaimTask);
@@ -1161,7 +1217,7 @@
     const stars = totalStars();
     M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Stadt restaurieren', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">DEINE STERNE VERÄNDERN COTTBUS</small><h2>Restaurierungsprojekte</h2></div><p>${stars} Sterne insgesamt gesammelt.</p></div><div class="mkl-project-grid">${PROJECTS.map(project => {
       const done = M.save.projects.includes(project.id);
-      return `<article class="mkl-project ${done ? 'done' : ''}"><i>${project.icon}</i><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.text)}</small><button class="${done ? 'mkl-secondary' : 'mkl-primary'}" data-mkl-project="${project.id}" ${done || stars < project.cost ? 'disabled' : ''}>${done ? 'Fertiggestellt' : `⭐ ${project.cost} benötigt`}</button></article>`;
+      return `<article class="mkl-project ${done ? 'done' : ''}"><i>${project.icon}</i><b>${escapeHtml(project.name)}</b><small>${escapeHtml(project.text)}</small><button type="button" class="${done ? 'mkl-secondary' : 'mkl-primary'}" data-mkl-project="${project.id}" ${done || stars < project.cost ? 'disabled' : ''}>${done ? 'Fertiggestellt' : `⭐ ${project.cost} benötigt`}</button></article>`;
     }).join('')}</div></div></div></main>`;
     bindCommon();
     M.shell.querySelectorAll('[data-mkl-project]').forEach(button => button.addEventListener('click', () => {
@@ -1179,7 +1235,7 @@
     ];
     M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Booster-Shop', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">MATCH COINS AUSGEBEN</small><h2>Booster und Leben</h2></div><p>Alle Booster können auch durch Level und Tagesaufgaben verdient werden.</p></div><div class="mkl-shop-grid">${items.map(item => {
       const booster = item.id === 'lives' ? { name: 'Leben auffüllen', icon: '❤️', text: 'Füllt deine fünf Herzen vollständig auf.' } : BOOSTERS[item.id];
-      return `<article class="mkl-shop-item"><i>${booster.icon}</i><b>${escapeHtml(booster.name)}</b><small>${escapeHtml(booster.text)}<br><strong>${item.id === 'lives' ? 'Alle Herzen' : `+${item.amount} Stück`}</strong></small><button class="mkl-primary" data-mkl-buy="${item.id}" data-price="${item.price}" data-amount="${item.amount}">🪙 ${item.price}</button></article>`;
+      return `<article class="mkl-shop-item"><i>${booster.icon}</i><b>${escapeHtml(booster.name)}</b><small>${escapeHtml(booster.text)}<br><strong>${item.id === 'lives' ? 'Alle Herzen' : `+${item.amount} Stück`}</strong></small><button type="button" class="mkl-primary" data-mkl-buy="${item.id}" data-price="${item.price}" data-amount="${item.amount}">🪙 ${item.price}</button></article>`;
     }).join('')}</div></div></div></main>`;
     bindCommon();
     M.shell.querySelectorAll('[data-mkl-buy]').forEach(button => button.addEventListener('click', () => {
@@ -1197,7 +1253,7 @@
     const points = M.save.event.points;
     const rank = points >= 8000 ? 1 : points >= 5000 ? 2 : points >= 2500 ? 3 : points >= 1000 ? 5 : 12;
     const next = [1000,2500,5000,8000].find(value => value > points) || 10000;
-    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Cottbus-Cup', true)}<div class="mkl-page"><section class="mkl-card mkl-hero" style="min-height:360px"><div class="mkl-hero-copy"><small class="mkl-kicker">WÖCHENTLICHES TURNIER · ${escapeHtml(M.save.event.week)}</small><h1 style="font-size:70px">Cottbus<span>-Cup</span></h1><p>Gewinne Level und sammle Turnierpunkte. Drei Sterne und hohe Punktzahlen geben besonders viele Punkte.</p><div class="mkl-stats-grid"><div class="mkl-stat"><small>Deine Punkte</small><b>${points.toLocaleString('de-DE')}</b></div><div class="mkl-stat"><small>Aktueller Rang</small><b>#${rank}</b></div><div class="mkl-stat"><small>Nächstes Ziel</small><b>${next.toLocaleString('de-DE')}</b></div></div><div class="mkl-hero-actions"><button class="mkl-primary" data-mkl-map>Level spielen</button></div></div><div class="mkl-hero-board"><div style="height:100%;display:grid;place-items:center;font-size:150px;filter:drop-shadow(0 0 30px #ffd64a)">🏆</div></div></section></div></div></main>`;
+    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Cottbus-Cup', true)}<div class="mkl-page"><section class="mkl-card mkl-hero" style="min-height:360px"><div class="mkl-hero-copy"><small class="mkl-kicker">WÖCHENTLICHES TURNIER · ${escapeHtml(M.save.event.week)}</small><h1 style="font-size:70px">Cottbus<span>-Cup</span></h1><p>Gewinne Level und sammle Turnierpunkte. Drei Sterne und hohe Punktzahlen geben besonders viele Punkte.</p><div class="mkl-stats-grid"><div class="mkl-stat"><small>Deine Punkte</small><b>${points.toLocaleString('de-DE')}</b></div><div class="mkl-stat"><small>Aktueller Rang</small><b>#${rank}</b></div><div class="mkl-stat"><small>Nächstes Ziel</small><b>${next.toLocaleString('de-DE')}</b></div></div><div class="mkl-hero-actions"><button type="button" class="mkl-primary" data-mkl-map>Level spielen</button></div></div><div class="mkl-hero-board"><div style="height:100%;display:grid;place-items:center;font-size:150px;filter:drop-shadow(0 0 30px #ffd64a)">🏆</div></div></section></div></div></main>`;
     bindCommon(); M.shell.querySelector('[data-mkl-map]')?.addEventListener('click', renderMap);
   }
 
@@ -1225,7 +1281,7 @@
     M.save.boosters[booster] += 1;
     save();
     playWinSound();
-    showModal(`<div style="text-align:center;font-size:70px">🎁</div><small class="mkl-kicker">TAGESGESCHENK</small><h2>Geschenk geöffnet!</h2><p>Du erhältst <b>${reward} Match Coins</b> und einen <b>${escapeHtml(BOOSTERS[booster].name)}</b>.</p><div class="mkl-modal-actions"><button class="mkl-primary" data-mkl-modal-close>Abholen</button></div>`);
+    showModal(`<div style="text-align:center;font-size:70px">🎁</div><small class="mkl-kicker">TAGESGESCHENK</small><h2>Geschenk geöffnet!</h2><p>Du erhältst <b>${reward} Match Coins</b> und einen <b>${escapeHtml(BOOSTERS[booster].name)}</b>.</p><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-modal-close>Abholen</button></div>`);
   }
 
   function audioContext() {

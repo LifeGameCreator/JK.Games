@@ -20257,3 +20257,22 @@ body.phone-v65-open {
   cursor:pointer!important;
   -webkit-tap-highlight-color:transparent!important;
 }
+
+/* V111 · Hauptscreen: Partnerfigur und Name wieder exakt auf Spielerhöhe.
+   Nur die sichtbare Partnergruppe wird verschoben; Raster und Klickfunktion bleiben unverändert. */
+.portrait-avatar-wrap.with-partner .portrait-partner-quick,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:hover,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:focus,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:focus-visible,
+.portrait-avatar-wrap.with-partner .portrait-partner-quick:active {
+  transform: translateY(-7px) !important;
+}
+@media (max-width:560px) {
+  .portrait-avatar-wrap.with-partner .portrait-partner-quick,
+  .portrait-avatar-wrap.with-partner .portrait-partner-quick:hover,
+  .portrait-avatar-wrap.with-partner .portrait-partner-quick:focus,
+  .portrait-avatar-wrap.with-partner .portrait-partner-quick:focus-visible,
+  .portrait-avatar-wrap.with-partner .portrait-partner-quick:active {
+    transform: translateY(-6px) !important;
+  }
+}
