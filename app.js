@@ -18560,7 +18560,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
         <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
-        <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Bot-Arena mit Merge-Inventar, Bossen und Online-Scores.</small></button>
+        <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
       </div>
     </div>`;
   if (appId === "settings") return phoneSettingsViewHtml();
