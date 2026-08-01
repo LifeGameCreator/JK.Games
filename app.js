@@ -16115,7 +16115,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL und City.KL jetzt spielen. Match.KL folgt nach deiner Freigabe."
+    description: "Runner.KL, City.KL und Match.KL jetzt vollständig spielen."
   },
   {
     id: "finder",
@@ -16309,7 +16309,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL und City.KL sind spielbar; Match.KL folgt nach deiner Bestätigung." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL, City.KL und Match.KL sind vollständig spielbar." });
   }
   return apps.map((app) => {
     const missingTier = tier < app.min;
@@ -16607,6 +16607,11 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     // V103: City.KL übernimmt dasselbe Smartphone wie Top Games.
     els.dialog.close();
     window.CityKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-match-kl]")?.addEventListener("click", () => {
+    // V109: Match.KL übernimmt dasselbe Smartphone wie Top Games.
+    els.dialog.close();
+    window.MatchKL?.open?.(item);
   });
   shell.querySelector("[data-device-open-games]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -18576,11 +18581,11 @@ function phoneSettingsViewHtml() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL und City.KL sind jetzt vollständig spielbar.</p></div>
+      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL, City.KL und Match.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
-        <button class="topgames-card locked" disabled><b>Match.KL</b><small>Folgt nach deiner Bestätigung.</small></button>
+        <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
       </div>
     </div>`;
   if (appId === "settings") return phoneSettingsViewHtml();
