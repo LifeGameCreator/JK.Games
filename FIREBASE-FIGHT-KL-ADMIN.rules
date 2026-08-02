@@ -1,3 +1,7 @@
+// JK.Games V124 – ergänzender Firestore-Regelblock für Fight.KL.
+// Diesen Block in die vorhandene firestore.rules übernehmen. Die bestehenden
+// Regeln der App dürfen dabei nicht gelöscht oder durch diese Datei ersetzt werden.
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -5,37 +9,36 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function ownRoleDoc() {
-      return get(/databases/$(database)/documents/staffRoles/$(request.auth.uid));
+    function ownStaffRoleExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid));
     }
 
-    function staffRole() {
-      return signedIn() && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
-        ? lower(ownRoleDoc().data.role)
-        : '';
+    function ownStaffRole() {
+      return ownStaffRoleExists()
+        ? get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data
+        : null;
     }
 
     function isFightKlAdmin() {
-      return staffRole() in ['admin', 'owner'];
+      return ownStaffRoleExists()
+        && ownStaffRole().active == true
+        && ownStaffRole().role in ['admin', 'owner'];
     }
 
-    // Eigenes Staff-Rollendokument lesbar für den jeweiligen Nutzer.
+    // Der angemeldete Nutzer darf ausschließlich seine eigene Teamrolle lesen.
+    // Rollen werden weiterhin nur durch die bereits vorhandene sichere
+    // Teamverwaltung beziehungsweise Cloud Functions geschrieben.
     match /staffRoles/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow write: if false;
     }
 
-    // Optionales Log für Fight.KL Adminaktionen.
+    // Optionales unveränderbares Audit-Log für spätere serverseitige
+    // Fight.KL-Modaktionen.
     match /fightKlAdminLogs/{logId} {
       allow read, create: if isFightKlAdmin();
       allow update, delete: if false;
-    }
-
-    // Beispiel: Fight.KL Online- oder Profilstatus.
-    match /fightKlProfiles/{userId} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && request.auth.uid == userId;
-      allow delete: if false;
     }
   }
 }

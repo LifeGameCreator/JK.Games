@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v123-center-fixes-merge-2-frontface";
+  const VERSION = "20260802-fight-kl-v124-complete-admin-companion-center";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 420;
@@ -346,6 +346,20 @@
   const rarityIndex = item => Math.max(0, RARITY_ORDER.indexOf(typeof item === "string" ? item : rarityKey(item)));
   const requiredLevel = item => Math.max(Number(itemDef(item).minLevel || 1), Number(rarityDef(item).minLevel || 1));
   const starText = star => star > 0 ? "★".repeat(star) : "Basis";
+  function companionOwnerBonuses(item) {
+    if (!item || itemDef(item).category !== "companion") return { damage: 0, defense: 0 };
+    const def = itemDef(item);
+    const rarityBaseDamage = [2, 4, 7, 11, 16, 20, 25, 32][rarityIndex(item)] || 2;
+    const rarityBaseDefense = [1, 2, 4, 6, 9, 12, 15, 20][rarityIndex(item)] || 1;
+    const star = clamp(Number(item.star) || 0, 0, MAX_STAR);
+    let damage = rarityBaseDamage * (1 + star * .28);
+    let defense = rarityBaseDefense * (1 + star * .24);
+    if (["street-dog", "shepherd-dog", "battle-hound"].includes(def.id)) defense += 1 + star * .45;
+    if (["alley-cat", "ranger-cat", "lynx-companion", "tiger-companion", "void-beast"].includes(def.id)) damage += 1.5 + star * .55;
+    if (["medic-companion", "phoenix-cub"].includes(def.id)) defense += 3 + star * .7;
+    if (["scout-companion", "gunner-companion", "arc-mage", "guardian-drone"].includes(def.id)) damage += 2 + star * .65;
+    return { damage: Math.round(damage), defense: Math.round(defense) };
+  }
 
   function getAppState() {
     try { return typeof state !== "undefined" && state ? state : null; } catch { return null; }
@@ -370,16 +384,43 @@
       return "";
     }
   }
-  function currentStaffRole() {
+  function currentStaffContext() {
     try {
       const api = window.JKGamesSettingsMenu || window.LifeBuilderSettingsMenu || window.LifeBuilderOnlineMod;
-      return String(api?.getRole?.()?.role || safeSessionRole() || "").toLowerCase();
+      const live = api?.getRole?.() || null;
+      if (live) return { role: String(live.role || "").toLowerCase(), active: live.active !== false };
+      const parsed = JSON.parse(sessionStorage.getItem("lifebuilder-2026-online-mod-session") || "null");
+      if (!parsed?.authorized || Number(parsed.expiresAt || 0) <= Date.now()) return { role: "", active: false };
+      return { role: String(parsed.role || "").toLowerCase(), active: true };
     } catch {
-      return safeSessionRole();
+      const role = safeSessionRole();
+      return { role, active: !!role };
     }
   }
+  function currentStaffRole() {
+    return currentStaffContext().role;
+  }
   function canUseStaffModMenu() {
-    return ["admin", "owner"].includes(currentStaffRole());
+    const staff = currentStaffContext();
+    return staff.active && ["admin", "owner"].includes(staff.role);
+  }
+  async function verifyFightAdminRole() {
+    if (!canUseStaffModMenu()) return false;
+    try {
+      const core = window.LifeBuilderFirebaseCore;
+      if (!core?.load) return false;
+      const fb = await core.load();
+      const user = await core.waitForAuth?.(7000) || fb.auth.currentUser;
+      if (!user) return false;
+      const snapshot = await fb.getDoc(fb.doc(fb.db, "staffRoles", user.uid));
+      if (!snapshot.exists()) return false;
+      const data = snapshot.data() || {};
+      const role = String(data.role || "").toLowerCase();
+      return data.active !== false && ["admin", "owner"].includes(role);
+    } catch (error) {
+      console.warn("Fight.KL Rollenprüfung", error);
+      return false;
+    }
   }
   function staffRoleLabel() {
     const role = currentStaffRole();
@@ -390,10 +431,11 @@
   function fightAdminButtonHtml() {
     return canUseStaffModMenu() ? `<button class="fkl-btn gold" type="button" data-fkl-admin-open>🛠 Mod-Menü</button>` : "";
   }
-  function openFightAdminMenu() {
-    if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur Admin und Owner sehen dieses Mod-Menü.");
-    renderInventory();
-    toast("Admin / Owner Mod-Menü", "Wähle ein Item aus. Im Detailbereich kannst du Sterne direkt setzen und Haltbarkeit auffüllen.");
+  async function openFightAdminMenu() {
+    if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur aktive Admin- und Owner-Konten sehen dieses Mod-Menü.");
+    toast("Rolle wird geprüft", "Firebase bestätigt deinen Admin- oder Owner-Zugriff.");
+    if (!await verifyFightAdminRole()) return toast("Zugriff nicht bestätigt", "Das Mod-Menü bleibt gesperrt, bis Firebase eine aktive Admin- oder Owner-Rolle bestätigt.");
+    renderFightAdminMenu();
   }
   function payFight(price, label) {
     const amount = Math.max(0, Math.round(Number(price) || 0));
@@ -676,6 +718,11 @@ function detailHtml(item) {
   if (stats.companionRange) lines.push(["Begleiter-Reichweite", Math.round(stats.companionRange)]);
   if (stats.companionHeal) lines.push(["Begleiter-Heilung", `${Number(stats.companionHeal).toFixed(1)}/s`]);
   if (stats.companionDamagePct) lines.push(["Begleiter-Bonus", `+${Math.round(stats.companionDamagePct)} %`]);
+  if (def.category === "companion") {
+    const ownerBonus = companionOwnerBonuses(item);
+    lines.push(["Bonus für deinen Schaden", `+${ownerBonus.damage} %`]);
+    lines.push(["Bonus für deine Verteidigung", `+${ownerBonus.defense} %`]);
+  }
   if (stats.dodgeHeal) lines.push(["Heilung bei Ausweichen", `+${Math.round(stats.dodgeHeal)}`]);
   if (max) lines.push(["Haltbarkeit", `${Math.round(item.durability)} / ${max}`]);
   const repairFamily = def.category === "weapon" ? def.family : ["armor","helmet","suit"].includes(def.category) ? "armor" : "";
@@ -1004,7 +1051,7 @@ function startCombat() {
   if (!player.weaponItem || player.weaponItem.durability <= 0) switchCombatWeapon(equipmentSlotForDef(itemDef(usable)), false);
   const special = SPECIALS[player.specialType];
   const weaponButtons = WEAPON_SLOT_KEYS.map((slot,index) => { const item = equipped(slot), def = item ? itemDef(item) : null; return `<button class="fkl-weapon-slot ${slot === player.activeWeaponSlot ? "active" : ""}" type="button" data-fkl-weapon-switch="${slot}" ${item ? "" : "disabled"}><span>${index+1}</span><i>${def?.icon || SLOT_META[slot].icon}</i><small>${escapeHtml(def?.name || "Leer")}</small></button>`; }).join("");
-  UI.main.innerHTML = `<section class="fkl-combat"><div class="fkl-combat-hud"><div class="fkl-hud-left"><button class="fkl-icon-btn" type="button" data-fkl-combat-pause>Ⅱ</button><div class="fkl-health-wrap"><small>LEBEN <b data-fkl-hp-text></b></small><div class="fkl-bar fkl-health"><i data-fkl-hp-bar></i></div><div class="fkl-bar fkl-xp" style="margin-top:4px;height:6px"><i data-fkl-xp-bar></i></div></div><div class="fkl-hud-pill"><small>SHIELD</small><b data-fkl-shield>0</b></div><div class="fkl-hud-pill fkl-mount-pill" data-fkl-mount-pill><small>REITTIER</small><b data-fkl-mount>—</b></div><div class="fkl-hud-pill fkl-companion-pill" data-fkl-companion-pill><small>BEGLEITER</small><b data-fkl-companion>—</b></div></div><div class="fkl-wave" data-fkl-wave>WELLE 1</div><div class="fkl-hud-right"><div class="fkl-hud-pill"><small>KILLS</small><b data-fkl-kills>0</b></div><div class="fkl-hud-pill"><small>SCORE</small><b data-fkl-score>0</b></div><div class="fkl-hud-pill"><small>POWER</small><b>${NUMBER.format(powerScore())}</b></div></div></div><div class="fkl-stage"><canvas class="fkl-canvas" data-fkl-canvas></canvas><div class="fkl-vignette"></div><div class="fkl-combat-message" data-fkl-message></div><div class="fkl-boss-wrap" data-fkl-boss-wrap hidden><b data-fkl-boss-name>BOSS</b><div class="fkl-bar fkl-boss"><i data-fkl-boss-bar></i></div></div><div class="fkl-weapon-switch">${weaponButtons}</div><div class="fkl-ammo"><small data-fkl-weapon-name></small><b data-fkl-ammo></b><small data-fkl-durability></small></div><button class="fkl-special-button ${special ? "" : "disabled"}" type="button" data-fkl-special ${special ? "" : "disabled"}><div class="fkl-special-circle" data-fkl-special-circle style="--special-color:${special?.color || '#62d9ff'};--special-progress:0deg"><span data-fkl-special-icon>${special?.icon || "✦"}</span></div><div class="fkl-special-meta"><small data-fkl-special-name>${special?.name || "Kein Special"}</small><b data-fkl-special-text>${special ? "0 %" : "—"}</b></div></button><div class="fkl-touch"><div class="fkl-stick" data-fkl-stick><div class="fkl-stick-knob" data-fkl-stick-knob></div></div><button class="fkl-auto" type="button" data-fkl-auto>AUTO AN</button><button class="fkl-fire" type="button" data-fkl-fire>FEUER</button></div></div></section>`;
+  UI.main.innerHTML = `<section class="fkl-combat"><div class="fkl-combat-hud"><div class="fkl-hud-left"><button class="fkl-icon-btn" type="button" data-fkl-combat-pause>Ⅱ</button><div class="fkl-health-wrap"><small>LEBEN <b data-fkl-hp-text></b></small><div class="fkl-bar fkl-health"><i data-fkl-hp-bar></i></div><div class="fkl-bar fkl-xp" style="margin-top:4px;height:6px"><i data-fkl-xp-bar></i></div></div><div class="fkl-hud-pill"><small>SHIELD</small><b data-fkl-shield>0</b></div><div class="fkl-hud-pill fkl-mount-pill" data-fkl-mount-pill><small>REITTIER</small><b data-fkl-mount>—</b></div><div class="fkl-hud-pill fkl-companion-pill" data-fkl-companion-pill><small>BEGLEITER</small><b data-fkl-companion>—</b><em data-fkl-companion-bonus></em></div></div><div class="fkl-wave" data-fkl-wave>WELLE 1</div><div class="fkl-hud-right"><div class="fkl-hud-pill"><small>KILLS</small><b data-fkl-kills>0</b></div><div class="fkl-hud-pill"><small>SCORE</small><b data-fkl-score>0</b></div><div class="fkl-hud-pill"><small>POWER</small><b>${NUMBER.format(powerScore())}</b></div></div></div><div class="fkl-stage"><canvas class="fkl-canvas" data-fkl-canvas></canvas><div class="fkl-vignette"></div><div class="fkl-combat-message" data-fkl-message></div><div class="fkl-boss-wrap" data-fkl-boss-wrap hidden><b data-fkl-boss-name>BOSS</b><div class="fkl-bar fkl-boss"><i data-fkl-boss-bar></i></div></div><div class="fkl-weapon-switch">${weaponButtons}</div><div class="fkl-ammo"><small data-fkl-weapon-name></small><b data-fkl-ammo></b><small data-fkl-durability></small></div><button class="fkl-special-button ${special ? "" : "disabled"}" type="button" data-fkl-special ${special ? "" : "disabled"}><div class="fkl-special-circle" data-fkl-special-circle style="--special-color:${special?.color || '#62d9ff'};--special-progress:0deg"><span data-fkl-special-icon>${special?.icon || "✦"}</span></div><div class="fkl-special-meta"><small data-fkl-special-name>${special?.name || "Kein Special"}</small><b data-fkl-special-text>${special ? "0 %" : "—"}</b></div></button><div class="fkl-touch"><div class="fkl-stick" data-fkl-stick><div class="fkl-stick-knob" data-fkl-stick-knob></div></div><button class="fkl-auto" type="button" data-fkl-auto>AUTO AN</button><button class="fkl-fire" type="button" data-fkl-fire>FEUER</button></div></div></section>`;
   const canvas = UI.main.querySelector("[data-fkl-canvas]");
   UI.session = { canvas, ctx: canvas.getContext("2d", { alpha: false }), player, viewW: 1280, viewH: 720, dpr: 1, camera: { x: player.x, y: player.y - 90 }, wave: 0, waveStarted: false, waveClearAt: 0, spawnQueue: [], spawnTimer: 0, enemies: [], projectiles: [], enemyProjectiles: [], particles: [], texts: [], pickups: [], score: 0, kills: 0, startedAt: performance.now(), paused: false, ended: false, autoFire: data.settings.autoFire !== false, joystick: { active: false, id: null, x: 0, y: 0, ox: 0, oy: 0 }, resizeObserver: null, boss: null, moneyEarned: 0, lootEarned: [], lastSave: 0, waveMessage: "", themeIndex: 0, theme: ARENA_THEMES[0], decorations: createArenaDecorations(0), frameCount: 0, fpsClock: performance.now(), fps: 60, specialInProgress: false };
   bindCombatControls(); resizeCombat(); UI.session.resizeObserver = new ResizeObserver(resizeCombat); UI.session.resizeObserver.observe(canvas.parentElement);
@@ -1384,7 +1431,7 @@ function grantLoot(wave, boss) {
 function updateHud() {
   const s = UI.session; if (!s || !UI.main) return; const p = s.player, data = ensureState(); const need = levelNeed(data.level);
   const set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};
-  set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`); set("[data-fkl-shield]",Math.ceil(p.shield)); set("[data-fkl-wave]",`WELLE ${s.wave}`); set("[data-fkl-kills]",s.kills); set("[data-fkl-score]",NUMBER.format(Math.floor(s.score))); set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");
+  set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`); set("[data-fkl-shield]",Math.ceil(p.shield)); set("[data-fkl-wave]",p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`); set("[data-fkl-kills]",s.kills); set("[data-fkl-score]",NUMBER.format(Math.floor(s.score))); set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");
   set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`); set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");
   const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;
   const mountPill=UI.main.querySelector("[data-fkl-mount-pill]"); if(mountPill) mountPill.hidden=!p.mountItem; set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");
@@ -1538,6 +1585,15 @@ function updateHud() {
     data.duel.wins = Math.max(0, Math.floor(Number(data.duel.wins) || 0));
     data.duel.losses = Math.max(0, Math.floor(Number(data.duel.losses) || 0));
     data.duel.draws = Math.max(0, Math.floor(Number(data.duel.draws) || 0));
+    data.staffTools ||= {};
+    data.staffTools.godMode = !!data.staffTools.godMode;
+    data.staffTools.damageMultiplier = clamp(Number(data.staffTools.damageMultiplier) || 1, 1, 100);
+    data.staffTools.speedMultiplier = clamp(Number(data.staffTools.speedMultiplier) || 1, 1, 10);
+    data.staffTools.defenseMultiplier = clamp(Number(data.staffTools.defenseMultiplier) || 1, 1, 100);
+    data.staffTools.selectedItemId = ITEM_MAP.has(data.staffTools.selectedItemId) ? data.staffTools.selectedItemId : "service-pistol";
+    data.staffTools.grantRarity = RARITIES[data.staffTools.grantRarity] ? data.staffTools.grantRarity : "common";
+    data.staffTools.grantStar = clamp(Math.floor(Number(data.staffTools.grantStar) || 0), 0, MAX_STAR);
+    data.staffTools.grantQuantity = clamp(Math.floor(Number(data.staffTools.grantQuantity) || 1), 1, 10);
     return data;
   }
 
@@ -1574,12 +1630,20 @@ function updateHud() {
     const sum = key => items.reduce((total, item) => total + Number(item[key] || 0), 0);
     const weapons = WEAPON_SLOT_KEYS.map(slot => equipped(slot)).filter(Boolean).map(effectiveStats);
     const strongest = weapons.reduce((best,item)=>Math.max(best,Number(item.damage||0)),0);
-    const companion = equipped("companion"); const cs = companion ? effectiveStats(companion) : {};
+    const companion = equipped("companion");
+    const cs = companion ? effectiveStats(companion) : {};
+    const ownerBonus = companionOwnerBonuses(companion);
     return {
-      health: Math.round(130 + data.level*3 + sum("health")), armor: Math.round(Math.min(72,sum("armor"))), speed: Math.round(sum("speed")-items.reduce((t,item)=>t+Number(item.speedPenalty||0)*100,0)),
-      damage: Math.round(strongest), damagePct: Math.round(sum("damagePct")), shield: Math.round(sum("shield")), crit: Math.round(5+sum("crit")), dodge: Math.round(Math.min(58,sum("dodge"))), loot: Math.round(sum("loot")), mountArmor: Math.round(sum("mountArmor")),
-      companionDamage: Math.round(Number(cs.companionDamage||0)*(1+sum("companionDamagePct")/100)), companionHealth: Math.round(Number(cs.companionHealth||0)*(1+sum("companionHealthPct")/100)),
-      companionRate: Number(cs.companionRate||0)*(1+sum("companionRatePct")/100), dodgeHeal: Math.round(sum("dodgeHeal")), power: powerScore()
+      health: Math.round(130 + data.level*3 + sum("health")),
+      armor: Math.round(Math.min(72,sum("armor"))),
+      speed: Math.round(sum("speed")-items.reduce((total,item)=>total+Number(item.speedPenalty||0)*100,0)),
+      damage: Math.round(strongest), damagePct: Math.round(sum("damagePct")), shield: Math.round(sum("shield")),
+      crit: Math.round(5+sum("crit")), dodge: Math.round(Math.min(58,sum("dodge"))), loot: Math.round(sum("loot")), mountArmor: Math.round(sum("mountArmor")),
+      companionDamage: Math.round(Number(cs.companionDamage||0)*(1+sum("companionDamagePct")/100)),
+      companionHealth: Math.round(Number(cs.companionHealth||0)*(1+sum("companionHealthPct")/100)),
+      companionRate: Number(cs.companionRate||0)*(1+sum("companionRatePct")/100),
+      companionOwnerDamage: ownerBonus.damage, companionOwnerDefense: ownerBonus.defense,
+      dodgeHeal: Math.round(sum("dodgeHeal")), power: powerScore()
     };
   }
 
@@ -1588,9 +1652,14 @@ function updateHud() {
     return EQUIPMENT_SLOT_KEYS.reduce((sum,slot)=>{const item=equipped(slot);if(!item)return sum;const s=effectiveStats(item);return sum+powerValueOfItem(item)+Math.round((s.companionRate||0)*180);},data.level*100);
   }
 
+  function characterPreviewHtml(style, compact = false) {
+    return `<div class="fkl-character-model ${compact ? "compact" : ""}"><span class="shadow"></span><span class="head"></span><span class="hair"></span><span class="eye e1"></span><span class="eye e2"></span><span class="nose"></span><span class="mouth"></span><span class="neck"></span><span class="body"></span><span class="chest"></span><span class="arm a1"></span><span class="arm a2"></span><span class="hand h1"></span><span class="hand h2"></span><span class="leg l1"></span><span class="leg l2"></span><span class="shoe s1"></span><span class="shoe s2"></span></div>`;
+  }
+
   function loadoutPanelHtml() {
-    const data=ensureState(),stats=aggregateLoadoutStats(),style=STYLE_MAP.get(data.cosmetics.active)||CHARACTER_STYLES[0];
-    return `<section class="fkl-panel fkl-loadout-panel v117"><div class="fkl-loadout-title"><div><small class="fkl-kicker">CHARAKTER · AUSRÜSTUNG · BEGLEITER</small><h3>${escapeHtml(playerName())}</h3><p>Ziehe Items auf die Slots. Dein Begleiter kämpft selbstständig und besitzt eigene Lebenspunkte.</p></div><div class="fkl-loadout-power">GESAMT-POWER <b>${NUMBER.format(stats.power)}</b></div></div><div class="fkl-loadout-grid"><div class="fkl-loadout-side left">${["helmet","armor","suit","boots","mount","companion"].map(loadoutSlotHtml).join("")}</div><div class="fkl-character-card" style="--body:${style.body};--accent:${style.accent};--trim:${style.trim}"><div class="fkl-character-aura"></div><div class="fkl-character-model"><span class="head"></span><span class="face"></span><span class="body"></span><span class="arm a1"></span><span class="arm a2"></span><span class="leg l1"></span><span class="leg l2"></span></div>${equipped("companion")?`<div class="fkl-loadout-companion-icon rarity-${rarityKey(equipped("companion"))}" style="${itemStyle(equipped("companion"))}" title="${escapeHtml(itemDef(equipped("companion")).name)}"><span>${itemDef(equipped("companion")).icon}</span></div>`:""}<strong>${escapeHtml(playerName())}</strong><small>${escapeHtml(style.name)} · Fight-Level ${data.level}</small></div><div class="fkl-loadout-side right">${["melee","sidearm","primary","chip","charm"].map(loadoutSlotHtml).join("")}</div></div><div class="fkl-loadout-stats"><div><small>Stärke</small><b>${NUMBER.format(stats.damage)}</b></div><div><small>Schadensbonus</small><b>+${stats.damagePct}%</b></div><div><small>Tempo</small><b>+${stats.speed}%</b></div><div><small>Leben</small><b>${NUMBER.format(stats.health)}</b></div><div><small>Rüstung</small><b>${stats.armor}%</b></div><div><small>Schild</small><b>${NUMBER.format(stats.shield)}</b></div><div><small>Krit</small><b>${stats.crit}%</b></div><div><small>Ausweichen</small><b>${stats.dodge}%</b></div><div><small>Beute</small><b>+${stats.loot}%</b></div><div><small>Reittier</small><b>${NUMBER.format(stats.mountArmor)}</b></div><div><small>Begleiter-Schaden</small><b>${NUMBER.format(stats.companionDamage)}</b></div><div><small>Begleiter-Leben</small><b>${NUMBER.format(stats.companionHealth)}</b></div></div></section>`;
+    const data=ensureState(),stats=aggregateLoadoutStats(),style=STYLE_MAP.get(data.cosmetics.active)||CHARACTER_STYLES[0],companion=equipped("companion"),bonus=companionOwnerBonuses(companion);
+    const companionBadge=companion?`<div class="fkl-loadout-companion-icon rarity-${rarityKey(companion)}" style="${itemStyle(companion)}" title="${escapeHtml(itemDef(companion).name)}"><span>${itemDef(companion).icon}</span><small>+${bonus.damage}% DMG · +${bonus.defense}% DEF</small></div>`:"";
+    return `<section class="fkl-panel fkl-loadout-panel v124"><div class="fkl-loadout-title"><div><small class="fkl-kicker">CHARAKTER · AUSRÜSTUNG · BEGLEITER</small><h3>${escapeHtml(playerName())}</h3><p>Ziehe Items auf die Slots. Begleiter kämpfen selbstständig, können Schaden erhalten und verstärken zusätzlich deinen Schaden und deine Verteidigung.</p></div><div class="fkl-loadout-power">GESAMT-POWER <b>${NUMBER.format(stats.power)}</b></div></div><div class="fkl-loadout-grid"><div class="fkl-loadout-side left">${["helmet","armor","suit","boots","mount","companion"].map(loadoutSlotHtml).join("")}</div><div class="fkl-character-card" style="--body:${style.body};--accent:${style.accent};--trim:${style.trim}"><div class="fkl-character-aura"></div>${characterPreviewHtml(style)}${companionBadge}<strong>${escapeHtml(playerName())}</strong><small>${escapeHtml(style.name)} · Fight-Level ${data.level}</small></div><div class="fkl-loadout-side right">${["melee","sidearm","primary","chip","charm"].map(loadoutSlotHtml).join("")}</div></div><div class="fkl-loadout-stats"><div><small>Stärke</small><b>${NUMBER.format(stats.damage)}</b></div><div><small>Schadensbonus</small><b>+${stats.damagePct}%</b></div><div><small>Tempo</small><b>+${stats.speed}%</b></div><div><small>Leben</small><b>${NUMBER.format(stats.health)}</b></div><div><small>Rüstung</small><b>${stats.armor}%</b></div><div><small>Schild</small><b>${NUMBER.format(stats.shield)}</b></div><div><small>Krit</small><b>${stats.crit}%</b></div><div><small>Ausweichen</small><b>${stats.dodge}%</b></div><div><small>Beute</small><b>+${stats.loot}%</b></div><div><small>Reittier</small><b>${NUMBER.format(stats.mountArmor)}</b></div><div><small>Begleiter-Schaden</small><b>${NUMBER.format(stats.companionDamage)}</b></div><div><small>Begleiter-Leben</small><b>${NUMBER.format(stats.companionHealth)}</b></div><div class="fkl-comp-bonus"><small>Dein Schaden durch Begleiter</small><b>+${stats.companionOwnerDamage}%</b></div><div class="fkl-comp-bonus"><small>Deine Verteidigung durch Begleiter</small><b>+${stats.companionOwnerDefense}%</b></div></div></section>`;
   }
 
   function drawInventory() {
@@ -1629,21 +1698,88 @@ function updateHud() {
   function dailyShopItems(category=UI.shopCategory){return ITEMS.filter(def=>{if(["pistol","automatic","shotgun","melee"].includes(category))return def.category==="weapon"&&def.family===category;if(["helmet","armor","suit","boots","chip","charm","companion","mount"].includes(category))return def.category===category;return false}).sort((a,b)=>rarityIndex(a.rarity)-rarityIndex(b.rarity)||(a.price||0)-(b.price||0));}
 
   function buildPlayer() {
-    const data=ensureState(),gearSlots=["helmet","armor","suit","boots","chip","charm","mount","companion"],gearItems=Object.fromEntries(gearSlots.map(slot=>[slot,equipped(slot)])),gear=Object.fromEntries(gearSlots.map(slot=>[slot,gearItems[slot]?effectiveStats(gearItems[slot]):{}])),sum=key=>gearSlots.reduce((t,slot)=>t+Number(gear[slot][key]||0),0),levelBonus=1+(data.level-1)*.012,damageMult=levelBonus*(1+sum("damagePct")/100),speedBonus=sum("speed"),speedPenalty=gearSlots.reduce((t,slot)=>t+Number(gear[slot].speedPenalty||0),0),style=STYLE_MAP.get(data.cosmetics.active)||CHARACTER_STYLES[0],weaponRuntimes={};
+    const data=ensureState(),gearSlots=["helmet","armor","suit","boots","chip","charm","mount","companion"],gearItems=Object.fromEntries(gearSlots.map(slot=>[slot,equipped(slot)])),gear=Object.fromEntries(gearSlots.map(slot=>[slot,gearItems[slot]?effectiveStats(gearItems[slot]):{}])),sum=key=>gearSlots.reduce((total,slot)=>total+Number(gear[slot][key]||0),0),levelBonus=1+(data.level-1)*.012,speedBonus=sum("speed"),speedPenalty=gearSlots.reduce((total,slot)=>total+Number(gear[slot].speedPenalty||0),0),style=STYLE_MAP.get(data.cosmetics.active)||CHARACTER_STYLES[0],weaponRuntimes={};
+    const staff=canUseStaffModMenu()?data.staffTools:{godMode:false,damageMultiplier:1,speedMultiplier:1,defenseMultiplier:1};
+    const ownerBonus=companionOwnerBonuses(gearItems.companion);
+    const damageMult=levelBonus*(1+sum("damagePct")/100)*(1+ownerBonus.damage/100)*Number(staff.damageMultiplier||1);
     WEAPON_SLOT_KEYS.forEach(slot=>{const item=equipped(slot);if(!item)return;const stats=effectiveStats(item);weaponRuntimes[slot]={slot,item,stats,ammo:Math.max(1,Math.round(stats.magazine||1)),reloading:false,reloadTimer:0,specialCharge:0,specialReady:false}});
-    let activeWeaponSlot=WEAPON_SLOT_KEYS.includes(data.activeWeaponSlot)&&weaponRuntimes[data.activeWeaponSlot]?data.activeWeaponSlot:WEAPON_SLOT_KEYS.find(slot=>weaponRuntimes[slot]);const active=weaponRuntimes[activeWeaponSlot]||{slot:"fists",item:null,stats:{id:"fists",name:"Fäuste",attack:"melee",family:"melee",rarity:"common",damage:9,fireRate:1.2,range:62,arc:1.5},ammo:1,reloading:false,reloadTimer:0,specialCharge:0,specialReady:false},moduleSpecial=gear.chip.specialGrant||gear.suit.specialGrant||gear.helmet.specialGrant||"",mountArmor=Math.round(Number(gear.mount.mountArmor||0));
+    let activeWeaponSlot=WEAPON_SLOT_KEYS.includes(data.activeWeaponSlot)&&weaponRuntimes[data.activeWeaponSlot]?data.activeWeaponSlot:WEAPON_SLOT_KEYS.find(slot=>weaponRuntimes[slot]);
+    const active=weaponRuntimes[activeWeaponSlot]||{slot:"fists",item:null,stats:{id:"fists",name:"Fäuste",attack:"melee",family:"melee",rarity:"common",damage:9,fireRate:1.2,range:62,arc:1.5},ammo:1,reloading:false,reloadTimer:0,specialCharge:0,specialReady:false},moduleSpecial=gear.chip.specialGrant||gear.suit.specialGrant||gear.helmet.specialGrant||"",mountArmor=Math.round(Number(gear.mount.mountArmor||0));
     const compItem=gearItems.companion,cs=gear.companion||{},compDamagePct=sum("companionDamagePct"),compHealthPct=sum("companionHealthPct"),compRatePct=sum("companionRatePct");
-    const companion=compItem?{item:compItem,stats:cs,x:WORLD_W/2-55,y:WORLD_H/2+55,hp:Math.round(Number(cs.companionHealth||100)*(1+compHealthPct/100)),maxHp:Math.round(Number(cs.companionHealth||100)*(1+compHealthPct/100)),damage:Number(cs.companionDamage||10)*(1+compDamagePct/100),rate:Number(cs.companionRate||1)*(1+compRatePct/100),range:Number(cs.companionRange||80),speed:Number(cs.companionSpeed||230),type:cs.companionType||"melee",heal:Number(cs.companionHeal||0),splash:Number(cs.companionSplash||0),pierce:Math.floor(Number(cs.companionPierce||0)),roar:Number(cs.companionRoar||0),cooldown:0,hitCooldown:0,dead:false,angle:0,attackAnim:0}:null;
-    return {x:WORLD_W/2,y:WORLD_H/2,radius:18,maxHp:Math.round(130+data.level*3+sum("health")),hp:0,maxShield:Math.round(sum("shield")),shield:Math.round(sum("shield")),baseSpeed:250*(1+(speedBonus-Number(gear.mount.speed||0))/100)*Math.max(.55,1-speedPenalty),mountSpeedPct:Number(gear.mount.speed||0),mountMaxArmor:mountArmor,mountArmor,mountActive:!!gearItems.mount&&mountArmor>0,mountItem:gearItems.mount,mountStats:gear.mount,speed:250,armor:clamp(sum("armor")/100,0,.72),dodge:clamp(sum("dodge")/100,0,.58),dodgeHeal:sum("dodgeHeal"),dodgeBurst:sum("dodgeBurst"),regen:sum("regen"),crit:.05+sum("crit")/100,critDamage:1.75+sum("critDamage")/100,lifesteal:(sum("lifesteal")+Number(active.stats.lifesteal||0))/100,bossDamage:1+sum("bossDamage")/100,lootBonus:sum("loot"),revive:Math.floor(sum("revive")),armorItem:gearItems.armor||gearItems.suit||gearItems.helmet,weaponRuntimes,activeWeaponSlot,weaponItem:active.item,weapon:active.stats,ammo:active.ammo,reloading:active.reloading,reloadTimer:active.reloadTimer,moduleSpecial,damageMult,fireCooldown:0,attackAnim:0,hitFlash:0,angle:-Math.PI/2,vx:0,vy:0,moving:false,weaponBroken:!active.item||Number(active.item.durability)<=0,cosmetics:style,lookX:0,lookY:-1,specialType:active.stats.special||moduleSpecial||"",specialCharge:active.specialCharge,specialReady:active.specialReady,specialPulse:0,companion};
+    const companion=compItem?{item:compItem,stats:cs,x:WORLD_W/2-55,y:WORLD_H/2+55,hp:Math.round(Number(cs.companionHealth||100)*(1+compHealthPct/100)),maxHp:Math.round(Number(cs.companionHealth||100)*(1+compHealthPct/100)),damage:Number(cs.companionDamage||10)*(1+compDamagePct/100),rate:Number(cs.companionRate||1)*(1+compRatePct/100),range:Number(cs.companionRange||80),speed:Number(cs.companionSpeed||230),type:cs.companionType||"melee",heal:Number(cs.companionHeal||0),splash:Number(cs.companionSplash||0),pierce:Math.floor(Number(cs.companionPierce||0)),roar:Number(cs.companionRoar||0),cooldown:0,hitCooldown:0,dead:false,angle:0,attackAnim:0,moving:false,runPhase:0,ownerDamageBonus:ownerBonus.damage,ownerDefenseBonus:ownerBonus.defense}:null;
+    const baseSpeed=250*(1+(speedBonus-Number(gear.mount.speed||0))/100)*Math.max(.55,1-speedPenalty)*Number(staff.speedMultiplier||1);
+    return {x:WORLD_W/2,y:WORLD_H/2,radius:18,maxHp:Math.round(130+data.level*3+sum("health")),hp:0,maxShield:Math.round(sum("shield")),shield:Math.round(sum("shield")),baseSpeed,mountSpeedPct:Number(gear.mount.speed||0),mountMaxArmor:mountArmor,mountArmor,mountActive:!!gearItems.mount&&mountArmor>0,mountItem:gearItems.mount,mountStats:gear.mount,speed:baseSpeed,armor:clamp(sum("armor")/100,0,.72),dodge:clamp(sum("dodge")/100,0,.58),dodgeHeal:sum("dodgeHeal"),dodgeBurst:sum("dodgeBurst"),regen:sum("regen"),crit:.05+sum("crit")/100,critDamage:1.75+sum("critDamage")/100,lifesteal:(sum("lifesteal")+Number(active.stats.lifesteal||0))/100,bossDamage:1+sum("bossDamage")/100,lootBonus:sum("loot"),revive:Math.floor(sum("revive")),armorItem:gearItems.armor||gearItems.suit||gearItems.helmet,weaponRuntimes,activeWeaponSlot,weaponItem:active.item,weapon:active.stats,ammo:active.ammo,reloading:active.reloading,reloadTimer:active.reloadTimer,moduleSpecial,damageMult,fireCooldown:0,attackAnim:0,hitFlash:0,angle:-Math.PI/2,vx:0,vy:0,moving:false,weaponBroken:!active.item||Number(active.item.durability)<=0,cosmetics:style,lookX:0,lookY:-1,specialType:active.stats.special||moduleSpecial||"",specialCharge:active.specialCharge,specialReady:active.specialReady,specialPulse:0,companion,companionDefensePct:ownerBonus.defense,godMode:!!staff.godMode,staffDefenseMultiplier:Number(staff.defenseMultiplier||1)};
   }
 
-  function updateCompanion(dt){const s=UI.session,p=s?.player,c=p?.companion;if(!c||c.dead)return;c.cooldown=Math.max(0,c.cooldown-dt);c.hitCooldown=Math.max(0,c.hitCooldown-dt);if(c.attackAnim>0)c.attackAnim-=dt;const followX=p.x-48*Math.cos(p.angle)+38*Math.sin(p.angle),followY=p.y-48*Math.sin(p.angle)-38*Math.cos(p.angle),fd=Math.hypot(followX-c.x,followY-c.y)||1;if(fd>42){c.x+=((followX-c.x)/fd)*c.speed*dt;c.y+=((followY-c.y)/fd)*c.speed*dt;}const target=nearestEnemy(c.x,c.y,c.range);if(target){c.angle=Math.atan2(target.y-c.y,target.x-c.x);const d=distance(c,target);if(c.cooldown<=0&&d<=c.range){c.cooldown=1/Math.max(.2,c.rate);c.attackAnim=.18;if(c.type==="melee"){damageEnemy(target,c.damage,false,c.splash);spawnParticles(target.x,target.y,rarityDef(c.item).color,7,130);}else{const speed=620;s.projectiles.push({x:c.x,y:c.y,vx:Math.cos(c.angle)*speed,vy:Math.sin(c.angle)*speed,radius:4,damage:c.damage,life:2.2,pierce:c.pierce,splash:c.splash,crit:false,color:rarityDef(c.item).color,hit:new Set()});}if(c.roar&&Math.random()<.12)for(const enemy of s.enemies)if(distance(enemy,c)<165){enemy.statusTimer=Math.max(enemy.statusTimer,.8);enemy.statusType="stasis";}}if(d<target.radius+25&&c.hitCooldown<=0){c.hitCooldown=.8;c.hp-=Math.max(2,target.damage*.24);addDamageText(c.x,c.y-25,`-${Math.round(target.damage*.24)}`,"#ff8c91",14);if(c.hp<=0){c.hp=0;c.dead=true;showCombatMessage(`${itemDef(c.item).name} AUSGEFALLEN`);spawnParticles(c.x,c.y,rarityDef(c.item).color,24,230);}}}if(c.heal>0&&p.hp>0)p.hp=Math.min(p.maxHp,p.hp+c.heal*dt);c.x=clamp(c.x,20,WORLD_W-20);c.y=clamp(c.y,20,WORLD_H-20);}
+  function updateCompanion(dt) {
+    const s=UI.session,p=s?.player,c=p?.companion;
+    if(!c||c.dead)return;
+    c.cooldown=Math.max(0,c.cooldown-dt);c.hitCooldown=Math.max(0,c.hitCooldown-dt);c.attackAnim=Math.max(0,c.attackAnim-dt);c.runPhase+=dt*(c.moving?13:4);
+    const def=itemDef(c.item),isMelee=c.type==="melee";
+    const followX=p.x-50*Math.cos(p.angle)+40*Math.sin(p.angle),followY=p.y-50*Math.sin(p.angle)-40*Math.cos(p.angle);
+    const target=nearestEnemy(c.x,c.y,isMelee?Math.max(420,c.range*5):c.range);
+    c.moving=false;
+    if(target){
+      c.angle=Math.atan2(target.y-c.y,target.x-c.x);
+      const d=distance(c,target);
+      const desired=isMelee?target.radius+30:Math.max(115,c.range*.68);
+      if(d>desired){const speed=c.speed*(isMelee?1.13:.82);c.x+=Math.cos(c.angle)*speed*dt;c.y+=Math.sin(c.angle)*speed*dt;c.moving=true;}
+      if(c.cooldown<=0&&d<=Math.max(c.range,desired+18)){
+        c.cooldown=1/Math.max(.2,c.rate);c.attackAnim=.22;
+        if(isMelee){damageEnemy(target,c.damage,false,c.splash);spawnParticles(target.x,target.y,rarityDef(c.item).color,8,150);c.x+=Math.cos(c.angle)*8;c.y+=Math.sin(c.angle)*8;}
+        else{const projectileSpeed=620;s.projectiles.push({x:c.x,y:c.y,vx:Math.cos(c.angle)*projectileSpeed,vy:Math.sin(c.angle)*projectileSpeed,radius:4,damage:c.damage,life:2.2,pierce:c.pierce,splash:c.splash,crit:false,color:rarityDef(c.item).color,hit:new Set()});}
+        if(c.roar&&Math.random()<.12)for(const enemy of s.enemies)if(distance(enemy,c)<165){enemy.statusTimer=Math.max(enemy.statusTimer,.8);enemy.statusType="stasis";}
+      }
+      if(d<target.radius+28&&c.hitCooldown<=0){
+        c.hitCooldown=.75;const incoming=Math.max(2,target.damage*.22);c.hp-=incoming;addDamageText(c.x,c.y-25,`-${Math.round(incoming)}`,"#ff8c91",14);
+        if(c.hp<=0){c.hp=0;c.dead=true;showCombatMessage(`${def.name} AUSGEFALLEN`);spawnParticles(c.x,c.y,rarityDef(c.item).color,24,230);}
+      }
+    }else{
+      const fd=Math.hypot(followX-c.x,followY-c.y)||1;
+      if(fd>38){c.angle=Math.atan2(followY-c.y,followX-c.x);c.x+=((followX-c.x)/fd)*c.speed*.9*dt;c.y+=((followY-c.y)/fd)*c.speed*.9*dt;c.moving=true;}
+    }
+    if(c.heal>0&&p.hp>0)p.hp=Math.min(p.maxHp,p.hp+c.heal*dt);
+    c.x=clamp(c.x,20,WORLD_W-20);c.y=clamp(c.y,20,WORLD_H-20);
+  }
 
-  function drawCompanion(ctx,s,now){const c=s.player?.companion;if(!c||c.dead)return;const x=sx(s,c.x),y=sy(s,c.y),def=itemDef(c.item),r=rarityDef(c.item),human=/companion$/.test(def.id)||["scout-companion","medic-companion","gunner-companion","arc-mage"].includes(def.id),flying=["guardian-drone","phoenix-cub"].includes(def.id),canine=["street-dog","battle-hound"].includes(def.id),bigCat=["tiger-companion","lion-companion","void-beast","lynx-companion"].includes(def.id);ctx.save();ctx.translate(x,y+(flying?Math.sin(now*.006)*7:0));ctx.rotate(c.angle+Math.PI/2);ctx.globalAlpha=.3;ctx.fillStyle="#000";ctx.beginPath();ctx.ellipse(0,24,24,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.shadowColor=r.color;ctx.shadowBlur=16;ctx.strokeStyle=r.color;ctx.lineWidth=3;ctx.lineJoin="round";if(human){ctx.fillStyle="#263840";ctx.beginPath();ctx.roundRect(-12,-19,24,36,10);ctx.fill();ctx.stroke();ctx.fillStyle="#c98e72";ctx.beginPath();ctx.arc(0,-26,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle=r.color;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,-8);ctx.lineTo(8,-32);ctx.stroke();}else if(flying){ctx.fillStyle=def.id.includes("phoenix")?"#ff9f63":"#334c55";ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(22,5);ctx.lineTo(0,17);ctx.lineTo(-22,5);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle="#fff8";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,1);ctx.lineTo(8,1);ctx.stroke();}else if(canine||bigCat){const body=canine?"#775946":bigCat&&def.id.includes("lion")?"#b17b36":bigCat&&def.id.includes("tiger")?"#d08a34":bigCat&&def.id.includes("lynx")?"#75664f":"#5a5470";const walk=Math.sin(now*.018)*3;ctx.rotate(-.22);ctx.fillStyle=body;ctx.beginPath();ctx.ellipse(-3,2,23,13,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.ellipse(18,-7,11,9,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=body;ctx.beginPath();ctx.moveTo(24,-15);ctx.lineTo(20,-24);ctx.lineTo(16,-12);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(12,-14);ctx.lineTo(8,-24);ctx.lineTo(7,-12);ctx.closePath();ctx.fill();ctx.strokeStyle=body;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-15,10);ctx.lineTo(-18,25+walk);ctx.moveTo(0,11);ctx.lineTo(-2,25-walk);ctx.moveTo(12,10);ctx.lineTo(10,24-walk);ctx.moveTo(25,7);ctx.lineTo(23,22+walk);ctx.stroke();ctx.strokeStyle=r.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-24,-1);ctx.quadraticCurveTo(-33,-7,-31,-18);ctx.stroke();ctx.fillStyle="#f6e5cc";ctx.beginPath();ctx.ellipse(24,-4,5,4,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="#1a1716";ctx.beginPath();ctx.arc(22,-7,1.2,0,Math.PI*2);ctx.arc(26,-7,1.2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#201110";ctx.beginPath();ctx.arc(29,-2,1.4,0,Math.PI*2);ctx.fill();if(def.id.includes("tiger")){ctx.strokeStyle="#4a2c11";ctx.lineWidth=2;for(const stripe of [-10,-2,6]){ctx.beginPath();ctx.moveTo(stripe,-8);ctx.lineTo(stripe+4,10);ctx.stroke();}}if(def.id.includes("lion")){ctx.strokeStyle="#ddb35e";ctx.lineWidth=6;ctx.beginPath();ctx.arc(18,-7,10,0,Math.PI*2);ctx.stroke();}}else{ctx.fillStyle=def.id.includes("drone")?"#334c55":"#74523e";ctx.beginPath();ctx.ellipse(0,2,24,14,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(17,-10,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-15,11);ctx.lineTo(-18,26);ctx.moveTo(5,12);ctx.lineTo(8,27);ctx.stroke();}if(c.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,33,-1.8,-.2);ctx.stroke();}ctx.restore();const pct=clamp(c.hp/c.maxHp,0,1);ctx.fillStyle="#020607cc";ctx.fillRect(x-28,y-38,56,5);ctx.fillStyle=r.color;ctx.fillRect(x-28,y-38,56*pct,5);}
 
-  function damagePlayer(amount,source){const s=UI.session,p=s?.player;if(p&&Math.random()<p.dodge){addDamageText(p.x,p.y-30,"AUSGEWICHEN","#6affd8",18);if(p.dodgeHeal)p.hp=Math.min(p.maxHp,p.hp+p.dodgeHeal);if(p.dodgeBurst)for(const enemy of s.enemies)if(distance(enemy,p)<145)damageEnemy(enemy,p.dodgeBurst,false,0);spawnParticles(p.x,p.y,"#62f4d0",12,180);return;}return damagePlayerV116(amount,source);}
+  function drawCompanion(ctx,s,now) {
+    const c=s.player?.companion;if(!c||c.dead)return;
+    const x=sx(s,c.x),y=sy(s,c.y),def=itemDef(c.item),rarity=rarityDef(c.item),human=/companion$/.test(def.id)||["scout-companion","medic-companion","gunner-companion","arc-mage"].includes(def.id),flying=["guardian-drone","phoenix-cub"].includes(def.id),canine=["street-dog","shepherd-dog","battle-hound"].includes(def.id),bigCat=["tiger-companion","lion-companion","void-beast","lynx-companion","alley-cat","ranger-cat"].includes(def.id);
+    const stride=c.moving?Math.sin(c.runPhase||now*.014)*5:Math.sin(now*.004)*.8;
+    ctx.save();ctx.translate(x,y+(flying?Math.sin(now*.006)*7:0));ctx.rotate(c.angle+Math.PI/2);
+    ctx.globalAlpha=.32;ctx.fillStyle="#000";ctx.beginPath();ctx.ellipse(0,25,26,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.shadowColor=rarity.color;ctx.shadowBlur=14;ctx.strokeStyle=rarity.color;ctx.lineWidth=2.5;ctx.lineJoin="round";
+    if(human){ctx.fillStyle="#243841";ctx.beginPath();ctx.roundRect(-12,-19,24,36,10);ctx.fill();ctx.stroke();ctx.fillStyle="#ca9278";ctx.beginPath();ctx.arc(0,-27,8.5,0,Math.PI*2);ctx.fill();ctx.fillStyle="#251c1a";ctx.beginPath();ctx.arc(0,-30,8.5,Math.PI,Math.PI*2);ctx.fill();ctx.strokeStyle=rarity.color;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,-8);ctx.lineTo(8,-32);ctx.stroke();}
+    else if(flying){ctx.fillStyle=def.id.includes("phoenix")?"#ff9f63":"#334c55";ctx.beginPath();ctx.moveTo(0,-21);ctx.lineTo(24,4);ctx.lineTo(0,18);ctx.lineTo(-24,4);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle="#eafcff";ctx.beginPath();ctx.arc(0,2,4,0,Math.PI*2);ctx.fill();}
+    else if(canine||bigCat){
+      const body=def.id==="street-dog"?"#8b694d":def.id==="shepherd-dog"?"#6e5138":def.id==="battle-hound"?"#514a43":def.id.includes("lion")?"#b17b36":def.id.includes("tiger")?"#d08a34":def.id.includes("lynx")?"#75664f":def.id.includes("void")?"#5a5470":"#77695d";
+      ctx.rotate(-.18);ctx.fillStyle=body;
+      ctx.beginPath();ctx.ellipse(-4,1,24,12.5,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.ellipse(18,-8,11,9,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.moveTo(24,-16);ctx.lineTo(20,-25);ctx.lineTo(16,-12);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(12,-15);ctx.lineTo(8,-24);ctx.lineTo(7,-11);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=body;ctx.lineWidth=5.5;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-16,9);ctx.lineTo(-19,25+stride);ctx.moveTo(-1,11);ctx.lineTo(-3,25-stride);ctx.moveTo(11,10);ctx.lineTo(9,24-stride);ctx.moveTo(23,7);ctx.lineTo(22,22+stride);ctx.stroke();
+      ctx.strokeStyle=rarity.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-25,-1);ctx.quadraticCurveTo(-35,-8-stride*.2,-31,-19);ctx.stroke();
+      if(canine){ctx.strokeStyle=rarity.color;ctx.lineWidth=3.5;ctx.beginPath();ctx.arc(17,-5,9,.25,Math.PI-.2);ctx.stroke();}
+      ctx.fillStyle="#f2dfc9";ctx.beginPath();ctx.ellipse(25,-4,5.5,4,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="#161413";ctx.beginPath();ctx.arc(22,-8,1.25,0,Math.PI*2);ctx.arc(26,-8,1.25,0,Math.PI*2);ctx.arc(30,-2,1.55,0,Math.PI*2);ctx.fill();
+      if(def.id.includes("tiger")){ctx.strokeStyle="#4a2c11";ctx.lineWidth=2;for(const stripe of [-11,-3,5]){ctx.beginPath();ctx.moveTo(stripe,-8);ctx.lineTo(stripe+4,10);ctx.stroke();}}
+      if(def.id.includes("lion")){ctx.strokeStyle="#ddb35e";ctx.lineWidth=6;ctx.beginPath();ctx.arc(18,-8,10,0,Math.PI*2);ctx.stroke();}
+      if(c.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(20,-4,28,-1.45,.2);ctx.stroke();}
+    }
+    ctx.restore();
+    const pct=clamp(c.hp/c.maxHp,0,1);ctx.fillStyle="#020607dd";ctx.fillRect(x-30,y-42,60,6);ctx.fillStyle=rarity.color;ctx.fillRect(x-30,y-42,60*pct,6);
+  }
 
-  function updateHud(){const s=UI.session;if(!s||!UI.main)return;const p=s.player,data=ensureState(),need=levelNeed(data.level),set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));set("[data-fkl-wave]",`WELLE ${s.wave}`);set("[data-fkl-kills]",s.kills);set("[data-fkl-score]",NUMBER.format(Math.floor(s.score)));set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`);set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;const mountPill=UI.main.querySelector("[data-fkl-mount-pill]");if(mountPill)mountPill.hidden=!p.mountItem;set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");const compPill=UI.main.querySelector("[data-fkl-companion-pill]");if(compPill)compPill.hidden=!p.companion;set("[data-fkl-companion]",p.companion?(p.companion.dead?"AUSGEFALLEN":`${Math.ceil(p.companion.hp)}/${p.companion.maxHp}`):"—");const specialButton=UI.main.querySelector("[data-fkl-special]"),specialCircle=UI.main.querySelector("[data-fkl-special-circle]"),spec=SPECIALS[p.specialType];if(specialCircle){specialCircle.style.setProperty("--special-progress",`${Math.round(p.specialCharge*3.6)}deg`);specialCircle.style.setProperty("--special-color",spec?.color||"#62d9ff")}set("[data-fkl-special-icon]",spec?.icon||"✦");set("[data-fkl-special-name]",spec?.name||"Kein Special");set("[data-fkl-special-text]",p.specialType?(p.specialReady?"BEREIT":`${Math.floor(p.specialCharge)} %`):"—");specialButton?.classList.toggle("ready",!!p.specialReady);specialButton?.classList.toggle("disabled",!p.specialType);if(specialButton)specialButton.disabled=!p.specialType;UI.main.querySelectorAll("[data-fkl-weapon-switch]").forEach(btn=>{const slot=btn.dataset.fklWeaponSwitch;btn.classList.toggle("active",slot===p.activeWeaponSlot);const runtime=p.weaponRuntimes[slot];btn.classList.toggle("broken",!!runtime?.item&&runtime.item.durability<=0)});const bossWrap=UI.main.querySelector("[data-fkl-boss-wrap]");if(bossWrap){bossWrap.hidden=!s.boss;if(s.boss){set("[data-fkl-boss-name]",s.boss.name);const bar=UI.main.querySelector("[data-fkl-boss-bar]");if(bar)bar.style.width=`${clamp(s.boss.hp/s.boss.maxHp*100,0,100)}%`}}}
+
+  function damagePlayer(amount,source){
+    const s=UI.session,p=s?.player;if(!p)return;
+    if(p.godMode){p.hp=p.maxHp;p.shield=p.maxShield;addDamageText(p.x,p.y-30,"GOD MODE","#ffd76f",16);return;}
+    if(Math.random()<p.dodge){addDamageText(p.x,p.y-30,"AUSGEWICHEN","#6affd8",18);if(p.dodgeHeal)p.hp=Math.min(p.maxHp,p.hp+p.dodgeHeal);if(p.dodgeBurst)for(const enemy of s.enemies)if(distance(enemy,p)<145)damageEnemy(enemy,p.dodgeBurst,false,0);spawnParticles(p.x,p.y,"#62f4d0",12,180);return;}
+    const companionReduction=clamp(Number(p.companionDefensePct||0)/100,0,.65);
+    const staffDivisor=Math.max(1,Number(p.staffDefenseMultiplier||1));
+    return damagePlayerV116(Math.max(.1,Number(amount||0)*(1-companionReduction)/staffDivisor),source);
+  }
+
+  function updateHud(){const s=UI.session;if(!s||!UI.main)return;const p=s.player,data=ensureState(),need=levelNeed(data.level),set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));set("[data-fkl-wave]",p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`);set("[data-fkl-kills]",s.kills);set("[data-fkl-score]",NUMBER.format(Math.floor(s.score)));set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`);set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;const mountPill=UI.main.querySelector("[data-fkl-mount-pill]");if(mountPill)mountPill.hidden=!p.mountItem;set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");const compPill=UI.main.querySelector("[data-fkl-companion-pill]");if(compPill)compPill.hidden=!p.companion;set("[data-fkl-companion]",p.companion?(p.companion.dead?"AUSGEFALLEN":`${Math.ceil(p.companion.hp)}/${p.companion.maxHp}`):"—");set("[data-fkl-companion-bonus]",p.companion?`+${p.companion.ownerDamageBonus}% DMG · +${p.companion.ownerDefenseBonus}% DEF`:"");const specialButton=UI.main.querySelector("[data-fkl-special]"),specialCircle=UI.main.querySelector("[data-fkl-special-circle]"),spec=SPECIALS[p.specialType];if(specialCircle){specialCircle.style.setProperty("--special-progress",`${Math.round(p.specialCharge*3.6)}deg`);specialCircle.style.setProperty("--special-color",spec?.color||"#62d9ff")}set("[data-fkl-special-icon]",spec?.icon||"✦");set("[data-fkl-special-name]",spec?.name||"Kein Special");set("[data-fkl-special-text]",p.specialType?(p.specialReady?"BEREIT":`${Math.floor(p.specialCharge)} %`):"—");specialButton?.classList.toggle("ready",!!p.specialReady);specialButton?.classList.toggle("disabled",!p.specialType);if(specialButton)specialButton.disabled=!p.specialType;UI.main.querySelectorAll("[data-fkl-weapon-switch]").forEach(btn=>{const slot=btn.dataset.fklWeaponSwitch;btn.classList.toggle("active",slot===p.activeWeaponSlot);const runtime=p.weaponRuntimes[slot];btn.classList.toggle("broken",!!runtime?.item&&runtime.item.durability<=0)});const bossWrap=UI.main.querySelector("[data-fkl-boss-wrap]");if(bossWrap){bossWrap.hidden=!s.boss;if(s.boss){set("[data-fkl-boss-name]",s.boss.name);const bar=UI.main.querySelector("[data-fkl-boss-bar]");if(bar)bar.style.width=`${clamp(s.boss.hp/s.boss.maxHp*100,0,100)}%`}}}
 
   function duelProfile(){const data=ensureState(),stats=aggregateLoadoutStats(),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),w=weapon?effectiveStats(weapon):{damage:10,fireRate:1,range:80,family:"melee"};return{name:playerName(),level:data.level,power:powerScore(),maxHp:Math.min(2200,Math.round(stats.health+stats.shield*.45)),damage:Math.min(380,Math.max(12,Math.round(w.damage*(1+stats.damagePct/100)*.36))),attackRate:Math.min(6,Math.max(.55,Number(w.fireRate||1))),rangeClass:w.family==="melee"?"melee":w.family==="pistol"?"pistol":"primary",weapon:itemDef(weapon).name,style:data.cosmetics.active};}
   function stopDuel(renderHome=false){clearTimeout(UI.duelPollTimer);cancelAnimationFrame(UI.duelRaf);UI.duelPollTimer=0;UI.duelRaf=0;UI.duel=null;if(renderHome&&UI.main)renderDashboard();}
@@ -1659,6 +1795,54 @@ function updateHud() {
   function updateDuelHud(){const d=UI.duel,state=d?.state;if(!state||!UI.main)return;const me=state.players?.[d.youSide]||{},opp=state.players?.[d.remoteSide]||{},set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};set("[data-fkl-duel-me-hp]",Math.ceil(me.hp||0));set("[data-fkl-duel-opp-hp]",Math.ceil(opp.hp||0));const mb=UI.main.querySelector("[data-fkl-duel-me-bar]"),ob=UI.main.querySelector("[data-fkl-duel-opp-bar]");if(mb)mb.style.width=`${clamp((me.hp||0)/(me.maxHp||1)*100,0,100)}%`;if(ob)ob.style.width=`${clamp((opp.hp||0)/(opp.maxHp||1)*100,0,100)}%`;const remaining=Math.max(0,Math.ceil((Number(state.endsAtMs||Date.now())-Date.now())/1000));set("[data-fkl-duel-clock]",`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,"0")}`);const special=UI.main.querySelector("[data-fkl-duel-special]");if(special){special.textContent=`⚡ Special ${Math.floor(me.charge||0)}%`;special.disabled=Number(me.charge||0)<100;}}
   function finishDuelUI(match){const d=UI.duel;if(!d||d.ended)return;d.ended=true;clearTimeout(UI.duelPollTimer);cancelAnimationFrame(UI.duelRaf);const data=ensureState(),winner=match.winnerSide,result=winner===d.youSide?"win":winner?"loss":"draw";if(result==="win")data.duel.wins++;else if(result==="loss")data.duel.losses++;else data.duel.draws++;safeSave();const modal=showModal(`<div style="font-size:64px">${result==="win"?"🏆":result==="loss"?"💥":"🤝"}</div><small class="fkl-kicker">ONLINE-DUELL BEENDET</small><h3>${result==="win"?"Sieg!":result==="loss"?"Niederlage":"Unentschieden"}</h3><p>${escapeHtml(match.finishReason||"Das Duell wurde ausgewertet.")}</p><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-duel-again>Noch ein Duell</button><button class="fkl-btn" type="button" data-fkl-duel-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-duel-again]").addEventListener("click",()=>{modal.remove();renderDuelLobby()});modal.querySelector("[data-fkl-duel-home]").addEventListener("click",()=>{modal.remove();renderDashboard()});}
   async function leaveOnlineDuel(returnPhone=false){const d=UI.duel;try{if(d?.matchId)await firebaseCallable(DUEL_LEAVE_FUNCTION,{matchId:d.matchId});else if(d?.waiting)await firebaseCallable(DUEL_LEAVE_FUNCTION,{});}catch{}stopDuel(false);if(returnPhone)returnToTopGames();else renderDashboard();}
+
+  function adminSelectedInventoryItem() {
+    const data=ensureState();
+    return data.inventory.find(item=>item.uid===data.staffTools.selectedInventoryUid)||equipped("primary")||equipped("sidearm")||equipped("melee")||data.inventory[0]||null;
+  }
+
+  function adminCharacterCardHtml() {
+    const data=ensureState(),style=STYLE_MAP.get(data.cosmetics.active)||CHARACTER_STYLES[0],stats=aggregateLoadoutStats(),comp=equipped("companion"),bonus=companionOwnerBonuses(comp);
+    return `<article class="fkl-panel fkl-mod-character" style="--body:${style.body};--accent:${style.accent};--trim:${style.trim}"><small class="fkl-kicker">LIVE-CHARAKTER</small><h2>${escapeHtml(playerName())}</h2><div class="fkl-mod-character-stage"><div class="fkl-character-aura"></div>${characterPreviewHtml(style,true)}${comp?`<div class="fkl-mod-pet"><span>${itemDef(comp).icon}</span><b>${escapeHtml(itemDef(comp).name)}</b><small>+${bonus.damage}% Schaden · +${bonus.defense}% Verteidigung</small></div>`:""}</div><div class="fkl-mod-stat-row"><span>Power <b>${NUMBER.format(stats.power)}</b></span><span>Leben <b>${NUMBER.format(stats.health)}</b></span><span>Tempo <b>+${stats.speed}%</b></span></div></article>`;
+  }
+
+  function renderFightAdminMenu() {
+    if(!UI.main||!canUseStaffModMenu())return toast("Kein Zugriff","Nur Admin und Owner dürfen dieses Mod-Menü öffnen.");
+    stopCombat(false);stopDuel(false);
+    const data=ensureState(),tools=data.staffTools,selected=adminSelectedInventoryItem(),selectedDef=selected?itemDef(selected):null;
+    if(selected&&!tools.selectedInventoryUid)tools.selectedInventoryUid=selected.uid;
+    const equippedCards=EQUIPMENT_SLOT_KEYS.map(slot=>{const item=equipped(slot),def=item?itemDef(item):null;return `<button class="fkl-mod-equip ${selected?.uid===item?.uid?"active":""}" type="button" data-fkl-mod-select="${item?.uid||""}" ${item?"":"disabled"}><span>${def?.icon||SLOT_META[slot].icon}</span><small>${escapeHtml(SLOT_META[slot].name)}</small><b>${escapeHtml(def?.name||"Leer")}</b>${item?`<em>${rarityDef(item).name} · ${starText(item.star)}</em>`:""}</button>`}).join("");
+    const catalog=ITEMS.slice().sort((a,b)=>a.category.localeCompare(b.category)||rarityIndex(a.rarity)-rarityIndex(b.rarity)||a.name.localeCompare(b.name,"de"));
+    const rarityOptions=RARITY_ORDER.map(id=>`<option value="${id}" ${tools.grantRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("");
+    const selectedRarity=selected?rarityKey(selected):"common";
+    UI.main.innerHTML=`<div class="fkl-page fkl-mod-page">${pageHeader("Admin / Owner Mod-Menü","Direkte Fight.KL-Verwaltung. Dieser Bereich wird ausschließlich bei aktiver Admin- oder Owner-Rolle angezeigt.",`<button class="fkl-btn" type="button" data-fkl-mod-inventory>🎒 Inventar</button>`)}<div class="fkl-mod-layout">${adminCharacterCardHtml()}<section class="fkl-panel fkl-mod-tools"><div class="fkl-mod-title"><div><small class="fkl-kicker">KAMPF-CHEATS</small><h3>Ingame-Einstellungen</h3></div><b>${staffRoleLabel()}</b></div><div class="fkl-mod-toggle-row"><button class="fkl-mod-toggle ${tools.godMode?"active":""}" type="button" data-fkl-mod-god><span>♾</span><div><b>God Mode</b><small>${tools.godMode?"Aktiv · unendlich Leben":"Aus"}</small></div></button></div><div class="fkl-mod-control-grid"><label><span>Schaden</span><select data-fkl-mod-setting="damageMultiplier">${[1,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.damageMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Speed</span><select data-fkl-mod-setting="speedMultiplier">${[1,1.5,2,3,5,8,10].map(v=>`<option value="${v}" ${Number(tools.speedMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Verteidigung</span><select data-fkl-mod-setting="defenseMultiplier">${[1,1.5,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.defenseMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label></div><small class="fkl-mod-note">Die Einstellungen gelten für die Bot-Arena. Online-Duelle bleiben serverseitig normal.</small></section><section class="fkl-panel fkl-mod-money"><small class="fkl-kicker">GELD</small><h3>Geld hinzufügen</h3><div class="fkl-mod-money-actions">${[10000,100000,1000000,10000000].map(v=>`<button type="button" data-fkl-mod-money="${v}">+${NUMBER.format(v)} €</button>`).join("")}</div><label class="fkl-mod-custom-money"><input type="number" min="1" step="1000" placeholder="Eigener Betrag" data-fkl-mod-money-input><button type="button" data-fkl-mod-money-custom>Hinzufügen</button></label><p>Aktuell: <b>${EURO.format(playerFunds())}</b></p></section><section class="fkl-panel fkl-mod-equipped"><small class="fkl-kicker">CHARAKTER-AUSRÜSTUNG</small><h3>Slot anklicken und bearbeiten</h3><div class="fkl-mod-equipped-grid">${equippedCards}</div></section><section class="fkl-panel fkl-mod-item-editor"><small class="fkl-kicker">ITEM-EDITOR</small><h3>${escapeHtml(selectedDef?.name||"Kein Item")}</h3>${selected?`<div class="fkl-mod-selected"><span>${selectedDef.icon}</span><div><b>${rarityDef(selected).name}</b><small>${starText(selected.star)} · ${itemMaxDurability(selected)?`${Math.round(selected.durability)}/${itemMaxDurability(selected)} Haltbarkeit`:"Ohne Haltbarkeit"}</small></div></div><div class="fkl-mod-control-grid"><label><span>Seltenheit</span><select data-fkl-mod-item-rarity>${RARITY_ORDER.map(id=>`<option value="${id}" ${selectedRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("")}</select></label><label><span>Sterne</span><select data-fkl-mod-item-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(selected.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label></div><div class="fkl-mod-item-actions"><button type="button" data-fkl-mod-item-repair>Max. Haltbarkeit</button><button type="button" data-fkl-mod-item-duplicate>Duplizieren</button></div>`:`<p>Rüste zuerst ein Item aus.</p>`}</section><section class="fkl-panel fkl-mod-grant"><small class="fkl-kicker">SHOP / ITEM-GEBER</small><h3>Beliebiges Item geben</h3><div class="fkl-mod-grant-grid"><label><span>Item</span><select data-fkl-mod-grant-item>${catalog.map(def=>`<option value="${def.id}" ${tools.selectedItemId===def.id?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${RARITIES[def.rarity].name}</option>`).join("")}</select></label><label><span>Seltenheit</span><select data-fkl-mod-grant-rarity>${rarityOptions}</select></label><label><span>Sterne</span><select data-fkl-mod-grant-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(tools.grantStar)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><label><span>Anzahl</span><select data-fkl-mod-grant-quantity>${[1,2,5,10].map(v=>`<option value="${v}" ${Number(tools.grantQuantity)===v?"selected":""}>${v}</option>`).join("")}</select></label></div><button class="fkl-btn gold fkl-mod-grant-button" type="button" data-fkl-mod-grant>Item geben</button></section></div></div>`;
+    bindPageHome();
+    UI.main.querySelector("[data-fkl-mod-inventory]")?.addEventListener("click",renderInventory);
+    UI.main.querySelector("[data-fkl-mod-god]")?.addEventListener("click",()=>{tools.godMode=!tools.godMode;safeSave();renderFightAdminMenu();});
+    UI.main.querySelectorAll("[data-fkl-mod-setting]").forEach(select=>select.addEventListener("change",()=>{tools[select.dataset.fklModSetting]=Number(select.value)||1;safeSave();renderFightAdminMenu();}));
+    UI.main.querySelectorAll("[data-fkl-mod-money]").forEach(btn=>btn.addEventListener("click",()=>addFightAdminMoney(Number(btn.dataset.fklModMoney))));
+    UI.main.querySelector("[data-fkl-mod-money-custom]")?.addEventListener("click",()=>addFightAdminMoney(Number(UI.main.querySelector("[data-fkl-mod-money-input]")?.value||0)));
+    UI.main.querySelectorAll("[data-fkl-mod-select]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.fklModSelect){tools.selectedInventoryUid=btn.dataset.fklModSelect;safeSave();renderFightAdminMenu();}}));
+    UI.main.querySelector("[data-fkl-mod-item-rarity]")?.addEventListener("change",event=>setFightAdminItemRarity(selected?.uid,event.currentTarget.value));
+    UI.main.querySelector("[data-fkl-mod-item-star]")?.addEventListener("change",event=>setFightAdminItemStar(selected?.uid,Number(event.currentTarget.value)));
+    UI.main.querySelector("[data-fkl-mod-item-repair]")?.addEventListener("click",()=>fillFightAdminItemDurability(selected?.uid));
+    UI.main.querySelector("[data-fkl-mod-item-duplicate]")?.addEventListener("click",()=>duplicateFightAdminItem(selected?.uid));
+    const syncGrant=()=>{tools.selectedItemId=UI.main.querySelector("[data-fkl-mod-grant-item]")?.value||tools.selectedItemId;tools.grantRarity=UI.main.querySelector("[data-fkl-mod-grant-rarity]")?.value||tools.grantRarity;tools.grantStar=Number(UI.main.querySelector("[data-fkl-mod-grant-star]")?.value||0);tools.grantQuantity=Number(UI.main.querySelector("[data-fkl-mod-grant-quantity]")?.value||1);safeSave();};
+    UI.main.querySelectorAll("[data-fkl-mod-grant-item],[data-fkl-mod-grant-rarity],[data-fkl-mod-grant-star],[data-fkl-mod-grant-quantity]").forEach(node=>node.addEventListener("change",syncGrant));
+    UI.main.querySelector("[data-fkl-mod-grant]")?.addEventListener("click",()=>{syncGrant();grantFightAdminItems();});
+  }
+
+  function addFightAdminMoney(amount) {
+    if(!canUseStaffModMenu())return toast("Kein Zugriff");
+    const value=Math.max(0,Math.floor(Number(amount)||0));if(!value)return toast("Betrag fehlt");
+    const appState=getAppState();if(!appState)return;
+    appState.bank=Number(appState.bank||0)+value;safeFeed(`Fight.KL Mod-Menü: ${EURO.format(value)} hinzugefügt.`);safeSave();safeRender();toast("Geld hinzugefügt",EURO.format(value));renderFightAdminMenu();
+  }
+  function setFightAdminItemRarity(uidValue,rarity){if(!canUseStaffModMenu()||!RARITIES[rarity])return;const item=ensureState().inventory.find(entry=>entry.uid===uidValue);if(!item)return;item.rarity=rarity;item.durability=itemMaxDurability(item);safeSave();renderFightAdminMenu();}
+  function setFightAdminItemStar(uidValue,star){if(!canUseStaffModMenu())return;const item=ensureState().inventory.find(entry=>entry.uid===uidValue);if(!item)return;item.star=clamp(Math.floor(Number(star)||0),0,MAX_STAR);item.durability=itemMaxDurability(item);safeSave();renderFightAdminMenu();}
+  function fillFightAdminItemDurability(uidValue){if(!canUseStaffModMenu())return;const item=ensureState().inventory.find(entry=>entry.uid===uidValue);if(!item)return;item.durability=itemMaxDurability(item);safeSave();renderFightAdminMenu();}
+  function duplicateFightAdminItem(uidValue){if(!canUseStaffModMenu())return;const data=ensureState(),item=data.inventory.find(entry=>entry.uid===uidValue);if(!item||data.inventory.length>=INVENTORY_LIMIT)return toast("Inventar voll");const copy=makeItem(item.baseId,item.star,null,rarityKey(item));data.inventory.unshift(copy);data.staffTools.selectedInventoryUid=copy.uid;safeSave();renderFightAdminMenu();}
+  function grantFightAdminItems(){if(!canUseStaffModMenu())return;const data=ensureState(),tools=data.staffTools,def=ITEM_MAP.get(tools.selectedItemId);if(!def)return;const room=INVENTORY_LIMIT-data.inventory.length,quantity=Math.min(room,clamp(Math.floor(Number(tools.grantQuantity)||1),1,10));if(quantity<=0)return toast("Inventar voll");for(let i=0;i<quantity;i++)data.inventory.unshift(makeItem(def.id,tools.grantStar,null,tools.grantRarity));safeSave();updateHead();toast("Item gegeben",`${quantity}× ${def.name} · ${RARITIES[tools.grantRarity].name} · ${starText(tools.grantStar)}`);renderFightAdminMenu();}
 
   function close(returnPhone=false){stopCombat(false);stopDuel(false);window.removeEventListener("keydown",onKeyDown);window.removeEventListener("keyup",onKeyUp);UI.overlay?.remove();UI.overlay=null;UI.shell=null;UI.main=null;document.body.classList.remove("fight-kl-open");if(returnPhone)returnToTopGames();}
   function onKeyDown(event){if(!UI.overlay)return;UI.keys[event.code]=true;if(UI.duel){if(event.code==="Escape"){event.preventDefault();leaveOnlineDuel(false)}if(event.code==="Space"){event.preventDefault();sendDuelAction("attack")}if(event.code==="ShiftLeft"||event.code==="ShiftRight"){event.preventDefault();sendDuelAction("dodge")}if(event.code==="KeyE"||event.code==="KeyQ"){event.preventDefault();sendDuelAction("special")}return;}if(event.code==="Escape"){event.preventDefault();if(UI.session)pauseCombat();else returnToTopGames()}if(event.code==="KeyR"&&UI.session){event.preventDefault();beginReload()}if((event.code==="KeyE"||event.code==="KeyQ")&&UI.session){event.preventDefault();triggerSpecial()}if(UI.session&&["Digit1","Numpad1","Digit2","Numpad2","Digit3","Numpad3"].includes(event.code)){event.preventDefault();const n=event.code.includes("1")?0:event.code.includes("2")?1:2;switchCombatWeapon(WEAPON_SLOT_KEYS[n])}if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.code))event.preventDefault();}

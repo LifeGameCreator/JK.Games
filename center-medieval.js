@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-02-jkgames-v122-streamed-open-world';
-const ONLINE_MAP_ID = 'center-dynasty-open-world-v2';
+const CENTER_VERSION = '2026-08-02-jkgames-v124-dynasty-streaming-world';
+const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
 const WORLD_SEED = 20260802;
@@ -42,7 +42,11 @@ const BUILDINGS = Object.freeze({
   storage: { name: 'Lagerhaus', icon: '▣', wood: 8, logs: 18, stone: 14, size: 6.6, category: 'Lager' },
   well: { name: 'Brunnen', icon: '◉', wood: 5, logs: 8, stone: 16, size: 3.4, category: 'Versorgung' },
   workshop: { name: 'Werkstatt', icon: '⚒', wood: 10, logs: 25, stone: 15, size: 7, category: 'Produktion' },
-  field: { name: 'Acker', icon: '▥', wood: 4, logs: 4, stone: 0, size: 8, category: 'Landwirtschaft' }
+  field: { name: 'Acker', icon: '▥', wood: 4, logs: 4, stone: 0, size: 8, category: 'Landwirtschaft' },
+  barn: { name: 'Scheune', icon: '🌾', wood: 12, logs: 28, stone: 10, size: 8.4, category: 'Landwirtschaft' },
+  huntingLodge: { name: 'Jagdhütte', icon: '🏹', wood: 10, logs: 22, stone: 8, size: 7.2, category: 'Jagd' },
+  mine: { name: 'Bergwerk', icon: '⛏', wood: 16, logs: 32, stone: 28, size: 8.8, category: 'Bergbau' },
+  tavern: { name: 'Taverne', icon: '🍲', wood: 14, logs: 30, stone: 20, size: 8.6, category: 'Gemeinschaft' }
 });
 const RECIPES = Object.freeze({
   axe: { name: 'Steinaxt', icon: '🪓', cost: { wood: 3, stone: 2 }, durability: 100, skill: 'survival' },
@@ -50,7 +54,10 @@ const RECIPES = Object.freeze({
   spear: { name: 'Jagdspeer', icon: '➶', cost: { wood: 4, stone: 1 }, durability: 100, skill: 'hunting' },
   hammer: { name: 'Bauhammer', icon: '🔨', cost: { wood: 4, stone: 2 }, durability: 100, skill: 'building' },
   torch: { name: 'Fackel', icon: '🕯', cost: { wood: 2, leather: 1 }, durability: 80, skill: 'survival' },
-  cookedMeat: { name: 'Gebratenes Fleisch', icon: '🍖', cost: { meat: 1, wood: 1 }, amount: 1, skill: 'survival' }
+  cookedMeat: { name: 'Gebratenes Fleisch', icon: '🍖', cost: { meat: 1, wood: 1 }, amount: 1, skill: 'survival' },
+  bow: { name: 'Jägerbogen', icon: '🏹', cost: { wood: 6, leather: 3, flax: 2 }, durability: 120, skill: 'hunting' },
+  ironAxe: { name: 'Eisenaxt', icon: '🪓', cost: { wood: 3, iron: 4, leather: 1 }, durability: 180, skill: 'crafting' },
+  medicine: { name: 'Heilkräuter', icon: '🌿', cost: { herbs: 3, water: 1 }, amount: 1, skill: 'survival' }
 });
 const SKILLS = Object.freeze({
   survival: { name: 'Überleben', icon: '⛺', text: 'Langsamerer Hunger- und Durstverlust.' },
@@ -58,10 +65,13 @@ const SKILLS = Object.freeze({
   mining: { name: 'Bergbau', icon: '⛏', text: 'Mehr Stein und Erz.' },
   hunting: { name: 'Jagd', icon: '➶', text: 'Mehr Fleisch und Leder.' },
   building: { name: 'Baukunst', icon: '⌂', text: 'Gebäude benötigen weniger Rohstoffe.' },
-  diplomacy: { name: 'Diplomatie', icon: '♟', text: 'Bewohner lassen sich leichter anwerben.' }
+  diplomacy: { name: 'Diplomatie', icon: '♟', text: 'Bewohner lassen sich leichter anwerben.' },
+  agriculture: { name: 'Landwirtschaft', icon: '🌾', text: 'Felder und Bauern erzeugen mehr Nahrung.' },
+  crafting: { name: 'Handwerk', icon: '⚒', text: 'Werkzeuge halten länger und Werkstätten produzieren mehr.' }
 });
-const RESOURCE_LABELS = Object.freeze({ wood: 'Holz', logs: 'Stämme', stone: 'Stein', berries: 'Beeren', meat: 'Fleisch', cookedMeat: 'Gebratenes Fleisch', water: 'Wasser', leather: 'Leder', flax: 'Flachs', iron: 'Eisenerz', coins: 'Münzen' });
+const RESOURCE_LABELS = Object.freeze({ wood: 'Holz', logs: 'Stämme', stone: 'Stein', berries: 'Beeren', meat: 'Fleisch', cookedMeat: 'Gebratenes Fleisch', water: 'Wasser', leather: 'Leder', flax: 'Flachs', iron: 'Eisenerz', herbs: 'Kräuter', grain: 'Getreide', medicine: 'Heilmittel', coins: 'Münzen' });
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 const distance2D = (a, b) => Math.hypot((a?.x || 0) - (b?.x || 0), (a?.z || 0) - (b?.z || 0));
@@ -126,27 +136,30 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 2,
+    version: 3,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
-    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal' },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal' },
     day: 1,
     season: 0,
     time: 8.25,
     weather: 'clear',
     weatherUntil: 14,
     needs: { health: 100, hunger: 92, thirst: 90, stamina: 100, warmth: 88 },
-    inventory: { wood: 8, logs: 0, stone: 5, berries: 4, meat: 0, cookedMeat: 0, water: 2, leather: 0, flax: 0, iron: 0, coins: 120 },
-    tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0 },
+    inventory: { wood: 8, logs: 0, stone: 5, berries: 4, meat: 0, cookedMeat: 0, water: 2, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 120 },
+    tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
     xp: 0,
     skillPoints: 0,
-    skills: { survival: 0, forestry: 0, mining: 0, hunting: 0, building: 0, diplomacy: 0 },
-    settlement: { name: 'Waldhain', residents: 0, reputation: 0, food: 0, firewood: 0, morale: 70, taxDue: 0 },
+    skills: { survival: 0, forestry: 0, mining: 0, hunting: 0, building: 0, diplomacy: 0, agriculture: 0, crafting: 0 },
+    settlement: { name: 'Waldhain', residents: 0, reputation: 0, food: 0, firewood: 0, morale: 70, taxDue: 0, jobs: { woodcutter: 0, farmer: 0, hunter: 0, miner: 0, crafter: 0 } },
+    family: { partner: '', affection: 0, heir: '', generation: 1 },
     buildings: [],
     harvested: {},
     completedQuests: [],
     activeQuest: 'tools',
     stats: { trees: 0, rocks: 0, animals: 0, crafted: 0, built: 0, recruited: 0, distance: 0 },
     discovered: ['Siedlungsplatz'],
+    landmarkRewards: {},
+    encounterHistory: {},
     lastSavedAt: Date.now()
   };
 }
@@ -159,14 +172,19 @@ function normalizeSaveState(raw) {
   state.world = { ...base.world, ...(raw.world || {}) };
   state.world.renderDistance = Math.floor(clamp(state.world.renderDistance, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
   state.world.density = ['low','normal','high'].includes(state.world.density) ? state.world.density : 'normal';
+  state.world.landmarkDensity = ['low','normal','high'].includes(state.world.landmarkDensity) ? state.world.landmarkDensity : 'normal';
   state.world.spawnAssigned = !!state.world.spawnAssigned;
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
   state.tools = { ...base.tools, ...(raw.tools || {}) };
   state.skills = { ...base.skills, ...(raw.skills || {}) };
   state.settlement = { ...base.settlement, ...(raw.settlement || {}) };
+  state.settlement.jobs = { ...base.settlement.jobs, ...(raw.settlement?.jobs || {}) };
+  state.family = { ...base.family, ...(raw.family || {}) };
+  state.landmarkRewards = raw.landmarkRewards && typeof raw.landmarkRewards === 'object' ? raw.landmarkRewards : {};
+  state.encounterHistory = raw.encounterHistory && typeof raw.encounterHistory === 'object' ? raw.encounterHistory : {};
   state.stats = { ...base.stats, ...(raw.stats || {}) };
-  state.buildings = Array.isArray(raw.buildings) ? raw.buildings.slice(0, 80).filter((entry) => entry && BUILDINGS[entry.type]) : [];
+  state.buildings = Array.isArray(raw.buildings) ? raw.buildings.slice(0, 140).filter((entry) => entry && BUILDINGS[entry.type]) : [];
   state.harvested = raw.harvested && typeof raw.harvested === 'object' ? raw.harvested : {};
   state.completedQuests = Array.isArray(raw.completedQuests) ? [...new Set(raw.completedQuests.map(String))].slice(0, 40) : [];
   state.discovered = Array.isArray(raw.discovered) ? [...new Set(raw.discovered.map(String))].slice(0, 40) : ['Siedlungsplatz'];
@@ -372,8 +390,10 @@ class CenterDynastyGame {
     this.state.world ||= { spawnAssigned: false, spawnIndex: -1, renderDistance: this.isMobile ? 2 : 3, density: 'normal' };
     this.state.world.renderDistance = Math.floor(clamp(this.state.world.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
     this.state.world.density = ['low','normal','high'].includes(this.state.world.density) ? this.state.world.density : 'normal';
-    const needsMigration = Number(this.state.version || 0) < 2 || !this.state.world.spawnAssigned;
-    if (!needsMigration) return;
+    this.state.world.landmarkDensity = ['low','normal','high'].includes(this.state.world.landmarkDensity) ? this.state.world.landmarkDensity : 'normal';
+    const needsSpawn = !this.state.world.spawnAssigned;
+    if (Number(this.state.version || 0) < 3) this.state.version = 3;
+    if (!needsSpawn) return;
     const maxAttempts = 900;
     const randomIndex = Math.floor((crypto?.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : Math.random()) * maxAttempts);
     let selected = null;
@@ -393,7 +413,7 @@ class CenterDynastyGame {
     this.state.world.spawnIndex = selected.index;
     this.state.world.spawnX = Number(selected.x.toFixed(2));
     this.state.world.spawnZ = Number(selected.z.toFixed(2));
-    this.state.version = 2;
+    this.state.version = 3;
     this.state.discovered = ['Unbekannte Wildnis'];
   }
 
@@ -703,6 +723,7 @@ class CenterDynastyGame {
     this.buildSavedSettlement();
     this.buildPlayerRoot();
     this.restoreStateToWorld();
+    this.buildWildlife();
     await this.updateChunkStreaming(true);
     await nextPaint();
     this.setLoading(70, 'Wälder, Dörfer, Wege und Berge werden in Sichtweite erzeugt.');
@@ -796,6 +817,7 @@ class CenterDynastyGame {
     const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [] };
     this.buildChunkPaths(chunk);
     this.buildChunkVillage(chunk);
+    this.buildChunkLandmarks(chunk);
     this.buildChunkForest(chunk);
     this.buildChunkRocksAndBushes(chunk);
     this.scene.add(group);
@@ -883,29 +905,88 @@ class CenterDynastyGame {
 
   buildChunkVillage(chunk) {
     const chance = hash2(chunk.cx, chunk.cz, WORLD_SEED + 707);
-    if (chance < .79) return;
+    if (chance < .76) return;
     const random = seededRandom((Math.imul(chunk.cx + 512, 1640531513) ^ Math.imul(chunk.cz + 512, 2246822519) ^ (WORLD_SEED + 701)) >>> 0);
-    const lx=45+random()*(CHUNK_SIZE-90),lz=45+random()*(CHUNK_SIZE-90),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
+    const lx=42+random()*(CHUNK_SIZE-84),lz=42+random()*(CHUNK_SIZE-84),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
     if(y>48||y<-3||Math.abs(x-riverCenter(z))<38)return;
-    const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen'];
-    const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see'];
+    const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen','Drachen','Königs'];
+    const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see','mark','hof'];
     const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
-    const houseCount=7+Math.floor(random()*12);
-    const wallMat=new THREE.MeshStandardMaterial({color:0xb39a72,roughness:1});
-    const roofMat=new THREE.MeshStandardMaterial({color:random()<.5?0x65412f:0x5c362c,roughness:1});
-    const houses=new THREE.InstancedMesh(new THREE.BoxGeometry(5.2,3.4,4.6),wallMat,houseCount);
-    const roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(4.2,2.4,4),roofMat,houseCount);
+    const villageType=random()<.28?'Bergdorf':random()<.56?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
+    const houseCount=8+Math.floor(random()*13);
+    const wallMat=new THREE.MeshStandardMaterial({color:villageType==='Bergdorf'?0x9f9584:0xb39a72,roughness:1});
+    const roofMat=new THREE.MeshStandardMaterial({color:random()<.5?0x65412f:0x513128,roughness:1});
+    const woodMat=new THREE.MeshStandardMaterial({color:0x60402b,roughness:1});
+    const houses=new THREE.InstancedMesh(new THREE.BoxGeometry(5.4,3.5,4.8),wallMat,houseCount);
+    const roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(4.3,2.5,4),roofMat,houseCount);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
-    for(let i=0;i<houseCount;i+=1){const angle=i/houseCount*Math.PI*2+random()*.45,radius=13+(i%3)*8+random()*5,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2;q.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+1.7,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));houses.setMatrixAt(i,matrix);matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+4.1,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));roofs.setMatrixAt(i,matrix);}
+    const housePositions=[];
+    for(let i=0;i<houseCount;i+=1){
+      const angle=i/houseCount*Math.PI*2+random()*.42,radius=16+(i%3)*8+random()*5,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2;
+      q.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
+      matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+1.75,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));houses.setMatrixAt(i,matrix);
+      matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+4.25,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));roofs.setMatrixAt(i,matrix);
+      housePositions.push({x:hx,z:hz,y:hy,yaw});
+    }
     chunk.group.add(houses,roofs);
-    const square=new THREE.Mesh(new THREE.CircleGeometry(12,20),new THREE.MeshStandardMaterial({color:0x80694d,roughness:1,polygonOffset:true,polygonOffsetFactor:-3}));square.rotation.x=-Math.PI/2;square.position.set(lx,y+.09,lz);chunk.group.add(square);
+    const square=new THREE.Mesh(new THREE.CircleGeometry(13,24),new THREE.MeshStandardMaterial({color:0x80694d,roughness:1,polygonOffset:true,polygonOffsetFactor:-3}));square.rotation.x=-Math.PI/2;square.position.set(lx,y+.09,lz);chunk.group.add(square);
+    for(let i=0;i<8;i+=1){
+      const angle=i/8*Math.PI*2,roadLength=20+(i%2)*9;
+      const road=new THREE.Mesh(new THREE.PlaneGeometry(3.2,roadLength),new THREE.MeshStandardMaterial({color:0x756146,roughness:1,polygonOffset:true,polygonOffsetFactor:-2}));
+      road.rotation.x=-Math.PI/2;road.rotation.z=-angle;road.position.set(lx+Math.sin(angle)*roadLength*.48,y+.085,lz+Math.cos(angle)*roadLength*.48);chunk.group.add(road);
+    }
     const well=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.4,1.2,12),new THREE.MeshStandardMaterial({color:0x77736b,roughness:1}));well.position.set(lx,y+.6,lz);chunk.group.add(well);
-    const people=Array.from({length:4+Math.floor(random()*9)},(_,i)=>`Bewohner ${i+1}`);
-    const village={name,x,z,people,buildings:houseCount,npcs:[],chunkKey:chunk.key};
+    const market=new THREE.Group();
+    const stall=new THREE.Mesh(new THREE.BoxGeometry(5,.35,2.4),woodMat);stall.position.y=1;market.add(stall);
+    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),woodMat);post.position.set(sx*2.1,1.6,sz*.9);market.add(post);}
+    const canopy=new THREE.Mesh(new THREE.PlaneGeometry(5.2,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x8d3f32:0x486f62,side:THREE.DoubleSide}));canopy.rotation.x=-Math.PI/2;canopy.position.y=3.05;market.add(canopy);market.position.set(lx+7,y,lz+5);chunk.group.add(market);
+    const fieldCount=villageType==='Bauerndorf'?4:2;
+    for(let f=0;f<fieldCount;f+=1){
+      const fx=lx-31+(f%2)*16,fz=lz+25+Math.floor(f/2)*12;
+      const field=new THREE.Mesh(new THREE.PlaneGeometry(13,9),new THREE.MeshStandardMaterial({color:0x4b3422,roughness:1,side:THREE.DoubleSide}));field.rotation.x=-Math.PI/2;field.position.set(fx,terrainHeightAt(chunk.originX+fx,chunk.originZ+fz)+.06,fz);chunk.group.add(field);
+      for(let row=-4;row<=4;row+=2){const crop=new THREE.Mesh(new THREE.BoxGeometry(11,.12,.12),new THREE.MeshStandardMaterial({color:0xa99a48,roughness:1}));crop.position.set(fx,field.position.y+.12,fz+row);chunk.group.add(crop);}
+    }
+    const barn=new THREE.Mesh(new THREE.BoxGeometry(8,4.4,6.6),woodMat);barn.position.set(lx-25,y+2.2,lz-20);chunk.group.add(barn);
+    const barnRoof=new THREE.Mesh(new THREE.ConeGeometry(6.3,3,4),roofMat);barnRoof.position.set(lx-25,y+5.6,lz-20);barnRoof.rotation.y=Math.PI/4;barnRoof.scale.z=.78;chunk.group.add(barnRoof);
+    const peopleCount=6+Math.floor(random()*12),bodyMat=new THREE.MeshStandardMaterial({color:0x48646d,roughness:1}),skinMat=new THREE.MeshStandardMaterial({color:0xc58d70,roughness:1});
+    const bodies=new THREE.InstancedMesh(new THREE.CapsuleGeometry(.25,.8,2,5),bodyMat,peopleCount),heads=new THREE.InstancedMesh(new THREE.SphereGeometry(.28,6,5),skinMat,peopleCount);
+    for(let i=0;i<peopleCount;i+=1){const angle=random()*Math.PI*2,radius=4+random()*13,px=lx+Math.cos(angle)*radius,pz=lz+Math.sin(angle)*radius,py=terrainHeightAt(chunk.originX+px,chunk.originZ+pz);q.setFromAxisAngle(new THREE.Vector3(0,1,0),random()*Math.PI*2);matrix.compose(new THREE.Vector3(px,py+1,pz),q,new THREE.Vector3(1,1,1));bodies.setMatrixAt(i,matrix);matrix.compose(new THREE.Vector3(px,py+2,pz),q,new THREE.Vector3(1,1,1));heads.setMatrixAt(i,matrix);}
+    chunk.group.add(bodies,heads);
+    const people=Array.from({length:peopleCount},(_,i)=>`Bewohner ${i+1}`);
+    const village={name,x,z,people,buildings:houseCount+2,npcs:[],chunkKey:chunk.key,type:villageType};
     chunk.villages.push(village);this.villages.push(village);
-    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:22,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
-    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+5,z:z+3,radius:7,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
-    chunk.hotspots.push(villageHotspot,marketHotspot);this.hotspots.push(villageHotspot,marketHotspot);
+    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:24,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
+    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+7,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
+    const wellHotspot={id:`well-${chunk.key}`,type:'well',x,z,radius:5,label:'Am Dorfbrunnen Wasser holen',data:{village:name},chunkKey:chunk.key};
+    chunk.hotspots.push(villageHotspot,marketHotspot,wellHotspot);this.hotspots.push(villageHotspot,marketHotspot,wellHotspot);
+  }
+
+  buildChunkLandmarks(chunk) {
+    const density=this.state.world?.landmarkDensity==='low'?.55:this.state.world?.landmarkDensity==='high'?1.45:1;
+    const chance=hash2(chunk.cx,chunk.cz,WORLD_SEED+1901);
+    if(chance<1-.24*density)return;
+    const random=seededRandom((Math.imul(chunk.cx+1701,1103515245)^Math.imul(chunk.cz+2903,12345)^(WORLD_SEED+1907))>>>0);
+    const lx=24+random()*(CHUNK_SIZE-48),lz=24+random()*(CHUNK_SIZE-48),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
+    if(y<-2||Math.abs(x-riverCenter(z))<24||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<55))return;
+    const roll=random();
+    let type=roll<.25?'cave':roll<.5?'ruin':roll<.72?'hunter-camp':roll<.88?'shrine':'mine';
+    const group=new THREE.Group();group.position.set(lx,y,lz);chunk.group.add(group);
+    const rock=new THREE.MeshStandardMaterial({color:0x5f625d,roughness:1,flatShading:true}),wood=new THREE.MeshStandardMaterial({color:0x5c3c28,roughness:1}),stone=new THREE.MeshStandardMaterial({color:0x777268,roughness:1});
+    let title='',text='',hotspotType='landmark',label='Ort untersuchen';
+    if(type==='cave'||type==='mine'){
+      for(let i=0;i<9;i++){const a=Math.PI*i/8;const boulder=new THREE.Mesh(new THREE.DodecahedronGeometry(1.8+random()*1.2,0),rock);boulder.position.set(Math.cos(a)*5,1.2+Math.sin(a)*3.6,Math.sin(a)*1.4);boulder.scale.y=1.2;boulder.rotation.set(random(),random(),random());group.add(boulder);}
+      const dark=new THREE.Mesh(new THREE.CircleGeometry(4.3,20),new THREE.MeshBasicMaterial({color:0x030404}));dark.position.set(0,2.4,-.35);group.add(dark);
+      title=type==='mine'?'Altes Erzbergwerk':'Verborgene Höhle';text=type==='mine'?'Ein verlassenes Bergwerk mit Eisenerz und tiefen Stollen.':'Eine natürliche Höhle, in der seltene Rohstoffe und Gefahren warten.';hotspotType=type==='mine'?'mine':'cave';label=type==='mine'?'Bergwerk erkunden':'Höhle erkunden';
+    }else if(type==='ruin'){
+      for(let i=0;i<8;i++){const block=new THREE.Mesh(new THREE.BoxGeometry(2.4+random()*2,1.8+random()*3,.9+random()*.5),stone);block.position.set((i%4)*3.4-5,block.geometry.parameters.height/2,Math.floor(i/4)*6-3);block.rotation.y=(random()-.5)*.5;group.add(block);}title='Vergessene Ruinen';text='Verfallene Mauern einer alten Siedlung. Zwischen den Steinen können Münzen und Wissen verborgen sein.';label='Ruinen durchsuchen';
+    }else if(type==='hunter-camp'){
+      const tent=new THREE.Mesh(new THREE.ConeGeometry(4,3.5,4),new THREE.MeshStandardMaterial({color:0x72583c,roughness:1,side:THREE.DoubleSide}));tent.rotation.y=Math.PI/4;tent.position.set(0,1.75,0);group.add(tent);for(let i=0;i<6;i++){const log=new THREE.Mesh(new THREE.CylinderGeometry(.15,.18,2,6),wood);log.rotation.z=Math.PI/2;log.rotation.y=i;log.position.set(6*Math.cos(i),.3,6*Math.sin(i));group.add(log);}title='Verlassenes Jägerlager';text='Ein Lager mit Spuren von Jägern. Vorräte könnten noch brauchbar sein.';hotspotType='encounter';label='Jägerlager durchsuchen';
+    }else{
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.7,1.1,8),stone);base.position.y=.55;group.add(base);const pillar=new THREE.Mesh(new THREE.BoxGeometry(1.1,5.5,1.1),stone);pillar.position.y=3.5;group.add(pillar);const flame=new THREE.Mesh(new THREE.SphereGeometry(.45,8,6),new THREE.MeshStandardMaterial({color:0xffd36a,emissive:0xff8a20,emissiveIntensity:1.4}));flame.position.y=6.4;group.add(flame);title='Alter Wegschrein';text='Ein Schrein früher Reisender. Eine kurze Rast stärkt Moral und Wärme.';label='Am Schrein rasten';
+    }
+    const id=`landmark-${type}-${chunk.key}`;
+    const hotspot={id,type:hotspotType,x,z,radius:9,label,data:{id,title,text,type},chunkKey:chunk.key};
+    chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);
   }
 
   unloadWorldChunk(key, chunk) {
@@ -1277,11 +1358,15 @@ class CenterDynastyGame {
   }
 
   buildWildlife() {
-    const random = seededRandom(314159);
-    const types = ['deer','deer','boar','deer','wolf','boar','deer','wolf'];
-    for (let i=0;i<24;i+=1) {
+    for(const animal of this.animals)animal.group?.removeFromParent();
+    this.animals.length=0;
+    const random = seededRandom((this.state.world?.spawnIndex||1)+314159);
+    const types = ['deer','deer','boar','deer','wolf','boar','deer','wolf','deer','boar'];
+    const cx=this.player?.position.x??this.state.position.x??0,cz=this.player?.position.z??this.state.position.z??0;
+    for (let i=0;i<30;i+=1) {
       const type = types[i % types.length];
-      let x=(random()*2-1)*340,z=(random()*2-1)*340;
+      const angle=random()*Math.PI*2,radius=45+random()*300;
+      let x=clamp(cx+Math.cos(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20),z=clamp(cz+Math.sin(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20);
       if (Math.abs(x-riverCenter(z))<20) x+=35;
       const animal=this.createAnimal(type,x,z,i);
       this.animals.push(animal);
@@ -1390,7 +1475,7 @@ class CenterDynastyGame {
       const soil=new THREE.Mesh(new THREE.BoxGeometry(12,.22,9),new THREE.MeshStandardMaterial({color:ghost?0x69c981:0x4d3422,transparent,opacity:alpha})); soil.position.y=.11; group.add(soil);
       for(let ix=-5;ix<=5;ix+=1.1) for(let iz=-3.5;iz<=3.5;iz+=1.3) { const crop=new THREE.Mesh(new THREE.ConeGeometry(.07,.55,4),new THREE.MeshStandardMaterial({color:ghost?0x69c981:0xb4a049,transparent,opacity:alpha})); crop.position.set(ix,.35,iz); group.add(crop); }
     } else {
-      const large=type==='storage'||type==='workshop';
+      const large=['storage','workshop','barn','huntingLodge','mine','tavern'].includes(type);
       const w=large?9:7.2,d=large?7:5.7,h=type==='woodshed'?3.2:4.3;
       if(type==='woodshed') {
         const floor=new THREE.Mesh(new THREE.BoxGeometry(w,.3,d),wood); floor.position.y=.15; group.add(floor);
@@ -1407,7 +1492,7 @@ class CenterDynastyGame {
   }
 
   addBuildingHotspots(saved) {
-    const labels={house:'Haus betreten und schlafen',campfire:'Am Lagerfeuer kochen',well:'Wasser aus dem Brunnen holen',storage:'Lagerhaus verwalten',workshop:'Werkstatt benutzen',woodshed:'Holzfällerlager verwalten',field:'Acker bewirtschaften'};
+    const labels={house:'Haus betreten und schlafen',campfire:'Am Lagerfeuer kochen',well:'Wasser aus dem Brunnen holen',storage:'Lagerhaus verwalten',workshop:'Werkstatt benutzen',woodshed:'Holzfällerlager verwalten',field:'Acker bewirtschaften',barn:'Scheunenproduktion abholen',huntingLodge:'Jagdhüttenproduktion abholen',mine:'Bergwerksproduktion abholen',tavern:'Taverne und Beziehungen verwalten'};
     this.hotspots.push({id:`build-${saved.id}`,type:`own-${saved.type}`,x:saved.x,z:saved.z,radius:BUILDINGS[saved.type].size*.72,label:labels[saved.type]||'Gebäude verwalten',data:saved});
   }
 
@@ -1615,12 +1700,13 @@ class CenterDynastyGame {
   }
 
   dailySettlementTick() {
-    const s=this.state.settlement;
-    const houses=this.state.buildings.filter((b)=>b.type==='house').length;
-    const fields=this.state.buildings.filter((b)=>b.type==='field').length;
-    const woodsheds=this.state.buildings.filter((b)=>b.type==='woodshed').length;
-    s.food+=fields*5;
-    s.firewood+=woodsheds*6;
+    const s=this.state.settlement,jobs=s.jobs||{};
+    const houses=this.state.buildings.filter((b)=>b.type==='house').length,fields=this.state.buildings.filter((b)=>b.type==='field').length,barns=this.state.buildings.filter((b)=>b.type==='barn').length,woodsheds=this.state.buildings.filter((b)=>b.type==='woodshed').length,lodges=this.state.buildings.filter((b)=>b.type==='huntingLodge').length,mines=this.state.buildings.filter((b)=>b.type==='mine').length,workshops=this.state.buildings.filter((b)=>b.type==='workshop').length;
+    const agriculture=1+(this.state.skills.agriculture||0)*.12,crafting=1+(this.state.skills.crafting||0)*.1;
+    s.food+=Math.round((fields*4+barns*3+(jobs.farmer||0)*4+(jobs.hunter||0)*3+lodges*2)*agriculture);
+    s.firewood+=Math.round((woodsheds*5+(jobs.woodcutter||0)*5)*crafting);
+    this.state.inventory.iron+=Math.floor((mines+(jobs.miner||0))*.65);
+    this.state.inventory.wood+=Math.floor((workshops+(jobs.crafter||0))*.55);
     const foodNeed=s.residents*2,woodNeed=s.residents*(this.state.season===3?3:1);
     s.food=Math.max(0,s.food-foodNeed);s.firewood=Math.max(0,s.firewood-woodNeed);
     if(s.residents>0){s.morale=clamp(s.morale+(s.food>=foodNeed&&s.firewood>=woodNeed?3:-8),0,100);s.taxDue+=s.residents*4+houses*2;}
@@ -1670,12 +1756,17 @@ class CenterDynastyGame {
   }
 
   updateAnimals(delta,now) {
-    const random=Math.random;
+    const random=Math.random,px=this.player?.position.x||0,pz=this.player?.position.z||0;
     for(const animal of this.animals){
-      if(!animal.active){if(animal.respawnAt&&Date.now()>animal.respawnAt){animal.active=true;animal.group.visible=true;animal.x=(random()*2-1)*330;animal.z=(random()*2-1)*330;}else continue;}
-      if(now>animal.nextTurn||Math.hypot(animal.targetX-animal.x,animal.targetZ-animal.z)<2){animal.nextTurn=now+2500+random()*6000;const a=random()*Math.PI*2;animal.targetX=clamp(animal.x+Math.cos(a)*(18+random()*35),-370,370);animal.targetZ=clamp(animal.z+Math.sin(a)*(18+random()*35),-370,370);}
+      if(!animal.active){
+        if(animal.respawnAt&&Date.now()>animal.respawnAt){const angle=random()*Math.PI*2,radius=90+random()*260;animal.active=true;animal.group.visible=true;animal.x=clamp(px+Math.cos(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20);animal.z=clamp(pz+Math.sin(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20);animal.targetX=animal.x;animal.targetZ=animal.z;}
+        else continue;
+      }
+      if(Math.hypot(animal.x-px,animal.z-pz)>620){const angle=random()*Math.PI*2,radius=130+random()*270;animal.x=clamp(px+Math.cos(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20);animal.z=clamp(pz+Math.sin(angle)*radius,-WORLD_HALF+20,WORLD_HALF-20);animal.targetX=animal.x;animal.targetZ=animal.z;}
+      if(now>animal.nextTurn||Math.hypot(animal.targetX-animal.x,animal.targetZ-animal.z)<2){animal.nextTurn=now+2500+random()*6000;const a=random()*Math.PI*2;animal.targetX=clamp(animal.x+Math.cos(a)*(18+random()*45),px-520,px+520);animal.targetZ=clamp(animal.z+Math.sin(a)*(18+random()*45),pz-520,pz+520);}
       const dx=animal.targetX-animal.x,dz=animal.targetZ-animal.z,d=Math.hypot(dx,dz)||1;
-      const speed=animal.speed*(distance2D(animal,this.player)<10?2.3:1);
+      const playerDistance=Math.hypot(animal.x-px,animal.z-pz),speed=animal.speed*(playerDistance<12?2.6:1);
+      if(playerDistance<12){animal.targetX=animal.x+(animal.x-px)/Math.max(1,playerDistance)*35;animal.targetZ=animal.z+(animal.z-pz)/Math.max(1,playerDistance)*35;}
       animal.x+=dx/d*speed*delta;animal.z+=dz/d*speed*delta;
       animal.group.position.set(animal.x,terrainHeightAt(animal.x,animal.z),animal.z);animal.group.rotation.y=Math.atan2(dx,dz);
       animal.group.children.forEach((child,index)=>{if(child.geometry?.type==='CylinderGeometry')child.rotation.x=Math.sin(now*.008+index)*.35;});
@@ -1735,8 +1826,14 @@ class CenterDynastyGame {
       case 'own-workshop':return this.openManagement('crafting');
       case 'own-woodshed':return this.collectProduction('wood');
       case 'own-field':return this.collectProduction('food');
-      case 'cave':return this.exploreCave();
-      case 'landmark':return this.openInfo(hotspot.data?.title||'Ort',hotspot.data?.text||'');
+      case 'own-barn':return this.collectProduction('grain');
+      case 'own-huntingLodge':return this.collectProduction('hunt');
+      case 'own-mine':return this.collectProduction('mine');
+      case 'own-tavern':return this.openManagement('dynasty');
+      case 'cave':return this.exploreCave(hotspot);
+      case 'mine':return this.exploreMine(hotspot);
+      case 'encounter':return this.resolveWorldEncounter(hotspot);
+      case 'landmark':return this.discoverLandmark(hotspot);
       case 'build-place':return this.placeBuilding();
       default:return this.openManagement('overview');
     }
@@ -1766,8 +1863,8 @@ class CenterDynastyGame {
   }
 
   harvestBush(node) {
-    const berries=2+Math.floor(Math.random()*4),flax=Math.random()<.45?1:0;
-    this.state.inventory.berries+=berries;this.state.inventory.flax+=flax;this.harvestNode(node,90000);this.gainXp(3,'Sammeln');this.toast(`+${berries} Beeren${flax?' · +1 Flachs':''}`);
+    const berries=2+Math.floor(Math.random()*4),flax=Math.random()<.45?1:0,herbs=Math.random()<.38?1+Math.floor(Math.random()*2):0;
+    this.state.inventory.berries+=berries;this.state.inventory.flax+=flax;this.state.inventory.herbs+=herbs;this.harvestNode(node,90000);this.gainXp(3+herbs,'Sammeln');this.toast(`+${berries} Beeren${flax?' · +1 Flachs':''}${herbs?` · +${herbs} Kräuter`:''}`);
   }
 
   harvestNode(node,respawnMs) { this.setResourceVisible(node,false);this.state.harvested[node.id]=Date.now()+respawnMs; }
@@ -1775,7 +1872,8 @@ class CenterDynastyGame {
   collectWater() { this.state.inventory.water+=3;this.state.needs.thirst=Math.min(100,this.state.needs.thirst+14);this.gainXp(2,'Versorgung');this.toast('+3 Wasser · Durst gestillt'); }
 
   huntAnimal(animal) {
-    if(!this.useTool('spear',8)){this.toast('Du brauchst einen Jagdspeer.');return;}
+    const usedBow=(this.state.tools.bow||0)>0;
+    if(usedBow){this.useTool('bow',5);}else if(!this.useTool('spear',8)){this.toast('Du brauchst einen Jagdspeer oder Jägerbogen.');return;}
     const hunting=this.state.skills.hunting||0;
     if(animal.type==='wolf'&&Math.random()>.58+hunting*.06){this.state.needs.health=Math.max(0,this.state.needs.health-18);this.state.needs.stamina=Math.max(0,this.state.needs.stamina-15);this.toast('Der Wolf verletzt dich und entkommt.');animal.targetX+=30;return;}
     const meat=(animal.type==='deer'?4:animal.type==='boar'?5:2)+hunting;
@@ -1822,12 +1920,33 @@ class CenterDynastyGame {
 
   openVillageInfo(name) {
     const village=this.villages.find((v)=>v.name===name);if(!village)return;
-    this.openPanel('DORF',name,`<div class="mdc-village-hero"><strong>${name}</strong><span>${village.people.length} bekannte Bewohner · Markt · Brunnen · Felder</span></div><p>Ein eigenständiges Dorf im Grenztal. Hier kannst du handeln, Aufgaben annehmen und neue Bewohner für Waldhain gewinnen.</p><button data-mdc-action="open-map">Auf Karte anzeigen</button>`);
+    this.openPanel('DORF',name,`<div class="mdc-village-hero"><strong>${name}</strong><span>${village.type||'Dorf'} · ${village.people.length} Bewohner · ${village.buildings||0} Gebäude</span></div><p>Ein eigenständiges Dorf mit Markt, Brunnen, Feldern, Scheune und Bewohnern. Hier kannst du handeln, neue Orte entdecken und Menschen für ${this.state.settlement.name} anwerben.</p><button data-mdc-action="open-map">Auf Karte anzeigen</button>`);
   }
 
-  exploreCave() {
+  exploreCave(hotspot=null) {
     if(this.state.tools.torch<=0){this.toast('Für die dunkle Höhle brauchst du eine Fackel.');return;}
-    this.useTool('torch',6);const stone=4+Math.floor(Math.random()*5),iron=1+Math.floor(Math.random()*3);this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-18);this.gainXp(18,'Höhle erkundet');this.toast(`Höhlenfund: +${stone} Stein · +${iron} Eisenerz`);
+    this.useTool('torch',6);const stone=4+Math.floor(Math.random()*5),iron=1+Math.floor(Math.random()*3),coins=Math.random()<.28?8+Math.floor(Math.random()*18):0;this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.inventory.coins+=coins;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-18);this.gainXp(18,'Höhle erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Höhlenfund: +${stone} Stein · +${iron} Eisenerz${coins?` · +${coins} Münzen`:''}`);
+  }
+
+  exploreMine(hotspot=null) {
+    if(this.state.tools.pickaxe<=0){this.toast('Für das Bergwerk brauchst du eine Spitzhacke.');return;}
+    this.useTool('pickaxe',9);const mining=this.state.skills.mining||0,stone=6+mining+Math.floor(Math.random()*5),iron=2+Math.floor(Math.random()*(3+mining));this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-22);this.gainXp(24+mining*2,'Bergwerk erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Bergwerksfund: +${stone} Stein · +${iron} Eisenerz`);
+  }
+
+  discoverLandmark(hotspot) {
+    const data=hotspot?.data||{},id=String(data.id||hotspot?.id||'landmark');
+    this.discover(data.title||'Unbekannter Ort');
+    if(!this.state.landmarkRewards[id]){const coins=12+Math.floor(hash2(id.length,Math.floor(hotspot.x||0),WORLD_SEED+2701)*34);this.state.landmarkRewards[id]=Date.now();this.state.inventory.coins+=coins;this.state.settlement.reputation+=3;this.gainXp(15,'Wahrzeichen entdeckt');this.toast(`${data.title||'Ort'} entdeckt · +${coins} Münzen`);}
+    this.openInfo(data.title||'Ort',data.text||'Ein besonderer Ort in der offenen Welt.');
+  }
+
+  resolveWorldEncounter(hotspot) {
+    const id=String(hotspot?.data?.id||hotspot?.id||'encounter'),last=Number(this.state.encounterHistory[id]||0);
+    if(Date.now()-last<120000){this.toast('Dieses Lager wurde bereits durchsucht.');return;}
+    this.state.encounterHistory[id]=Date.now();const danger=Math.random();
+    if(danger<.28){const loss=5+Math.floor(Math.random()*10);this.state.needs.health=Math.max(1,this.state.needs.health-loss);this.state.inventory.leather+=1;this.toast(`Ein Wolf überrascht dich: -${loss} Gesundheit · +1 Leder`);}
+    else{const meat=1+Math.floor(Math.random()*3),coins=8+Math.floor(Math.random()*20),herbs=Math.floor(Math.random()*3);this.state.inventory.meat+=meat;this.state.inventory.coins+=coins;this.state.inventory.herbs+=herbs;this.toast(`Jägerlager: +${meat} Fleisch · +${coins} Münzen${herbs?` · +${herbs} Kräuter`:''}`);}
+    this.gainXp(14,'Weltbegegnung');
   }
 
   sleepUntilMorning() {
@@ -1837,6 +1956,9 @@ class CenterDynastyGame {
 
   collectProduction(kind) {
     if(kind==='wood'){this.state.inventory.logs+=4;this.state.settlement.firewood+=5;this.toast('+4 Stämme · +5 Dorf-Feuerholz');}
+    else if(kind==='grain'){this.state.inventory.grain+=5;this.state.inventory.flax+=2;this.state.settlement.food+=4;this.toast('+5 Getreide · +2 Flachs · +4 Dorfnahrung');}
+    else if(kind==='hunt'){this.state.inventory.meat+=3;this.state.inventory.leather+=2;this.state.settlement.food+=3;this.toast('+3 Fleisch · +2 Leder · +3 Dorfnahrung');}
+    else if(kind==='mine'){this.state.inventory.stone+=5;this.state.inventory.iron+=2;this.toast('+5 Stein · +2 Eisenerz');}
     else {this.state.settlement.food+=6;this.state.inventory.flax+=2;this.toast('+6 Dorfnahrung · +2 Flachs');}
     this.gainXp(7,'Dorfproduktion');
   }
@@ -1845,6 +1967,7 @@ class CenterDynastyGame {
     if(item==='berries'){if(this.state.inventory.berries<1)return this.toast('Keine Beeren.');this.state.inventory.berries-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+9);}
     if(item==='cookedMeat'){if(this.state.inventory.cookedMeat<1)return this.toast('Kein gebratenes Fleisch.');this.state.inventory.cookedMeat-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+32);this.state.needs.health=Math.min(100,this.state.needs.health+4);}
     if(item==='water'){if(this.state.inventory.water<1)return this.toast('Kein Wasser.');this.state.inventory.water-=1;this.state.needs.thirst=Math.min(100,this.state.needs.thirst+30);}
+    if(item==='medicine'){if(this.state.inventory.medicine<1)return this.toast('Kein Heilmittel.');this.state.inventory.medicine-=1;this.state.needs.health=Math.min(100,this.state.needs.health+45);this.state.needs.warmth=Math.min(100,this.state.needs.warmth+12);}
     this.renderHud(true);this.saveState();
   }
 
@@ -1859,7 +1982,7 @@ class CenterDynastyGame {
     const recipe=RECIPES[recipeId];if(!recipe)return;
     if(!this.hasCost(recipe.cost)){this.toast('Nicht genügend Rohstoffe.');return;}
     this.payCost(recipe.cost);
-    if(recipeId==='cookedMeat')this.state.inventory.cookedMeat+=recipe.amount||1;else this.state.tools[recipeId]=Math.min(100,(this.state.tools[recipeId]||0)+recipe.durability);
+    if(recipeId==='cookedMeat')this.state.inventory.cookedMeat+=recipe.amount||1;else if(recipeId==='medicine')this.state.inventory.medicine+=recipe.amount||1;else this.state.tools[recipeId]=Math.min(recipeId==='ironAxe'?180:120,(this.state.tools[recipeId]||0)+recipe.durability);
     this.state.stats.crafted+=1;this.gainXp(8,`Herstellung: ${recipe.name}`);this.toast(`${recipe.name} hergestellt.`);this.openManagement('crafting');this.checkQuestProgress();
   }
 
@@ -1909,8 +2032,8 @@ class CenterDynastyGame {
 
   openManagement(tab='overview') {
     this.panelMode=tab;
-    const tabs=['overview','inventory','crafting','building','skills','village','map','settings'];
-    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',map:'Karte',settings:'Welt'};
+    const tabs=['overview','inventory','crafting','building','skills','village','dynasty','map','settings'];
+    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',dynasty:'Dynastie',map:'Karte',settings:'Welt'};
     const nav=`<nav class="mdc-panel-tabs">${tabs.map((id)=>`<button class="${id===tab?'active':''}" data-mdc-tab="${id}">${labels[id]}</button>`).join('')}</nav>`;
     let body='';
     if(tab==='overview')body=this.renderOverviewPanel();
@@ -1919,6 +2042,7 @@ class CenterDynastyGame {
     if(tab==='building')body=this.renderBuildingPanel();
     if(tab==='skills')body=this.renderSkillsPanel();
     if(tab==='village')body=this.renderVillagePanel();
+    if(tab==='dynasty')body=this.renderDynastyPanel();
     if(tab==='map')body=this.renderMapPanel();
     if(tab==='settings')body=this.renderWorldSettingsPanel();
     this.openPanel('CENTER',labels[tab],nav+body);
@@ -1929,17 +2053,17 @@ class CenterDynastyGame {
     return `<div class="mdc-overview-hero"><span>${season.icon}</span><div><small>${season.name} · Tag ${this.state.day}</small><h3>${this.state.settlement.name}</h3><p>${this.state.settlement.residents} Bewohner · ${this.state.settlement.reputation} Ruf</p></div></div>
       <div class="mdc-stat-grid"><article><small>Gesundheit</small><b>${Math.round(this.state.needs.health)}%</b></article><article><small>Münzen</small><b>${this.state.inventory.coins}</b></article><article><small>Geladene Regionen</small><b>${this.chunks.size}</b></article><article><small>Dörfer in Sicht</small><b>${this.loadedVillageCount}</b></article></div>
       <div class="mdc-quest-detail"><small>AKTUELLE AUFGABE</small><h3>${q.title}</h3><p>${q.text}</p><strong>${q.progress}</strong></div>
-      <div class="mdc-panel-actions"><button data-mdc-tab="crafting">Werkzeug herstellen</button><button data-mdc-tab="building">Gebäude planen</button><button data-mdc-tab="settings">Sichtweite & Weltleistung</button><button data-mdc-action="sleep">Bis zum Morgen schlafen</button></div>`;
+      <div class="mdc-panel-actions"><button data-mdc-tab="crafting">Werkzeug herstellen</button><button data-mdc-tab="building">Gebäude planen</button><button data-mdc-tab="dynasty">Beziehungen & Dynastie</button><button data-mdc-tab="settings">Sichtweite & Weltleistung</button><button data-mdc-action="sleep">Bis zum Morgen schlafen</button></div>`;
   }
 
   renderInventoryPanel() {
-    const items=Object.entries(RESOURCE_LABELS).map(([id,name])=>`<article><span>${this.itemIcon(id)}</span><div><b>${name}</b><small>Im Rucksack</small></div><strong>${this.state.inventory[id]||0}</strong>${['berries','cookedMeat','water'].includes(id)?`<button data-mdc-use="${id}">Benutzen</button>`:''}</article>`).join('');
-    const tools=Object.entries(RECIPES).filter(([id])=>id!=='cookedMeat').map(([id,r])=>`<article><span>${r.icon}</span><div><b>${r.name}</b><small>Haltbarkeit</small></div><strong>${Math.round(this.state.tools[id]||0)}%</strong></article>`).join('');
+    const items=Object.entries(RESOURCE_LABELS).map(([id,name])=>`<article><span>${this.itemIcon(id)}</span><div><b>${name}</b><small>Im Rucksack</small></div><strong>${this.state.inventory[id]||0}</strong>${['berries','cookedMeat','water','medicine'].includes(id)?`<button data-mdc-use="${id}">Benutzen</button>`:''}</article>`).join('');
+    const tools=Object.entries(RECIPES).filter(([id])=>!['cookedMeat','medicine'].includes(id)).map(([id,r])=>`<article><span>${r.icon}</span><div><b>${r.name}</b><small>Haltbarkeit</small></div><strong>${Math.round(this.state.tools[id]||0)}%</strong></article>`).join('');
     return `<h3 class="mdc-section-title">Rohstoffe</h3><div class="mdc-inventory-list">${items}</div><h3 class="mdc-section-title">Werkzeuge</h3><div class="mdc-inventory-list">${tools}</div>`;
   }
 
   renderCraftingPanel() {
-    return `<p class="mdc-note">Werkzeuge verschleißen bei Benutzung. Am Lagerfeuer kannst du Fleisch garen.</p><div class="mdc-recipe-grid">${Object.entries(RECIPES).map(([id,r])=>`<article><span>${r.icon}</span><div><h3>${r.name}</h3><p>${this.costText(r.cost)}</p><small>${id==='cookedMeat'?'Nahrung':'Haltbarkeit '+Math.round(this.state.tools[id]||0)+'%'}</small></div><button ${this.hasCost(r.cost)?'':'disabled'} data-mdc-action="craft" data-recipe="${id}">Herstellen</button></article>`).join('')}</div>`;
+    return `<p class="mdc-note">Werkzeuge verschleißen bei Benutzung. Am Lagerfeuer kannst du Fleisch garen.</p><div class="mdc-recipe-grid">${Object.entries(RECIPES).map(([id,r])=>`<article><span>${r.icon}</span><div><h3>${r.name}</h3><p>${this.costText(r.cost)}</p><small>${['cookedMeat','medicine'].includes(id)?'Verbrauchsgegenstand':'Haltbarkeit '+Math.round(this.state.tools[id]||0)+'%'}</small></div><button ${this.hasCost(r.cost)?'':'disabled'} data-mdc-action="craft" data-recipe="${id}">Herstellen</button></article>`).join('')}</div>`;
   }
 
   renderBuildingPanel() {
@@ -1951,23 +2075,35 @@ class CenterDynastyGame {
   }
 
   renderVillagePanel() {
-    const s=this.state.settlement;const capacity=this.state.buildings.filter((b)=>b.type==='house').length*2;
-    return `<div class="mdc-village-hero"><strong>${s.name}</strong><span>${s.residents}/${capacity} Bewohner · Moral ${Math.round(s.morale)}%</span></div>
+    const s=this.state.settlement,capacity=this.state.buildings.filter((b)=>b.type==='house').length*2,jobs=s.jobs||{},assigned=Object.values(jobs).reduce((sum,value)=>sum+Number(value||0),0),free=Math.max(0,s.residents-assigned);
+    const jobDefs={woodcutter:['🪵','Holzfäller'],farmer:['🌾','Bauer'],hunter:['🏹','Jäger'],miner:['⛏','Bergarbeiter'],crafter:['⚒','Handwerker']};
+    return `<div class="mdc-village-hero"><strong>${s.name}</strong><span>${s.residents}/${capacity} Bewohner · Moral ${Math.round(s.morale)}% · ${free} frei</span></div>
       <div class="mdc-stat-grid"><article><small>Nahrung</small><b>${s.food}</b></article><article><small>Feuerholz</small><b>${s.firewood}</b></article><article><small>Ruf</small><b>${s.reputation}</b></article><article><small>Steuern</small><b>${s.taxDue}</b></article></div>
-      <div class="mdc-resident-list">${(this.state.recruitedNames||[]).length?(this.state.recruitedNames||[]).map((n)=>`<article><span>♟</span><b>${n}</b><small>Bewohner von Waldhain</small></article>`).join(''):'<p>Noch hat sich niemand deiner Siedlung angeschlossen.</p>'}</div>
+      <h3 class="mdc-section-title">Berufe zuweisen</h3><div class="mdc-job-grid">${Object.entries(jobDefs).map(([id,[icon,name]])=>`<article><span>${icon}</span><div><b>${name}</b><small>${jobs[id]||0} Bewohner</small></div><button data-mdc-action="job-minus" data-job="${id}" ${(jobs[id]||0)>0?'':'disabled'}>−</button><button data-mdc-action="job-plus" data-job="${id}" ${free>0?'':'disabled'}>+</button></article>`).join('')}</div>
+      <h3 class="mdc-section-title">Bewohner</h3><div class="mdc-resident-list">${(this.state.recruitedNames||[]).length?(this.state.recruitedNames||[]).map((n,index)=>`<article><span>♟</span><b>${n}</b><small>${Object.keys(jobDefs)[index%Object.keys(jobDefs).length]||'Bewohner'} von ${s.name}</small></article>`).join(''):'<p>Noch hat sich niemand deiner Siedlung angeschlossen.</p>'}</div>
       <button ${s.taxDue>0&&this.state.inventory.coins>=s.taxDue?'':'disabled'} data-mdc-action="pay-tax">Steuern bezahlen (${s.taxDue})</button>`;
+  }
+
+  renderDynastyPanel() {
+    const family=this.state.family||{partner:'',affection:0,heir:'',generation:1};
+    const partnerText=family.partner?family.partner:`Noch keine Partnerschaft · ${Math.round(family.affection)}% Beziehung`;
+    return `<div class="mdc-dynasty-hero"><span>♛</span><div><small>GENERATION ${family.generation||1}</small><h3>Dynastie von ${escapeHtml(this.state.settlement.name)}</h3><p>Ruf ${this.state.settlement.reputation} · ${this.state.settlement.residents} Bewohner</p></div></div>
+      <div class="mdc-family-grid"><article><small>Partner</small><b>${partnerText}</b></article><article><small>Erbe</small><b>${family.heir||'Noch kein Erbe'}</b></article><article><small>Vermächtnis</small><b>${this.state.completedQuests.length} Kapitel</b></article></div>
+      <p class="mdc-note">Besuche Dorffeste, verbessere deinen Ruf und baue eine Taverne, um Beziehungen zu vertiefen. Eine Familie sichert deine nächste Generation.</p>
+      <div class="mdc-panel-actions"><button data-mdc-action="courtship" ${family.partner||this.state.inventory.coins<20?'disabled':''}>Dorffest besuchen · 20 Münzen</button><button data-mdc-action="family" ${!family.partner||family.heir||this.state.inventory.coins<50?'disabled':''}>Familie gründen · 50 Münzen</button></div>`;
   }
 
   renderMapPanel() {
     const px=this.player?.position.x||0,pz=this.player?.position.z||0,range=Math.max(650,(this.state.world?.renderDistance||2)*CHUNK_SIZE*1.25);
     const marker=(name,x,z,icon)=>{const left=clamp(50+(x-px)/range*50,2,98).toFixed(2),top=clamp(50+(z-pz)/range*50,2,98).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${name}">${icon}</i>`;};
-    return `<div class="mdc-world-map streamed"><div class="local-grid"></div>${this.villages.map((v)=>marker(v.name,v.x,v.z,'♜')).join('')}${this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon)).join('')}<b style="left:50%;top:50%">▲</b></div><p class="mdc-note">Lokale Karte der aktuell geladenen Welt. Die vollständige Open World umfasst mehr als 12 × 12 Kilometer und erzeugt hunderte Dörfer prozedural.</p>`;
+    return `<div class="mdc-world-map streamed"><div class="local-grid"></div>${this.villages.map((v)=>marker(v.name,v.x,v.z,'♜')).join('')}${this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)&&Math.hypot(h.x-px,h.z-pz)<range).map((h)=>marker(h.data?.title||h.label,h.x,h.z,h.type==='cave'?'◒':h.type==='mine'?'⛏':h.type==='encounter'?'⛺':'◆')).join('')}${this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon)).join('')}<b style="left:50%;top:50%">▲</b></div><p class="mdc-note">Lokale Karte der aktuell geladenen Welt. Die vollständige Open World umfasst mehr als 12 × 12 Kilometer und erzeugt hunderte Dörfer prozedural.</p>`;
   }
 
   renderWorldSettingsPanel() {
-    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal';
+    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal';
     return `<div class="mdc-settings-card"><small>DYNAMISCHES WELT-STREAMING</small><h3>Sichtweite</h3><p>Nur Regionen rund um dich werden geladen. Entfernte Regionen werden automatisch aus dem Speicher entfernt.</p><div class="mdc-setting-options">${[1,2,3,4,5].map((value)=>`<button class="${distance===value?'active':''}" data-mdc-action="world-distance" data-value="${value}">${value===1?'Kurz':value===2?'Mittel':value===3?'Weit':value===4?'Sehr weit':'Extrem'}<small>${(value*CHUNK_SIZE).toLocaleString('de-DE')} m Radius</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>OBJEKTDICHTE</small><h3>Wälder und Landschaft</h3><p>Bestimmt, wie viele Bäume, Felsen und Büsche pro Region erzeugt werden.</p><div class="mdc-setting-options three">${[['low','Niedrig'],['normal','Normal'],['high','Sehr dicht']].map(([id,label])=>`<button class="${density===id?'active':''}" data-mdc-action="world-density" data-value="${id}">${label}</button>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>ENTDECKUNGEN</small><h3>Höhlen, Ruinen und Lager</h3><p>Bestimmt, wie häufig besondere Orte und zufällige Begegnungen in neuen Regionen entstehen.</p><div class="mdc-setting-options three">${[['low','Selten'],['normal','Normal'],['high','Häufig']].map(([id,label])=>`<button class="${landmarks===id?'active':''}" data-mdc-action="landmark-density" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-stat-grid"><article><small>Geladene Regionen</small><b>${this.chunks.size}</b></article><article><small>Dörfer in Sicht</small><b>${this.loadedVillageCount}</b></article><article><small>Weltgröße</small><b>12 km</b></article><article><small>Spawnpunkt</small><b>#${this.state.world?.spawnIndex??0}</b></article></div>`;
   }
 
@@ -1979,20 +2115,22 @@ class CenterDynastyGame {
       house:{title:'Ein Dach über dem Kopf',text:'Baue das erste Wohnhaus.',done:this.state.buildings.some((b)=>b.type==='house'),progress:`Wohnhaus ${this.state.buildings.some((b)=>b.type==='house')?1:0}/1`},
       resident:{title:'Gemeinsam stärker',text:'Wirb den ersten Bewohner an.',done:res>=1,progress:`Bewohner ${res}/1`},
       village:{title:'Dorf im Aufbruch',text:'Errichte vier Gebäude und gewinne zwei Bewohner.',done:built>=4&&res>=2,progress:`Gebäude ${Math.min(4,built)}/4 · Bewohner ${Math.min(2,res)}/2`},
-      legacy:{title:'Eine neue Dynastie',text:'Erreiche zehn Gebäude, fünf Bewohner und 100 Ruf.',done:built>=10&&res>=5&&this.state.settlement.reputation>=100,progress:`${built}/10 Gebäude · ${res}/5 Bewohner · ${this.state.settlement.reputation}/100 Ruf`}
+      legacy:{title:'Eine neue Dynastie',text:'Erreiche zehn Gebäude, fünf Bewohner und 100 Ruf.',done:built>=10&&res>=5&&this.state.settlement.reputation>=100,progress:`${built}/10 Gebäude · ${res}/5 Bewohner · ${this.state.settlement.reputation}/100 Ruf`},
+      profession:{title:'Ein arbeitendes Dorf',text:'Weise mindestens drei Bewohnern Berufe zu.',done:Object.values(this.state.settlement.jobs||{}).reduce((sum,value)=>sum+Number(value||0),0)>=3,progress:`${Math.min(3,Object.values(this.state.settlement.jobs||{}).reduce((sum,value)=>sum+Number(value||0),0))}/3 Berufe`},
+      dynasty:{title:'Das Vermächtnis',text:'Gründe eine Familie und sichere einen Erben.',done:!!this.state.family?.heir,progress:this.state.family?.heir?`Erbe: ${this.state.family.heir}`:`Beziehung ${Math.round(this.state.family?.affection||0)}%`}
     };
     return quests[this.state.activeQuest]||quests.tools;
   }
 
   checkQuestProgress() {
-    const order=['tools','fire','house','resident','village','legacy'];
+    const order=['tools','fire','house','resident','village','profession','legacy','dynasty'];
     const q=this.currentQuest();if(!q.done)return;
     const id=this.state.activeQuest;
     if(!this.state.completedQuests.includes(id)){this.state.completedQuests.push(id);this.state.inventory.coins+=35;this.state.settlement.reputation+=10;this.gainXp(35,`Aufgabe: ${q.title}`);this.toast(`Aufgabe abgeschlossen: ${q.title} · +35 Münzen`);}
     const index=order.indexOf(id);this.state.activeQuest=order[Math.min(order.length-1,index+1)];this.renderHud(true);if(this.panel.classList.contains('is-open'))this.openManagement(this.panelMode||'overview');
   }
 
-  itemIcon(id){return {wood:'🪵',logs:'▥',stone:'◆',berries:'●',meat:'🍖',cookedMeat:'♨',water:'💧',leather:'▱',flax:'🌾',iron:'⬢',coins:'◉'}[id]||'·';}
+  itemIcon(id){return {wood:'🪵',logs:'▥',stone:'◆',berries:'●',meat:'🍖',cookedMeat:'♨',water:'💧',leather:'▱',flax:'🌾',iron:'⬢',herbs:'🌿',grain:'🌾',medicine:'✚',coins:'◉'}[id]||'·';}
   costText(cost,discount=false){return Object.entries(cost||{}).filter(([,v])=>v>0).map(([k,v])=>`${this.adjustCost(v,discount)} ${RESOURCE_LABELS[k]||k}`).join(' · ')||'Kostenlos';}
 
   handlePanelAction(event) {
@@ -2012,7 +2150,16 @@ class CenterDynastyGame {
     if(action==='pay-tax')this.payTax();
     if(action==='world-distance'){this.state.world.renderDistance=Math.floor(clamp(Number(button.dataset.value),MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE));this.applyWorldRenderSettings(true);this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Sichtweite: ${this.state.world.renderDistance} Regionen.`);}
     if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
+    if(action==='landmark-density'){const value=button.dataset.value;this.state.world.landmarkDensity=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Besondere Orte: ${this.state.world.landmarkDensity}.`);}
+    if(action==='job-plus')this.adjustVillageJob(button.dataset.job,1);
+    if(action==='job-minus')this.adjustVillageJob(button.dataset.job,-1);
+    if(action==='courtship')this.advanceRelationship();
+    if(action==='family')this.startFamily();
   }
+
+  adjustVillageJob(id,delta){const jobs=this.state.settlement.jobs||{},assigned=Object.values(jobs).reduce((sum,value)=>sum+Number(value||0),0);if(delta>0&&assigned>=this.state.settlement.residents)return;if(delta<0&&(jobs[id]||0)<=0)return;jobs[id]=Math.max(0,(jobs[id]||0)+delta);this.state.settlement.jobs=jobs;this.saveState(true);this.openManagement('village');}
+  advanceRelationship(){const family=this.state.family;if(family.partner||this.state.inventory.coins<20)return;this.state.inventory.coins-=20;family.affection=clamp((family.affection||0)+18+Math.floor(Math.random()*18),0,100);this.state.settlement.reputation+=2;if(family.affection>=100){const names=['Mara','Freya','Liv','Runa','Hilda','Edda','Alrik','Konrad','Sven','Borin'];family.partner=names[Math.floor(Math.random()*names.length)];this.toast(`${family.partner} möchte dein Leben mit dir teilen.`);}else this.toast(`Beziehung verbessert: ${Math.round(family.affection)}%.`);this.saveState(true);this.openManagement('dynasty');}
+  startFamily(){const family=this.state.family;if(!family.partner||family.heir||this.state.inventory.coins<50)return;this.state.inventory.coins-=50;const names=['Aren','Elin','Tilda','Falk','Rika','Jorin','Lene','Marten'];family.heir=names[Math.floor(Math.random()*names.length)];this.state.settlement.morale=Math.min(100,this.state.settlement.morale+10);this.state.settlement.reputation+=15;this.gainXp(45,'Dynastie gegründet');this.toast(`${family.heir} ist der neue Erbe deiner Dynastie.`);this.saveState(true);this.openManagement('dynasty');}
 
   upgradeSkill(id) { if(!SKILLS[id]||this.state.skillPoints<1||this.state.skills[id]>=5)return;this.state.skillPoints-=1;this.state.skills[id]+=1;this.toast(`${SKILLS[id].name} auf Stufe ${this.state.skills[id]}.`);this.openManagement('skills'); }
   payTax(){const due=this.state.settlement.taxDue;if(due<=0||this.state.inventory.coins<due)return;this.state.inventory.coins-=due;this.state.settlement.taxDue=0;this.state.settlement.morale=Math.min(100,this.state.settlement.morale+4);this.toast('Steuern bezahlt.');this.openManagement('village');}
@@ -2026,7 +2173,7 @@ class CenterDynastyGame {
     const needs=[['health','Leben','♥'],['hunger','Hunger','●'],['thirst','Durst','◆'],['stamina','Ausdauer','⚡'],['warmth','Wärme','♨']];
     this.needsElement.innerHTML=needs.map(([id,name,icon])=>`<div class="${id}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${clamp(this.state.needs[id],0,100)}%"></b></i></div><strong>${Math.round(this.state.needs[id])}</strong></div>`).join('');
     const q=this.currentQuest();this.questElement.innerHTML=`<small>AUFGABE</small><strong>${q.title}</strong><span>${q.progress}</span>`;
-    this.hotbarElement.innerHTML=`<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
+    this.hotbarElement.innerHTML=`<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
     const season=SEASONS[this.state.season],weather=WEATHER[this.state.weather];const hours=Math.floor(this.state.time),minutes=Math.floor((this.state.time-hours)*60);
     this.seasonLabel.textContent=`${season.icon} ${season.name}`;this.dayLabel.textContent=`Tag ${this.state.day}`;this.timeLabel.textContent=`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;this.weatherLabel.textContent=`${weather.icon} ${weather.name}`;
     this.compassLabel.textContent=this.compassDirection();
@@ -2039,6 +2186,7 @@ class CenterDynastyGame {
     const canvas=this.minimap;if(!canvas||!this.player)return;const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(18,31,20,.88)';ctx.beginPath();ctx.arc(w/2,h/2,w*.48,0,Math.PI*2);ctx.fill();ctx.save();ctx.beginPath();ctx.arc(w/2,h/2,w*.46,0,Math.PI*2);ctx.clip();const range=125,scale=w/(range*2);const px=this.player.position.x,pz=this.player.position.z;
     ctx.strokeStyle='rgba(75,145,176,.8)';ctx.lineWidth=10;ctx.beginPath();for(let z=pz-range;z<=pz+range;z+=4){const x=riverCenter(z);const sx=w/2+(x-px)*scale,sy=h/2+(z-pz)*scale;if(z===pz-range)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);}ctx.stroke();
     ctx.fillStyle='#d4b36c';for(const v of this.villages){const x=w/2+(v.x-px)*scale,y=h/2+(v.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-3,y-3,6,6);}}
+    ctx.fillStyle='#d98b60';for(const hspot of this.hotspots){if(!['cave','mine','landmark','encounter'].includes(hspot.type))continue;const x=w/2+(hspot.x-px)*scale,y=h/2+(hspot.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}}
     ctx.fillStyle='#e8f2d0';for(const b of this.state.buildings){const x=w/2+(b.x-px)*scale,y=h/2+(b.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-2,y-2,4,4);}}
     ctx.translate(w/2,h/2);ctx.rotate(-this.yaw);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,4);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.restore();ctx.strokeStyle='rgba(225,194,120,.85)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(w/2,h/2,w*.46,0,Math.PI*2);ctx.stroke();
   }
