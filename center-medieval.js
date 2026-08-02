@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-02-jkgames-v120-center-dynasty';
-const ONLINE_MAP_ID = 'center-dynasty-valley-v1';
-const WORLD_HALF = 430;
+const CENTER_VERSION = '2026-08-02-jkgames-v122-streamed-open-world';
+const ONLINE_MAP_ID = 'center-dynasty-open-world-v2';
+const WORLD_HALF = 6000;
+const CHUNK_SIZE = 180;
+const WORLD_SEED = 20260802;
+const MIN_RENDER_DISTANCE = 1;
+const MAX_RENDER_DISTANCE = 5;
 const WATER_LEVEL = -2.15;
 const ONLINE_WRITE_INTERVAL_MS = 1250;
 const ONLINE_HEARTBEAT_MS = 10000;
@@ -77,6 +81,17 @@ function seededRandom(seed = 1) {
   };
 }
 
+function hash2(x, z, seed = WORLD_SEED) {
+  let h = (Math.imul(Math.floor(x), 374761393) + Math.imul(Math.floor(z), 668265263) + Math.imul(seed, 69069)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function chunkKey(cx, cz) { return `${cx}:${cz}`; }
+function worldToChunk(value) { return Math.floor((Number(value) + WORLD_HALF) / CHUNK_SIZE); }
+function chunkOrigin(index) { return -WORLD_HALF + index * CHUNK_SIZE; }
+function densityMultiplier(value) { return value === 'low' ? .58 : value === 'high' ? 1.42 : 1; }
+
 function roleSnapshot() {
   const api = window.LifeBuilderSettingsMenu || window.LifeBuilderOnlineMod;
   let sessionRole = '';
@@ -111,8 +126,9 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 1,
-    position: { x: -42, z: 176, yaw: Math.PI, view: 'third' },
+    version: 2,
+    position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal' },
     day: 1,
     season: 0,
     time: 8.25,
@@ -140,6 +156,10 @@ function normalizeSaveState(raw) {
   if (!raw || typeof raw !== 'object') return base;
   const state = { ...base, ...raw };
   state.position = { ...base.position, ...(raw.position || {}) };
+  state.world = { ...base.world, ...(raw.world || {}) };
+  state.world.renderDistance = Math.floor(clamp(state.world.renderDistance, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
+  state.world.density = ['low','normal','high'].includes(state.world.density) ? state.world.density : 'normal';
+  state.world.spawnAssigned = !!state.world.spawnAssigned;
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
   state.tools = { ...base.tools, ...(raw.tools || {}) };
@@ -171,44 +191,47 @@ function riverCenter(z) {
 }
 
 function terrainHeightAt(x, z) {
-  let h = Math.sin(x * .021) * 2.2 + Math.cos(z * .018) * 2.4 + Math.sin((x + z) * .012) * 1.7;
-  h += Math.sin(x * .006 + 1.2) * Math.cos(z * .007) * 4.2;
-  const edge = Math.max(Math.abs(x), Math.abs(z));
-  if (edge > 255) h += ((edge - 255) / 175) ** 1.8 * 66;
-  h += gaussian(x, z, -335, -215, 120, 72);
-  h += gaussian(x, z, 330, -265, 145, 85);
-  h += gaussian(x, z, 280, 310, 135, 74);
-  h += gaussian(x, z, -300, 295, 155, 62);
-  h += gaussian(x, z, 48, -335, 110, 40);
-  const riverDistance = Math.abs(x - riverCenter(z));
-  h -= Math.exp(-(riverDistance ** 2) / (22 ** 2)) * 7.8;
-  const clearings = [
-    [-42, 176, 68, 4.2], [112, 72, 54, 5.8], [-182, -72, 58, 7.4], [174, -210, 60, 4.5], [-88, -286, 55, 8.1]
-  ];
-  for (const [cx, cz, radius, target] of clearings) {
-    const d = Math.hypot(x - cx, z - cz);
-    if (d < radius) {
-      const t = (1 - d / radius) ** 2;
-      h = h * (1 - t) + target * t;
+  const large = Math.sin(x * .00155 + .7) * Math.cos(z * .00125 - .4) * 18;
+  const rolling = Math.sin(x * .0063) * 5.5 + Math.cos(z * .0054) * 5 + Math.sin((x + z) * .0038) * 4.2;
+  const detail = Math.sin(x * .018 + z * .006) * 1.7 + Math.cos(z * .016 - x * .004) * 1.5;
+  let h = large + rolling + detail;
+  const mountainCell = 620;
+  const gx = Math.floor(x / mountainCell);
+  const gz = Math.floor(z / mountainCell);
+  for (let dz = -1; dz <= 1; dz += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      const cx = gx + dx, cz = gz + dz;
+      const chance = hash2(cx, cz, WORLD_SEED + 91);
+      if (chance < .56) continue;
+      const px = (cx + .16 + hash2(cx, cz, WORLD_SEED + 113) * .68) * mountainCell;
+      const pz = (cz + .16 + hash2(cx, cz, WORLD_SEED + 157) * .68) * mountainCell;
+      const radius = 150 + hash2(cx, cz, WORLD_SEED + 191) * 210;
+      const height = 28 + hash2(cx, cz, WORLD_SEED + 211) * 72;
+      h += gaussian(x, z, px, pz, radius, height);
     }
   }
-  return h;
+  const riverDistance = Math.abs(x - riverCenter(z));
+  h -= Math.exp(-(riverDistance ** 2) / (24 ** 2)) * 13.5;
+  return clamp(h, -9, 112);
 }
 
-function makeTerrainGeometry(size = WORLD_HALF * 2, segments = 92) {
+function makeTerrainGeometry(size = CHUNK_SIZE, segments = 22, originX = 0, originZ = 0) {
   const geometry = new THREE.BufferGeometry();
   const vertices = [];
   const colors = [];
   const indices = [];
   const color = new THREE.Color();
   for (let iz = 0; iz <= segments; iz += 1) {
-    const z = -size / 2 + size * (iz / segments);
+    const localZ = size * (iz / segments);
+    const z = originZ + localZ;
     for (let ix = 0; ix <= segments; ix += 1) {
-      const x = -size / 2 + size * (ix / segments);
+      const localX = size * (ix / segments);
+      const x = originX + localX;
       const y = terrainHeightAt(x, z);
-      vertices.push(x, y, z);
-      const variation = clamp((y + 8) / 85, 0, 1);
-      color.setHSL(.24 - variation * .03, .31, .32 + variation * .1);
+      vertices.push(localX, y, localZ);
+      const altitude = clamp((y + 8) / 95, 0, 1);
+      if (altitude > .72) color.setHSL(.12, .08, .42 + altitude * .16);
+      else color.setHSL(.245 - altitude * .035, .34, .28 + altitude * .12);
       colors.push(color.r, color.g, color.b);
     }
   }
@@ -225,6 +248,7 @@ function makeTerrainGeometry(size = WORLD_HALF * 2, segments = 92) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
   return geometry;
 }
 
@@ -330,11 +354,47 @@ class CenterDynastyGame {
     this.tmpVector2 = new THREE.Vector3();
     this.tmpBox = new THREE.Box3();
     this.worldBounds = { minX: -WORLD_HALF + 8, maxX: WORLD_HALF - 8, minZ: -WORLD_HALF + 8, maxZ: WORLD_HALF - 8 };
+    this.chunks = new Map();
+    this.chunkUpdateAt = 0;
+    this.chunkBuildQueue = [];
+    this.chunkBuildBusy = false;
+    this.loadedVillageCount = 0;
+    this.lastChunkCenter = '';
+    this.ensureOpenWorldState();
     this.weatherParticles = null;
     this.seasonMaterials = [];
     this.buildOverlay();
     this.installEntryPoint();
     this.bindGlobalEvents();
+  }
+
+  ensureOpenWorldState() {
+    this.state.world ||= { spawnAssigned: false, spawnIndex: -1, renderDistance: this.isMobile ? 2 : 3, density: 'normal' };
+    this.state.world.renderDistance = Math.floor(clamp(this.state.world.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
+    this.state.world.density = ['low','normal','high'].includes(this.state.world.density) ? this.state.world.density : 'normal';
+    const needsMigration = Number(this.state.version || 0) < 2 || !this.state.world.spawnAssigned;
+    if (!needsMigration) return;
+    const maxAttempts = 900;
+    const randomIndex = Math.floor((crypto?.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : Math.random()) * maxAttempts);
+    let selected = null;
+    for (let offset = 0; offset < maxAttempts; offset += 1) {
+      const index = (randomIndex + offset) % maxAttempts;
+      const angle = index * 2.399963229728653;
+      const radius = 700 + ((index * 977) % 5000);
+      const x = clamp(Math.cos(angle) * radius + (hash2(index, 9, WORLD_SEED + 401) - .5) * 260, -WORLD_HALF + 240, WORLD_HALF - 240);
+      const z = clamp(Math.sin(angle) * radius + (hash2(index, 17, WORLD_SEED + 433) - .5) * 260, -WORLD_HALF + 240, WORLD_HALF - 240);
+      const y = terrainHeightAt(x, z);
+      const slope = Math.max(Math.abs(terrainHeightAt(x + 4, z) - y), Math.abs(terrainHeightAt(x, z + 4) - y));
+      if (y > -2 && y < 42 && slope < 3.4 && Math.abs(x - riverCenter(z)) > 32) { selected = { x, z, index }; break; }
+    }
+    selected ||= { x: 0, z: 0, index: 0 };
+    this.state.position = { x: Number(selected.x.toFixed(2)), z: Number(selected.z.toFixed(2)), yaw: Math.PI * 2 * hash2(selected.index, 3, WORLD_SEED + 449), view: 'third' };
+    this.state.world.spawnAssigned = true;
+    this.state.world.spawnIndex = selected.index;
+    this.state.world.spawnX = Number(selected.x.toFixed(2));
+    this.state.world.spawnZ = Number(selected.z.toFixed(2));
+    this.state.version = 2;
+    this.state.discovered = ['Unbekannte Wildnis'];
   }
 
   buildOverlay() {
@@ -448,8 +508,8 @@ class CenterDynastyGame {
       entry.classList.remove('upcoming');
       entry.disabled = false;
       entry.removeAttribute('disabled');
-      entry.setAttribute('aria-label', 'Center – Dynastie-Welt betreten');
-      entry.title = 'Center – Dynastie-Welt betreten';
+      entry.setAttribute('aria-label', 'Center – riesige Open World betreten');
+      entry.title = 'Center – riesige Open World betreten';
       const label = entry.querySelector('span');
       const icon = entry.querySelector('b');
       if (label) label.textContent = 'Center';
@@ -566,8 +626,8 @@ class CenterDynastyGame {
     document.body.style.overflow = 'hidden';
     this.overlay.hidden = false;
     this.loading.classList.remove('is-hidden');
-    this.loading.querySelector('h2').textContent = 'Das Grenztal entsteht';
-    this.setLoading(4, 'Center-Dynastie wird vorbereitet.');
+    this.loading.querySelector('h2').textContent = 'Die Open World entsteht';
+    this.setLoading(4, 'Dein persönlicher Spawnpunkt und die ersten Weltregionen werden vorbereitet.');
     const onlinePreparation = this.prepareMultiplayer();
     const started = performance.now();
     try {
@@ -579,7 +639,7 @@ class CenterDynastyGame {
       this.setLoading(94, 'Bewohner und Koop-Spieler werden verbunden.');
       const prepared = await Promise.race([onlinePreparation, wait(2200).then(() => null)]);
       await wait(Math.max(0, 2500 - (performance.now() - started)));
-      this.setLoading(100, 'Das Grenztal ist bereit.');
+      this.setLoading(100, 'Deine Open World ist bereit.');
       await wait(150);
       this.loading.classList.add('is-hidden');
       this.lastFrameAt = performance.now();
@@ -587,7 +647,7 @@ class CenterDynastyGame {
       this.lastNeedsAt = performance.now();
       this.startLoop();
       this.canvas.focus({ preventScroll: true });
-      this.toast('Sammle Rohstoffe, fertige Werkzeuge und gründe dein Dorf.');
+      this.toast('Du bist an einem einzigartigen Ort gespawnt. Erkunde Wälder, Wege, Berge und Dörfer.');
       this.startRolePolling();
       if (prepared) this.connectMultiplayer(prepared).catch(() => {});
       else onlinePreparation.then((late) => { if (this.opened && late) this.connectMultiplayer(late).catch(() => {}); else if (this.opened) this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1); }).catch(() => this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1));
@@ -625,8 +685,8 @@ class CenterDynastyGame {
   async initialize() {
     this.setLoading(10, 'WebGL, Himmel und Beleuchtung werden aufgebaut.');
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(SEASONS[this.state.season].fog, .00245);
-    this.camera = new THREE.PerspectiveCamera(62, 1, .08, 1150);
+    this.scene.fog = new THREE.FogExp2(SEASONS[this.state.season].fog, .00165);
+    this.camera = new THREE.PerspectiveCamera(62, 1, .08, 1800);
     this.camera.rotation.order = 'YXZ';
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -635,29 +695,25 @@ class CenterDynastyGame {
     this.renderer.shadowMap.enabled = false;
     this.buildSkyAndLights();
     await nextPaint();
-    this.setLoading(22, 'Eine große Landschaft mit Bergen und Flusstal wird geformt.');
-    this.buildTerrain();
+    this.setLoading(27, 'Die endlose Welt wird in dynamische Regionen aufgeteilt.');
+    this.initializeStreamingWorld();
     this.buildWater();
     await nextPaint();
-    this.setLoading(38, 'Straßen, Brücken und Dörfer entstehen.');
-    this.buildRoadNetwork();
-    this.buildVillages();
-    await nextPaint();
-    this.setLoading(55, 'Wälder, Felsen und sammelbare Rohstoffe werden verteilt.');
-    this.buildResources();
-    await nextPaint();
-    this.setLoading(70, 'Wildtiere und Bewohner ziehen in das Tal.');
-    this.buildWildlife();
-    this.buildLandmarks();
+    this.setLoading(48, 'Der persönliche Spawnpunkt wird vorbereitet.');
     this.buildSavedSettlement();
     this.buildPlayerRoot();
+    this.restoreStateToWorld();
+    await this.updateChunkStreaming(true);
+    await nextPaint();
+    this.setLoading(70, 'Wälder, Dörfer, Wege und Berge werden in Sichtweite erzeugt.');
     await this.ensureCorrectPlayerModel();
     this.buildWeatherParticles();
     this.applySeasonVisuals(true);
+    this.applyWorldRenderSettings(true);
     this.initialized = true;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.overlay);
-    this.setLoading(88, 'Steuerung, Überleben und Dorfverwaltung werden aktiviert.');
+    this.setLoading(88, 'Streaming, Überleben und Dorfverwaltung werden aktiviert.');
   }
 
   buildSkyAndLights() {
@@ -677,6 +733,198 @@ class CenterDynastyGame {
     this.moon = new THREE.DirectionalLight(0x9fb9e8, 0);
     this.scene.add(this.moon);
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
+  }
+
+  initializeStreamingWorld() {
+    this.chunks.clear();
+    this.chunkBuildQueue.length = 0;
+    this.chunkBuildBusy = false;
+    this.lastChunkCenter = '';
+  }
+
+  applyWorldRenderSettings(force = false) {
+    const distance = Math.floor(clamp(this.state.world?.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
+    if (this.camera) this.camera.far = Math.max(520, distance * CHUNK_SIZE * 2.25);
+    if (this.camera) this.camera.updateProjectionMatrix();
+    if (this.scene?.fog) this.scene.fog.density = clamp(.00325 - distance * .00043, .00072, .0028);
+    if (force) this.lastChunkCenter = '';
+  }
+
+  async updateChunkStreaming(force = false) {
+    if (!this.player || !this.scene) return;
+    const now = performance.now();
+    if (!force && now - this.chunkUpdateAt < 260) return;
+    this.chunkUpdateAt = now;
+    const cx = worldToChunk(this.player.position.x);
+    const cz = worldToChunk(this.player.position.z);
+    const centerKey = chunkKey(cx, cz);
+    const radius = Math.floor(clamp(this.state.world?.renderDistance || 2, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
+    if (!force && centerKey === this.lastChunkCenter && this.chunks.size) return;
+    this.lastChunkCenter = centerKey;
+    const wanted = new Set();
+    const candidates = [];
+    for (let dz = -radius; dz <= radius; dz += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const tx = cx + dx, tz = cz + dz;
+        if (chunkOrigin(tx) < -WORLD_HALF || chunkOrigin(tx) >= WORLD_HALF || chunkOrigin(tz) < -WORLD_HALF || chunkOrigin(tz) >= WORLD_HALF) continue;
+        const key = chunkKey(tx, tz);
+        wanted.add(key);
+        if (!this.chunks.has(key)) candidates.push({ cx: tx, cz: tz, key, distance: Math.hypot(dx, dz) });
+      }
+    }
+    candidates.sort((a,b) => a.distance - b.distance);
+    for (const [key, chunk] of [...this.chunks]) if (!wanted.has(key)) this.unloadWorldChunk(key, chunk);
+    for (const candidate of candidates) {
+      this.loadWorldChunk(candidate.cx, candidate.cz);
+      if (force && candidate.distance <= 1.5) await nextPaint();
+    }
+    this.loadedVillageCount = [...this.chunks.values()].reduce((sum, chunk) => sum + (chunk.villages?.length || 0), 0);
+  }
+
+  loadWorldChunk(cx, cz) {
+    const key = chunkKey(cx, cz);
+    if (this.chunks.has(key)) return this.chunks.get(key);
+    const group = new THREE.Group();
+    group.name = `world-chunk-${key}`;
+    const originX = chunkOrigin(cx), originZ = chunkOrigin(cz);
+    group.position.set(originX, 0, originZ);
+    const quality = this.state.world?.density || 'normal';
+    const segments = quality === 'low' ? 16 : quality === 'high' ? 26 : 21;
+    const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+    const terrain = new THREE.Mesh(makeTerrainGeometry(CHUNK_SIZE, segments, originX, originZ), terrainMaterial);
+    group.add(terrain);
+    const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [] };
+    this.buildChunkPaths(chunk);
+    this.buildChunkVillage(chunk);
+    this.buildChunkForest(chunk);
+    this.buildChunkRocksAndBushes(chunk);
+    this.scene.add(group);
+    this.chunks.set(key, chunk);
+    return chunk;
+  }
+
+  buildChunkPaths(chunk) {
+    const r = seededRandom((Math.imul(chunk.cx + 4096, 73856093) ^ Math.imul(chunk.cz + 4096, 19349663) ^ WORLD_SEED) >>> 0);
+    const hasRoad = r() < .72;
+    if (!hasRoad) return;
+    const material = new THREE.MeshStandardMaterial({ color: 0x756146, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 });
+    const orientation = Math.floor(r() * 3);
+    const offset = 30 + r() * (CHUNK_SIZE - 60);
+    const segments = 5;
+    for (let i = 0; i < segments; i += 1) {
+      let x1, z1, x2, z2;
+      const a = i / segments, b = (i + 1) / segments;
+      if (orientation === 0) { x1 = offset; x2 = offset + Math.sin(i * 1.7) * 4; z1 = a * CHUNK_SIZE; z2 = b * CHUNK_SIZE; }
+      else if (orientation === 1) { z1 = offset; z2 = offset + Math.sin(i * 1.7) * 4; x1 = a * CHUNK_SIZE; x2 = b * CHUNK_SIZE; }
+      else { x1 = a * CHUNK_SIZE; z1 = a * CHUNK_SIZE + (offset - CHUNK_SIZE / 2) * .35; x2 = b * CHUNK_SIZE; z2 = b * CHUNK_SIZE + (offset - CHUNK_SIZE / 2) * .35; }
+      const wx = chunk.originX + (x1 + x2) / 2, wz = chunk.originZ + (z1 + z2) / 2;
+      const length = Math.hypot(x2 - x1, z2 - z1);
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(5.6, length), material);
+      road.rotation.x = -Math.PI / 2;
+      road.rotation.z = -Math.atan2(x2 - x1, z2 - z1);
+      road.position.set((x1 + x2) / 2, terrainHeightAt(wx, wz) + .08, (z1 + z2) / 2);
+      chunk.group.add(road);
+    }
+  }
+
+  buildChunkForest(chunk) {
+    const random = seededRandom((Math.imul(chunk.cx + 8192, 83492791) ^ Math.imul(chunk.cz + 8192, 2971215073) ^ (WORLD_SEED + 77)) >>> 0);
+    const density = densityMultiplier(this.state.world?.density);
+    const count = Math.floor((88 + random() * 92) * density);
+    const nodes = [];
+    for (let i = 0; i < count; i += 1) {
+      const lx = 5 + random() * (CHUNK_SIZE - 10), lz = 5 + random() * (CHUNK_SIZE - 10);
+      const x = chunk.originX + lx, z = chunk.originZ + lz, y = terrainHeightAt(x, z);
+      if (y > 58 || Math.abs(x - riverCenter(z)) < 25 || chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<50)) continue;
+      nodes.push({ id: `tree-${chunk.key}-${i}`, type: 'tree', x, z, y, scale: .62 + random() * 1.05, active: true, chunkKey: chunk.key });
+    }
+    if (!nodes.length) return;
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x593722, roughness: 1 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: SEASONS[this.state.season].foliage, roughness: 1, flatShading: true });
+    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(.34,.5,4.2,6), trunkMat, nodes.length);
+    const crowns = new THREE.InstancedMesh(new THREE.ConeGeometry(2.2,5.7,7,2), leafMat, nodes.length);
+    const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3(), position = new THREE.Vector3();
+    nodes.forEach((node,index) => {
+      const yaw = random() * Math.PI * 2;
+      rotation.setFromAxisAngle(new THREE.Vector3(0,1,0), yaw);
+      scale.set(node.scale,node.scale,node.scale);
+      position.set(node.x - chunk.originX,node.y+2.1*node.scale,node.z - chunk.originZ);matrix.compose(position,rotation,scale);trunks.setMatrixAt(index,matrix);
+      position.set(node.x - chunk.originX,node.y+5.35*node.scale,node.z - chunk.originZ);matrix.compose(position,rotation,scale);crowns.setMatrixAt(index,matrix);
+      node.instanceIndex=index;node.instanceMeshes=[trunks,crowns];node.localCoordinates=true;node.chunkOriginX=chunk.originX;node.chunkOriginZ=chunk.originZ;
+    });
+    trunks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);crowns.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    chunk.group.add(trunks,crowns);
+    this.seasonMaterials.push({ material: leafMat, kind: 'foliage', chunkKey: chunk.key });
+    const interactive = nodes.filter((_,i)=>i%Math.max(8,Math.floor(nodes.length/10))===0).slice(0,14);
+    chunk.resources.push(...interactive);this.resourceNodes.push(...interactive);
+    for (const node of interactive) {
+      const until=Number(this.state.harvested[node.id]||0);if(until>Date.now())this.setResourceVisible(node,false);
+    }
+  }
+
+  buildChunkRocksAndBushes(chunk) {
+    const random = seededRandom((Math.imul(chunk.cx + 2048, 2654435761) ^ Math.imul(chunk.cz + 2048, 1597334677) ^ (WORLD_SEED + 129)) >>> 0);
+    const density = densityMultiplier(this.state.world?.density);
+    const create = (type, count) => {
+      const nodes=[];
+      for(let i=0;i<count;i+=1){const lx=6+random()*(CHUNK_SIZE-12),lz=6+random()*(CHUNK_SIZE-12),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>72||Math.abs(x-riverCenter(z))<18||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<42))continue;nodes.push({id:`${type}-${chunk.key}-${i}`,type,x,z,y,scale:.48+random()*.9,active:true,chunkKey:chunk.key});}
+      if(!nodes.length)return;
+      const isRock=type==='rock';
+      const mat=new THREE.MeshStandardMaterial({color:isRock?0x747976:0x486f37,roughness:1,flatShading:true});
+      const geometry=isRock?new THREE.DodecahedronGeometry(1.25,0):new THREE.IcosahedronGeometry(1.1,1);
+      const mesh=new THREE.InstancedMesh(geometry,mat,nodes.length);const matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
+      nodes.forEach((node,index)=>{if(isRock)q.setFromEuler(new THREE.Euler(index*.17,index*.39,index*.11));else q.identity();const scale=isRock?new THREE.Vector3(node.scale*1.15,node.scale*.8,node.scale):new THREE.Vector3(node.scale*1.4,node.scale*.85,node.scale);const yoff=isRock?.65*node.scale:.75*node.scale;matrix.compose(new THREE.Vector3(node.x-chunk.originX,node.y+yoff,node.z-chunk.originZ),q,scale);mesh.setMatrixAt(index,matrix);node.instanceIndex=index;node.instanceMeshes=[mesh];node.localCoordinates=true;node.chunkOriginX=chunk.originX;node.chunkOriginZ=chunk.originZ;});
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);chunk.group.add(mesh);
+      const interactive=nodes.filter((_,i)=>i%Math.max(5,Math.floor(nodes.length/6))===0).slice(0,8);chunk.resources.push(...interactive);this.resourceNodes.push(...interactive);for(const node of interactive){const until=Number(this.state.harvested[node.id]||0);if(until>Date.now())this.setResourceVisible(node,false);}
+    };
+    create('rock',Math.floor((16+random()*18)*density));
+    create('bush',Math.floor((20+random()*24)*density));
+  }
+
+  buildChunkVillage(chunk) {
+    const chance = hash2(chunk.cx, chunk.cz, WORLD_SEED + 707);
+    if (chance < .79) return;
+    const random = seededRandom((Math.imul(chunk.cx + 512, 1640531513) ^ Math.imul(chunk.cz + 512, 2246822519) ^ (WORLD_SEED + 701)) >>> 0);
+    const lx=45+random()*(CHUNK_SIZE-90),lz=45+random()*(CHUNK_SIZE-90),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
+    if(y>48||y<-3||Math.abs(x-riverCenter(z))<38)return;
+    const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen'];
+    const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see'];
+    const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
+    const houseCount=7+Math.floor(random()*12);
+    const wallMat=new THREE.MeshStandardMaterial({color:0xb39a72,roughness:1});
+    const roofMat=new THREE.MeshStandardMaterial({color:random()<.5?0x65412f:0x5c362c,roughness:1});
+    const houses=new THREE.InstancedMesh(new THREE.BoxGeometry(5.2,3.4,4.6),wallMat,houseCount);
+    const roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(4.2,2.4,4),roofMat,houseCount);
+    const matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
+    for(let i=0;i<houseCount;i+=1){const angle=i/houseCount*Math.PI*2+random()*.45,radius=13+(i%3)*8+random()*5,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2;q.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+1.7,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));houses.setMatrixAt(i,matrix);matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+4.1,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));roofs.setMatrixAt(i,matrix);}
+    chunk.group.add(houses,roofs);
+    const square=new THREE.Mesh(new THREE.CircleGeometry(12,20),new THREE.MeshStandardMaterial({color:0x80694d,roughness:1,polygonOffset:true,polygonOffsetFactor:-3}));square.rotation.x=-Math.PI/2;square.position.set(lx,y+.09,lz);chunk.group.add(square);
+    const well=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.4,1.2,12),new THREE.MeshStandardMaterial({color:0x77736b,roughness:1}));well.position.set(lx,y+.6,lz);chunk.group.add(well);
+    const people=Array.from({length:4+Math.floor(random()*9)},(_,i)=>`Bewohner ${i+1}`);
+    const village={name,x,z,people,buildings:houseCount,npcs:[],chunkKey:chunk.key};
+    chunk.villages.push(village);this.villages.push(village);
+    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:22,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
+    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+5,z:z+3,radius:7,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
+    chunk.hotspots.push(villageHotspot,marketHotspot);this.hotspots.push(villageHotspot,marketHotspot);
+  }
+
+  unloadWorldChunk(key, chunk) {
+    if (!chunk) return;
+    chunk.group.removeFromParent();
+    chunk.group.traverse((object)=>{if(object.geometry)object.geometry.dispose?.();const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((mat)=>mat?.dispose?.());});
+    const resources=new Set(chunk.resources||[]),hotspots=new Set(chunk.hotspots||[]),villages=new Set(chunk.villages||[]);
+    this.resourceNodes=this.resourceNodes.filter((node)=>!resources.has(node));
+    this.hotspots=this.hotspots.filter((node)=>!hotspots.has(node));
+    this.villages=this.villages.filter((v)=>!villages.has(v));
+    this.seasonMaterials=this.seasonMaterials.filter((entry)=>entry.chunkKey!==key);
+    this.chunks.delete(key);
+  }
+
+  rebuildStreamedWorld() {
+    for (const [key,chunk] of [...this.chunks]) this.unloadWorldChunk(key,chunk);
+    this.lastChunkCenter='';
+    this.applyWorldRenderSettings(true);
+    this.updateChunkStreaming(true);
   }
 
   buildTerrain() {
@@ -706,7 +954,7 @@ class CenterDynastyGame {
     const material = new THREE.MeshPhysicalMaterial({ color: 0x3e7890, transparent: true, opacity: .78, roughness: .22, metalness: .05, transmission: .08, side: THREE.DoubleSide });
     const vertices = [];
     const indices = [];
-    const segments = 82;
+    const segments = 360;
     for (let i = 0; i <= segments; i += 1) {
       const z = -WORLD_HALF + (WORLD_HALF * 2) * i / segments;
       const center = riverCenter(z);
@@ -1002,16 +1250,17 @@ class CenterDynastyGame {
     if (node.type === 'tree') {
       const yaw = (node.instanceIndex * 1.618) % (Math.PI*2);
       rotation.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
-      matrix.compose(new THREE.Vector3(node.x,node.y+2.15*node.scale,node.z),rotation,new THREE.Vector3(scale,scale,scale));
+      const px=node.localCoordinates?node.x-node.chunkOriginX:node.x,pz=node.localCoordinates?node.z-node.chunkOriginZ:node.z;
+      matrix.compose(new THREE.Vector3(px,node.y+2.15*node.scale,pz),rotation,new THREE.Vector3(scale,scale,scale));
       node.instanceMeshes[0].setMatrixAt(node.instanceIndex,matrix);
-      matrix.compose(new THREE.Vector3(node.x,node.y+5.45*node.scale,node.z),rotation,new THREE.Vector3(scale,scale,scale));
+      matrix.compose(new THREE.Vector3(px,node.y+5.45*node.scale,pz),rotation,new THREE.Vector3(scale,scale,scale));
       node.instanceMeshes[1].setMatrixAt(node.instanceIndex,matrix);
     } else if (node.type === 'rock') {
       rotation.setFromEuler(new THREE.Euler(node.instanceIndex*.17,node.instanceIndex*.39,node.instanceIndex*.11));
-      matrix.compose(new THREE.Vector3(node.x,node.y+.65*node.scale,node.z),rotation,new THREE.Vector3(scale*1.15,scale*.8,scale));
+      {const px=node.localCoordinates?node.x-node.chunkOriginX:node.x,pz=node.localCoordinates?node.z-node.chunkOriginZ:node.z;matrix.compose(new THREE.Vector3(px,node.y+.65*node.scale,pz),rotation,new THREE.Vector3(scale*1.15,scale*.8,scale));}
       node.instanceMeshes[0].setMatrixAt(node.instanceIndex,matrix);
     } else {
-      matrix.compose(new THREE.Vector3(node.x,node.y+.75*node.scale,node.z),rotation,new THREE.Vector3(scale*1.4,scale*.85,scale));
+      {const px=node.localCoordinates?node.x-node.chunkOriginX:node.x,pz=node.localCoordinates?node.z-node.chunkOriginZ:node.z;matrix.compose(new THREE.Vector3(px,node.y+.75*node.scale,pz),rotation,new THREE.Vector3(scale*1.4,scale*.85,scale));}
       node.instanceMeshes[0].setMatrixAt(node.instanceIndex,matrix);
     }
     node.instanceMeshes.forEach((mesh) => { mesh.instanceMatrix.needsUpdate = true; });
@@ -1211,6 +1460,7 @@ class CenterDynastyGame {
     const changedSlot = latest.slot !== this.currentSlot;
     this.currentSlot = latest.slot;
     this.state = nextState;
+    this.ensureOpenWorldState();
     this.yaw = Number(this.state.position.yaw || Math.PI);
     this.firstPerson = this.state.position.view === 'first';
     if (this.initialized) {
@@ -1220,7 +1470,7 @@ class CenterDynastyGame {
       this.colliders = this.colliders.filter((collider) => collider.source !== 'owned');
       this.buildSavedSettlement();
       this.restoreHarvestedNodes();
-      if (changedSlot) this.toast(`Spielstand ${latest.slot + 1} geladen.`);
+      if (changedSlot) { this.rebuildStreamedWorld(); this.toast(`Spielstand ${latest.slot + 1} geladen · neuer Weltbereich.`); }
     }
   }
 
@@ -1235,6 +1485,7 @@ class CenterDynastyGame {
     this.snapCamera();
     this.restoreHarvestedNodes();
     this.renderHud(true);
+    this.updateChunkStreaming(true);
   }
 
   saveState(force=false) {
@@ -1242,6 +1493,7 @@ class CenterDynastyGame {
     const now=Date.now();
     if(!force&&now-this.lastSaveAt<5000) return;
     this.lastSaveAt=now;
+    this.state.version=2;
     this.state.position={x:Number(this.player.position.x.toFixed(2)),z:Number(this.player.position.z.toFixed(2)),yaw:Number(this.yaw.toFixed(4)),view:this.firstPerson?'first':'third'};
     this.state.lastSavedAt=now;
     const bridge=window.JKGamesCenterBridge;
@@ -1355,7 +1607,9 @@ class CenterDynastyGame {
 
   respawnAfterCollapse() {
     this.toast('Du bist zusammengebrochen und wachst im Lager wieder auf.');
-    this.player.position.set(-42,terrainHeightAt(-42,176),176);
+    const spawnX=Number(this.state.world?.spawnX||this.state.position.x||0),spawnZ=Number(this.state.world?.spawnZ||this.state.position.z||0);
+    this.player.position.set(spawnX,terrainHeightAt(spawnX,spawnZ),spawnZ);
+    this.lastChunkCenter='';this.updateChunkStreaming(true);
     this.state.needs={health:45,hunger:35,thirst:35,stamina:60,warmth:60};
     this.state.inventory.coins=Math.max(0,this.state.inventory.coins-20);
   }
@@ -1379,6 +1633,11 @@ class CenterDynastyGame {
     if(this.treeLeafMaterial)this.treeLeafMaterial.color.set(season.foliage);
     if(this.bushMaterial)this.bushMaterial.color.set(this.state.season===3?0x89948c:season.foliage).offsetHSL(0,-.08,-.08);
     if(this.terrainMaterial)this.terrainMaterial.color.set(this.state.season===3?0xdde1dc:season.ground).offsetHSL(0,-.1,.2);
+    for(const entry of this.seasonMaterials){
+      if(!entry?.material)continue;
+      if(entry.kind==='foliage')entry.material.color.set(this.state.season===3?0x87968d:season.foliage);
+      if(entry.kind==='ground')entry.material.color.set(this.state.season===3?0xdde1dc:0xffffff);
+    }
     if(this.scene?.fog)this.scene.fog.color.set(season.fog);
     if(!initial)this.updateWeatherParticles();
   }
@@ -1446,11 +1705,15 @@ class CenterDynastyGame {
   }
 
   locationFromPosition(x,z) {
-    const places=[['Siedlungsplatz',-42,176,65],['Falkenau',112,72,58],['Steinfurt',-182,-72,62],['Seehof',174,-210,64],['Hochwald',-88,-286,58],['Ruinen von Altmark',48,-335,45],['Nordpass',286,305,62],['Bärenhöhle',-303,294,55]];
-    for(const [name,cx,cz,r] of places)if(Math.hypot(x-cx,z-cz)<r){this.discover(name);return name;}
-    if(terrainHeightAt(x,z)>35)return 'Bergland';
-    if(Math.abs(x-riverCenter(z))<30)return 'Grenzfluss';
-    return 'Das Grenztal';
+    let nearestVillage=null,nearestDistance=Infinity;
+    for(const village of this.villages){const d=Math.hypot(x-village.x,z-village.z);if(d<nearestDistance){nearestVillage=village;nearestDistance=d;}}
+    if(nearestVillage&&nearestDistance<46){this.discover(nearestVillage.name);return nearestVillage.name;}
+    const height=terrainHeightAt(x,z);
+    if(height>62)return 'Hochgebirge';
+    if(height>38)return 'Bergland';
+    if(Math.abs(x-riverCenter(z))<30)return 'Großer Grenzfluss';
+    const biome=hash2(Math.floor(x/420),Math.floor(z/420),WORLD_SEED+811);
+    return biome<.25?'Dichter Wald':biome<.5?'Weites Hügelland':biome<.75?'Altes Jagdgebiet':'Offene Wildnis';
   }
 
   discover(name) { if(!this.state.discovered.includes(name)){this.state.discovered.push(name);this.gainXp(10,`${name} entdeckt`);this.toast(`Neuer Ort entdeckt: ${name}`);} }
@@ -1646,8 +1909,8 @@ class CenterDynastyGame {
 
   openManagement(tab='overview') {
     this.panelMode=tab;
-    const tabs=['overview','inventory','crafting','building','skills','village','map'];
-    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',map:'Karte'};
+    const tabs=['overview','inventory','crafting','building','skills','village','map','settings'];
+    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',map:'Karte',settings:'Welt'};
     const nav=`<nav class="mdc-panel-tabs">${tabs.map((id)=>`<button class="${id===tab?'active':''}" data-mdc-tab="${id}">${labels[id]}</button>`).join('')}</nav>`;
     let body='';
     if(tab==='overview')body=this.renderOverviewPanel();
@@ -1657,15 +1920,16 @@ class CenterDynastyGame {
     if(tab==='skills')body=this.renderSkillsPanel();
     if(tab==='village')body=this.renderVillagePanel();
     if(tab==='map')body=this.renderMapPanel();
+    if(tab==='settings')body=this.renderWorldSettingsPanel();
     this.openPanel('CENTER',labels[tab],nav+body);
   }
 
   renderOverviewPanel() {
     const q=this.currentQuest();const season=SEASONS[this.state.season];
     return `<div class="mdc-overview-hero"><span>${season.icon}</span><div><small>${season.name} · Tag ${this.state.day}</small><h3>${this.state.settlement.name}</h3><p>${this.state.settlement.residents} Bewohner · ${this.state.settlement.reputation} Ruf</p></div></div>
-      <div class="mdc-stat-grid"><article><small>Gesundheit</small><b>${Math.round(this.state.needs.health)}%</b></article><article><small>Münzen</small><b>${this.state.inventory.coins}</b></article><article><small>Gebäude</small><b>${this.state.buildings.length}</b></article><article><small>Fähigkeitspunkte</small><b>${this.state.skillPoints}</b></article></div>
+      <div class="mdc-stat-grid"><article><small>Gesundheit</small><b>${Math.round(this.state.needs.health)}%</b></article><article><small>Münzen</small><b>${this.state.inventory.coins}</b></article><article><small>Geladene Regionen</small><b>${this.chunks.size}</b></article><article><small>Dörfer in Sicht</small><b>${this.loadedVillageCount}</b></article></div>
       <div class="mdc-quest-detail"><small>AKTUELLE AUFGABE</small><h3>${q.title}</h3><p>${q.text}</p><strong>${q.progress}</strong></div>
-      <div class="mdc-panel-actions"><button data-mdc-tab="crafting">Werkzeug herstellen</button><button data-mdc-tab="building">Gebäude planen</button><button data-mdc-action="sleep">Bis zum Morgen schlafen</button></div>`;
+      <div class="mdc-panel-actions"><button data-mdc-tab="crafting">Werkzeug herstellen</button><button data-mdc-tab="building">Gebäude planen</button><button data-mdc-tab="settings">Sichtweite & Weltleistung</button><button data-mdc-action="sleep">Bis zum Morgen schlafen</button></div>`;
   }
 
   renderInventoryPanel() {
@@ -1695,8 +1959,16 @@ class CenterDynastyGame {
   }
 
   renderMapPanel() {
-    const marker=(name,x,z,icon)=>{const left=((x+WORLD_HALF)/(WORLD_HALF*2)*100).toFixed(2),top=((z+WORLD_HALF)/(WORLD_HALF*2)*100).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${name}">${icon}</i>`;};
-    return `<div class="mdc-world-map"><div class="river"></div>${marker('Waldhain',-42,176,'⌂')}${this.villages.map((v)=>marker(v.name,v.x,v.z,'♜')).join('')}${marker('Ruinen',48,-335,'▥')}${marker('Höhle',-303,294,'●')}${this.state.buildings.map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon)).join('')}<b style="left:${((this.player.position.x+WORLD_HALF)/(WORLD_HALF*2)*100).toFixed(2)}%;top:${((this.player.position.z+WORLD_HALF)/(WORLD_HALF*2)*100).toFixed(2)}%">▲</b></div><p class="mdc-note">Entdeckte Orte: ${this.state.discovered.join(' · ')}</p>`;
+    const px=this.player?.position.x||0,pz=this.player?.position.z||0,range=Math.max(650,(this.state.world?.renderDistance||2)*CHUNK_SIZE*1.25);
+    const marker=(name,x,z,icon)=>{const left=clamp(50+(x-px)/range*50,2,98).toFixed(2),top=clamp(50+(z-pz)/range*50,2,98).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${name}">${icon}</i>`;};
+    return `<div class="mdc-world-map streamed"><div class="local-grid"></div>${this.villages.map((v)=>marker(v.name,v.x,v.z,'♜')).join('')}${this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon)).join('')}<b style="left:50%;top:50%">▲</b></div><p class="mdc-note">Lokale Karte der aktuell geladenen Welt. Die vollständige Open World umfasst mehr als 12 × 12 Kilometer und erzeugt hunderte Dörfer prozedural.</p>`;
+  }
+
+  renderWorldSettingsPanel() {
+    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal';
+    return `<div class="mdc-settings-card"><small>DYNAMISCHES WELT-STREAMING</small><h3>Sichtweite</h3><p>Nur Regionen rund um dich werden geladen. Entfernte Regionen werden automatisch aus dem Speicher entfernt.</p><div class="mdc-setting-options">${[1,2,3,4,5].map((value)=>`<button class="${distance===value?'active':''}" data-mdc-action="world-distance" data-value="${value}">${value===1?'Kurz':value===2?'Mittel':value===3?'Weit':value===4?'Sehr weit':'Extrem'}<small>${(value*CHUNK_SIZE).toLocaleString('de-DE')} m Radius</small></button>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>OBJEKTDICHTE</small><h3>Wälder und Landschaft</h3><p>Bestimmt, wie viele Bäume, Felsen und Büsche pro Region erzeugt werden.</p><div class="mdc-setting-options three">${[['low','Niedrig'],['normal','Normal'],['high','Sehr dicht']].map(([id,label])=>`<button class="${density===id?'active':''}" data-mdc-action="world-density" data-value="${id}">${label}</button>`).join('')}</div></div>
+      <div class="mdc-stat-grid"><article><small>Geladene Regionen</small><b>${this.chunks.size}</b></article><article><small>Dörfer in Sicht</small><b>${this.loadedVillageCount}</b></article><article><small>Weltgröße</small><b>12 km</b></article><article><small>Spawnpunkt</small><b>#${this.state.world?.spawnIndex??0}</b></article></div>`;
   }
 
   currentQuest() {
@@ -1738,6 +2010,8 @@ class CenterDynastyGame {
     if(action==='sleep')this.sleepUntilMorning();
     if(action==='open-map')this.openManagement('map');
     if(action==='pay-tax')this.payTax();
+    if(action==='world-distance'){this.state.world.renderDistance=Math.floor(clamp(Number(button.dataset.value),MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE));this.applyWorldRenderSettings(true);this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Sichtweite: ${this.state.world.renderDistance} Regionen.`);}
+    if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
   }
 
   upgradeSkill(id) { if(!SKILLS[id]||this.state.skillPoints<1||this.state.skills[id]>=5)return;this.state.skillPoints-=1;this.state.skills[id]+=1;this.toast(`${SKILLS[id].name} auf Stufe ${this.state.skills[id]}.`);this.openManagement('skills'); }
@@ -1807,7 +2081,7 @@ class CenterDynastyGame {
 
   startLoop() {
     cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;this.updateMovement(delta);this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.updateRemotePlayers(delta);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);};
+    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.updateRemotePlayers(delta);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);};
     this.raf=requestAnimationFrame(frame);
   }
 

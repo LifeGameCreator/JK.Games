@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260801-fight-kl-v119-mobile-combat-ui-fix";
+  const VERSION = "20260802-fight-kl-v120-admin-modmenu-arena-shift";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 420;
@@ -39,6 +39,14 @@
     emp: { name: "EMP-Impuls", icon: "🧲", color: "#55f0d0", text: "Legt Schützen, Drohnen und Panzer kurz lahm." },
     pierce: { name: "Durchbruch-Schuss", icon: "☄️", color: "#ff5de5", text: "Ein mächtiges Projektil durchschlägt die gesamte Linie." }
   };
+
+  const ARENA_THEMES = [
+    { id: "grid-core", name: "Neon-Kern", bgTop: "#10252a", bgBottom: "#061013", grid: "#2c4b4d55", gridMajor: "#49e6b31c", border: "#5bf0bd77", light: ["#4bf0bf44", "transparent"], crateFill: "#23383c", crateStroke: "#416166", crack: "#010608aa" },
+    { id: "ember-zone", name: "Glut-Zone", bgTop: "#311512", bgBottom: "#120506", grid: "#7a3d3150", gridMajor: "#ff8b511e", border: "#ff9b6c88", light: ["#ff955544", "transparent"], crateFill: "#473126", crateStroke: "#8d6044", crack: "#1b0907cc" },
+    { id: "toxic-marsh", name: "Toxic-Sumpf", bgTop: "#10261b", bgBottom: "#051009", grid: "#2f64475a", gridMajor: "#7dff8c1f", border: "#9bff7988", light: ["#7dff8c4f", "transparent"], crateFill: "#243a2c", crateStroke: "#4a845d", crack: "#041208cc" },
+    { id: "frost-array", name: "Frost-Sektor", bgTop: "#132633", bgBottom: "#050d14", grid: "#4f6d8750", gridMajor: "#96d2ff20", border: "#9ddbff88", light: ["#a7e4ff48", "transparent"], crateFill: "#243845", crateStroke: "#5b7a95", crack: "#071019cc" },
+    { id: "void-prism", name: "Void-Prisma", bgTop: "#221230", bgBottom: "#09040f", grid: "#5e3f7d52", gridMajor: "#f66dff1c", border: "#f48fff8d", light: ["#ed74ff44", "transparent"], crateFill: "#312243", crateStroke: "#8f6ab0", crack: "#14071ecc" }
+  ];
 
   const ITEMS = [
     { id: "service-pistol", name: "Dienstpistole", icon: "🔫", category: "weapon", family: "pistol", rarity: "common", attack: "gun", damage: 24, fireRate: 2.3, magazine: 7, reload: 1.25, range: 620, durability: 900, price: 420, text: "Zuverlässige Pistole mit sieben Schuss." },
@@ -353,6 +361,40 @@
     const appState = getAppState();
     return Math.max(0, Number(appState?.cash) || 0) + Math.max(0, Number(appState?.bank) || 0);
   }
+  function safeSessionRole() {
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem("lifebuilder-2026-online-mod-session") || "null");
+      if (!parsed?.authorized || Number(parsed.expiresAt || 0) <= Date.now()) return "";
+      return String(parsed.role || "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+  function currentStaffRole() {
+    try {
+      const api = window.JKGamesSettingsMenu || window.LifeBuilderSettingsMenu || window.LifeBuilderOnlineMod;
+      return String(api?.getRole?.()?.role || safeSessionRole() || "").toLowerCase();
+    } catch {
+      return safeSessionRole();
+    }
+  }
+  function canUseStaffModMenu() {
+    return ["admin", "owner"].includes(currentStaffRole());
+  }
+  function staffRoleLabel() {
+    const role = currentStaffRole();
+    if (role === "owner") return "Owner";
+    if (role === "admin") return "Admin";
+    return "Kein Zugriff";
+  }
+  function fightAdminButtonHtml() {
+    return canUseStaffModMenu() ? `<button class="fkl-btn gold" type="button" data-fkl-admin-open>🛠 Mod-Menü</button>` : "";
+  }
+  function openFightAdminMenu() {
+    if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur Admin und Owner sehen dieses Mod-Menü.");
+    renderInventory();
+    toast("Admin / Owner Mod-Menü", "Wähle ein Item aus. Im Detailbereich kannst du Sterne direkt setzen und Haltbarkeit auffüllen.");
+  }
   function payFight(price, label) {
     const amount = Math.max(0, Math.round(Number(price) || 0));
     if (!amount) return true;
@@ -640,7 +682,8 @@ function detailHtml(item) {
   const canRepair = max && item.durability < max && (data.repairKits[repairFamily] > 0 || data.repairKits.universal > 0);
   const currentIndex = rarityIndex(item); const nextKey = currentIndex < rarityIndex("legendary") ? RARITY_ORDER[currentIndex + 1] : ""; const next = nextKey ? RARITIES[nextKey] : null;
   const canPromote = item.star >= MAX_STAR && !!next;
-  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${def.icon}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div><p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions"><button class="fkl-btn primary" type="button" data-fkl-equip="${item.uid}" ${locked ? "disabled" : ""}>${isEquipped ? `${SLOT_META[slot]?.name || "Item"} ausgerüstet` : `In ${SLOT_META[slot]?.name || "Slot"} ausrüsten`}</button>${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ Zu ${next.name}</button>` : ""}${item.star >= MAX_STAR && currentIndex >= rarityIndex("legendary") ? `<small class="fkl-rarity-cap">${r.name} bleibt eine eigene Itemlinie und kann nur bis fünf Sterne verbessert werden.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}</div></aside>`;
+  const adminBlock = canUseStaffModMenu() ? `<div class="fkl-admin-block"><div class="fkl-admin-head"><small class="fkl-kicker">ADMIN / OWNER MOD-MENÜ</small><b>${staffRoleLabel()}</b></div><p>Direkte Item-Verwaltung nur für Admin und Owner. Sterne werden sofort übernommen.</p><div class="fkl-admin-stars">${Array.from({length: MAX_STAR + 1}, (_,index) => `<button class="${Number(item.star||0)===index?"active":""}" type="button" data-fkl-admin-star="${item.uid}" data-star="${index}">${index===0?"Basis":`${index}★`}</button>`).join("")}</div><div class="fkl-admin-actions"><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="-1">−1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="1">+1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-durability="${item.uid}">Max. Haltbarkeit</button><button class="fkl-btn gold" type="button" data-fkl-admin-duplicate="${item.uid}">Duplizieren</button></div></div>` : "";
+  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${def.icon}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div><p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions"><button class="fkl-btn primary" type="button" data-fkl-equip="${item.uid}" ${locked ? "disabled" : ""}>${isEquipped ? `${SLOT_META[slot]?.name || "Item"} ausgerüstet` : `In ${SLOT_META[slot]?.name || "Slot"} ausrüsten`}</button>${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ Zu ${next.name}</button>` : ""}${item.star >= MAX_STAR && currentIndex >= rarityIndex("legendary") ? `<small class="fkl-rarity-cap">${r.name} bleibt eine eigene Itemlinie und kann nur bis fünf Sterne verbessert werden.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}</div>${adminBlock}</aside>`;
 }
 
 
@@ -776,6 +819,37 @@ function repairItem(id) {
   let kit = family && data.repairKits[family] > 0 ? family : data.repairKits.universal > 0 ? "universal" : "";
   if (!kit) return toast("Kein Reparaturset", "Kaufe ein passendes Set im Shop.");
   data.repairKits[kit] -= 1; item.durability = clamp(item.durability + REPAIR_KITS[kit].amount, 0, max); safeSave(); drawInventory(); toast("Repariert", `${def.name}: ${Math.round(item.durability)}/${max}`);
+}
+function staffItemById(id){return ensureState().inventory.find(entry=>entry.uid===id)||null;}
+function setStaffItemStar(id, star) {
+  if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur Admin und Owner können Items direkt bearbeiten.");
+  const item = staffItemById(id); if (!item) return;
+  item.star = clamp(Math.floor(Number(star) || 0), 0, MAX_STAR);
+  item.durability = itemMaxDurability(item);
+  UI.detailUid = item.uid; safeSave(); updateHead(); drawInventory();
+  toast("Admin-Mod-Menü", `${itemDef(item).name} ist jetzt ${starText(item.star)}.`);
+}
+function shiftStaffItemStar(id, delta) {
+  const item = staffItemById(id); if (!item) return;
+  setStaffItemStar(id, clamp(Number(item.star || 0) + Number(delta || 0), 0, MAX_STAR));
+}
+function fillStaffItemDurability(id) {
+  if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur Admin und Owner können Items direkt bearbeiten.");
+  const item = staffItemById(id); if (!item) return;
+  const max = itemMaxDurability(item); if (!max) return toast("Keine Haltbarkeit", "Dieser Gegenstand besitzt keine Haltbarkeit.");
+  item.durability = max;
+  UI.detailUid = item.uid; safeSave(); updateHead(); drawInventory();
+  toast("Admin-Mod-Menü", `${itemDef(item).name} wurde vollständig repariert.`);
+}
+function duplicateStaffItem(id) {
+  if (!canUseStaffModMenu()) return toast("Kein Zugriff", "Nur Admin und Owner können Items direkt bearbeiten.");
+  const data = ensureState(); const item = staffItemById(id); if (!item) return;
+  if (data.inventory.length >= INVENTORY_LIMIT) return toast("Inventar voll", "Kein Platz mehr zum Duplizieren.");
+  const copy = makeItem(item.baseId, item.star, null, rarityKey(item));
+  copy.durability = Math.min(item.durability, itemMaxDurability(copy));
+  data.inventory.unshift(copy);
+  UI.detailUid = copy.uid; safeSave(); updateHead(); drawInventory();
+  toast("Admin-Mod-Menü", `${itemDef(copy).name} wurde dupliziert.`);
 }
 
 function dailyShopItems(category = UI.shopCategory) {
@@ -932,16 +1006,29 @@ function startCombat() {
   const weaponButtons = WEAPON_SLOT_KEYS.map((slot,index) => { const item = equipped(slot), def = item ? itemDef(item) : null; return `<button class="fkl-weapon-slot ${slot === player.activeWeaponSlot ? "active" : ""}" type="button" data-fkl-weapon-switch="${slot}" ${item ? "" : "disabled"}><span>${index+1}</span><i>${def?.icon || SLOT_META[slot].icon}</i><small>${escapeHtml(def?.name || "Leer")}</small></button>`; }).join("");
   UI.main.innerHTML = `<section class="fkl-combat"><div class="fkl-combat-hud"><div class="fkl-hud-left"><button class="fkl-icon-btn" type="button" data-fkl-combat-pause>Ⅱ</button><div class="fkl-health-wrap"><small>LEBEN <b data-fkl-hp-text></b></small><div class="fkl-bar fkl-health"><i data-fkl-hp-bar></i></div><div class="fkl-bar fkl-xp" style="margin-top:4px;height:6px"><i data-fkl-xp-bar></i></div></div><div class="fkl-hud-pill"><small>SHIELD</small><b data-fkl-shield>0</b></div><div class="fkl-hud-pill fkl-mount-pill" data-fkl-mount-pill><small>REITTIER</small><b data-fkl-mount>—</b></div><div class="fkl-hud-pill fkl-companion-pill" data-fkl-companion-pill><small>BEGLEITER</small><b data-fkl-companion>—</b></div></div><div class="fkl-wave" data-fkl-wave>WELLE 1</div><div class="fkl-hud-right"><div class="fkl-hud-pill"><small>KILLS</small><b data-fkl-kills>0</b></div><div class="fkl-hud-pill"><small>SCORE</small><b data-fkl-score>0</b></div><div class="fkl-hud-pill"><small>POWER</small><b>${NUMBER.format(powerScore())}</b></div></div></div><div class="fkl-stage"><canvas class="fkl-canvas" data-fkl-canvas></canvas><div class="fkl-vignette"></div><div class="fkl-combat-message" data-fkl-message></div><div class="fkl-boss-wrap" data-fkl-boss-wrap hidden><b data-fkl-boss-name>BOSS</b><div class="fkl-bar fkl-boss"><i data-fkl-boss-bar></i></div></div><div class="fkl-weapon-switch">${weaponButtons}</div><div class="fkl-ammo"><small data-fkl-weapon-name></small><b data-fkl-ammo></b><small data-fkl-durability></small></div><button class="fkl-special-button ${special ? "" : "disabled"}" type="button" data-fkl-special ${special ? "" : "disabled"}><div class="fkl-special-circle" data-fkl-special-circle style="--special-color:${special?.color || '#62d9ff'};--special-progress:0deg"><span data-fkl-special-icon>${special?.icon || "✦"}</span></div><div class="fkl-special-meta"><small data-fkl-special-name>${special?.name || "Kein Special"}</small><b data-fkl-special-text>${special ? "0 %" : "—"}</b></div></button><div class="fkl-touch"><div class="fkl-stick" data-fkl-stick><div class="fkl-stick-knob" data-fkl-stick-knob></div></div><button class="fkl-auto" type="button" data-fkl-auto>AUTO AN</button><button class="fkl-fire" type="button" data-fkl-fire>FEUER</button></div></div></section>`;
   const canvas = UI.main.querySelector("[data-fkl-canvas]");
-  UI.session = { canvas, ctx: canvas.getContext("2d", { alpha: false }), player, viewW: 1280, viewH: 720, dpr: 1, camera: { x: player.x, y: player.y - 90 }, wave: 0, waveStarted: false, waveClearAt: 0, spawnQueue: [], spawnTimer: 0, enemies: [], projectiles: [], enemyProjectiles: [], particles: [], texts: [], pickups: [], score: 0, kills: 0, startedAt: performance.now(), paused: false, ended: false, autoFire: data.settings.autoFire !== false, joystick: { active: false, id: null, x: 0, y: 0, ox: 0, oy: 0 }, resizeObserver: null, boss: null, moneyEarned: 0, lootEarned: [], lastSave: 0, waveMessage: "", decorations: createArenaDecorations(), frameCount: 0, fpsClock: performance.now(), fps: 60, specialInProgress: false };
+  UI.session = { canvas, ctx: canvas.getContext("2d", { alpha: false }), player, viewW: 1280, viewH: 720, dpr: 1, camera: { x: player.x, y: player.y - 90 }, wave: 0, waveStarted: false, waveClearAt: 0, spawnQueue: [], spawnTimer: 0, enemies: [], projectiles: [], enemyProjectiles: [], particles: [], texts: [], pickups: [], score: 0, kills: 0, startedAt: performance.now(), paused: false, ended: false, autoFire: data.settings.autoFire !== false, joystick: { active: false, id: null, x: 0, y: 0, ox: 0, oy: 0 }, resizeObserver: null, boss: null, moneyEarned: 0, lootEarned: [], lastSave: 0, waveMessage: "", themeIndex: 0, theme: ARENA_THEMES[0], decorations: createArenaDecorations(0), frameCount: 0, fpsClock: performance.now(), fps: 60, specialInProgress: false };
   bindCombatControls(); resizeCombat(); UI.session.resizeObserver = new ResizeObserver(resizeCombat); UI.session.resizeObserver.observe(canvas.parentElement);
   startWave(1); updateHud(); UI.last = performance.now(); cancelAnimationFrame(UI.raf); UI.raf = requestAnimationFrame(combatLoop);
   playSound(180, .14, "sawtooth"); setTimeout(() => playSound(330, .18, "square"), 120);
 }
 
-  function createArenaDecorations() {
+  function createArenaDecorations(themeIndex = UI.session?.themeIndex || 0) {
+    const palette = ARENA_THEMES[themeIndex % ARENA_THEMES.length] || ARENA_THEMES[0];
     const list = [];
-    for (let i = 0; i < 90; i++) list.push({ x: rand(60, WORLD_W - 60), y: rand(60, WORLD_H - 60), type: Math.random() < .5 ? "crack" : Math.random() < .75 ? "crate" : "light", size: rand(10, 36), rot: rand(0, Math.PI * 2) });
+    const variants = themeIndex % ARENA_THEMES.length === 0 ? ["crack","crate","light"] : themeIndex % ARENA_THEMES.length === 1 ? ["crack","crate","ember"] : themeIndex % ARENA_THEMES.length === 2 ? ["toxic","crate","light"] : themeIndex % ARENA_THEMES.length === 3 ? ["ice","crate","light"] : ["void","crate","crack"];
+    for (let i = 0; i < 96; i++) {
+      const roll = Math.random();
+      const type = roll < .42 ? variants[0] : roll < .74 ? variants[1] : variants[2];
+      list.push({ x: rand(60, WORLD_W - 60), y: rand(60, WORLD_H - 60), type, size: rand(10, 38), rot: rand(0, Math.PI * 2), palette });
+    }
     return list;
+  }
+  function cycleArenaTheme() {
+    const s = UI.session; if (!s) return;
+    s.themeIndex = (Number(s.themeIndex || 0) + 1) % ARENA_THEMES.length;
+    s.theme = ARENA_THEMES[s.themeIndex];
+    s.decorations = createArenaDecorations(s.themeIndex);
+    showCombatMessage(`ARENA-WECHSEL · ${s.theme.name}`);
   }
   function resizeCombat() {
     const s = UI.session; if (!s?.canvas) return;
@@ -1263,6 +1350,7 @@ function damagePlayerV116(amount, source) {
     const reward = Math.round(60 + wave * 24); s.moneyEarned += reward; s.score += wave * 250;
     if (wave % 3 === 0) grantLoot(wave, false);
     if (wave % 5 === 0) { s.player.hp = Math.min(s.player.maxHp, s.player.hp + s.player.maxHp * .18); s.player.shield = Math.min(s.player.maxShield, s.player.shield + s.player.maxShield * .25); }
+    if (wave % 10 === 0) cycleArenaTheme();
     safeSave();
   }
 function grantLoot(wave, boss) {
@@ -1322,19 +1410,20 @@ function updateHud() {
   }
   function sx(s,x){return x-s.camera.x+s.viewW/2} function sy(s,y){return y-s.camera.y+s.viewH/2}
   function drawGround(ctx,s){
-    const grad=ctx.createLinearGradient(0,0,0,s.viewH);grad.addColorStop(0,"#10252a");grad.addColorStop(1,"#061013");ctx.fillStyle=grad;ctx.fillRect(0,0,s.viewW,s.viewH);
+    const theme=s.theme||ARENA_THEMES[0];
+    const grad=ctx.createLinearGradient(0,0,0,s.viewH);grad.addColorStop(0,theme.bgTop);grad.addColorStop(1,theme.bgBottom);ctx.fillStyle=grad;ctx.fillRect(0,0,s.viewW,s.viewH);
     const grid=72, ox=(( -s.camera.x+s.viewW/2)%grid+grid)%grid, oy=(( -s.camera.y+s.viewH/2)%grid+grid)%grid;
-    ctx.strokeStyle="#2c4b4d55";ctx.lineWidth=1;ctx.beginPath();for(let x=ox;x<s.viewW;x+=grid){ctx.moveTo(x,0);ctx.lineTo(x,s.viewH)}for(let y=oy;y<s.viewH;y+=grid){ctx.moveTo(0,y);ctx.lineTo(s.viewW,y)}ctx.stroke();
-    ctx.strokeStyle="#49e6b31c";ctx.lineWidth=2;const big=grid*5, bx=(( -s.camera.x+s.viewW/2)%big+big)%big, by=(( -s.camera.y+s.viewH/2)%big+big)%big;ctx.beginPath();for(let x=bx;x<s.viewW;x+=big){ctx.moveTo(x,0);ctx.lineTo(x,s.viewH)}for(let y=by;y<s.viewH;y+=big){ctx.moveTo(0,y);ctx.lineTo(s.viewW,y)}ctx.stroke();
-    const edgeX=sx(s,0),edgeY=sy(s,0),edgeR=sx(s,WORLD_W),edgeB=sy(s,WORLD_H);ctx.strokeStyle="#5bf0bd77";ctx.lineWidth=5;ctx.strokeRect(edgeX,edgeY,edgeR-edgeX,edgeB-edgeY);
+    ctx.strokeStyle=theme.grid;ctx.lineWidth=1;ctx.beginPath();for(let x=ox;x<s.viewW;x+=grid){ctx.moveTo(x,0);ctx.lineTo(x,s.viewH)}for(let y=oy;y<s.viewH;y+=grid){ctx.moveTo(0,y);ctx.lineTo(s.viewW,y)}ctx.stroke();
+    ctx.strokeStyle=theme.gridMajor;ctx.lineWidth=2;const big=grid*5, bx=(( -s.camera.x+s.viewW/2)%big+big)%big, by=(( -s.camera.y+s.viewH/2)%big+big)%big;ctx.beginPath();for(let x=bx;x<s.viewW;x+=big){ctx.moveTo(x,0);ctx.lineTo(x,s.viewH)}for(let y=by;y<s.viewH;y+=big){ctx.moveTo(0,y);ctx.lineTo(s.viewW,y)}ctx.stroke();
+    const edgeX=sx(s,0),edgeY=sy(s,0),edgeR=sx(s,WORLD_W),edgeB=sy(s,WORLD_H);ctx.strokeStyle=theme.border;ctx.lineWidth=5;ctx.strokeRect(edgeX,edgeY,edgeR-edgeX,edgeB-edgeY);
   }
-  function drawDecorations(ctx,s){for(const d of s.decorations){const x=sx(s,d.x),y=sy(s,d.y);if(x<-60||y<-60||x>s.viewW+60||y>s.viewH+60)continue;ctx.save();ctx.translate(x,y);ctx.rotate(d.rot);if(d.type==="crack"){ctx.strokeStyle="#010608aa";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-d.size,0);ctx.lineTo(-d.size*.25,-d.size*.2);ctx.lineTo(0,d.size*.1);ctx.lineTo(d.size*.55,-d.size*.3);ctx.lineTo(d.size,0);ctx.stroke()}else if(d.type==="crate"){ctx.fillStyle="#23383c";ctx.strokeStyle="#416166";ctx.lineWidth=2;ctx.fillRect(-d.size/2,-d.size/2,d.size,d.size);ctx.strokeRect(-d.size/2,-d.size/2,d.size,d.size);ctx.beginPath();ctx.moveTo(-d.size/2,-d.size/2);ctx.lineTo(d.size/2,d.size/2);ctx.moveTo(d.size/2,-d.size/2);ctx.lineTo(-d.size/2,d.size/2);ctx.stroke()}else{const g=ctx.createRadialGradient(0,0,0,0,0,d.size*2);g.addColorStop(0,"#4bf0bf44");g.addColorStop(1,"transparent");ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,d.size*2,0,Math.PI*2);ctx.fill()}ctx.restore()}}
+  function drawDecorations(ctx,s){for(const d of s.decorations){const x=sx(s,d.x),y=sy(s,d.y),palette=d.palette||s.theme||ARENA_THEMES[0];if(x<-60||y<-60||x>s.viewW+60||y>s.viewH+60)continue;ctx.save();ctx.translate(x,y);ctx.rotate(d.rot);if(d.type==="crack"){ctx.strokeStyle=palette.crack;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-d.size,0);ctx.lineTo(-d.size*.25,-d.size*.2);ctx.lineTo(0,d.size*.1);ctx.lineTo(d.size*.55,-d.size*.3);ctx.lineTo(d.size,0);ctx.stroke()}else if(d.type==="crate"){ctx.fillStyle=palette.crateFill;ctx.strokeStyle=palette.crateStroke;ctx.lineWidth=2;ctx.fillRect(-d.size/2,-d.size/2,d.size,d.size);ctx.strokeRect(-d.size/2,-d.size/2,d.size,d.size);ctx.beginPath();ctx.moveTo(-d.size/2,-d.size/2);ctx.lineTo(d.size/2,d.size/2);ctx.moveTo(d.size/2,-d.size/2);ctx.lineTo(-d.size/2,d.size/2);ctx.stroke()}else{const g=ctx.createRadialGradient(0,0,0,0,0,d.size*2);if(d.type==="ember"){g.addColorStop(0,"#ff955544");g.addColorStop(1,"transparent");}else if(d.type==="toxic"){g.addColorStop(0,"#7dff8c4c");g.addColorStop(1,"transparent");}else if(d.type==="ice"){g.addColorStop(0,"#a7e4ff4d");g.addColorStop(1,"transparent");}else if(d.type==="void"){g.addColorStop(0,"#ed74ff44");g.addColorStop(1,"transparent");}else{g.addColorStop(0,palette.light?.[0]||"#4bf0bf44");g.addColorStop(1,palette.light?.[1]||"transparent");}ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,d.size*2,0,Math.PI*2);ctx.fill()}ctx.restore()}}
   function drawPlayer(ctx,s,now) {
     const p=s.player,x=sx(s,p.x),y=sy(s,p.y),walk=p.moving?Math.sin(now*.014)*5:0,bob=p.moving?Math.abs(Math.sin(now*.014))*2:0;
     const style=p.cosmetics||CHARACTER_STYLES[0];
     const lookX = Number.isFinite(p.lookX) ? p.lookX : Math.cos(p.angle);
     const lookY = Number.isFinite(p.lookY) ? p.lookY : Math.sin(p.angle);
-    const facing = Math.abs(lookY) >= Math.abs(lookX) * .82 ? (lookY > 0 ? "front" : "back") : "side";
+    const facing = Math.abs(lookY) >= Math.abs(lookX) * .82 ? (lookY > 0 ? "back" : "front") : "side";
     const sideDir = lookX >= 0 ? 1 : -1;
     const aimX=Math.cos(p.angle), aimY=Math.sin(p.angle);
     ctx.save(); ctx.translate(x,y);
@@ -1510,7 +1599,7 @@ function updateHud() {
     const categories=[["all","Alle"],["weapon","Waffen"],["armor","Rüstung"],["companion","Begleiter"],["chip","Module"],["charm","Talismane"],["mount","Reittiere"]];
     const list=inventoryFilteredItems();
     const filter=`<section class="fkl-panel fkl-inventory-toolbar"><div class="fkl-inventory-tabs">${categories.map(([id,label])=>`<button class="${UI.inventoryCategory===id?"active":""}" type="button" data-fkl-inv-cat="${id}">${label}</button>`).join("")}</div><label class="fkl-search"><span>⌕</span><input type="search" value="${escapeHtml(UI.inventorySearch)}" placeholder="Item, Seltenheit oder Effekt suchen" data-fkl-inv-search></label><select data-fkl-inv-sort><option value="rarity" ${UI.inventorySort==="rarity"?"selected":""}>Seltenheit</option><option value="power" ${UI.inventorySort==="power"?"selected":""}>Power</option><option value="new" ${UI.inventorySort==="new"?"selected":""}>Neu erhalten</option><option value="name" ${UI.inventorySort==="name"?"selected":""}>Name</option></select><div class="fkl-inv-count"><b>${list.length}</b><small>angezeigt</small></div></section>`;
-    UI.main.innerHTML=`<div class="fkl-page fkl-inventory-page">${pageHeader("Inventar & Charakter",`${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Fünf identische Items ergeben den nächsten Stern. Begleiter können wie Ausrüstung gemerged und verbessert werden.`,`<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size===5?"":"disabled"}>✨ ${UI.selected.size}/5 matchen</button>`)}${loadoutPanelHtml()}${filter}<div class="fkl-inventory-layout"><section class="fkl-inventory">${list.map(itemCard).join("")||`<div class="fkl-empty-inventory">Keine passenden Items gefunden.</div>`}</section>${detailHtml(detail)}</div></div>`;
+    UI.main.innerHTML=`<div class="fkl-page fkl-inventory-page">${pageHeader("Inventar & Charakter",`${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Fünf identische Items ergeben den nächsten Stern. Begleiter können wie Ausrüstung gemerged und verbessert werden.`,`${fightAdminButtonHtml()}<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size===5?"":"disabled"}>✨ ${UI.selected.size}/5 matchen</button>`)}${loadoutPanelHtml()}${filter}<div class="fkl-inventory-layout"><section class="fkl-inventory">${list.map(itemCard).join("")||`<div class="fkl-empty-inventory">Keine passenden Items gefunden.</div>`}</section>${detailHtml(detail)}</div></div>`;
     bindPageHome();
     UI.main.querySelectorAll("[data-fkl-inv-cat]").forEach(btn=>btn.addEventListener("click",()=>{UI.inventoryCategory=btn.dataset.fklInvCat;drawInventory();}));
     UI.main.querySelector("[data-fkl-inv-sort]")?.addEventListener("change",e=>{UI.inventorySort=e.currentTarget.value;drawInventory();});
@@ -1523,13 +1612,18 @@ function updateHud() {
     UI.main.querySelectorAll("[data-fkl-item-info]").forEach(btn=>btn.addEventListener("click",event=>{event.stopPropagation();UI.detailUid=btn.dataset.fklItemInfo;drawInventory();}));
     UI.main.querySelectorAll("[data-fkl-equip-slot]").forEach(slotNode=>{slotNode.addEventListener("dragover",event=>{event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect="move";slotNode.classList.add("drag-over")});slotNode.addEventListener("dragleave",()=>slotNode.classList.remove("drag-over"));slotNode.addEventListener("drop",event=>{event.preventDefault();slotNode.classList.remove("drag-over");const id=event.dataTransfer?.getData("text/fight-kl-item");if(id)equipItemToSlot(id,slotNode.dataset.fklEquipSlot)});});
     UI.main.querySelectorAll("[data-fkl-slot-info]").forEach(btn=>btn.addEventListener("click",event=>{event.stopPropagation();const item=equipped(btn.dataset.fklSlotInfo);if(item){UI.detailUid=item.uid;drawInventory()}else toast(SLOT_META[btn.dataset.fklSlotInfo]?.name||"Slot",SLOT_META[btn.dataset.fklSlotInfo]?.hint||"Dieser Slot ist leer.")}));
+    UI.main.querySelector("[data-fkl-admin-open]")?.addEventListener("click",openFightAdminMenu);
+    UI.main.querySelectorAll("[data-fkl-admin-star]").forEach(btn=>btn.addEventListener("click",event=>setStaffItemStar(event.currentTarget.dataset.fklAdminStar,event.currentTarget.dataset.star)));
+    UI.main.querySelectorAll("[data-fkl-admin-star-step]").forEach(btn=>btn.addEventListener("click",event=>shiftStaffItemStar(event.currentTarget.dataset.fklAdminStarStep,event.currentTarget.dataset.step)));
+    UI.main.querySelectorAll("[data-fkl-admin-durability]").forEach(btn=>btn.addEventListener("click",event=>fillStaffItemDurability(event.currentTarget.dataset.fklAdminDurability)));
+    UI.main.querySelectorAll("[data-fkl-admin-duplicate]").forEach(btn=>btn.addEventListener("click",event=>duplicateStaffItem(event.currentTarget.dataset.fklAdminDuplicate)));
     UI.main.querySelector("[data-fkl-merge]")?.addEventListener("click",requestMergeConfirmation);UI.main.querySelector("[data-fkl-equip]")?.addEventListener("click",event=>equipItem(event.currentTarget.dataset.fklEquip));UI.main.querySelector("[data-fkl-repair]")?.addEventListener("click",event=>repairItem(event.currentTarget.dataset.fklRepair));UI.main.querySelector("[data-fkl-promote]")?.addEventListener("click",event=>promoteItem(event.currentTarget.dataset.fklPromote));
   }
 
   function renderDashboard() {
     if(!UI.main)return; stopCombat(false); stopDuel(false); const data=ensureState(),need=data.level>=MAX_LEVEL?1:levelNeed(data.level),pct=data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),comp=equipped("companion");
-    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · BEGLEITER · ONLINE-DUELLE</small><h1>FIGHT<span>.KL</span></h1><p>Merge dein Arsenal, rüste drei Waffen und einen kämpfenden Begleiter aus und überlebe unendliche Bot-Wellen. Ab Fight-Level 5 trittst du online im 1-gegen-1 gegen andere Spieler an.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button></div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${escapeHtml(comp?itemDef(comp).name:"Keiner")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Online-Duelle</small><b>${data.duel.wins} S · ${data.duel.losses} N</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, elf Slots, Filter, Suche, Sortierung und Merge-System.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Waffen, Begleiter, Talismane, Module, Rüstungen und Reparatursets.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
-    UI.main.querySelector("[data-fkl-start]").addEventListener("click",startCombat);UI.main.querySelectorAll("[data-fkl-inventory]").forEach(btn=>btn.addEventListener("click",renderInventory));UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn=>btn.addEventListener("click",renderShop));UI.main.querySelectorAll("[data-fkl-duel]").forEach(btn=>btn.addEventListener("click",renderDuelLobby));UI.main.querySelector("[data-fkl-leader]").addEventListener("click",renderLeaderboard);updateHead();
+    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · BEGLEITER · ONLINE-DUELLE</small><h1>FIGHT<span>.KL</span></h1><p>Merge dein Arsenal, rüste drei Waffen und einen kämpfenden Begleiter aus und überlebe unendliche Bot-Wellen. Ab Fight-Level 5 trittst du online im 1-gegen-1 gegen andere Spieler an.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button>${fightAdminButtonHtml()}</div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${escapeHtml(comp?itemDef(comp).name:"Keiner")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Online-Duelle</small><b>${data.duel.wins} S · ${data.duel.losses} N</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, elf Slots, Filter, Suche, Sortierung und Merge-System.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Waffen, Begleiter, Talismane, Module, Rüstungen und Reparatursets.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
+    UI.main.querySelector("[data-fkl-start]").addEventListener("click",startCombat);UI.main.querySelectorAll("[data-fkl-inventory]").forEach(btn=>btn.addEventListener("click",renderInventory));UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn=>btn.addEventListener("click",renderShop));UI.main.querySelectorAll("[data-fkl-duel]").forEach(btn=>btn.addEventListener("click",renderDuelLobby));UI.main.querySelectorAll("[data-fkl-admin-open]").forEach(btn=>btn.addEventListener("click",openFightAdminMenu));UI.main.querySelector("[data-fkl-leader]").addEventListener("click",renderLeaderboard);updateHead();
   }
 
   function dailyShopItems(category=UI.shopCategory){return ITEMS.filter(def=>{if(["pistol","automatic","shotgun","melee"].includes(category))return def.category==="weapon"&&def.family===category;if(["helmet","armor","suit","boots","chip","charm","companion","mount"].includes(category))return def.category===category;return false}).sort((a,b)=>rarityIndex(a.rarity)-rarityIndex(b.rarity)||(a.price||0)-(b.price||0));}
@@ -1545,7 +1639,7 @@ function updateHud() {
 
   function updateCompanion(dt){const s=UI.session,p=s?.player,c=p?.companion;if(!c||c.dead)return;c.cooldown=Math.max(0,c.cooldown-dt);c.hitCooldown=Math.max(0,c.hitCooldown-dt);if(c.attackAnim>0)c.attackAnim-=dt;const followX=p.x-48*Math.cos(p.angle)+38*Math.sin(p.angle),followY=p.y-48*Math.sin(p.angle)-38*Math.cos(p.angle),fd=Math.hypot(followX-c.x,followY-c.y)||1;if(fd>42){c.x+=((followX-c.x)/fd)*c.speed*dt;c.y+=((followY-c.y)/fd)*c.speed*dt;}const target=nearestEnemy(c.x,c.y,c.range);if(target){c.angle=Math.atan2(target.y-c.y,target.x-c.x);const d=distance(c,target);if(c.cooldown<=0&&d<=c.range){c.cooldown=1/Math.max(.2,c.rate);c.attackAnim=.18;if(c.type==="melee"){damageEnemy(target,c.damage,false,c.splash);spawnParticles(target.x,target.y,rarityDef(c.item).color,7,130);}else{const speed=620;s.projectiles.push({x:c.x,y:c.y,vx:Math.cos(c.angle)*speed,vy:Math.sin(c.angle)*speed,radius:4,damage:c.damage,life:2.2,pierce:c.pierce,splash:c.splash,crit:false,color:rarityDef(c.item).color,hit:new Set()});}if(c.roar&&Math.random()<.12)for(const enemy of s.enemies)if(distance(enemy,c)<165){enemy.statusTimer=Math.max(enemy.statusTimer,.8);enemy.statusType="stasis";}}if(d<target.radius+25&&c.hitCooldown<=0){c.hitCooldown=.8;c.hp-=Math.max(2,target.damage*.24);addDamageText(c.x,c.y-25,`-${Math.round(target.damage*.24)}`,"#ff8c91",14);if(c.hp<=0){c.hp=0;c.dead=true;showCombatMessage(`${itemDef(c.item).name} AUSGEFALLEN`);spawnParticles(c.x,c.y,rarityDef(c.item).color,24,230);}}}if(c.heal>0&&p.hp>0)p.hp=Math.min(p.maxHp,p.hp+c.heal*dt);c.x=clamp(c.x,20,WORLD_W-20);c.y=clamp(c.y,20,WORLD_H-20);}
 
-  function drawCompanion(ctx,s,now){const c=s.player?.companion;if(!c||c.dead)return;const x=sx(s,c.x),y=sy(s,c.y),def=itemDef(c.item),r=rarityDef(c.item),human=/companion$/.test(def.id)||["scout-companion","medic-companion","gunner-companion","arc-mage"].includes(def.id),flying=["guardian-drone","phoenix-cub"].includes(def.id);ctx.save();ctx.translate(x,y+(flying?Math.sin(now*.006)*7:0));ctx.rotate(c.angle+Math.PI/2);ctx.globalAlpha=.3;ctx.fillStyle="#000";ctx.beginPath();ctx.ellipse(0,22,23,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.shadowColor=r.color;ctx.shadowBlur=16;ctx.strokeStyle=r.color;ctx.lineWidth=3;ctx.fillStyle=human?"#263840":def.id.includes("tiger")?"#d99032":def.id.includes("lion")?"#c38b45":def.id.includes("cat")||def.id.includes("lynx")||def.id.includes("beast")?"#58546f":def.id.includes("drone")?"#334c55":"#74523e";if(human){ctx.beginPath();ctx.roundRect(-12,-19,24,36,10);ctx.fill();ctx.stroke();ctx.fillStyle="#c98e72";ctx.beginPath();ctx.arc(0,-26,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle=r.color;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,-8);ctx.lineTo(8,-32);ctx.stroke();}else if(flying){ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(22,5);ctx.lineTo(0,17);ctx.lineTo(-22,5);ctx.closePath();ctx.fill();ctx.stroke();}else{ctx.beginPath();ctx.ellipse(0,2,24,14,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(17,-10,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-15,11);ctx.lineTo(-18,26);ctx.moveTo(5,12);ctx.lineTo(8,27);ctx.stroke();}if(c.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,33,-1.8,-.2);ctx.stroke();}ctx.restore();const pct=clamp(c.hp/c.maxHp,0,1);ctx.fillStyle="#020607cc";ctx.fillRect(x-28,y-38,56,5);ctx.fillStyle=r.color;ctx.fillRect(x-28,y-38,56*pct,5);}
+  function drawCompanion(ctx,s,now){const c=s.player?.companion;if(!c||c.dead)return;const x=sx(s,c.x),y=sy(s,c.y),def=itemDef(c.item),r=rarityDef(c.item),human=/companion$/.test(def.id)||["scout-companion","medic-companion","gunner-companion","arc-mage"].includes(def.id),flying=["guardian-drone","phoenix-cub"].includes(def.id),canine=["street-dog","battle-hound"].includes(def.id),bigCat=["tiger-companion","lion-companion","void-beast","lynx-companion"].includes(def.id);ctx.save();ctx.translate(x,y+(flying?Math.sin(now*.006)*7:0));ctx.rotate(c.angle+Math.PI/2);ctx.globalAlpha=.3;ctx.fillStyle="#000";ctx.beginPath();ctx.ellipse(0,24,24,8,0,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;ctx.shadowColor=r.color;ctx.shadowBlur=16;ctx.strokeStyle=r.color;ctx.lineWidth=3;ctx.lineJoin="round";if(human){ctx.fillStyle="#263840";ctx.beginPath();ctx.roundRect(-12,-19,24,36,10);ctx.fill();ctx.stroke();ctx.fillStyle="#c98e72";ctx.beginPath();ctx.arc(0,-26,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle=r.color;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(8,-8);ctx.lineTo(8,-32);ctx.stroke();}else if(flying){ctx.fillStyle=def.id.includes("phoenix")?"#ff9f63":"#334c55";ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(22,5);ctx.lineTo(0,17);ctx.lineTo(-22,5);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle="#fff8";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-8,1);ctx.lineTo(8,1);ctx.stroke();}else if(canine||bigCat){const body=canine?"#775946":bigCat&&def.id.includes("lion")?"#b17b36":bigCat&&def.id.includes("tiger")?"#d08a34":bigCat&&def.id.includes("lynx")?"#75664f":"#5a5470";const walk=Math.sin(now*.018)*3;ctx.rotate(-.22);ctx.fillStyle=body;ctx.beginPath();ctx.ellipse(-3,2,23,13,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.ellipse(18,-7,11,9,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=body;ctx.beginPath();ctx.moveTo(24,-15);ctx.lineTo(20,-24);ctx.lineTo(16,-12);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(12,-14);ctx.lineTo(8,-24);ctx.lineTo(7,-12);ctx.closePath();ctx.fill();ctx.strokeStyle=body;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-15,10);ctx.lineTo(-18,25+walk);ctx.moveTo(0,11);ctx.lineTo(-2,25-walk);ctx.moveTo(12,10);ctx.lineTo(10,24-walk);ctx.moveTo(25,7);ctx.lineTo(23,22+walk);ctx.stroke();ctx.strokeStyle=r.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-24,-1);ctx.quadraticCurveTo(-33,-7,-31,-18);ctx.stroke();ctx.fillStyle="#f6e5cc";ctx.beginPath();ctx.ellipse(24,-4,5,4,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="#1a1716";ctx.beginPath();ctx.arc(22,-7,1.2,0,Math.PI*2);ctx.arc(26,-7,1.2,0,Math.PI*2);ctx.fill();ctx.fillStyle="#201110";ctx.beginPath();ctx.arc(29,-2,1.4,0,Math.PI*2);ctx.fill();if(def.id.includes("tiger")){ctx.strokeStyle="#4a2c11";ctx.lineWidth=2;for(const stripe of [-10,-2,6]){ctx.beginPath();ctx.moveTo(stripe,-8);ctx.lineTo(stripe+4,10);ctx.stroke();}}if(def.id.includes("lion")){ctx.strokeStyle="#ddb35e";ctx.lineWidth=6;ctx.beginPath();ctx.arc(18,-7,10,0,Math.PI*2);ctx.stroke();}}else{ctx.fillStyle=def.id.includes("drone")?"#334c55":"#74523e";ctx.beginPath();ctx.ellipse(0,2,24,14,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(17,-10,10,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-15,11);ctx.lineTo(-18,26);ctx.moveTo(5,12);ctx.lineTo(8,27);ctx.stroke();}if(c.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,33,-1.8,-.2);ctx.stroke();}ctx.restore();const pct=clamp(c.hp/c.maxHp,0,1);ctx.fillStyle="#020607cc";ctx.fillRect(x-28,y-38,56,5);ctx.fillStyle=r.color;ctx.fillRect(x-28,y-38,56*pct,5);}
 
   function damagePlayer(amount,source){const s=UI.session,p=s?.player;if(p&&Math.random()<p.dodge){addDamageText(p.x,p.y-30,"AUSGEWICHEN","#6affd8",18);if(p.dodgeHeal)p.hp=Math.min(p.maxHp,p.hp+p.dodgeHeal);if(p.dodgeBurst)for(const enemy of s.enemies)if(distance(enemy,p)<145)damageEnemy(enemy,p.dodgeBurst,false,0);spawnParticles(p.x,p.y,"#62f4d0",12,180);return;}return damagePlayerV116(amount,source);}
 

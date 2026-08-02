@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownRoleDoc() {
+      return get(/databases/$(database)/documents/staffRoles/$(request.auth.uid));
+    }
+
+    function staffRole() {
+      return signedIn() && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+        ? lower(ownRoleDoc().data.role)
+        : '';
+    }
+
+    function isFightKlAdmin() {
+      return staffRole() in ['admin', 'owner'];
+    }
+
+    // Eigenes Staff-Rollendokument lesbar für den jeweiligen Nutzer.
+    match /staffRoles/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // Optionales Log für Fight.KL Adminaktionen.
+    match /fightKlAdminLogs/{logId} {
+      allow read, create: if isFightKlAdmin();
+      allow update, delete: if false;
+    }
+
+    // Beispiel: Fight.KL Online- oder Profilstatus.
+    match /fightKlProfiles/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+  }
+}

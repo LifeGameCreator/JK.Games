@@ -125,3 +125,15 @@ body.fight-kl-open{overflow:hidden!important}
   .fkl-ammo{top:6px}.fkl-special-button{top:102px;width:62px;min-height:62px}.fkl-special-circle{width:56px;height:56px}.fkl-special-meta{top:57px}.fkl-auto{top:174px}
   .fkl-weapon-switch{bottom:92px}.fkl-stick{width:84px;height:84px}.fkl-fire{width:72px;height:72px}.fkl-stick-knob{width:42px;height:42px}
 }
+
+/* V120 admin tools */
+.fkl-admin-block{margin-top:18px;padding:14px;border:1px solid rgba(91,240,189,.18);border-radius:18px;background:linear-gradient(180deg,rgba(9,18,20,.94),rgba(6,11,13,.92));box-shadow:0 16px 32px rgba(0,0,0,.22)}
+.fkl-admin-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.fkl-admin-head b{color:#ffd76f;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.fkl-admin-block p{margin:0 0 12px;color:var(--fkl-muted);font-size:13px;line-height:1.45}
+.fkl-admin-stars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.fkl-admin-stars button{appearance:none;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#101a1f;color:#dceced;padding:10px 8px;font:inherit;font-weight:700;cursor:pointer;transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease}
+.fkl-admin-stars button:hover,.fkl-admin-stars button.active{border-color:#ffd76f;box-shadow:0 0 0 1px rgba(255,215,111,.28) inset,0 8px 20px rgba(255,215,111,.12);transform:translateY(-1px)}
+.fkl-admin-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fkl-admin-actions .fkl-btn{width:100%;justify-content:center}
+@media (max-width: 760px){.fkl-admin-stars,.fkl-admin-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
