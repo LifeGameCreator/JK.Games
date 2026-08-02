@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v147-friends-power-stars-inventory-recovery";
+  const VERSION = "20260802-fight-kl-v149-friends-50-percent-nerf";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -23,6 +23,7 @@
   const COOP_MAX_PREDICTION = .30;
   const COOP_MAX_PLAYERS = 4;
   const FRIEND_SLOT_ROLES = ["tank", "dd", "healer"];
+  const FRIEND_STRENGTH_MULTIPLIER = 0.5; // V149: Tank, DD und Heiler nochmals vollständig um 50 % abgeschwächt.
   const FIGHT_BACKUP_PREFIX = "jkgames-fight-kl-backup:";
   const FIGHT_ACTIVE_SLOT_KEY = "lifebuilder-2026-active-slot";
   const FIGHT_CONFLICT_PREFIX = "lifebuilder-cloud-conflict-backup:";
@@ -405,9 +406,9 @@
   ];
 
   const FRIEND_ROLE_META = {
-    tank: { name: "Tank", icon: "🛡️", color: "#62d6ff", text: "Zieht Gegner an, skaliert automatisch mit deiner Power und erreicht je nach Sternen ungefähr 58–73 % deiner Kampfschadensleistung. Erleidet nur 5 % des normalen Spielerschadens." },
-    dd: { name: "DD", icon: "⚔️", color: "#ff667f", text: "Greift aggressiv an und skaliert automatisch mit deiner Power. Je nach Sternen erreicht er ungefähr 78–98 % deiner Kampfschadensleistung." },
-    healer: { name: "Heiler", icon: "✚", color: "#64f1ad", text: "Skaliert automatisch mit deiner Power, verursacht ungefähr 48–60 % deiner Kampfschadensleistung und heilt dich, sich selbst, Freunde, Reittier und Begleiter." }
+    tank: { name: "Tank", icon: "🛡️", color: "#62d6ff", text: "Zieht Gegner an und skaliert automatisch mit deiner Power. Nach dem V149-Nerf erreicht er je nach Sternen ungefähr 29–36 % deiner Kampfschadensleistung. Seine Tank-Schadensreduktion bleibt bestehen." },
+    dd: { name: "DD", icon: "⚔️", color: "#ff667f", text: "Greift aggressiv an und skaliert automatisch mit deiner Power. Nach dem V149-Nerf erreicht er je nach Sternen ungefähr 39–49 % deiner Kampfschadensleistung." },
+    healer: { name: "Heiler", icon: "✚", color: "#64f1ad", text: "Skaliert automatisch mit deiner Power, verursacht nach dem V149-Nerf ungefähr 24–30 % deiner Kampfschadensleistung und heilt dich, sich selbst, Freunde, Reittier und Begleiter mit halbierter Heilwirkung." }
   };
   const FRIEND_DEFS = [
     {id:"friend-bulwark",name:"Bulwark",role:"tank",icon:"🛡️",price:14500,body:"#172f3e",accent:"#58dcff",accent2:"#b9f6ff",weapon:"Schildgenerator",text:"Schwerer Frontkämpfer mit leuchtendem Energieschild."},
@@ -442,7 +443,7 @@
       return sum+powerValueOfItem(item)+Math.round((s.companionRate||0)*90);
     },Math.max(50,Number(data.level||1)*50));
   }
-  function friendRolePowerFactor(role){ return role==="dd"?.78:role==="tank"?.62:.54; }
+  function friendRolePowerFactor(role){ return (role==="dd"?.78:role==="tank"?.62:.54)*FRIEND_STRENGTH_MULTIPLIER; }
   function friendPowerValue(friend,data=ensureState(),basePower=null){
     if(!friend)return 0; const def=FRIEND_MAP.get(friend.id); if(!def)return 0;
     const ownPower=basePower==null?playerEquipmentPower(data):basePower;
@@ -604,18 +605,37 @@
     try { return typeof state !== "undefined" && state ? state : null; } catch { return null; }
   }
   function fightActiveSlotIndex(){try{return clamp(Math.floor(Number(localStorage.getItem(FIGHT_ACTIVE_SLOT_KEY))||0),0,3);}catch{return 0;}}
+  function fightInventorySignature(data){
+    if(!data||!Array.isArray(data.inventory))return "0";
+    const items=data.inventory.map(item=>`${String(item?.uid||"")}|${String(item?.baseId||"")}|${String(item?.rarity||"")}|${Math.floor(Number(item?.star)||0)}|${Math.round(Number(item?.durability)||0)}`).join(";");
+    const equipped=EQUIPMENT_SLOT_KEYS.map(slot=>`${slot}:${String(data.equipped?.[slot]||"")}`).join(";");
+    return `${data.inventory.length}#${items}#${equipped}`;
+  }
+  function touchFightInventoryRevision(data){
+    if(!data||!Array.isArray(data.inventory))return;
+    const signature=fightInventorySignature(data);
+    if(signature===String(data.inventorySignatureV148||""))return;
+    data.inventorySignatureV148=signature;
+    data.inventoryRevision=Math.max(0,Math.floor(Number(data.inventoryRevision)||0))+1;
+    data.inventoryUpdatedAtMs=Date.now();
+  }
   function cloneFightBackup(data){
     if(!data||!Array.isArray(data.inventory)||!data.inventory.length)return null;
-    return {savedAtMs:Date.now(),slotIndex:fightActiveSlotIndex(),version:VERSION,inventory:data.inventory,equipped:data.equipped||{},repairKits:data.repairKits||{},cosmetics:data.cosmetics||{},friends:data.friends||{},inventoryUpdatedAtMs:Number(data.inventoryUpdatedAtMs||Date.now())};
+    return {savedAtMs:Date.now(),slotIndex:fightActiveSlotIndex(),version:VERSION,inventory:data.inventory,equipped:data.equipped||{},repairKits:data.repairKits||{},cosmetics:data.cosmetics||{},friends:data.friends||{},inventoryRevision:Number(data.inventoryRevision||0),inventorySignatureV148:String(data.inventorySignatureV148||""),inventoryUpdatedAtMs:Number(data.inventoryUpdatedAtMs||Date.now())};
   }
   function storeFightBackup(data){
     const snapshot=cloneFightBackup(data);if(!snapshot)return;
-    try{localStorage.setItem(`${FIGHT_BACKUP_PREFIX}${snapshot.slotIndex}`,JSON.stringify(snapshot));}catch(error){console.warn("Fight.KL Inventar-Sicherung",error);}
+    try{
+      const key=`${FIGHT_BACKUP_PREFIX}${snapshot.slotIndex}`,serialized=JSON.stringify(snapshot),previous=localStorage.getItem(key);
+      if(previous&&previous!==serialized)localStorage.setItem(`${key}:previous`,previous);
+      localStorage.setItem(key,serialized);
+    }catch(error){console.warn("Fight.KL Inventar-Sicherung",error);}
   }
   function recoveryFightCandidates(slotIndex){
     const out=[];const push=(fight,savedAtMs=0,source="")=>{if(!fight||!Array.isArray(fight.inventory)||!fight.inventory.length)return;out.push({fight,savedAtMs:Number(savedAtMs||fight.inventoryUpdatedAtMs||0),source});};
     try{
       const direct=JSON.parse(localStorage.getItem(`${FIGHT_BACKUP_PREFIX}${slotIndex}`)||"null");if(direct?.inventory)push(direct,direct.savedAtMs,"Fight.KL-Sicherung");
+      const previous=JSON.parse(localStorage.getItem(`${FIGHT_BACKUP_PREFIX}${slotIndex}:previous`)||"null");if(previous?.inventory)push(previous,previous.savedAtMs,"Vorherige Fight.KL-Sicherung");
       for(let i=0;i<localStorage.length;i++){
         const key=localStorage.key(i)||"";if(!key.startsWith(FIGHT_CONFLICT_PREFIX)||key.endsWith(":latest"))continue;
         try{const payload=JSON.parse(localStorage.getItem(key)||"null");if(Number(payload?.slotIndex)===slotIndex)push(payload?.state?.fightKl,payload?.savedAtMs,"Cloud-Konflikt-Sicherung");}catch{}
@@ -636,7 +656,7 @@
     setTimeout(()=>toast("Fight.KL-Inventar wiederhergestellt",`${valid.length} Items aus ${candidate.source} geladen.`),80);
     return true;
   }
-  function safeSave() { try { const fight=getAppState()?.fightKl;if(fight){fight.inventoryUpdatedAtMs=Date.now();storeFightBackup(fight);} if (typeof save === "function") save(); } catch (error) { console.warn("Fight.KL speichern", error); } }
+  function safeSave() { try { const fight=getAppState()?.fightKl;if(fight){touchFightInventoryRevision(fight);storeFightBackup(fight);} if (typeof save === "function") save(); } catch (error) { console.warn("Fight.KL speichern", error); } }
   function safeRender() { try { if (typeof render === "function") render(); } catch {} }
   function safeFeed(text) { try { if (typeof addFeed === "function") addFeed(text); } catch {} }
   function playerName() {
@@ -1967,7 +1987,7 @@ function beginReload() {
     spawnParticles(enemy.x, enemy.y, enemy.color, enemy.boss ? 38 : enemy.normalBoss ? 28 : 15, enemy.boss ? 330 : enemy.normalBoss ? 270 : 190);
     if (enemy.split && !bossUnit && s.enemies.length < 100) for (let i = 0; i < 2; i++) { const child = { id: uid(), ...ENEMIES.runner, type: "runner", x: enemy.x + rand(-20,20), y: enemy.y + rand(-20,20), maxHp: enemy.maxHp * .28, hp: enemy.maxHp * .28, speed: enemy.speed * 1.15, damage: enemy.damage * .65, attackCooldown: .5, abilityCooldown: 0, hitFlash: 0, angle: 0, phase: rand(0,8), dead:false }; s.enemies.push(child); }
     if (Math.random() < .035 + s.player.lootBonus / 1200) s.pickups.push({ type: Math.random() < .35 ? "heal" : "credit", x: enemy.x, y: enemy.y, value: Math.random() < .35 ? 16 : 10 + s.wave * 2, life: 14, phase: 0 });
-    if (enemy.boss) { showCombatMessage(`${enemy.name} BESIEGT`); grantLoot(s.wave, true); if(!s.coop||s.coop.role==="host"){const granted=grantFriendBossCopies();if(s.coop?.role==="host"&&granted)s.coop.friendRewardSeq=Number(s.coop.friendRewardSeq||0)+1;} }
+    if (enemy.boss) { showCombatMessage(`${enemy.name} BESIEGT`); grantCombatLoot(s.wave, true); if(!s.coop||s.coop.role==="host"){const granted=grantFriendBossCopies();if(s.coop?.role==="host"&&granted)s.coop.friendRewardSeq=Number(s.coop.friendRewardSeq||0)+1;} }
     else if (enemy.normalBoss) showCombatMessage(`${enemy.name} BESIEGT`);
   }
 function damagePlayerV116(amount, source) {
@@ -2011,13 +2031,24 @@ function damagePlayerV116(amount, source) {
   function completeWave(wave) {
     const s = UI.session; if (!s) return;
     const reward = Math.round(60 + wave * 24); s.moneyEarned += reward; s.score += wave * 250;
-    if (wave % 3 === 0) grantLoot(wave, false);
+    if (wave % 3 === 0) grantCombatLoot(wave, false);
     if (wave % 5 === 0) { for(const player of combatPlayers(true)){if(player.hp>0)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*.18);player.shield=Math.min(player.maxShield,player.shield+player.maxShield*.25);} }
     if (wave % 10 === 0) cycleArenaTheme();
     safeSave();
   }
+function grantCombatLoot(wave,boss){
+  const item=grantLoot(wave,boss);
+  const coop=UI.session?.coop;
+  if(coop?.role==="host"){
+    coop.lootRewardSeq=Math.max(0,Number(coop.lootRewardSeq||0))+1;
+    coop.lootRewardEvents||=[];
+    coop.lootRewardEvents.push({seq:coop.lootRewardSeq,wave:Math.max(1,Math.floor(Number(wave)||1)),boss:!!boss});
+    if(coop.lootRewardEvents.length>48)coop.lootRewardEvents.splice(0,coop.lootRewardEvents.length-48);
+  }
+  return item;
+}
 function grantLoot(wave, boss) {
-  const data = ensureState(); if (data.inventory.length >= INVENTORY_LIMIT) { UI.session.moneyEarned += boss ? 1200 : 300; return; }
+  const data = ensureState(); if (data.inventory.length >= INVENTORY_LIMIT) { UI.session.moneyEarned += boss ? 1200 : 300; return null; }
   const roll = Math.random() * 100; const luck = Math.min(.45, UI.session.player.lootBonus / 1000) + (boss ? .08 : 0); let rarity = "common";
   const universeChance = data.level >= 50 && wave >= 100 ? .002 + Math.min(.008, (wave - 100) * .00008) + (boss ? .006 : 0) + luck * .004 : 0;
   const exoticChance = data.level >= 15 && wave >= 60 ? .012 + Math.min(.018, (wave - 60) * .00025) + luck * .01 : 0;
@@ -2035,7 +2066,7 @@ function grantLoot(wave, boss) {
   else pool = ITEMS.filter(def => rarityIndex(def.rarity) <= rarityIndex("legendary") && !["special","mythic","exotic","universe"].includes(def.rarity) && data.level >= Math.max(def.minLevel || 1, RARITIES[rarity].minLevel || 1));
   if (!pool.length) pool = ITEMS.filter(item => item.rarity === "common");
   const def = pick(pool); const star = wave >= 80 && Math.random() < .05 ? 1 : 0; const item = makeItem(def.id, star, null, rarity);
-  data.inventory.unshift(item); UI.session.lootEarned.push(item); safeSave(); toast("Beute erhalten", `${RARITIES[rarity].name}: ${def.name} ${starText(star)}`);
+  data.inventory.unshift(item); UI.session.lootEarned.push(item); safeSave(); toast("Persönliche Beute", `${RARITIES[rarity].name}: ${def.name} ${starText(star)}`); return item;
 }
 
   function addFightXp(amount) {
@@ -2244,11 +2275,11 @@ function updateHud() {
   function showExitConfirm(){const s=UI.session;if(!s)return returnToTopGames();s.paused=true;const modal=showModal(`<div style="font-size:55px">⚠️</div><h3>Run wirklich verlassen?</h3><p>Die aktuelle Welle und der noch nicht ausgezahlte Run-Bonus gehen verloren. Bereits gefundene Items bleiben erhalten.</p><div class="fkl-modal-actions"><button class="fkl-btn primary" type="button" data-fkl-stay>Im Kampf bleiben</button><button class="fkl-btn danger" type="button" data-fkl-confirm-exit>Run verlassen</button></div>`);modal.querySelector("[data-fkl-stay]").addEventListener("click",()=>{modal.remove();s.paused=false;UI.last=performance.now()});modal.querySelector("[data-fkl-confirm-exit]").addEventListener("click",()=>{modal.remove();finishCombat("exit")})}
   function finishCombat(reason="dead"){
     const s=UI.session;if(!s||s.ended)return;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;s.resizeObserver?.disconnect();
-    const data=ensureState(),durationMs=Math.max(1000,performance.now()-s.startedAt),completedWave=Math.max(0,s.wave-(s.waveStarted?1:0));data.runs+=1;data.totalKills+=s.kills;data.bestWave=Math.max(data.bestWave,completedWave);data.bestScore=Math.max(data.bestScore,Math.floor(s.score));
+    const data=ensureState(),durationMs=Math.max(1000,performance.now()-s.startedAt),completedWave=Math.max(0,s.wave-(s.waveStarted?1:0)),personalLoot=Math.max(0,Number(s.lootEarned?.length||0));data.runs+=1;data.totalKills+=s.kills;data.bestWave=Math.max(data.bestWave,completedWave);data.bestScore=Math.max(data.bestScore,Math.floor(s.score));
     const reward=reason==="dead"?Math.min(250000,Math.round(s.moneyEarned+completedWave*115+s.kills*7+s.score/900)):0;if(reward)awardMoney(reward,"Fight.KL Run-Bonus");safeSave();updateHead();
     if(reason==="dead")submitScore({score:s.score,wave:completedWave,kills:s.kills,durationMs}).then(()=>{});
     const loot=s.lootEarned.slice(-5).map(item=>`${itemDef(item).icon} ${itemDef(item).name} ${starText(item.star)}`).join("<br>")||"Keine besonderen Items";
-    const modal=showModal(`<div style="font-size:64px">${reason==="dead"?"☠️":"🚪"}</div><small class="fkl-kicker">${reason==="dead"?"RUN BEENDET":"RUN VERLASSEN"}</small><h3>${reason==="dead"?`Welle ${completedWave} erreicht`:"Kampf verlassen"}</h3><div class="fkl-summary-grid"><div><small>Kills</small><b>${s.kills}</b></div><div><small>Score</small><b>${NUMBER.format(Math.floor(s.score))}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Solo-Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div><div><small>Beste Welle</small><b>${data.bestWave}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><p><b>Gefundene Items</b><br>${loot}</p><div class="fkl-modal-actions"><button class="fkl-btn primary" type="button" data-fkl-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-summary-home>Hauptmenü</button></div>`);
+    const modal=showModal(`<div style="font-size:64px">${reason==="dead"?"☠️":"🚪"}</div><small class="fkl-kicker">${reason==="dead"?"RUN BEENDET":"RUN VERLASSEN"}</small><h3>${reason==="dead"?`Welle ${completedWave} erreicht`:"Kampf verlassen"}</h3><div class="fkl-summary-grid"><div><small>Kills</small><b>${s.kills}</b></div><div><small>Score</small><b>${NUMBER.format(Math.floor(s.score))}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Eigene Items</small><b>${personalLoot}</b></div><div><small>Solo-Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div><div><small>Beste Welle</small><b>${data.bestWave}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><p><b>Gefundene Items</b><br>${loot}</p><div class="fkl-modal-actions"><button class="fkl-btn primary" type="button" data-fkl-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-summary-home>Hauptmenü</button></div>`);
     modal.querySelector("[data-fkl-again]").addEventListener("click",()=>{modal.remove();UI.session=null;startCombat()});modal.querySelector("[data-fkl-summary-inventory]").addEventListener("click",()=>{modal.remove();UI.session=null;renderInventory()});modal.querySelector("[data-fkl-summary-home]").addEventListener("click",()=>{modal.remove();UI.session=null;renderDashboard()});
   }
   function stopCombat(saveState=true){UI.shell?.classList.remove("combat-active");const s=UI.session;if(!s)return;if(s.coop)stopCoopNetwork(true);cancelAnimationFrame(UI.raf);UI.raf=0;s.resizeObserver?.disconnect();UI.session=null;UI.pointer.fire=false;if(saveState)safeSave()}
@@ -2314,6 +2345,7 @@ function updateHud() {
       const automatic = ["primary","sidearm","melee","armor","companion","mount"].map(slot => data.inventory.find(item => item.uid === data.equipped[slot])).find(Boolean) || data.inventory[0] || null;
       data.staffTools.selectedInventoryUid = automatic?.uid || "";
     }
+    if(!data.inventorySignatureV148&&data.inventory.length)touchFightInventoryRevision(data);
     return data;
   }
 
@@ -2435,8 +2467,8 @@ function updateHud() {
     return entries.map((entry,index)=>{
       const def=FRIEND_MAP.get(entry.id),meta=friendRoleMeta(def.role),role=def.role,star=friendStar(entry),starScale=friendStarScale(entry);
       const hpFactor=role==="tank"?2.4+star*.25:role==="healer"?1.35+star*.14:1.25+star*.12;
-      const maxHp=Math.max(100,Math.round(player.maxHp*hpFactor));
-      const damageShare=(role==="dd"?.78:role==="tank"?.58:.48)*starScale;
+      const maxHp=Math.max(50,Math.round(player.maxHp*hpFactor*FRIEND_STRENGTH_MULTIPLIER));
+      const damageShare=(role==="dd"?.78:role==="tank"?.58:.48)*starScale*FRIEND_STRENGTH_MULTIPLIER;
       const attackRate=role==="dd"?1.8:role==="tank"?.85:.75;
       const damagePerHit=Math.max(1,baseDps*damageShare/attackRate);
       return {friendUnit:true,id:def.id,name:def.name,role,def,star,power:friendPowerValue(entry,data,basePower),x:player.x+(index-1)*58,y:player.y+92,radius:16,maxHp,hp:maxHp,damageTakenMultiplier:role==="tank"?.05:.10,damageShare,damagePerHit,attackRate,range:role==="tank"?105:role==="dd"?590:420,speed:role==="tank"?215:role==="dd"?275:240,cooldown:0,healCooldown:role==="healer"?.4:0,hitFlash:0,attackAnim:0,moving:false,angle:-Math.PI/2,index,dead:false,color:meta.color,owner:player};
@@ -2455,7 +2487,7 @@ function updateHud() {
   }
   function healFriendTeam(player,healer){
     if(!player||!healer||healer.hp<=0)return;
-    const star=friendStar(healer),heal=Math.max(5,player.maxHp*(.03+star*.006));
+    const star=friendStar(healer),heal=Math.max(2.5,player.maxHp*(.03+star*.006)*FRIEND_STRENGTH_MULTIPLIER);
     player.hp=Math.min(player.maxHp,player.hp+heal);
     healer.hp=Math.min(healer.maxHp,healer.hp+heal*.9);
     for(const friend of friendList(player))if(friend!==healer&&friend.hp>0)friend.hp=Math.min(friend.maxHp,friend.hp+heal*.55);
@@ -2871,10 +2903,10 @@ function updateHud() {
   async function finishCoopHost(reason){const s=UI.session,c=s?.coop;if(!c||c.ended)return;c.ended=true;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;try{await c.fb.setDoc(c.matchRef,{status:"ended",finishReason:reason,finalWave:s.wave,updatedAtMs:Date.now()},{merge:true});}catch{}finishCoopRun(reason);}
   function finishCoopGuest(reason){const s=UI.session,c=s?.coop;if(!c||c.ended)return;c.ended=true;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;finishCoopRun(reason);}
   function finishCoopRun(reason){
-    const s=UI.session,c=s?.coop;if(!s||!c)return;const activeWave=!!(s.enemies.length||s.spawnQueue.length),completedWave=Math.max(0,s.wave-(activeWave?1:0)),score=Math.floor(s.score||0),kills=Math.floor(s.kills||0),durationMs=Math.max(1000,performance.now()-s.startedAt),reward=Math.min(250000,Math.round(s.moneyEarned+completedWave*115+kills*7+score/900));
+    const s=UI.session,c=s?.coop;if(!s||!c)return;const activeWave=!!(s.enemies.length||s.spawnQueue.length),completedWave=Math.max(0,s.wave-(activeWave?1:0)),score=Math.floor(s.score||0),kills=Math.floor(s.kills||0),personalLoot=Math.max(0,Number(s.lootEarned?.length||0)),durationMs=Math.max(1000,performance.now()-s.startedAt),reward=Math.min(250000,Math.round(s.moneyEarned+completedWave*115+kills*7+score/900));
     const data=ensureState();data.runs+=1;data.totalKills+=kills;data.bestScore=Math.max(data.bestScore,score);addFightXp(Math.round(completedWave*40+kills*2));if(reward)awardMoney(reward,"Fight.KL Wellen-KOOP");safeSave();updateHead();
     stopCoopNetwork(false);s.resizeObserver?.disconnect?.();UI.shell?.classList.remove("combat-active");UI.session=null;UI.pointer.fire=false;
-    const modal=showModal(`<div style="font-size:64px">🤝</div><small class="fkl-kicker">WELLEN-KOOP BEENDET</small><h3>Team-Lauf beendet</h3><p>${escapeHtml(reason)}</p><div class="fkl-summary-grid"><div><small>KOOP-Welle</small><b>${completedWave}</b></div><div><small>Team-Kills</small><b>${kills}</b></div><div><small>Team-Score</small><b>${NUMBER.format(score)}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Solo-Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-coop-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-coop-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-coop-again]")?.addEventListener("click",()=>{modal.remove();renderCoopLobby();});modal.querySelector("[data-fkl-summary-inventory]")?.addEventListener("click",()=>{modal.remove();renderInventory();});modal.querySelector("[data-fkl-coop-home]")?.addEventListener("click",()=>{modal.remove();renderDashboard();});
+    const modal=showModal(`<div style="font-size:64px">🤝</div><small class="fkl-kicker">WELLEN-KOOP BEENDET</small><h3>Team-Lauf beendet</h3><p>${escapeHtml(reason)}</p><div class="fkl-summary-grid"><div><small>KOOP-Welle</small><b>${completedWave}</b></div><div><small>Team-Kills</small><b>${kills}</b></div><div><small>Team-Score</small><b>${NUMBER.format(score)}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Eigene Items</small><b>${personalLoot}</b></div><div><small>Solo-Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-coop-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-coop-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-coop-again]")?.addEventListener("click",()=>{modal.remove();renderCoopLobby();});modal.querySelector("[data-fkl-summary-inventory]")?.addEventListener("click",()=>{modal.remove();renderInventory();});modal.querySelector("[data-fkl-coop-home]")?.addEventListener("click",()=>{modal.remove();renderDashboard();});
   }
   function stopCoopNetwork(markLeft=true){
     clearTimeout(UI.coopPollTimer);UI.coopPollTimer=0;clearInterval(UI.coopHeartbeatTimer);UI.coopHeartbeatTimer=0;for(const unsub of UI.coopUnsubs.splice(0)){try{unsub();}catch{}}
@@ -2996,7 +3028,7 @@ function updateHud() {
   }
   function hydrateCoopFriends(player,profile){
     const remoteBasePower=Math.max(50,Number(profile?.power||0));
-    player.friends=(profile?.friends||[]).slice(0,3).map((raw,index)=>{const def=FRIEND_MAP.get(raw.id)||FRIEND_DEFS.find(x=>x.role===raw.role)||FRIEND_DEFS[0],meta=friendRoleMeta(def.role),star=friendStar(raw),maxHp=Math.max(100,Number(raw.maxHp)||Math.round(player.maxHp*(def.role==="tank"?2.4+star*.25:def.role==="healer"?1.35+star*.14:1.25+star*.12))),attackRate=Number(raw.attackRate)||(def.role==="dd"?1.8:def.role==="tank"?.85:.75),damageShare=Number(raw.damageShare)||((def.role==="dd"?.78:def.role==="tank"?.58:.48)*friendStarScale(raw));return{friendUnit:true,id:def.id,name:def.name,role:def.role,def,star,power:Number(raw.power)||Math.round(remoteBasePower*friendRolePowerFactor(def.role)*friendStarScale(raw)),x:player.x+(index-1)*58,y:player.y+92,radius:16,maxHp,hp:maxHp,damageTakenMultiplier:def.role==="tank"?.05:.10,damageShare,damagePerHit:Number(raw.damagePerHit)||10,attackRate,range:def.role==="tank"?105:def.role==="dd"?590:420,speed:def.role==="tank"?215:def.role==="dd"?275:240,cooldown:0,healCooldown:def.role==="healer"?.4:0,hitFlash:0,attackAnim:0,moving:false,angle:-Math.PI/2,index,dead:false,color:meta.color,owner:player};});return player;
+    player.friends=(profile?.friends||[]).slice(0,3).map((raw,index)=>{const def=FRIEND_MAP.get(raw.id)||FRIEND_DEFS.find(x=>x.role===raw.role)||FRIEND_DEFS[0],meta=friendRoleMeta(def.role),star=friendStar(raw),computedMaxHp=Math.max(50,Math.round(player.maxHp*(def.role==="tank"?2.4+star*.25:def.role==="healer"?1.35+star*.14:1.25+star*.12)*FRIEND_STRENGTH_MULTIPLIER)),maxHp=Math.max(50,Math.min(Number(raw.maxHp)||computedMaxHp,computedMaxHp)),attackRate=Number(raw.attackRate)||(def.role==="dd"?1.8:def.role==="tank"?.85:.75),computedDamageShare=(def.role==="dd"?.78:def.role==="tank"?.58:.48)*friendStarScale(raw)*FRIEND_STRENGTH_MULTIPLIER,damageShare=Math.min(Number(raw.damageShare)||computedDamageShare,computedDamageShare);return{friendUnit:true,id:def.id,name:def.name,role:def.role,def,star,power:Math.min(Number(raw.power)||Math.round(remoteBasePower*friendRolePowerFactor(def.role)*friendStarScale(raw)),Math.round(remoteBasePower*friendRolePowerFactor(def.role)*friendStarScale(raw))),x:player.x+(index-1)*58,y:player.y+92,radius:16,maxHp,hp:maxHp,damageTakenMultiplier:def.role==="tank"?.05:.10,damageShare,damagePerHit:Math.max(1,Math.min(Number(raw.damagePerHit)||10,playerCombatDps(player)*computedDamageShare/Math.max(.2,attackRate))),attackRate,range:def.role==="tank"?105:def.role==="dd"?590:420,speed:def.role==="tank"?215:def.role==="dd"?275:240,cooldown:0,healCooldown:def.role==="healer"?.4:0,hitFlash:0,attackAnim:0,moving:false,angle:-Math.PI/2,index,dead:false,color:meta.color,owner:player};});return player;
   }
   function coopTeamHudHtml(c){
     const others=coopRemotePlayers(c).map(p=>`<div class="fkl-coop-mini" data-fkl-coop-mini="${escapeHtml(p.coopUid||"")}"><strong>${escapeHtml(p.coopName||"Mitspieler")}</strong><span class="hp">100 %</span><span class="power">PWR ${powerCompact(p.power)}</span></div>`).join("");
@@ -3006,7 +3038,7 @@ function updateHud() {
     unlockFightAudio();const startAt=normalizeWaveCheckpoint(match.startWave||match.wave||1,MAX_WAVE_CHECKPOINT),uids=coopParticipantUids(match),profiles=coopParticipantProfiles(match);if(!uids.includes(user.uid))return toast("KOOP-Fehler","Dein Spieler ist nicht in dieser Lobby.");stopCoopWaiting(false);startCombat(startAt,{trackSoloProgress:false});const s=UI.session;if(!s)return;
     const positions=uids.map((_,i)=>{const a=-Math.PI/2+i*Math.PI*2/uids.length;return{x:WORLD_W/2+Math.cos(a)*145,y:WORLD_H/2+Math.sin(a)*105};}),selfIndex=uids.indexOf(user.uid),local=s.player,localProfile=profiles[user.uid]||coopProfile(),role=match.hostUid===user.uid?"host":"guest";local.coopUid=user.uid;local.coopName=String(localProfile.name||playerName()).slice(0,24);local.power=Number(localProfile.power||powerScore());local.x=positions[selfIndex].x;local.y=positions[selfIndex].y;local.hp=local.maxHp;local.shield=local.maxShield;local.spawnProtection=4;
     const remotes=[];uids.forEach((id,index)=>{if(id===user.uid)return;const p=hydrateCoopFriends(buildCoopPlayer(profiles[id]||{},positions[index].x,positions[index].y),profiles[id]||{});p.coopUid=id;p.power=Number(profiles[id]?.power||0);p.spawnProtection=4;remotes.push(p);});
-    s.coop={role,matchId:match.id||match.matchId,fb,user,selfUid:user.uid,hostUid:match.hostUid,teamSize:uids.length,participantUids:uids,profiles,startWave:startAt,local,remotes,remote:remotes[0]||null,remoteByUid:new Map(remotes.map(p=>[p.coopUid,p])),remoteMeta:new Map(),remoteTargets:{},inputSeq:0,specialSeq:0,careCompanionSeq:0,careMountSeq:0,lastInputWrite:0,forceInputPending:false,lastSnapshotWrite:0,snapshotPending:false,lastSnapshotAt:0,lastSnapshotArrivalAt:0,lastSnapshotSeq:-1,frameSeq:0,inputFrameIndex:0,frameIndex:0,soundSeq:0,soundEvents:[],damageSeq:0,damageEvents:[],specialVisualSeq:0,specialEvents:[],lastSoundSeq:0,lastDamageSeq:0,lastSpecialVisualSeq:0,friendRewardSeq:0,lastFriendRewardSeq:0,connected:true,ended:false,matchRef:fb.doc(fb.db,COOP_MATCH_COLLECTION,match.id||match.matchId)};
+    s.coop={role,matchId:match.id||match.matchId,fb,user,selfUid:user.uid,hostUid:match.hostUid,teamSize:uids.length,participantUids:uids,profiles,startWave:startAt,local,remotes,remote:remotes[0]||null,remoteByUid:new Map(remotes.map(p=>[p.coopUid,p])),remoteMeta:new Map(),remoteTargets:{},inputSeq:0,specialSeq:0,careCompanionSeq:0,careMountSeq:0,lastInputWrite:0,forceInputPending:false,lastSnapshotWrite:0,snapshotPending:false,lastSnapshotAt:0,lastSnapshotArrivalAt:0,lastSnapshotSeq:-1,frameSeq:0,inputFrameIndex:0,frameIndex:0,soundSeq:0,soundEvents:[],damageSeq:0,damageEvents:[],specialVisualSeq:0,specialEvents:[],lastSoundSeq:0,lastDamageSeq:0,lastSpecialVisualSeq:0,friendRewardSeq:0,lastFriendRewardSeq:0,lootRewardSeq:0,lootRewardEvents:[],lastLootRewardSeq:0,connected:true,ended:false,matchRef:fb.doc(fb.db,COOP_MATCH_COLLECTION,match.id||match.matchId)};
     s.player=local;s.enemies=[];s.projectiles=[];s.enemyProjectiles=[];s.spawnQueue=[];s.waveClearAt=0;startWave(startAt);const stage=UI.main?.querySelector(".fkl-stage");if(stage)stage.insertAdjacentHTML("beforeend",coopTeamHudHtml(s.coop));setupCoopNetwork();showCombatMessage(`${uids.length}-PLAYER-KOOP · WELLE ${startAt}`);updateCoopHud();
   }
   function setupCoopNetwork(){
@@ -3034,14 +3066,17 @@ function updateHud() {
   function updateCompanionVisualOnly(dt){const p=UI.session?.player;if(!p)return;for(const comp of companionList(p)){comp.attackAnim=Math.max(0,Number(comp.attackAnim||0)-dt);comp.runPhase=Number(comp.runPhase||0)+dt*(comp.moving?13:4);}}
   function updateFriendVisualOnly(dt){const p=UI.session?.player;if(!p)return;for(const friend of friendList(p)){friend.attackAnim=Math.max(0,Number(friend.attackAnim||0)-dt);friend.hitFlash=Math.max(0,Number(friend.hitFlash||0)-dt);}}
   function writeCoopSnapshot(now=performance.now()){
-    const s=UI.session,c=s?.coop;if(!c||c.role!=="host"||c.snapshotPending||now-c.lastSnapshotWrite<COOP_SNAPSHOT_INTERVAL)return;c.lastSnapshotWrite=now;c.snapshotPending=true;const players={};for(const p of combatPlayers(true))players[p.coopUid||c.selfUid]=serializeCoopPlayer(p);const snapshot=cleanCoopData({seq:++c.frameSeq,wave:s.wave,score:s.score,kills:s.kills,themeIndex:s.themeIndex,bossWave:!!s.isBossWave,bossPending:!!s.bossPending,players,enemies:s.enemies,projectiles:s.projectiles.filter(x=>!x.previewOnly).map(({hit,...rest})=>rest),enemyProjectiles:s.enemyProjectiles,pickups:s.pickups,bossId:s.boss?.id||"",sounds:(c.soundEvents||[]).slice(-18),damages:(c.damageEvents||[]).slice(-48),specials:(c.specialEvents||[]).slice(-18),friendRewardSeq:Number(c.friendRewardSeq||0),updatedAtMs:Date.now()});c.frameRefs||=Array.from({length:32},(_,i)=>c.fb.doc(c.fb.db,COOP_MATCH_COLLECTION,c.matchId,"frames",String(i)));c.frameIndex=(Number(c.frameIndex||0)+1)%c.frameRefs.length;c.fb.setDoc(c.frameRefs[c.frameIndex],{snapshot,updatedAtMs:Date.now()},{merge:false}).catch(()=>{}).finally(()=>{if(UI.session?.coop)c.snapshotPending=false;});
+    const s=UI.session,c=s?.coop;if(!c||c.role!=="host"||c.snapshotPending||now-c.lastSnapshotWrite<COOP_SNAPSHOT_INTERVAL)return;c.lastSnapshotWrite=now;c.snapshotPending=true;const players={};for(const p of combatPlayers(true))players[p.coopUid||c.selfUid]=serializeCoopPlayer(p);const snapshot=cleanCoopData({seq:++c.frameSeq,wave:s.wave,score:s.score,kills:s.kills,themeIndex:s.themeIndex,bossWave:!!s.isBossWave,bossPending:!!s.bossPending,players,enemies:s.enemies,projectiles:s.projectiles.filter(x=>!x.previewOnly).map(({hit,...rest})=>rest),enemyProjectiles:s.enemyProjectiles,pickups:s.pickups,bossId:s.boss?.id||"",sounds:(c.soundEvents||[]).slice(-18),damages:(c.damageEvents||[]).slice(-48),specials:(c.specialEvents||[]).slice(-18),friendRewardSeq:Number(c.friendRewardSeq||0),lootRewards:(c.lootRewardEvents||[]).slice(-32),updatedAtMs:Date.now()});c.frameRefs||=Array.from({length:32},(_,i)=>c.fb.doc(c.fb.db,COOP_MATCH_COLLECTION,c.matchId,"frames",String(i)));c.frameIndex=(Number(c.frameIndex||0)+1)%c.frameRefs.length;c.fb.setDoc(c.frameRefs[c.frameIndex],{snapshot,updatedAtMs:Date.now()},{merge:false}).catch(()=>{}).finally(()=>{if(UI.session?.coop)c.snapshotPending=false;});
   }
   function reconcileCoopProjectiles(current,incoming){const oldById=new Map(current.filter(x=>x.netId).map(x=>[x.netId,x]));return(incoming||[]).map(raw=>{const old=raw.netId?oldById.get(raw.netId):null;return old?{...raw,x:old.x,y:old.y,targetX:Number(raw.x),targetY:Number(raw.y),hit:new Set()}:{...raw,targetX:Number(raw.x),targetY:Number(raw.y),hit:new Set()};});}
   function applyCoopSnapshot(data){
     const s=UI.session,c=s?.coop,snap=data?.snapshot;if(!s||!c)return;if(data.status==="ended"){finishCoopGuest(data.finishReason||"KOOP beendet.");return;}const seq=coopFinite(snap?.seq,-1);if(!snap||seq<=Number(c.lastSnapshotSeq||-1))return;c.lastSnapshotSeq=seq;c.lastSnapshotAt=performance.now();c.snapshotWarning=false;s.wave=coopFinite(snap.wave,s.wave);s.score=coopFinite(snap.score,s.score);s.kills=coopFinite(snap.kills,s.kills);s.themeIndex=coopFinite(snap.themeIndex,s.themeIndex);s.theme=ARENA_THEMES[s.themeIndex%ARENA_THEMES.length]||ARENA_THEMES[0];s.isBossWave=coopHas(snap,"bossWave")?!!snap.bossWave:s.wave%10===0;s.bossPending=coopHas(snap,"bossPending")?!!snap.bossPending:s.bossPending;
     const arrival=performance.now(),sampleDt=clamp((arrival-Number(c.lastSnapshotArrivalAt||arrival-COOP_SNAPSHOT_INTERVAL))/1000,.045,.35);c.lastSnapshotArrivalAt=arrival;const oldEnemies=new Map(s.enemies.map(e=>[e.id,e]));s.enemies=(snap.enemies||[]).map(raw=>{const old=oldEnemies.get(raw.id),tx=Number(raw.x),ty=Number(raw.y);if(!old)return{...raw,targetX:tx,targetY:ty,targetAngle:Number(raw.angle||0),netVx:0,netVy:0,netSampleAt:arrival,phase:Number(raw.phase||0)};const px=Number.isFinite(old.targetX)?old.targetX:old.x,py=Number.isFinite(old.targetY)?old.targetY:old.y,max=Math.max(180,Number(raw.speed||220)*1.8),rvx=(tx-px)/sampleDt,rvy=(ty-py)/sampleDt,rs=Math.hypot(rvx,rvy)||1,sc=Math.min(1,max/rs);return{...raw,x:old.x,y:old.y,angle:old.angle,phase:Number(old.phase||raw.phase||0),hitFlash:Math.max(Number(old.hitFlash||0),Number(raw.hitFlash||0)),targetX:tx,targetY:ty,targetAngle:Number(raw.angle||0),netVx:Number(old.netVx||0)*.48+rvx*sc*.52,netVy:Number(old.netVy||0)*.48+rvy*sc*.52,netSampleAt:arrival};});const previews=s.projectiles.filter(x=>x.previewOnly&&x.life>0);s.projectiles=[...reconcileCoopProjectiles(s.projectiles.filter(x=>!x.previewOnly),snap.projectiles),...previews];s.enemyProjectiles=reconcileCoopProjectiles(s.enemyProjectiles,snap.enemyProjectiles);s.pickups=(snap.pickups||[]).map(x=>({...x}));s.boss=s.enemies.find(e=>e.id===snap.bossId)||null;
     for(const sound of snap.sounds||[]){const n=Number(sound.seq||0);if(n>c.lastSoundSeq){c.lastSoundSeq=n;playSound(Number(sound.frequency||180),Number(sound.duration||.06),String(sound.type||"sine"),Number(sound.gain||.02),false);}}for(const damage of snap.damages||[]){const n=Number(damage.seq||0);if(n>c.lastDamageSeq){c.lastDamageSeq=n;addDamageText(Number(damage.x||0),Number(damage.y||0),String(damage.text||"0"),String(damage.color||"#fff"),Number(damage.size||18));}}for(const ev of snap.specials||[]){const n=Number(ev.seq||0);if(n>c.lastSpecialVisualSeq){c.lastSpecialVisualSeq=n;const own=ev.owner===c.selfUid&&Number(ev.sourceSeq||0)<=Number(c.specialSeq||0);if(!own)relayCoopSpecialVisual(ev);}}
-    const own=snap.players?.[c.selfUid];if(own)applyCoopPlayerState(c.local,own);for(const r of c.remotes){const state=snap.players?.[r.coopUid];if(!state)continue;c.remoteTargets[r.coopUid]={x:coopFinite(state.x,r.x),y:coopFinite(state.y,r.y),vx:coopFinite(state.vx,0),vy:coopFinite(state.vy,0),angle:coopFinite(state.angle,r.angle),moving:!!state.moving,sampleAt:arrival};applyCoopPlayerState(r,state);}const rewardSeq=Number(snap.friendRewardSeq||0);while(c.lastFriendRewardSeq<rewardSeq){c.lastFriendRewardSeq++;grantFriendBossCopies();}updateHud();
+    const own=snap.players?.[c.selfUid];if(own)applyCoopPlayerState(c.local,own);for(const r of c.remotes){const state=snap.players?.[r.coopUid];if(!state)continue;c.remoteTargets[r.coopUid]={x:coopFinite(state.x,r.x),y:coopFinite(state.y,r.y),vx:coopFinite(state.vx,0),vy:coopFinite(state.vy,0),angle:coopFinite(state.angle,r.angle),moving:!!state.moving,sampleAt:arrival};applyCoopPlayerState(r,state);}const rewardSeq=Number(snap.friendRewardSeq||0);while(c.lastFriendRewardSeq<rewardSeq){c.lastFriendRewardSeq++;grantFriendBossCopies();}
+    const privateLootEvents=Array.isArray(snap.lootRewards)?snap.lootRewards.slice().sort((a,b)=>Number(a?.seq||0)-Number(b?.seq||0)):[];
+    for(const reward of privateLootEvents){const seq=Number(reward?.seq||0);if(seq<=Number(c.lastLootRewardSeq||0))continue;c.lastLootRewardSeq=seq;grantLoot(Math.max(1,Math.floor(Number(reward?.wave)||s.wave||1)),!!reward?.boss);}
+    updateHud();
   }
   function stopCoopNetwork(markLeft=true){clearTimeout(UI.coopPollTimer);UI.coopPollTimer=0;clearInterval(UI.coopHeartbeatTimer);UI.coopHeartbeatTimer=0;for(const unsub of UI.coopUnsubs.splice(0)){try{unsub();}catch{}}const c=UI.session?.coop;if(!c)return;clearInterval(c.presenceTimer);if(markLeft&&!c.ended){if(c.role!=="host"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});}}
   function leaveWaveCoop(){const c=UI.session?.coop;if(c&&!c.ended){if(c.role!=="host"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});c.ended=true;}stopCoopNetwork(false);stopCombat(false);renderDashboard();}

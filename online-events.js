@@ -845,9 +845,14 @@
     const remoteItems = Array.isArray(remoteFight?.inventory) ? remoteFight.inventory.length : 0;
     const localUpdated = Number(localFight?.inventoryUpdatedAtMs || localState.onlineUpdatedAtMs || 0);
     const remoteUpdated = Number(remoteFight?.inventoryUpdatedAtMs || remoteState.onlineUpdatedAtMs || 0);
-    if (localItems > 0 && (remoteItems === 0 || (localUpdated > remoteUpdated && localItems >= remoteItems))) {
+    const localRevision = Math.max(0, Number(localFight?.inventoryRevision || 0));
+    const remoteRevision = Math.max(0, Number(remoteFight?.inventoryRevision || 0));
+    const localIsNewer = localRevision > remoteRevision
+      || (localRevision === remoteRevision && localUpdated > remoteUpdated)
+      || (remoteRevision === 0 && localRevision > 0 && localUpdated >= remoteUpdated);
+    if (localItems > 0 && (remoteItems === 0 || localIsNewer)) {
       remoteState.fightKl = JSON.parse(JSON.stringify(localFight));
-      remoteState.fightKl.inventoryRecoveredFromLocalV147 = true;
+      remoteState.fightKl.inventoryRecoveredFromLocalV148 = true;
       remoteState.fightKl.inventoryUpdatedAtMs = Math.max(Date.now(), localUpdated);
     }
     return remoteState;
