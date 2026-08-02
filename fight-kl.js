@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v149-friends-50-percent-nerf";
+  const VERSION = "20260802-fight-kl-v151-rarity-progression-rebalance";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -33,6 +33,20 @@
   // Zweite reine Waffen-Nerf-Stufe: Alle Waffen verursachen nochmals nur 50 % des V135-Schadens.
   // Zusammen mit dem bisherigen Arsenal-Multiplikator bleiben damit 25 % des ursprünglichen Waffenschadens.
   const WEAPON_DAMAGE_NERF_MULTIPLIER = 0.5;
+  // V151: Neu abgestimmte Seltenheitskurve. Frühere Stufen werden wieder spielbarer,
+  // während die bisher zu starken Endgame-Stufen deutlich enger zusammenrücken.
+  // Preise, Dropchancen, Magazine, Feuerrate und Haltbarkeit bleiben unverändert.
+  const RARITY_COMBAT_BALANCE = Object.freeze({
+    common: 1.30,
+    uncommon: 1.27,
+    rare: 1.23,
+    epic: 1.18,
+    legendary: 1.15,
+    special: 1.12,
+    mythic: 0.80,
+    exotic: 0.62,
+    universe: 0.52
+  });
   // V142: Hauptbosse jeder zehnten Welle besitzen doppelte Lebenspunkte und verursachen doppelten Schaden.
   const MAIN_BOSS_HEALTH_MULTIPLIER = 2;
   const MAIN_BOSS_DAMAGE_MULTIPLIER = 2;
@@ -902,9 +916,23 @@ function ensureStateV116() {
       // "splash" ist der Wirkungsradius. Er bleibt unverändert, damit Explosionswaffen
       // nicht gleichzeitig Reichweite verlieren; ihr Flächenschaden folgt bereits out.damage.
     }
-    // Die Item-/Gesamt-Power der Waffen folgt demselben zweiten Nerf, ohne andere
-    // Ausrüstung künstlich abzuwerten.
-    out.mult = mult * ARSENAL_STRENGTH_MULTIPLIER * (def.category === "weapon" ? WEAPON_DAMAGE_NERF_MULTIPLIER : 1);
+    // V151: Die gesamte Kampfleistung wird anschließend anhand der Seltenheit neu
+    // eingeordnet. So werden Gewöhnlich bis Legendär etwas stärker, während die
+    // Endgame-Stufen nicht mehr mit übergroßen Sprüngen davonziehen.
+    const rarityCombatBalance = Number(RARITY_COMBAT_BALANCE[rarityKeyValue] || 1);
+    const rarityBalancedStats = [
+      "damage", "health", "shield", "mountArmor", "armor", "regen", "crit", "critDamage",
+      "lifesteal", "bossDamage", "dodge", "damagePct", "reloadPct", "magazinePct",
+      "companionDamage", "companionHealth", "companionHeal", "companionSplash", "companionRoar",
+      "companionDamagePct", "companionHealthPct", "companionRatePct", "companionCareHealthPct",
+      "companionCareHealPct", "mountCareHealthPct", "mountCareHealPct", "dodgeHeal", "dodgeBurst", "speed"
+    ];
+    rarityBalancedStats.forEach(key => {
+      if (Number.isFinite(out[key])) out[key] *= rarityCombatBalance;
+    });
+    // Die Item-/Gesamt-Power folgt derselben Kurve. Nicht-kämpferische Werte wie
+    // Preis, Dropchance, Reichweite, Magazin, Feuerrate und Haltbarkeit bleiben gleich.
+    out.mult = mult * ARSENAL_STRENGTH_MULTIPLIER * (def.category === "weapon" ? WEAPON_DAMAGE_NERF_MULTIPLIER : 1) * rarityCombatBalance;
     return out;
   }
 function powerScore() {
@@ -1002,7 +1030,7 @@ function renderDashboard() {
   const need = data.level >= MAX_LEVEL ? 1 : levelNeed(data.level);
   const pct = data.level >= MAX_LEVEL ? 100 : clamp(data.xp / need * 100, 0, 100);
   const weapon = equipped(data.activeWeaponSlot) || equipped("primary") || equipped("sidearm") || equipped("melee");
-  UI.main.innerHTML = `<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">UNENDLICHE BOT-WELLEN · BOSS ALLE 10 WELLEN</small><h1>FIGHT<span>.KL</span></h1><p>Baue dein Arsenal auf, kombiniere zwei identische Items zu Sternen und entwickle normale Ausrüstung bis Legendär. Special-, mystische und exotische Ausrüstung besitzt eigene Endgame-Linien. Universe ist die neue höchste Stufe ab Fight-Level 50. Drei Waffen, Vollanzug, Helm und Reittier bilden deinen persönlichen Build.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Kampf starten</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button></div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level >= MAX_LEVEL ? "Maximallevel erreicht" : `${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level + 1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Waffen-Slot</small><b>${escapeHtml(SLOT_META[data.activeWeaponSlot]?.name || "Waffe")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Gesamtkills</small><b>${NUMBER.format(data.totalKills)}</b></div></div></aside><div class="fkl-dashboard-lower"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Merge & Loadout</b><small>Charakter in der Mitte, zehn Ausrüstungsplätze und zwei gleiche Items pro Stern.</small></article><article class="fkl-panel fkl-feature" data-fkl-loadout><i>🧍</i><b>Charakterwerte</b><small>Tempo, Stärke, Rüstung, Schild, Reittierpanzerung und alle Equip-Slots.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Großes Arsenal, erneut halbierter Waffenschaden und Universe-Ausrüstung ab Fight-Level 50.</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Firebase-Rangliste nach höchster Welle und bestem Score.</small></article></div></div>`;
+  UI.main.innerHTML = `<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">UNENDLICHE BOT-WELLEN · BOSS ALLE 10 WELLEN</small><h1>FIGHT<span>.KL</span></h1><p>Baue dein Arsenal auf, kombiniere zwei identische Items zu Sternen und entwickle normale Ausrüstung bis Legendär. Special-, mystische und exotische Ausrüstung besitzt eigene Endgame-Linien. Universe ist die neue höchste Stufe ab Fight-Level 50. Drei Waffen, Vollanzug, Helm und Reittier bilden deinen persönlichen Build.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Kampf starten</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button></div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level >= MAX_LEVEL ? "Maximallevel erreicht" : `${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level + 1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Waffen-Slot</small><b>${escapeHtml(SLOT_META[data.activeWeaponSlot]?.name || "Waffe")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Gesamtkills</small><b>${NUMBER.format(data.totalKills)}</b></div></div></aside><div class="fkl-dashboard-lower"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Merge & Loadout</b><small>Charakter in der Mitte, zehn Ausrüstungsplätze und zwei gleiche Items pro Stern.</small></article><article class="fkl-panel fkl-feature" data-fkl-loadout><i>🧍</i><b>Charakterwerte</b><small>Tempo, Stärke, Rüstung, Schild, Reittierpanzerung und alle Equip-Slots.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Neu abgestimmte Seltenheitskurve: Legendär ist für etwa Welle 50 gedacht; Endgame-Stufen steigen kontrollierter weiter.</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Firebase-Rangliste nach höchster Welle und bestem Score.</small></article></div></div>`;
   UI.main.querySelector("[data-fkl-start]").addEventListener("click", startCombat);
   UI.main.querySelectorAll("[data-fkl-inventory],[data-fkl-loadout]").forEach(btn => btn.addEventListener("click", renderInventory));
   UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn => btn.addEventListener("click", renderShop));
@@ -2080,7 +2108,7 @@ function grantLoot(wave, boss) {
 function updateHud() {
   const s = UI.session; if (!s || !UI.main) return; const p = s.player, data = ensureState(); const need = levelNeed(data.level);
   const set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};
-  set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`); set("[data-fkl-shield]",Math.ceil(p.shield)); set("[data-fkl-wave]",p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`); set("[data-fkl-kills]",s.kills); set("[data-fkl-score]",NUMBER.format(Math.floor(s.score))); set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");
+  set("[data-fkl-hp-text]",`${Math.round(clamp(p.hp/p.maxHp*100,0,100))} % · ${Math.ceil(p.hp)}/${p.maxHp}`); set("[data-fkl-shield]",Math.ceil(p.shield)); set("[data-fkl-wave]",p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`); set("[data-fkl-kills]",s.kills); set("[data-fkl-score]",NUMBER.format(Math.floor(s.score))); set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");
   set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`); set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");
   const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;
   const mountPill=UI.main.querySelector("[data-fkl-mount-pill]"); if(mountPill) mountPill.hidden=!p.mountItem; set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");
@@ -2610,7 +2638,7 @@ function updateHud() {
     const bossWave=!!s.isBossWave||s.wave%10===0;
     const bossQueued=!!s.spawnQueue?.some(entry=>entry?.boss);
     const bossPending=bossWave&&!activeBoss&&(!!s.bossPending||bossQueued);
-    set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));
+    set("[data-fkl-hp-text]",`${Math.round(clamp(p.hp/p.maxHp*100,0,100))} % · ${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));
     const endgameCount=endgameNormalBossCount(s.wave),endgameHud=endgameCount?` · ${endgameCount}× ENDGAME-BOSS`:"";
     set("[data-fkl-wave]",s.coop?`KOOP · WELLE ${s.wave}${bossWave?" · HAUPTBOSS":""}${endgameHud}`:p.godMode?`WELLE ${s.wave}${bossWave?" · HAUPTBOSS":""}${endgameHud} · GOD MODE`:`WELLE ${s.wave}${bossWave?" · HAUPTBOSS":""}${endgameHud}`);
     set("[data-fkl-kills]",s.kills);set("[data-fkl-score]",NUMBER.format(Math.floor(s.score)));set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`);set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");
@@ -3031,15 +3059,22 @@ function updateHud() {
     player.friends=(profile?.friends||[]).slice(0,3).map((raw,index)=>{const def=FRIEND_MAP.get(raw.id)||FRIEND_DEFS.find(x=>x.role===raw.role)||FRIEND_DEFS[0],meta=friendRoleMeta(def.role),star=friendStar(raw),computedMaxHp=Math.max(50,Math.round(player.maxHp*(def.role==="tank"?2.4+star*.25:def.role==="healer"?1.35+star*.14:1.25+star*.12)*FRIEND_STRENGTH_MULTIPLIER)),maxHp=Math.max(50,Math.min(Number(raw.maxHp)||computedMaxHp,computedMaxHp)),attackRate=Number(raw.attackRate)||(def.role==="dd"?1.8:def.role==="tank"?.85:.75),computedDamageShare=(def.role==="dd"?.78:def.role==="tank"?.58:.48)*friendStarScale(raw)*FRIEND_STRENGTH_MULTIPLIER,damageShare=Math.min(Number(raw.damageShare)||computedDamageShare,computedDamageShare);return{friendUnit:true,id:def.id,name:def.name,role:def.role,def,star,power:Math.min(Number(raw.power)||Math.round(remoteBasePower*friendRolePowerFactor(def.role)*friendStarScale(raw)),Math.round(remoteBasePower*friendRolePowerFactor(def.role)*friendStarScale(raw))),x:player.x+(index-1)*58,y:player.y+92,radius:16,maxHp,hp:maxHp,damageTakenMultiplier:def.role==="tank"?.05:.10,damageShare,damagePerHit:Math.max(1,Math.min(Number(raw.damagePerHit)||10,playerCombatDps(player)*computedDamageShare/Math.max(.2,attackRate))),attackRate,range:def.role==="tank"?105:def.role==="dd"?590:420,speed:def.role==="tank"?215:def.role==="dd"?275:240,cooldown:0,healCooldown:def.role==="healer"?.4:0,hitFlash:0,attackAnim:0,moving:false,angle:-Math.PI/2,index,dead:false,color:meta.color,owner:player};});return player;
   }
   function coopTeamHudHtml(c){
-    const others=coopRemotePlayers(c).map(p=>`<div class="fkl-coop-mini" data-fkl-coop-mini="${escapeHtml(p.coopUid||"")}"><strong>${escapeHtml(p.coopName||"Mitspieler")}</strong><span class="hp">100 %</span><span class="power">PWR ${powerCompact(p.power)}</span></div>`).join("");
-    return `<div class="fkl-coop-team v145"><div class="fkl-coop-self-card"><header><strong>${escapeHtml(c.local.coopName||playerName())}</strong><span data-fkl-coop-self-text>100 % · ${Math.ceil(c.local.hp)}/${c.local.maxHp}</span></header><div class="bar"><i data-fkl-coop-self-bar style="width:100%"></i></div><small>POWER ${powerCompact(c.local.power)}</small></div><div class="fkl-coop-center-label">${c.teamSize}-PLAYER-KOOP · HOST-WELLE ${c.startWave}</div><div class="fkl-coop-others">${others}</div></div>`;
+    const players=[c.local,...coopRemotePlayers(c)];
+    const rows=players.map(p=>{
+      const uid=String(p.coopUid||c.selfUid||"");
+      const isHost=uid===String(c.hostUid||"");
+      const isSelf=uid===String(c.selfUid||"");
+      const pct=clamp(Number(p.hp||0)/Math.max(1,Number(p.maxHp||1))*100,0,100);
+      return `<div class="fkl-coop-player-chip ${isSelf?"self":""} ${isHost?"host":""}" data-fkl-coop-player="${escapeHtml(uid)}"><strong>${isHost?"<i>♛</i>":""}${escapeHtml(p.coopName||(isSelf?playerName():"Mitspieler"))}</strong><span class="power">PWR ${powerCompact(p.power)}K</span><span class="hp">${p.hp>0?`${Math.round(pct)} %`:"K.O."}</span></div>`;
+    }).join("");
+    return `<div class="fkl-coop-team v150"><small>${c.teamSize}-PLAYER-KOOP · WELLE ${c.startWave}</small>${rows}</div>`;
   }
   function startCoopArena(match,fb,user){
     unlockFightAudio();const startAt=normalizeWaveCheckpoint(match.startWave||match.wave||1,MAX_WAVE_CHECKPOINT),uids=coopParticipantUids(match),profiles=coopParticipantProfiles(match);if(!uids.includes(user.uid))return toast("KOOP-Fehler","Dein Spieler ist nicht in dieser Lobby.");stopCoopWaiting(false);startCombat(startAt,{trackSoloProgress:false});const s=UI.session;if(!s)return;
     const positions=uids.map((_,i)=>{const a=-Math.PI/2+i*Math.PI*2/uids.length;return{x:WORLD_W/2+Math.cos(a)*145,y:WORLD_H/2+Math.sin(a)*105};}),selfIndex=uids.indexOf(user.uid),local=s.player,localProfile=profiles[user.uid]||coopProfile(),role=match.hostUid===user.uid?"host":"guest";local.coopUid=user.uid;local.coopName=String(localProfile.name||playerName()).slice(0,24);local.power=Number(localProfile.power||powerScore());local.x=positions[selfIndex].x;local.y=positions[selfIndex].y;local.hp=local.maxHp;local.shield=local.maxShield;local.spawnProtection=4;
     const remotes=[];uids.forEach((id,index)=>{if(id===user.uid)return;const p=hydrateCoopFriends(buildCoopPlayer(profiles[id]||{},positions[index].x,positions[index].y),profiles[id]||{});p.coopUid=id;p.power=Number(profiles[id]?.power||0);p.spawnProtection=4;remotes.push(p);});
     s.coop={role,matchId:match.id||match.matchId,fb,user,selfUid:user.uid,hostUid:match.hostUid,teamSize:uids.length,participantUids:uids,profiles,startWave:startAt,local,remotes,remote:remotes[0]||null,remoteByUid:new Map(remotes.map(p=>[p.coopUid,p])),remoteMeta:new Map(),remoteTargets:{},inputSeq:0,specialSeq:0,careCompanionSeq:0,careMountSeq:0,lastInputWrite:0,forceInputPending:false,lastSnapshotWrite:0,snapshotPending:false,lastSnapshotAt:0,lastSnapshotArrivalAt:0,lastSnapshotSeq:-1,frameSeq:0,inputFrameIndex:0,frameIndex:0,soundSeq:0,soundEvents:[],damageSeq:0,damageEvents:[],specialVisualSeq:0,specialEvents:[],lastSoundSeq:0,lastDamageSeq:0,lastSpecialVisualSeq:0,friendRewardSeq:0,lastFriendRewardSeq:0,lootRewardSeq:0,lootRewardEvents:[],lastLootRewardSeq:0,connected:true,ended:false,matchRef:fb.doc(fb.db,COOP_MATCH_COLLECTION,match.id||match.matchId)};
-    s.player=local;s.enemies=[];s.projectiles=[];s.enemyProjectiles=[];s.spawnQueue=[];s.waveClearAt=0;startWave(startAt);const stage=UI.main?.querySelector(".fkl-stage");if(stage)stage.insertAdjacentHTML("beforeend",coopTeamHudHtml(s.coop));setupCoopNetwork();showCombatMessage(`${uids.length}-PLAYER-KOOP · WELLE ${startAt}`);updateCoopHud();
+    s.player=local;s.enemies=[];s.projectiles=[];s.enemyProjectiles=[];s.spawnQueue=[];s.waveClearAt=0;startWave(startAt);const stage=UI.main?.querySelector(".fkl-stage");if(stage){stage.classList.add("fkl-stage-coop-v150");stage.style.setProperty("--fkl-coop-rows",String(Math.max(1,uids.length)));stage.insertAdjacentHTML("beforeend",coopTeamHudHtml(s.coop));}setupCoopNetwork();showCombatMessage(`${uids.length}-PLAYER-KOOP · WELLE ${startAt}`);updateCoopHud();
   }
   function setupCoopNetwork(){
     const s=UI.session,c=s?.coop;if(!c)return;for(const unsub of UI.coopUnsubs.splice(0)){try{unsub();}catch{}}const fb=c.fb;c.selfRef=fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.selfUid);c.inputRefs=Array.from({length:32},(_,i)=>fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.selfUid,"inputs",String(i)));fb.setDoc(c.selfRef,{uid:c.selfUid,name:c.local.coopName,left:false,power:c.local.power,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});
@@ -3080,7 +3115,18 @@ function updateHud() {
   }
   function stopCoopNetwork(markLeft=true){clearTimeout(UI.coopPollTimer);UI.coopPollTimer=0;clearInterval(UI.coopHeartbeatTimer);UI.coopHeartbeatTimer=0;for(const unsub of UI.coopUnsubs.splice(0)){try{unsub();}catch{}}const c=UI.session?.coop;if(!c)return;clearInterval(c.presenceTimer);if(markLeft&&!c.ended){if(c.role!=="host"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});}}
   function leaveWaveCoop(){const c=UI.session?.coop;if(c&&!c.ended){if(c.role!=="host"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});c.ended=true;}stopCoopNetwork(false);stopCombat(false);renderDashboard();}
-  function updateCoopHud(){const c=UI.session?.coop;if(!c)return;const pct=clamp(c.local.hp/c.local.maxHp*100,0,100),text=UI.main?.querySelector("[data-fkl-coop-self-text]"),bar=UI.main?.querySelector("[data-fkl-coop-self-bar]");if(text)text.textContent=c.local.hp>0?`${Math.round(pct)} % · ${Math.ceil(c.local.hp)}/${c.local.maxHp}`:"K.O.";if(bar)bar.style.width=`${pct}%`;UI.main?.querySelectorAll("[data-fkl-coop-mini]").forEach(node=>{const p=c.remoteByUid.get(node.dataset.fklCoopMini);if(!p)return;const hp=node.querySelector(".hp"),power=node.querySelector(".power"),v=clamp(p.hp/p.maxHp*100,0,100);if(hp)hp.textContent=p.hp>0?`${Math.round(v)} %`:"K.O.";if(power)power.textContent=`PWR ${powerCompact(p.power)}`;});}
+  function updateCoopHud(){
+    const c=UI.session?.coop;if(!c)return;
+    UI.main?.querySelectorAll("[data-fkl-coop-player]").forEach(node=>{
+      const uid=String(node.dataset.fklCoopPlayer||"");
+      const p=uid===String(c.selfUid||"")?c.local:c.remoteByUid.get(uid);
+      if(!p)return;
+      const hp=node.querySelector(".hp"),power=node.querySelector(".power"),pct=clamp(Number(p.hp||0)/Math.max(1,Number(p.maxHp||1))*100,0,100);
+      if(hp)hp.textContent=p.hp>0?`${Math.round(pct)} %`:"K.O.";
+      if(power)power.textContent=`PWR ${powerCompact(p.power)}K`;
+      node.classList.toggle("down",!(p.hp>0));
+    });
+  }
   function startWave(number){
     const s=UI.session;if(!s||s.ended)return;number=Math.max(1,Math.floor(Number(number)||1));if(s.trackSoloProgress!==false)unlockWaveCheckpoint(number);s.wave=number;s.waveStarted=true;s.waveClearAt=0;s.spawnTimer=0;s.spawnQueue=[];const bossWave=number%10===0,bossIndex=bossWave?Math.floor(number/10-1)%BOSSES.length:-1,endgameBossCount=endgameNormalBossCount(number);s.isBossWave=bossWave;s.bossPending=bossWave;s.expectedBoss=bossWave?(BOSSES[bossIndex]||BOSSES[0]):null;s.endgameBossCount=endgameBossCount;s.boss=null;let count=bossWave?5+Math.floor(number/7):6+Math.floor(number*1.62)+Math.floor(Math.pow(number,1.13)*.42);if(number>=20)count=Math.round(count*1.18);if(number>=40)count=Math.round(count*1.14);const teamSize=Math.max(1,Number(s.coop?.teamSize||1));count=Math.min(190,Math.round(count*(1+(teamSize-1)*.34)));if(bossWave)s.spawnQueue.push({boss:true,bossIndex});for(let i=0;i<endgameBossCount;i++)s.spawnQueue.push({normalBoss:true,bossIndex:(Math.floor(number/10)+i)%BOSSES.length,endgameRank:i+1});const unlocked=["grunt",...(number>=2?["runner"]:[]),...(number>=4?["shooter"]:[]),...(number>=6?["brute"]:[]),...(number>=8?["shield"]:[]),...(number>=12?["splitter"]:[]),...(number>=15?["bomber"]:[]),...(number>=20?["drone","medic"]:[]),...(number>=25?["tank"]:[]),...(number>=30?["sniper"]:[]),...(number>=38?["phantom"]:[])];for(let i=0;i<count;i++){let type=pick(unlocked);if(number<3&&Math.random()<.7)type="grunt";s.spawnQueue.push({type,elite:number>=20&&Math.random()<Math.min(.24,(number-18)*.006)});}const endgameLabel=endgameBossCount?`${endgameBossCount} ENDGAME-BOSS${endgameBossCount>1?"E":""}`:"",teamLabel=teamSize>1?` · ${teamSize}P-SKALIERUNG`:"";showCombatMessage(bossWave?`⚠ HAUPTBOSS · WELLE ${number} · 2× STÄRKE${endgameLabel?` + ${endgameLabel}`:""}${teamLabel}`:endgameLabel?`WELLE ${number} · ${endgameLabel}${teamLabel}`:number>=20?`WELLE ${number} · ELITE-ZONE${teamLabel}`:`WELLE ${number}${teamLabel}`);updateHud();
   }
