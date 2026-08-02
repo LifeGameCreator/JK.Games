@@ -245,3 +245,24 @@ body.fight-kl-open{overflow:hidden!important}
 @media(max-width:1100px){.fkl-bulk-delete{grid-template-columns:1fr}.fkl-bulk-delete-actions{grid-template-columns:repeat(3,minmax(105px,1fr))}}@media(max-width:650px){.fkl-bulk-delete-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.fkl-bulk-delete-actions button.all{grid-column:1/-1}.fkl-bulk-delete{padding:13px}.fkl-bulk-delete-actions button{min-width:0;font-size:11px}}
 
 .fkl-shop-rarity-tabs{display:flex;gap:7px;overflow-x:auto;padding:3px 1px 10px;scrollbar-width:thin}.fkl-shop-rarity-tabs button{flex:0 0 auto;display:flex;align-items:center;gap:7px;min-height:38px;padding:7px 11px;border:1px solid color-mix(in srgb,var(--rarity-filter,#7edfc5),transparent 70%);border-radius:11px;background:rgba(6,14,18,.86);color:#aebfc3;font-weight:900;cursor:pointer}.fkl-shop-rarity-tabs button b{min-width:23px;padding:2px 6px;border-radius:7px;background:rgba(255,255,255,.06);color:var(--rarity-filter,#7edfc5)}.fkl-shop-rarity-tabs button.active{color:#fff;border-color:var(--rarity-filter,#66efc5);box-shadow:0 0 16px color-mix(in srgb,var(--rarity-filter,#66efc5),transparent 76%)}.fkl-shop-rarity-tabs button:disabled{opacity:.3;cursor:not-allowed}
+
+/* V139: Hauptboss-Anzeige und KOOP-Position */
+.fkl-boss-wrap{
+  z-index:19;
+  pointer-events:none;
+  box-shadow:0 12px 34px #000b,0 0 28px #a735ff42;
+}
+.fkl-boss-wrap[hidden]{display:none!important}
+.fkl-boss-wrap.active{border-color:#d879ff;background:linear-gradient(180deg,#25102ff2,#100713f2)}
+.fkl-boss-wrap.pending{border-color:#ffbe45;background:linear-gradient(180deg,#332008f2,#140d05f2);animation:fkl-boss-warning .75s ease-in-out infinite alternate}
+.fkl-boss-wrap.pending .fkl-boss i{background:linear-gradient(90deg,#ff9c38,#ffe16b)}
+.fkl-stage.fkl-coop-stage .fkl-boss-wrap{top:78px}
+@keyframes fkl-boss-warning{from{filter:brightness(.9);box-shadow:0 12px 34px #000b,0 0 16px #ffb33f42}to{filter:brightness(1.18);box-shadow:0 12px 34px #000b,0 0 34px #ffb33f99}}
+@media(max-width:900px){
+  .fkl-stage.fkl-coop-stage .fkl-boss-wrap{top:108px;left:50%;transform:translateX(-50%);width:min(540px,78%)}
+  .fkl-stage.fkl-coop-stage .fkl-boss-wrap.pending{animation:fkl-boss-warning .75s ease-in-out infinite alternate}
+}
+@media(max-width:560px){
+  .fkl-stage.fkl-coop-stage .fkl-boss-wrap{top:104px;left:50%;transform:translateX(-50%);width:calc(100% - 24px)}
+  .fkl-boss-wrap b{font-size:12px}
+}
