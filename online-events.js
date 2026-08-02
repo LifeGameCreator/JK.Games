@@ -837,6 +837,22 @@
     return `${CLOUD_CONFLICT_BACKUP_PREFIX}${uid}:${Number(slotIndex)}:${Date.now()}`;
   }
 
+  function mergeFightKlOnCloudLoad(localState, remoteState) {
+    if (!localState || !remoteState) return remoteState;
+    const localFight = localState.fightKl;
+    const remoteFight = remoteState.fightKl;
+    const localItems = Array.isArray(localFight?.inventory) ? localFight.inventory.length : 0;
+    const remoteItems = Array.isArray(remoteFight?.inventory) ? remoteFight.inventory.length : 0;
+    const localUpdated = Number(localFight?.inventoryUpdatedAtMs || localState.onlineUpdatedAtMs || 0);
+    const remoteUpdated = Number(remoteFight?.inventoryUpdatedAtMs || remoteState.onlineUpdatedAtMs || 0);
+    if (localItems > 0 && (remoteItems === 0 || (localUpdated > remoteUpdated && localItems >= remoteItems))) {
+      remoteState.fightKl = JSON.parse(JSON.stringify(localFight));
+      remoteState.fightKl.inventoryRecoveredFromLocalV147 = true;
+      remoteState.fightKl.inventoryUpdatedAtMs = Math.max(Date.now(), localUpdated);
+    }
+    return remoteState;
+  }
+
   function slotSummary(slotState) {
     if (!slotState || typeof slotState !== "object") return { empty: true };
     return {
@@ -848,6 +864,10 @@
       petIds: Array.isArray(slotState.pets) ? slotState.pets.filter(Boolean).map((pet) => String(pet.id || pet.name || "")).filter(Boolean).sort() : [],
       items: Array.isArray(slotState.items) ? slotState.items.length : 0,
       properties: Array.isArray(slotState.properties) ? slotState.properties.length : 0,
+      fightItems: Array.isArray(slotState.fightKl?.inventory) ? slotState.fightKl.inventory.length : 0,
+      fightLevel: Math.max(0, Number(slotState.fightKl?.level || 0)),
+      fightBestWave: Math.max(0, Number(slotState.fightKl?.bestWave || 0)),
+      fightUpdatedAtMs: Math.max(0, Number(slotState.fightKl?.inventoryUpdatedAtMs || 0)),
       updatedAtMs: Math.max(0, Number(slotState.onlineUpdatedAtMs || 0))
     };
   }
@@ -878,7 +898,9 @@
       || localSummary.day > remoteSummary.day
       || localSummary.level > remoteSummary.level
       || localSummary.items > remoteSummary.items + 3
-      || localSummary.properties > remoteSummary.properties;
+      || localSummary.properties > remoteSummary.properties
+      || localSummary.fightItems > remoteSummary.fightItems
+      || localSummary.fightBestWave > remoteSummary.fightBestWave;
     const backupKey = backupConflictSlot(onlineUser?.uid || "", slotIndex, localState, reason);
     if (!meaningful) return;
     cloudConflicts.push({ slotIndex, localState, remoteState, remoteRevision, localSummary, remoteSummary, extraLocalPets, backupKey });
@@ -1002,6 +1024,7 @@
     queueCloudConflict(slotIndex, localState, remoteState, revision, "revision-conflict");
     remoteState.onlineUpdatedAtMs = Number(data.updatedAtMs || remoteState.onlineUpdatedAtMs || Date.now());
     remoteState.onlineAccountUid = onlineUser.uid;
+    remoteState = mergeFightKlOnCloudLoad(localState, remoteState);
     saveSlots[slotIndex] = remoteState;
     cloudSlotRevisions[slotIndex] = revision;
     cloudSlotLoaded[slotIndex] = true;
@@ -1188,6 +1211,7 @@
               queueCloudConflict(index, localState, remoteState, revision, "initial-hydration");
               remoteState.onlineUpdatedAtMs = Number(remoteData.updatedAtMs || remoteState.onlineUpdatedAtMs || Date.now());
               remoteState.onlineAccountUid = user.uid;
+              remoteState = mergeFightKlOnCloudLoad(localState, remoteState);
               saveSlots[index] = remoteState;
               cloudSlotRevisions[index] = revision;
             }
