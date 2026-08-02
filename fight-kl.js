@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v130-wave-checkpoints-admin-character-editor";
+  const VERSION = "20260802-fight-kl-v131-coop-friendly-fire";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 420;
@@ -1374,6 +1374,7 @@ function beginReload() {
       const crit = Math.random() < p.crit; damageEnemy(enemy, w.damage * p.damageMult * (crit ? p.critDamage : 1), crit, w.splash || 0); hit++;
       enemy.x += Math.cos(p.angle) * (w.id === "shock-hammer" ? 65 : 22); enemy.y += Math.sin(p.angle) * (w.id === "shock-hammer" ? 65 : 22);
     }
+    if (applyCoopFriendlyMeleeHit(p, w, range, arc)) hit++;
     s.particles.push({ type: "slash", x: p.x, y: p.y, angle: p.angle, radius: range, life: .24, maxLife: .24, color: RARITIES[w.rarity]?.color || "#fff" });
     if (w.dash) { p.x = clamp(p.x + Math.cos(p.angle) * w.dash, 20, WORLD_W - 20); p.y = clamp(p.y + Math.sin(p.angle) * w.dash, 20, WORLD_H - 20); }
     if (hit) chargeSpecial(Math.min(9, 1.8 + hit * 1.25));
@@ -1437,6 +1438,18 @@ function beginReload() {
     const s = UI.session;
     for (const bullet of [...s.projectiles]) {
       bullet.x += bullet.vx * dt; bullet.y += bullet.vy * dt; bullet.life -= dt;
+      if (s.coop && bullet.life > 0) {
+        const attacker = coopProjectileOwner(bullet);
+        const teammate = coopFriendlyTarget(attacker);
+        if (teammate && !bullet.hit.has(teammate)
+          && Math.hypot(teammate.x - bullet.x, teammate.y - bullet.y) <= teammate.radius + bullet.radius) {
+          bullet.hit.add(teammate);
+          damageCombatPlayer(teammate, bullet.damage, { ...bullet, friendlyFire: true, attacker });
+          showCombatMessage(`${attacker?.coopName || "SPIELER"} HAT ${teammate.coopName || "DEN TEAMKAMERADEN"} GETROFFEN`);
+          if (bullet.pierce > 0) bullet.pierce -= 1; else bullet.life = 0;
+        }
+      }
+      if (bullet.life <= 0) continue;
       for (const enemy of [...s.enemies]) {
         if (enemy.dead || bullet.hit.has(enemy)) continue;
         if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) <= enemy.radius + bullet.radius) {
@@ -1981,6 +1994,24 @@ function updateHud() {
   }
   function coopOwnerKey(player){const s=UI.session;if(!s?.coop)return"local";return player===s.coop.remote?"remote":"local";}
   function coopProjectileOwner(projectile){const s=UI.session;if(!s?.coop||projectile?.ownerKey!=="remote")return s?.coop?.local||s?.player;return s.coop.remote;}
+  function coopFriendlyTarget(attacker){
+    const s=UI.session;if(!s?.coop||!attacker)return null;
+    const target=attacker===s.coop.remote?(s.coop.local||s.player):s.coop.remote;
+    return target&&target!==attacker&&target.hp>0?target:null;
+  }
+  function applyCoopFriendlyMeleeHit(attacker,weapon,range,arc){
+    const target=coopFriendlyTarget(attacker);if(!target)return false;
+    const dx=target.x-attacker.x,dy=target.y-attacker.y,d=Math.hypot(dx,dy);
+    if(d>range+target.radius)return false;
+    const diff=Math.atan2(Math.sin(Math.atan2(dy,dx)-attacker.angle),Math.cos(Math.atan2(dy,dx)-attacker.angle));
+    if(Math.abs(diff)>arc/2)return false;
+    const crit=Math.random()<Number(attacker.crit||0),damage=Number(weapon.damage||1)*Number(attacker.damageMult||1)*(crit?Number(attacker.critDamage||1.75):1);
+    damageCombatPlayer(target,damage,{friendlyFire:true,melee:true,attacker});
+    target.x=clamp(target.x+Math.cos(attacker.angle)*(weapon.id==="shock-hammer"?48:16),target.radius,WORLD_W-target.radius);
+    target.y=clamp(target.y+Math.sin(attacker.angle)*(weapon.id==="shock-hammer"?48:16),target.radius,WORLD_H-target.radius);
+    showCombatMessage(`${attacker.coopName||"SPIELER"} HAT ${target.coopName||"DEN TEAMKAMERADEN"} GETROFFEN`);
+    return true;
+  }
   function damageEnemyForPlayer(player,enemy,amount,crit=false,splash=0){if(!player)return damageEnemy(enemy,amount,crit,splash);return withSessionPlayer(player,()=>damageEnemy(enemy,amount,crit,splash));}
   function drawCoopPlayerEntity(ctx,s,player,now,isLocal){
     if(!player)return;
@@ -2026,7 +2057,7 @@ function updateHud() {
   function renderCoopLobby(){
     if(!UI.main)return;stopCombat(false);stopDuel(false);stopCoopWaiting(true);
     const data=ensureState();
-    UI.main.innerHTML=`<div class="fkl-page">${pageHeader("Wellen-KOOP","Zwei Spieler kämpfen gemeinsam gegen dieselben Wellen. Die tatsächliche Startwelle wird auf den höchsten Startpunkt begrenzt, den beide Spieler freigeschaltet haben.")}<section class="fkl-panel fkl-coop-lobby"><div class="fkl-coop-emblem">🤝</div><small class="fkl-kicker">TEAM-ARENA</small><h2>Gemeinsam gegen endlose Bot-Wellen</h2><p>Die Bots greifen immer den nächsten lebenden Spieler an. Friendly Fire ist deaktiviert. Wird ein Spieler K.O., kämpft der andere weiter.</p><label class="fkl-coop-wave-select"><span>Gewünschte Startwelle</span><select data-fkl-coop-start-wave>${waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart)}</select><small>Deine Freischaltung: bis Welle ${data.unlockedWaveStart}</small></label><div class="fkl-coop-rules"><span>👥 2 Spieler</span><span>🤖 Gemeinsame Bots</span><span>🛡 Kein Friendly Fire</span><span>🏁 Gemeinsamer Startpunkt</span></div><button class="fkl-btn gold" type="button" data-fkl-find-coop>Mitspieler suchen</button><button class="fkl-btn" type="button" data-fkl-cancel-coop hidden>Suche abbrechen</button><div class="fkl-online-state" data-fkl-coop-status>Firebase ist bereit für die Suche.</div></section></div>`;
+    UI.main.innerHTML=`<div class="fkl-page">${pageHeader("Wellen-KOOP","Zwei Spieler kämpfen gemeinsam gegen dieselben Wellen. Die tatsächliche Startwelle wird auf den höchsten Startpunkt begrenzt, den beide Spieler freigeschaltet haben.")}<section class="fkl-panel fkl-coop-lobby"><div class="fkl-coop-emblem">🤝</div><small class="fkl-kicker">TEAM-ARENA</small><h2>Gemeinsam gegen endlose Bot-Wellen</h2><p>Die Bots greifen immer den nächsten lebenden Spieler an. Friendly Fire ist aktiviert: Kugeln, Begleiter-Projektile und Nahkampfangriffe können den Mitspieler verletzen. Wird ein Spieler K.O., kämpft der andere weiter.</p><label class="fkl-coop-wave-select"><span>Gewünschte Startwelle</span><select data-fkl-coop-start-wave>${waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart)}</select><small>Deine Freischaltung: bis Welle ${data.unlockedWaveStart}</small></label><div class="fkl-coop-rules"><span>👥 2 Spieler</span><span>🤖 Gemeinsame Bots</span><span>💥 Friendly Fire aktiv</span><span>🏁 Gemeinsamer Startpunkt</span></div><button class="fkl-btn gold" type="button" data-fkl-find-coop>Mitspieler suchen</button><button class="fkl-btn" type="button" data-fkl-cancel-coop hidden>Suche abbrechen</button><div class="fkl-online-state" data-fkl-coop-status>Firebase ist bereit für die Suche.</div></section></div>`;
     bindPageHome();
     UI.main.querySelector("[data-fkl-coop-start-wave]")?.addEventListener("change",event=>{data.selectedStartWave=normalizeWaveCheckpoint(event.currentTarget.value,data.unlockedWaveStart);safeSave();});
     UI.main.querySelector("[data-fkl-find-coop]")?.addEventListener("click",joinWaveCoop);UI.main.querySelector("[data-fkl-cancel-coop]")?.addEventListener("click",()=>stopCoopWaiting(true));
@@ -2074,8 +2105,8 @@ function updateHud() {
     s.coop={role,matchId:match.id||match.matchId,fb,user,local,remote,remoteInput:null,inputSeq:0,specialSeq:0,careCompanionSeq:0,careMountSeq:0,lastInputWrite:0,lastSnapshotWrite:0,snapshotPending:false,lastSnapshotAt:0,ended:false,connected:true,matchRef:fb.doc(fb.db,COOP_MATCH_COLLECTION,match.id||match.matchId)};
     s.player=local;s.camera.x=(local.x+remote.x)/2;s.camera.y=local.y-80;s.wave=startAt;
     if(role==="guest"){s.spawnQueue=[];s.enemies=[];s.projectiles=[];s.enemyProjectiles=[];s.pickups=[];s.waveStarted=false;s.waveClearAt=0;s.boss=null;}
-    const stage=UI.main?.querySelector(".fkl-stage");stage?.insertAdjacentHTML("beforeend",`<div class="fkl-coop-team" data-fkl-coop-team><div class="local"><small>${escapeHtml(local.coopName)}</small><div><i data-fkl-coop-local-bar></i></div><b data-fkl-coop-local-hp></b></div><span>🤝 KOOP</span><div class="remote"><small>${escapeHtml(remote.coopName)}</small><div><i data-fkl-coop-remote-bar></i></div><b data-fkl-coop-remote-hp></b></div></div><button class="fkl-coop-leave" type="button" data-fkl-coop-leave>KOOP verlassen</button>`);UI.main?.querySelector("[data-fkl-coop-leave]")?.addEventListener("click",leaveWaveCoop);
-    setupCoopNetwork();showCombatMessage(role==="host"?"KOOP GESTARTET · DU BIST HOST":"KOOP GESTARTET · MIT HOST VERBUNDEN");updateHud();
+    const stage=UI.main?.querySelector(".fkl-stage");stage?.insertAdjacentHTML("beforeend",`<div class="fkl-coop-team" data-fkl-coop-team><div class="local"><small>${escapeHtml(local.coopName)}</small><div><i data-fkl-coop-local-bar></i></div><b data-fkl-coop-local-hp></b></div><span>💥 KOOP · FF AN</span><div class="remote"><small>${escapeHtml(remote.coopName)}</small><div><i data-fkl-coop-remote-bar></i></div><b data-fkl-coop-remote-hp></b></div></div><button class="fkl-coop-leave" type="button" data-fkl-coop-leave>KOOP verlassen</button>`);UI.main?.querySelector("[data-fkl-coop-leave]")?.addEventListener("click",leaveWaveCoop);
+    setupCoopNetwork();showCombatMessage(role==="host"?"KOOP GESTARTET · FRIENDLY FIRE AKTIV":"KOOP VERBUNDEN · FRIENDLY FIRE AKTIV");updateHud();
   }
   function setupCoopNetwork(){
     const s=UI.session,c=s?.coop;if(!c)return;const fb=c.fb,selfRef=fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.user.uid);c.selfRef=selfRef;c.inputRefs=Array.from({length:16},(_,index)=>fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.user.uid,"inputs",String(index)));
@@ -2120,7 +2151,7 @@ function updateHud() {
   function coopSwitchRemoteWeapon(player,slot){const runtime=player.weaponRuntimes?.[slot];if(!runtime)return;player.activeWeaponSlot=slot;player.weaponItem=runtime.item;player.weapon=runtime.stats;player.ammo=runtime.ammo;player.reloading=runtime.reloading;player.reloadTimer=runtime.reloadTimer;player.specialType=runtime.stats.special||"";}
   function coopRemoteAttack(player,target){
     const s=UI.session,w=player.weapon;if(player.fireCooldown>0||player.reloading)return;if(w.attack!=="melee"&&player.ammo<=0){player.reloading=true;player.reloadTimer=Math.max(.35,w.reload||1.5);return;}const rate=Math.max(.15,Number(w.fireRate)||1);player.fireCooldown=1/rate;player.attackAnim=Math.min(.3,1/rate);player.angle=Math.atan2(target.y-player.y,target.x-player.x);
-    if(w.attack==="melee"){const range=w.range||80,arc=w.arc||1.6;for(const enemy of [...s.enemies]){const dx=enemy.x-player.x,dy=enemy.y-player.y,d=Math.hypot(dx,dy);if(d>range+enemy.radius)continue;const diff=Math.atan2(Math.sin(Math.atan2(dy,dx)-player.angle),Math.cos(Math.atan2(dy,dx)-player.angle));if(Math.abs(diff)>arc/2)continue;const crit=Math.random()<player.crit;damageEnemyForPlayer(player,enemy,w.damage*player.damageMult*(crit?player.critDamage:1),crit,w.splash||0);}s.particles.push({type:"slash",x:player.x,y:player.y,angle:player.angle,radius:range,life:.24,maxLife:.24,color:RARITIES[w.rarity]?.color||"#fff"});}
+    if(w.attack==="melee"){const range=w.range||80,arc=w.arc||1.6;for(const enemy of [...s.enemies]){const dx=enemy.x-player.x,dy=enemy.y-player.y,d=Math.hypot(dx,dy);if(d>range+enemy.radius)continue;const diff=Math.atan2(Math.sin(Math.atan2(dy,dx)-player.angle),Math.cos(Math.atan2(dy,dx)-player.angle));if(Math.abs(diff)>arc/2)continue;const crit=Math.random()<player.crit;damageEnemyForPlayer(player,enemy,w.damage*player.damageMult*(crit?player.critDamage:1),crit,w.splash||0);}applyCoopFriendlyMeleeHit(player,w,range,arc);s.particles.push({type:"slash",x:player.x,y:player.y,angle:player.angle,radius:range,life:.24,maxLife:.24,color:RARITIES[w.rarity]?.color||"#fff"});}
     else{player.ammo-=1;const count=w.attack==="shotgun"?Math.max(1,Math.round(w.pellets||7)):1;for(let i=0;i<count;i++){const angle=player.angle+(w.spread||0)*rand(-1,1),crit=Math.random()<player.crit;s.projectiles.push({x:player.x+Math.cos(angle)*28,y:player.y+Math.sin(angle)*28,vx:Math.cos(angle)*(w.attack==="shotgun"?760:940),vy:Math.sin(angle)*(w.attack==="shotgun"?760:940),radius:rarityIndex(w.rarity)>=5?5:3,damage:w.damage*player.damageMult*(crit?player.critDamage:1),life:(w.range||620)/900,color:crit?"#ffe05a":RARITIES[w.rarity]?.color||"#fff",crit,pierce:Math.max(0,Math.round(w.pierce||0)),splash:Number(w.splash||0),ownerKey:"remote",hit:new Set()});}if(player.ammo<=0){player.reloading=true;player.reloadTimer=Math.max(.35,w.reload||1.5);}}
   }
   function serializeCoopPlayer(player){return cleanCoopData({x:player.x,y:player.y,angle:player.angle,moving:player.moving,hp:player.hp,maxHp:player.maxHp,shield:player.shield,maxShield:player.maxShield,activeWeaponSlot:player.activeWeaponSlot,ammo:player.ammo,reloading:player.reloading,specialCharge:player.specialCharge,specialReady:player.specialReady,companionCareTimer:player.companionCare?.timer||0,mountCareTimer:player.mountCare?.timer||0,mountActive:player.mountActive,mountArmor:player.mountArmor,mountMaxArmor:player.mountMaxArmor,companion:player.companion?{x:player.companion.x,y:player.companion.y,angle:player.companion.angle,moving:player.companion.moving,hp:player.companion.hp,maxHp:player.companion.maxHp,dead:player.companion.dead,attackAnim:player.companion.attackAnim}:null});}
