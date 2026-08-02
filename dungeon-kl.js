@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-dungeon-kl-v156-path-target-heal-los-animation-fix";
+  const VERSION = "20260802-dungeon-kl-v157-catacomb-collision-connectors-fix";
   const MAX_LEVEL = 100;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
@@ -496,9 +496,14 @@
     const block=(x,y,w,h,k="pit")=>blocked.push(rct(x,y,w,h,k));
     const ladder=(x,y,w,h,dir="vertical")=>{const v=rct(x,y,w,h,"ladder");walkable.push(v);ladders.push({...v,dir});};
     if (variant===0 || kind==="catacomb") {
-      add(110,640,1280,170); add(630,100,240,610); add(110,100,510,210); add(880,100,510,210); add(110,350,410,210); add(980,350,410,210);
-      ladder(700,560,100,90); add(590,170,90,95,"corridor"); add(820,170,90,95,"corridor"); entry={x:750,y:755}; exit={x:750,y:140}; bossPoint={x:750,y:245}; chestPoint={x:300,y:450};
-      block(540,350,120,190,kind==="flooded"?"water":"pit"); block(840,350,120,190,kind==="flooded"?"water":"pit"); ladder(500,410,180,76,"horizontal"); ladder(820,410,180,76,"horizontal");
+      // V157: Die Krypta besitzt bewusst überlappende Übergänge. Dadurch entstehen
+      // an den Kanten der Rechtecke keine unsichtbaren Kollisionsnähte mehr.
+      add(110,640,1280,170); add(620,90,260,630); add(100,90,530,225); add(870,90,530,225); add(100,340,440,230); add(960,340,440,230);
+      ladder(690,545,120,115);
+      add(565,150,140,145,"corridor"); add(795,150,140,145,"corridor");
+      entry={x:750,y:755}; exit={x:750,y:140}; bossPoint={x:750,y:245}; chestPoint={x:300,y:450};
+      block(535,335,130,225,kind==="flooded"?"water":"pit"); block(835,335,130,225,kind==="flooded"?"water":"pit");
+      ladder(475,385,235,125,"horizontal"); ladder(790,385,235,125,"horizontal");
     } else if (variant===1 || kind==="flooded") {
       add(80,650,520,170); add(410,470,190,350); add(410,410,650,170); add(870,190,190,390); add(870,100,550,170); add(1110,270,310,250);
       ladder(490,580,90,90); ladder(930,310,90,100); entry={x:180,y:735}; exit={x:1320,y:160}; bossPoint={x:1210,y:390}; chestPoint={x:710,y:490};
@@ -539,7 +544,24 @@
     if (!layout.enemySpawns.length) layout.enemySpawns=[{x:bossPoint.x,y:bossPoint.y+100}];
     return layout;
   }
-  function isPointInWalkableRaw(walkable,blocked,x,y,r=0){const floor=walkable.some(z=>containsRect(z,x,y,r)),bridge=walkable.some(z=>z.kind==="ladder"&&containsRect(z,x,y,r));return bridge||(floor&&!blocked.some(z=>intersectsRect(z,x,y,r)));}
+  function pointOnDungeonSurface(walkable,blocked,x,y){
+    const onBridge=walkable.some(z=>z.kind==="ladder"&&x>=z.x&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h);
+    if(onBridge)return true;
+    const onFloor=walkable.some(z=>x>=z.x&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h);
+    if(!onFloor)return false;
+    return !blocked.some(z=>x>z.x&&x<z.x+z.w&&y>z.y&&y<z.y+z.h);
+  }
+  function isPointInWalkableRaw(walkable,blocked,x,y,r=0){
+    const radius=Math.max(0,Number(r)||0);
+    if(!pointOnDungeonSurface(walkable,blocked,x,y))return false;
+    if(radius<=0)return true;
+    // Eine Figur darf über die Naht zweier direkt verbundener Bodenrechtecke laufen.
+    // Deshalb wird ihre Kreisfläche gegen die Vereinigung aller Bodenflächen geprüft,
+    // statt zu verlangen, dass der komplette Kreis in genau einem Rechteck liegt.
+    const d=radius*.70710678;
+    const samples=[[radius,0],[-radius,0],[0,radius],[0,-radius],[d,d],[-d,d],[d,-d],[-d,-d],[radius*.5,0],[-radius*.5,0],[0,radius*.5],[0,-radius*.5]];
+    return samples.every(([dx,dy])=>pointOnDungeonSurface(walkable,blocked,x+dx,y+dy));
+  }
   function collectSpawnPoints(layout,count,rnd,entry,exit){const out=[];let guard=0;while(out.length<count&&guard++<900){const z=layout.walkable[Math.floor(rnd()*layout.walkable.length)],x=z.x+45+rnd()*Math.max(20,z.w-90),y=z.y+45+rnd()*Math.max(20,z.h-90);if(!isPointInWalkableRaw(layout.walkable,layout.blocked,x,y,28)||!isReachablePoint(layout,x,y))continue;if(Math.hypot(x-entry.x,y-entry.y)<260||Math.hypot(x-exit.x,y-exit.y)<100)continue;if(layout.props.some(p=>p.r&&Math.hypot(x-p.x,y-p.y)<p.r+40))continue;out.push({x,y});}return out;}
   function markReachable(layout,start){const nav=layout.nav;if(!nav)return;const sx=clamp(Math.floor(start.x/nav.cell),0,nav.cols-1),sy=clamp(Math.floor(start.y/nav.cell),0,nav.rows-1),key=(x,y)=>`${x}:${y}`,q=[[sx,sy]],seen=new Set([key(sx,sy)]),dirs=[[1,0],[-1,0],[0,1],[0,-1]];for(let head=0;head<q.length;head++){const[x,y]=q[head];for(const[dx,dy]of dirs){const nx=x+dx,ny=y+dy,k=key(nx,ny);if(nx<0||ny<0||nx>=nav.cols||ny>=nav.rows||!nav.grid[ny][nx]||seen.has(k))continue;seen.add(k);q.push([nx,ny]);}}layout.reachable=seen;}
   function isReachablePoint(layout,x,y){const nav=layout.nav;if(!nav||!layout.reachable)return true;return layout.reachable.has(`${clamp(Math.floor(x/nav.cell),0,nav.cols-1)}:${clamp(Math.floor(y/nav.cell),0,nav.rows-1)}`);}
