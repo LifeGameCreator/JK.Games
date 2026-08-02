@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v127-ingame-face-direction-fix";
+  const VERSION = "20260802-fight-kl-v130-wave-checkpoints-admin-character-editor";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 420;
@@ -15,6 +15,11 @@
   const DUEL_GET_FUNCTION = "fightKlGetDuel";
   const DUEL_ACTION_FUNCTION = "fightKlDuelAction";
   const DUEL_LEAVE_FUNCTION = "fightKlLeaveDuel";
+  const COOP_LOBBY_PATH = ["fightKlCoopSystem", "publicLobby"];
+  const COOP_MATCH_COLLECTION = "fightKlCoopMatches";
+  const COOP_INVITE_COLLECTION = "fightKlCoopInvites";
+  const COOP_SNAPSHOT_INTERVAL = 170;
+  const COOP_INPUT_INTERVAL = 75;
   const EURO = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
   const NUMBER = new Intl.NumberFormat("de-DE");
 
@@ -338,6 +343,9 @@
     duel: null,
     duelPollTimer: 0,
     duelRaf: 0,
+    coopWaiting: null,
+    coopPollTimer: 0,
+    coopUnsubs: [],
     mergeConfirmTimer: 0,
     mergeConfirmOpen: false
   };
@@ -355,6 +363,32 @@
   const rarityIndex = item => Math.max(0, RARITY_ORDER.indexOf(typeof item === "string" ? item : rarityKey(item)));
   const requiredLevel = item => Math.max(Number(itemDef(item).minLevel || 1), Number(rarityDef(item).minLevel || 1));
   const starText = star => star > 0 ? "★".repeat(star) : "Basis";
+  const MAX_WAVE_CHECKPOINT = 500;
+  function normalizeWaveCheckpoint(value, maxAllowed = MAX_WAVE_CHECKPOINT) {
+    const max = Math.max(1, Math.min(MAX_WAVE_CHECKPOINT, Math.floor(Number(maxAllowed) || 1)));
+    const raw = Math.max(1, Math.floor(Number(value) || 1));
+    if (raw < 10 || max < 10) return 1;
+    return Math.min(Math.floor(max / 10) * 10, Math.floor(raw / 10) * 10);
+  }
+  function waveCheckpointValues(maxAllowed = 1) {
+    const max = normalizeWaveCheckpoint(maxAllowed, MAX_WAVE_CHECKPOINT);
+    const values = [1];
+    for (let wave = 10; wave <= max; wave += 10) values.push(wave);
+    return values;
+  }
+  function waveCheckpointOptions(selected, maxAllowed) {
+    const normalized = normalizeWaveCheckpoint(selected, maxAllowed);
+    return waveCheckpointValues(maxAllowed).map(wave => `<option value="${wave}" ${wave === normalized ? "selected" : ""}>${wave === 1 ? "Welle 1 · von vorne" : `Welle ${wave}`}</option>`).join("");
+  }
+  function unlockWaveCheckpoint(wave) {
+    const data = ensureState();
+    if (!data) return;
+    const checkpoint = normalizeWaveCheckpoint(wave, MAX_WAVE_CHECKPOINT);
+    if (checkpoint < 10 || checkpoint <= data.unlockedWaveStart) return;
+    data.unlockedWaveStart = checkpoint;
+    safeSave();
+    toast("Neue Startwelle freigeschaltet", `Du kannst künftig direkt bei Welle ${checkpoint} starten.`);
+  }
   function companionOwnerBonuses(item) {
     if (!item || itemDef(item).category !== "companion") return { damage: 0, defense: 0 };
     const def = itemDef(item);
@@ -503,6 +537,7 @@ function ensureStateV116() {
   if (!appState) return null;
   appState.fightKl ||= {};
   const data = appState.fightKl;
+  const hasStoredInventory = Object.prototype.hasOwnProperty.call(data, "inventory");
   data.version = VERSION;
   data.level = clamp(Math.floor(Number(data.level) || 1), 1, MAX_LEVEL);
   data.xp = Math.max(0, Math.floor(Number(data.xp) || 0));
@@ -511,7 +546,8 @@ function ensureStateV116() {
   data.bestScore = Math.max(0, Math.floor(Number(data.bestScore) || 0));
   data.totalKills = Math.max(0, Math.floor(Number(data.totalKills) || 0));
   data.runs = Math.max(0, Math.floor(Number(data.runs) || 0));
-  data.inventory = Array.isArray(data.inventory) && data.inventory.length ? data.inventory : defaultInventory();
+  if (!hasStoredInventory) data.inventory = defaultInventory();
+  else if (!Array.isArray(data.inventory)) data.inventory = [];
   data.inventory = data.inventory.slice(0, INVENTORY_LIMIT).map(raw => {
     const def = ITEM_MAP.get(raw?.baseId);
     if (!def) return null;
@@ -746,7 +782,7 @@ function detailHtml(item) {
   const currentIndex = rarityIndex(item); const nextKey = currentIndex < rarityIndex("legendary") ? RARITY_ORDER[currentIndex + 1] : ""; const next = nextKey ? RARITIES[nextKey] : null;
   const canPromote = item.star >= MAX_STAR && !!next;
   const adminBlock = canUseStaffModMenu() ? `<div class="fkl-admin-block"><div class="fkl-admin-head"><small class="fkl-kicker">ADMIN / OWNER MOD-MENÜ</small><b>${staffRoleLabel()}</b></div><p>Direkte Item-Verwaltung nur für Admin und Owner. Sterne werden sofort übernommen.</p><div class="fkl-admin-stars">${Array.from({length: MAX_STAR + 1}, (_,index) => `<button class="${Number(item.star||0)===index?"active":""}" type="button" data-fkl-admin-star="${item.uid}" data-star="${index}">${index===0?"Basis":`${index}★`}</button>`).join("")}</div><div class="fkl-admin-actions"><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="-1">−1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="1">+1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-durability="${item.uid}">Max. Haltbarkeit</button><button class="fkl-btn gold" type="button" data-fkl-admin-duplicate="${item.uid}">Duplizieren</button></div></div>` : "";
-  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${def.icon}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div><p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions"><button class="fkl-btn primary" type="button" data-fkl-equip="${item.uid}" ${locked ? "disabled" : ""}>${isEquipped ? `${SLOT_META[slot]?.name || "Item"} ausgerüstet` : `In ${SLOT_META[slot]?.name || "Slot"} ausrüsten`}</button>${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ Zu ${next.name}</button>` : ""}${item.star >= MAX_STAR && currentIndex >= rarityIndex("legendary") ? `<small class="fkl-rarity-cap">${r.name} bleibt eine eigene Itemlinie und kann nur bis fünf Sterne verbessert werden.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}<button class="fkl-btn danger" type="button" data-fkl-sell="${item.uid}">Verkaufen · ${EURO.format(fightItemSellPrice(item))}</button></div>${adminBlock}</aside>`;
+  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${def.icon}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div><p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions"><button class="fkl-btn primary" type="button" data-fkl-equip="${item.uid}" ${locked ? "disabled" : ""}>${isEquipped ? `${SLOT_META[slot]?.name || "Item"} ausgerüstet` : `In ${SLOT_META[slot]?.name || "Slot"} ausrüsten`}</button>${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ Zu ${next.name}</button>` : ""}${item.star >= MAX_STAR && currentIndex >= rarityIndex("legendary") ? `<small class="fkl-rarity-cap">${r.name} bleibt eine eigene Itemlinie und kann nur bis fünf Sterne verbessert werden.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}${data.inventory.length <= 1 ? `<button class="fkl-btn danger" type="button" disabled title="Das letzte Item muss im Inventar bleiben.">Letztes Item · nicht verkäuflich</button>` : `<button class="fkl-btn danger" type="button" data-fkl-sell="${item.uid}">Verkaufen · ${EURO.format(fightItemSellPrice(item))}</button>`}</div>${adminBlock}</aside>`;
 }
 
 
@@ -771,7 +807,7 @@ function detailHtml(item) {
 function drawInventory() {
   const data = ensureState(); if (!UI.main) return;
   const detail = data.inventory.find(item => item.uid === UI.detailUid) || null;
-  UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Merge-Inventar & Loadout", `${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Zwei identische Items derselben Seltenheit und Sternstufe ergeben den nächsten Stern. Verkauf bringt immer 30 % des berechneten Itemwerts.`, `<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size === 2 ? "" : "disabled"}>✨ ${UI.selected.size}/2 matchen</button>`)}${loadoutPanelHtml()}<div class="fkl-inventory-layout"><section class="fkl-inventory">${data.inventory.map(itemCard).join("")}</section>${detailHtml(detail)}</div></div>`;
+  UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Merge-Inventar & Loadout", `${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Zwei identische Items derselben Seltenheit und Sternstufe ergeben den nächsten Stern. Verkauf bringt 30 % des berechneten Itemwerts. Das letzte Item bleibt immer im Inventar.`, `<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size === 2 ? "" : "disabled"}>✨ ${UI.selected.size}/2 matchen</button>`)}${loadoutPanelHtml()}<div class="fkl-inventory-layout"><section class="fkl-inventory">${data.inventory.map(itemCard).join("")}</section>${detailHtml(detail)}</div></div>`;
   bindPageHome();
   UI.main.querySelectorAll("[data-fkl-item]").forEach(card => {
     card.addEventListener("dragstart", event => { event.dataTransfer?.setData("text/fight-kl-item", card.dataset.fklItem); event.dataTransfer && (event.dataTransfer.effectAllowed = "move"); card.classList.add("dragging"); });
@@ -936,14 +972,18 @@ function dailyShopItems(category = UI.shopCategory) {
     return Math.max(1,Math.round(fightItemFullValue(item)*.30));
   }
   function requestSellFightItem(uidValue) {
-    const data=ensureState(),item=data.inventory.find(entry=>entry.uid===uidValue);if(!item)return;
+    const data=ensureState();
+    if (data.inventory.length <= 1) return toast("Letztes Item bleibt", "Das letzte Item im Fight.KL-Inventar kann nicht verkauft werden.");
+    const item=data.inventory.find(entry=>entry.uid===uidValue);if(!item)return;
     const def=itemDef(item),price=fightItemSellPrice(item),equippedSlots=Object.entries(data.equipped).filter(([,id])=>id===item.uid).map(([slot])=>SLOT_META[slot]?.name||slot);
     const modal=showModal(`<div class="fkl-sell-confirm"><div class="fkl-merge-confirm-icon" style="${itemStyle(item)}">${def.icon}</div><small class="fkl-kicker">30 % VERKAUFSWERT</small><h3>${escapeHtml(def.name)} verkaufen?</h3><p>Du erhältst <b>${EURO.format(price)}</b>.${equippedSlots.length?`<br>Das Item wird automatisch aus ${escapeHtml(equippedSlots.join(", "))} entfernt.`:""}</p><div class="fkl-modal-actions"><button class="fkl-btn danger" type="button" data-fkl-confirm-sell>Verkaufen</button><button class="fkl-btn" type="button" data-fkl-cancel-sell>Behalten</button></div></div>`);
     modal.querySelector("[data-fkl-confirm-sell]")?.addEventListener("click",()=>{modal.remove();sellFightItem(item.uid)});
     modal.querySelector("[data-fkl-cancel-sell]")?.addEventListener("click",()=>modal.remove());
   }
   function sellFightItem(uidValue) {
-    const data=ensureState(),index=data.inventory.findIndex(entry=>entry.uid===uidValue);if(index<0)return;
+    const data=ensureState();
+    if (data.inventory.length <= 1) return toast("Letztes Item bleibt", "Das letzte Item im Fight.KL-Inventar kann nicht verkauft werden.");
+    const index=data.inventory.findIndex(entry=>entry.uid===uidValue);if(index<0)return;
     const item=data.inventory[index],def=itemDef(item),price=fightItemSellPrice(item);
     Object.keys(data.equipped||{}).forEach(slot=>{if(data.equipped[slot]===item.uid)data.equipped[slot]="";});
     data.inventory.splice(index,1);UI.selected.delete(item.uid);if(UI.detailUid===item.uid)UI.detailUid=data.inventory[0]?.uid||"";
@@ -1085,7 +1125,7 @@ function switchToNextWeapon() {
   saveActiveWeaponRuntime(p); p.activeWeaponSlot = "fists"; p.weaponItem = null; p.weapon = { id:"fists", name:"Fäuste", attack:"melee", family:"melee", rarity:"common", damage:9, fireRate:1.2, range:62, arc:1.5 }; p.ammo=1; p.reloading=false; p.specialType=p.moduleSpecial||""; p.specialCharge=0; p.specialReady=false; showCombatMessage("ALLE WAFFEN KAPUTT · FÄUSTE"); return false;
 }
 
-function startCombat() {
+function startCombat(startAtWave = null) {
   const data = ensureState(); const weaponItems = WEAPON_SLOT_KEYS.map(equipped).filter(Boolean);
   if (!weaponItems.length) return toast("Keine Waffe", "Rüste mindestens eine Nahkampfwaffe, Pistole oder Langwaffe aus.");
   const usable = weaponItems.find(item => data.level >= requiredLevel(item) && (!itemMaxDurability(item) || item.durability > 0));
@@ -1098,7 +1138,10 @@ function startCombat() {
   const canvas = UI.main.querySelector("[data-fkl-canvas]");
   UI.session = { canvas, ctx: canvas.getContext("2d", { alpha: false }), player, viewW: 1280, viewH: 720, screenW:1280, screenH:720, zoom:1, dpr: 1, camera: { x: player.x, y: player.y - 90 }, wave: 0, waveStarted: false, waveClearAt: 0, spawnQueue: [], spawnTimer: 0, enemies: [], projectiles: [], enemyProjectiles: [], particles: [], texts: [], pickups: [], score: 0, kills: 0, startedAt: performance.now(), paused: false, ended: false, autoFire: data.settings.autoFire !== false, joystick: { active: false, id: null, x: 0, y: 0, ox: 0, oy: 0 }, resizeObserver: null, boss: null, moneyEarned: 0, lootEarned: [], lastSave: 0, waveMessage: "", themeIndex: 0, theme: ARENA_THEMES[0], decorations: createArenaDecorations(0), frameCount: 0, fpsClock: performance.now(), fps: 60, specialInProgress: false };
   bindCombatControls(); resizeCombat(); UI.session.resizeObserver = new ResizeObserver(resizeCombat); UI.session.resizeObserver.observe(canvas.parentElement);
-  startWave(1); updateHud(); UI.last = performance.now(); cancelAnimationFrame(UI.raf); UI.raf = requestAnimationFrame(combatLoop);
+  const requestedStartWave = normalizeWaveCheckpoint(startAtWave == null ? data.selectedStartWave : startAtWave, data.unlockedWaveStart);
+  data.selectedStartWave = requestedStartWave;
+  safeSave();
+  startWave(requestedStartWave); updateHud(); UI.last = performance.now(); cancelAnimationFrame(UI.raf); UI.raf = requestAnimationFrame(combatLoop);
   playSound(180, .14, "sawtooth"); setTimeout(() => playSound(330, .18, "square"), 120);
 }
 
@@ -1152,6 +1195,8 @@ function startCombat() {
   }
   function startWave(number) {
     const s = UI.session; if (!s || s.ended) return;
+    number = Math.max(1, Math.floor(Number(number) || 1));
+    unlockWaveCheckpoint(number);
     s.wave = number; s.waveStarted = true; s.waveClearAt = 0; s.spawnTimer = 0; s.spawnQueue = [];
     const bossWave = number % 10 === 0;
     let count = bossWave ? 5 + Math.floor(number / 7) : 6 + Math.floor(number * 1.62) + Math.floor(Math.pow(number, 1.13) * .42);
@@ -1171,28 +1216,35 @@ function startCombat() {
     let x = clamp(s.player.x + Math.cos(angle) * dist, 35, WORLD_W - 35), y = clamp(s.player.y + Math.sin(angle) * dist, 35, WORLD_H - 35);
     if (spec.boss) {
       const boss = BOSSES[spec.bossIndex] || BOSSES[0]; const scale = 1 + Math.max(0, s.wave - 10) * .055;
-      const enemy = { ...boss, type: "boss", boss: true, x, y, maxHp: boss.hp * scale, hp: boss.hp * scale, speed: boss.speed * (1 + s.wave * .006), damage: boss.damage * (1 + s.wave * .04), attackCooldown: 1.5, abilityCooldown: 2.5, hitFlash: 0, angle: 0, phase: 0, dead: false, statusTimer: 0, statusType: "" };
+      const enemy = { id: uid(), ...boss, type: "boss", boss: true, x, y, maxHp: boss.hp * scale, hp: boss.hp * scale, speed: boss.speed * (1 + s.wave * .006), damage: boss.damage * (1 + s.wave * .04), attackCooldown: 1.5, abilityCooldown: 2.5, hitFlash: 0, angle: 0, phase: 0, dead: false, statusTimer: 0, statusType: "" };
       s.enemies.push(enemy); s.boss = enemy; return;
     }
     const base = ENEMIES[spec.type] || ENEMIES.grunt; const scale = 1 + s.wave * .115 + Math.pow(s.wave, 1.25) * .012; const elite = !!spec.elite;
-    s.enemies.push({ ...base, type: spec.type, elite, x, y, maxHp: base.hp * scale * (elite ? 2.15 : 1), hp: base.hp * scale * (elite ? 2.15 : 1), radius: base.radius * (elite ? 1.16 : 1), speed: base.speed * (1 + Math.min(.75, s.wave * .012)) * (elite ? 1.08 : 1), damage: base.damage * (1 + s.wave * .045) * (elite ? 1.55 : 1), score: base.score * (elite ? 2.5 : 1), xp: base.xp * (elite ? 2.2 : 1), attackCooldown: rand(.2, 1.1), abilityCooldown: rand(1, 3), hitFlash: 0, angle: 0, phase: rand(0, 10), dead: false, statusTimer: 0, statusType: "" });
+    s.enemies.push({ id: uid(), ...base, type: spec.type, elite, x, y, maxHp: base.hp * scale * (elite ? 2.15 : 1), hp: base.hp * scale * (elite ? 2.15 : 1), radius: base.radius * (elite ? 1.16 : 1), speed: base.speed * (1 + Math.min(.75, s.wave * .012)) * (elite ? 1.08 : 1), damage: base.damage * (1 + s.wave * .045) * (elite ? 1.55 : 1), score: base.score * (elite ? 2.5 : 1), xp: base.xp * (elite ? 2.2 : 1), attackCooldown: rand(.2, 1.1), abilityCooldown: rand(1, 3), hitFlash: 0, angle: 0, phase: rand(0, 10), dead: false, statusTimer: 0, statusType: "" });
   }
   function combatLoop(now) {
     const s = UI.session; if (!s || s.ended) return;
     const dt = Math.min(.034, Math.max(.001, (now - UI.last) / 1000)); UI.last = now;
-    if (!s.paused) updateCombat(dt, now);
+    if (!s.paused) {
+      if (s.coop?.role === "guest") updateCoopGuest(dt, now);
+      else updateCombat(dt, now);
+    }
     drawCombat(now);
     UI.raf = requestAnimationFrame(combatLoop);
   }
   function updateCombat(dt, now) {
-    const s = UI.session, p = s.player; if (!s || s.ended) return;
+    const s = UI.session, p = s?.player; if (!s || s.ended) return;
     s.frameCount++; if (now - s.fpsClock >= 1000) { s.fps = s.frameCount * 1000 / (now - s.fpsClock); s.frameCount = 0; s.fpsClock = now; }
     if (s.spawnQueue.length) {
       s.spawnTimer -= dt;
       if (s.spawnTimer <= 0) { spawnEnemy(s.spawnQueue.shift()); s.spawnTimer = s.wave <= 3 ? .55 : Math.max(.12, .42 - s.wave * .006); }
     }
-    if(p.companionCare)p.companionCare.timer=Math.max(0,p.companionCare.timer-dt);if(p.mountCare)p.mountCare.timer=Math.max(0,p.mountCare.timer-dt);updatePlayer(dt);
+    if(p.companionCare)p.companionCare.timer=Math.max(0,p.companionCare.timer-dt);
+    if(p.mountCare)p.mountCare.timer=Math.max(0,p.mountCare.timer-dt);
+    updatePlayer(dt);
+    if (s.coop?.role === "host") updateCoopRemotePlayer(dt, now);
     updateCompanion(dt);
+    if (s.coop?.role === "host" && s.coop.remote) withSessionPlayer(s.coop.remote, () => updateCompanion(dt));
     updateEnemies(dt);
     updateProjectiles(dt);
     updateParticles(dt);
@@ -1202,15 +1254,24 @@ function startCombat() {
       showCombatMessage(`WELLE ${s.wave} GESCHAFFT`);
     }
     if (s.waveClearAt && now >= s.waveClearAt) startWave(s.wave + 1);
+    const cameraTarget = p.hp > 0 ? p : (s.coop?.remote?.hp > 0 ? s.coop.remote : p);
     const cameraSpeed = 1 - Math.pow(.001, dt);
-    s.camera.x += (p.x - s.camera.x) * cameraSpeed; s.camera.y += ((p.y - s.viewH * .12) - s.camera.y) * cameraSpeed;
-    if (p.regen > 0 && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
-    if (p.hitFlash > 0) p.hitFlash -= dt; if (p.attackAnim > 0) p.attackAnim -= dt;
+    s.camera.x += (cameraTarget.x - s.camera.x) * cameraSpeed; s.camera.y += ((cameraTarget.y - s.viewH * .12) - s.camera.y) * cameraSpeed;
+    for (const entity of combatPlayers()) {
+      if (entity.regen > 0 && entity.hp > 0) entity.hp = Math.min(entity.maxHp, entity.hp + entity.regen * dt);
+      if (entity.hitFlash > 0) entity.hitFlash -= dt;
+      if (entity.attackAnim > 0) entity.attackAnim -= dt;
+    }
+    if (s.coop?.role === "host") {
+      if (combatPlayers(true).every(entity => entity.hp <= 0)) finishCoopHost("Beide Spieler wurden besiegt.");
+      writeCoopSnapshot(now);
+    }
     if (now - s.lastSave > 12000) { s.lastSave = now; safeSave(); }
     updateHud();
   }
 function updatePlayer(dt) {
   const s = UI.session, p = s.player;
+  if (!p || p.hp <= 0) { if (p) { p.moving=false; p.vx=0; p.vy=0; } return; }
   let mx = 0, my = 0;
   if (UI.keys.KeyW || UI.keys.ArrowUp) my -= 1; if (UI.keys.KeyS || UI.keys.ArrowDown) my += 1;
   if (UI.keys.KeyA || UI.keys.ArrowLeft) mx -= 1; if (UI.keys.KeyD || UI.keys.ArrowRight) mx += 1;
@@ -1266,7 +1327,7 @@ function beginReload() {
     const count = w.attack === "shotgun" ? Math.max(1, Math.round(w.pellets || 7)) : 1;
     for (let i = 0; i < count; i++) {
       const spread = (w.spread || 0) * rand(-1, 1); const angle = p.angle + spread; const crit = Math.random() < p.crit;
-      s.projectiles.push({ x: p.x + Math.cos(angle) * 28, y: p.y + Math.sin(angle) * 28, vx: Math.cos(angle) * (w.attack === "shotgun" ? 760 : 940), vy: Math.sin(angle) * (w.attack === "shotgun" ? 760 : 940), radius: rarityIndex(w.rarity) >= 5 ? 5 : 3, damage: w.damage * p.damageMult * (crit ? p.critDamage : 1), life: (w.range || 620) / 900, color: crit ? "#ffe05a" : RARITIES[w.rarity]?.color || "#fff", crit, pierce: Math.max(0, Math.round(w.pierce || 0)), splash: Number(w.splash || 0), hit: new Set() });
+      s.projectiles.push({ x: p.x + Math.cos(angle) * 28, y: p.y + Math.sin(angle) * 28, vx: Math.cos(angle) * (w.attack === "shotgun" ? 760 : 940), vy: Math.sin(angle) * (w.attack === "shotgun" ? 760 : 940), radius: rarityIndex(w.rarity) >= 5 ? 5 : 3, damage: w.damage * p.damageMult * (crit ? p.critDamage : 1), life: (w.range || 620) / 900, color: crit ? "#ffe05a" : RARITIES[w.rarity]?.color || "#fff", crit, pierce: Math.max(0, Math.round(w.pierce || 0)), splash: Number(w.splash || 0), ownerKey:coopOwnerKey(p), hit: new Set() });
     }
     chargeSpecial(.7 + count * .16); spawnParticles(p.x + Math.cos(p.angle) * 30, p.y + Math.sin(p.angle) * 30, RARITIES[w.rarity]?.color || "#ffd", 5, 120);
     playSound(w.attack === "shotgun" ? 95 : w.fireRate > 7 ? 150 : 210, w.attack === "shotgun" ? .08 : .035, "square", .018); if (p.ammo <= 0) beginReload();
@@ -1280,7 +1341,9 @@ function beginReload() {
     if (!enemy || enemy.dead) return; const scale = enemy.boss ? .35 : 1; enemy.statusType = type; enemy.statusTimer = Math.max(enemy.statusTimer || 0, duration * scale);
   }
   function triggerSpecial() {
-    const s = UI.session, p = s?.player; if (!s || s.paused || !p?.specialType || !p.specialReady) return;
+    const s = UI.session, p = s?.player;
+    if(s?.coop?.role==="guest"){if(!p?.specialType||!p.specialReady)return;p.specialReady=false;p.specialCharge=0;s.coop.specialSeq++;showCombatMessage("SPECIAL AN HOST GESENDET");sendCoopInput(performance.now()+COOP_INPUT_INTERVAL);return;}
+    if (!s || s.paused || !p?.specialType || !p.specialReady) return;
     const type = p.specialType, spec = SPECIALS[type]; p.specialReady = false; p.specialCharge = 0; p.specialPulse = .8; s.specialInProgress = true;
     const base = Math.max(20, Number(p.weapon.damage || 20) * p.damageMult); const enemies = [...s.enemies].filter(e => !e.dead).sort((a,b) => distance(a,p)-distance(b,p));
     showCombatMessage(spec?.name || "SPECIAL");
@@ -1298,7 +1361,7 @@ function beginReload() {
       s.particles.push({ type:"ring", x:p.x, y:p.y, radius:20, maxRadius:590, life:.8, maxLife:.8, color:spec.color });
       enemies.filter(e => distance(e,p) <= 590).forEach(e => { damageEnemy(e, base * .8, false, 0); if (e.tech || e.ranged || e.type === "tank") applyStatus(e,"emp",4.2); else applyStatus(e,"shock",1.1); });
     } else {
-      s.projectiles.push({ x:p.x + Math.cos(p.angle)*34, y:p.y + Math.sin(p.angle)*34, vx:Math.cos(p.angle)*1250, vy:Math.sin(p.angle)*1250, radius:14, damage:base*3.1, life:1.25, color:spec?.color || "#ff5de5", crit:true, pierce:99, splash:60, hit:new Set(), special:true });
+      s.projectiles.push({ x:p.x + Math.cos(p.angle)*34, y:p.y + Math.sin(p.angle)*34, vx:Math.cos(p.angle)*1250, vy:Math.sin(p.angle)*1250, radius:14, damage:base*3.1, life:1.25, color:spec?.color || "#ff5de5", crit:true, pierce:99, splash:60, ownerKey:coopOwnerKey(p), hit:new Set(), special:true });
     }
     spawnParticles(p.x,p.y,spec?.color || "#fff",28,300); playSound(120,.18,"sawtooth",.05); setTimeout(()=>playSound(680,.18,"triangle",.035),80); setTimeout(()=>{ if (UI.session) UI.session.specialInProgress=false; },120);
   }
@@ -1316,13 +1379,32 @@ function beginReload() {
     if (hit) chargeSpecial(Math.min(9, 1.8 + hit * 1.25));
     playSound(hit ? 105 : 180, .07, "sawtooth", .02);
   }
+  function combatPlayers(includeDead=false) {
+    const s=UI.session;if(!s)return[];
+    const list=s.coop?[s.coop.local||s.player,s.coop.remote]:[s.player];
+    return includeDead?list.filter(Boolean):list.filter(entity=>entity&&entity.hp>0);
+  }
+  function nearestCombatPlayer(enemy) {
+    let best=null,bestDistance=Infinity;
+    for(const entity of combatPlayers()){
+      const d=Math.hypot(entity.x-enemy.x,entity.y-enemy.y);
+      if(d<bestDistance){bestDistance=d;best=entity;}
+    }
+    return best?{player:best,distance:bestDistance,dx:best.x-enemy.x,dy:best.y-enemy.y}:null;
+  }
+  function damageCombatPlayer(target,amount,source){
+    const s=UI.session;if(!s||!target||target.hp<=0)return;
+    if(target===s.player){damagePlayer(amount,source);return;}
+    withSessionPlayer(target,()=>damagePlayer(amount,source));
+  }
   function updateEnemies(dt) {
-    const s = UI.session, p = s.player;
+    const s = UI.session;
     for (const enemy of [...s.enemies]) {
       if (enemy.dead) continue; enemy.phase += dt * 8; enemy.hitFlash = Math.max(0, enemy.hitFlash - dt); enemy.attackCooldown -= dt; enemy.abilityCooldown -= dt;
       if (enemy.statusTimer > 0) { enemy.statusTimer -= dt; if (enemy.statusType === "emp" || enemy.statusType === "stasis") { enemy.x += Math.sin(enemy.phase) * .15; continue; } }
-      const dx = p.x - enemy.x, dy = p.y - enemy.y, d = Math.hypot(dx, dy) || 1; enemy.angle = Math.atan2(dy, dx);
-      if (enemy.boss) updateBoss(enemy, dt, d, dx / d, dy / d);
+      const targetInfo=nearestCombatPlayer(enemy);if(!targetInfo)continue;
+      const target=targetInfo.player,dx=targetInfo.dx,dy=targetInfo.dy,d=targetInfo.distance||1;enemy.angle=Math.atan2(dy,dx);
+      if (enemy.boss) updateBoss(enemy, target, dt, d, dx / d, dy / d);
       else if (enemy.healer) {
         if (d > 430) { enemy.x += dx / d * enemy.speed * dt; enemy.y += dy / d * enemy.speed * dt; }
         if (enemy.abilityCooldown <= 0) { enemy.abilityCooldown = 5.5; const allies=s.enemies.filter(e=>e!==enemy&&!e.dead&&distance(e,enemy)<270).slice(0,8); allies.forEach(e=>{e.hp=Math.min(e.maxHp,e.hp+e.maxHp*.12);}); s.particles.push({type:"ring",x:enemy.x,y:enemy.y,radius:12,maxRadius:260,life:.55,maxLife:.55,color:enemy.color}); }
@@ -1334,18 +1416,18 @@ function beginReload() {
         if (enemy.attackCooldown <= 0 && d < (enemy.type === "sniper" ? 980 : 680)) { enemy.attackCooldown = 1 / enemy.attackRate; fireEnemyProjectile(enemy, enemy.angle, enemy.damage); }
       } else {
         enemy.x += dx / d * enemy.speed * dt; enemy.y += dy / d * enemy.speed * dt;
-        if (d < enemy.radius + p.radius + 5 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; if (enemy.explosive) { damagePlayer(enemy.damage * 1.35, enemy); s.particles.push({type:"blast",x:enemy.x,y:enemy.y,radius:10,maxRadius:150,life:.45,maxLife:.45,color:enemy.color}); killEnemy(enemy); } else damagePlayer(enemy.damage, enemy); }
+        if (d < enemy.radius + target.radius + 5 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; if (enemy.explosive) { damageCombatPlayer(target,enemy.damage * 1.35,enemy); s.particles.push({type:"blast",x:enemy.x,y:enemy.y,radius:10,maxRadius:150,life:.45,maxLife:.45,color:enemy.color}); killEnemy(enemy); } else damageCombatPlayer(target,enemy.damage,enemy); }
       }
       enemy.x = clamp(enemy.x, enemy.radius, WORLD_W - enemy.radius); enemy.y = clamp(enemy.y, enemy.radius, WORLD_H - enemy.radius);
     }
   }
-  function updateBoss(enemy, dt, d, nx, ny) {
-    const p = UI.session.player; enemy.x += nx * enemy.speed * dt; enemy.y += ny * enemy.speed * dt;
-    if (d < enemy.radius + p.radius + 14 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; damagePlayer(enemy.damage, enemy); }
+  function updateBoss(enemy, target, dt, d, nx, ny) {
+    enemy.x += nx * enemy.speed * dt; enemy.y += ny * enemy.speed * dt;
+    if (d < enemy.radius + target.radius + 14 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; damageCombatPlayer(target,enemy.damage,enemy); }
     if (enemy.abilityCooldown > 0) return;
-    if (enemy.ability === "slam") { enemy.abilityCooldown = 4.2; UI.session.particles.push({ type:"ring",x:enemy.x,y:enemy.y,radius:10,maxRadius:240,life:.65,maxLife:.65,color:enemy.color }); if (d < 235) damagePlayer(enemy.damage * 1.45, enemy); }
+    if (enemy.ability === "slam") { enemy.abilityCooldown = 4.2; UI.session.particles.push({ type:"ring",x:enemy.x,y:enemy.y,radius:10,maxRadius:240,life:.65,maxLife:.65,color:enemy.color }); for(const player of combatPlayers())if(distance(player,enemy)<235)damageCombatPlayer(player,enemy.damage*1.45,enemy); }
     else if (enemy.ability === "burst") { enemy.abilityCooldown = 3.8; for (let i=0;i<14;i++) fireEnemyProjectile(enemy,i/14*Math.PI*2,enemy.damage*.72); }
-    else if (enemy.ability === "empburst") { enemy.abilityCooldown = 4.6; UI.session.particles.push({type:"ring",x:enemy.x,y:enemy.y,radius:12,maxRadius:420,life:.72,maxLife:.72,color:enemy.color}); if(d<410){p.specialCharge=Math.max(0,p.specialCharge-24);damagePlayer(enemy.damage*.9,enemy);} }
+    else if (enemy.ability === "empburst") { enemy.abilityCooldown = 4.6; UI.session.particles.push({type:"ring",x:enemy.x,y:enemy.y,radius:12,maxRadius:420,life:.72,maxLife:.72,color:enemy.color}); for(const player of combatPlayers())if(distance(player,enemy)<410){player.specialCharge=Math.max(0,player.specialCharge-24);damageCombatPlayer(player,enemy.damage*.9,enemy);} }
     else { enemy.abilityCooldown=5.2; for(let i=0;i<4;i++)spawnEnemy({type:pick(["grunt","runner","shield","drone"]),elite:UI.session.wave>=30&&Math.random()<.25}); showCombatMessage("BOSS RUFT VERSTÄRKUNG"); }
   }
   function fireEnemyProjectile(enemy, angle, damage) {
@@ -1358,7 +1440,7 @@ function beginReload() {
       for (const enemy of [...s.enemies]) {
         if (enemy.dead || bullet.hit.has(enemy)) continue;
         if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) <= enemy.radius + bullet.radius) {
-          bullet.hit.add(enemy); damageEnemy(enemy, bullet.damage * (enemy.boss ? s.player.bossDamage : 1), bullet.crit, bullet.splash);
+          const attacker=coopProjectileOwner(bullet);bullet.hit.add(enemy);damageEnemyForPlayer(attacker,enemy,bullet.damage*(enemy.boss?Number(attacker?.bossDamage||1):1),bullet.crit,bullet.splash);
           if (bullet.pierce > 0) bullet.pierce -= 1; else bullet.life = 0;
           if (bullet.life <= 0) break;
         }
@@ -1367,9 +1449,12 @@ function beginReload() {
     s.projectiles = s.projectiles.filter(b => b.life > 0 && b.x > -30 && b.y > -30 && b.x < WORLD_W + 30 && b.y < WORLD_H + 30);
     for (const bullet of [...s.enemyProjectiles]) {
       bullet.x += bullet.vx * dt; bullet.y += bullet.vy * dt; bullet.life -= dt;
-      const companion=s.player.companion;if(companion&&!companion.dead&&Math.hypot(companion.x-bullet.x,companion.y-bullet.y)<=18+bullet.radius){damageCompanion(bullet.damage,bullet,.5);bullet.life=0;continue;}
-      if(s.player.mountActive&&Math.hypot(s.player.x-bullet.x,s.player.y-bullet.y)<=s.player.radius+10+bullet.radius){damageMount(bullet.damage,bullet,.5);bullet.life=0;continue;}
-      if (Math.hypot(s.player.x - bullet.x, s.player.y - bullet.y) <= s.player.radius + bullet.radius) { damagePlayer(bullet.damage, bullet); bullet.life = 0; }
+      for(const player of combatPlayers()){
+        const companion=player.companion;
+        if(companion&&!companion.dead&&Math.hypot(companion.x-bullet.x,companion.y-bullet.y)<=18+bullet.radius){withSessionPlayer(player,()=>damageCompanion(bullet.damage,bullet,.5));bullet.life=0;break;}
+        if(player.mountActive&&Math.hypot(player.x-bullet.x,player.y-bullet.y)<=player.radius+10+bullet.radius){withSessionPlayer(player,()=>damageMount(bullet.damage,bullet,.5));bullet.life=0;break;}
+        if(Math.hypot(player.x-bullet.x,player.y-bullet.y)<=player.radius+bullet.radius){damageCombatPlayer(player,bullet.damage,bullet);bullet.life=0;break;}
+      }
     }
     s.enemyProjectiles = s.enemyProjectiles.filter(b => b.life > 0);
   }
@@ -1389,7 +1474,7 @@ function beginReload() {
     s.kills += 1; chargeSpecial(enemy.boss ? 16 : enemy.elite ? 6 : 2.2); const gained = Math.round(enemy.score * (1 + s.wave * .035)); s.score += gained;
     addFightXp(Math.round(enemy.xp * (1 + s.wave * .025)));
     spawnParticles(enemy.x, enemy.y, enemy.color, enemy.boss ? 38 : 15, enemy.boss ? 330 : 190);
-    if (enemy.split && !enemy.boss && s.enemies.length < 100) for (let i = 0; i < 2; i++) { const child = { ...ENEMIES.runner, type: "runner", x: enemy.x + rand(-20,20), y: enemy.y + rand(-20,20), maxHp: enemy.maxHp * .28, hp: enemy.maxHp * .28, speed: enemy.speed * 1.15, damage: enemy.damage * .65, attackCooldown: .5, abilityCooldown: 0, hitFlash: 0, angle: 0, phase: rand(0,8), dead:false }; s.enemies.push(child); }
+    if (enemy.split && !enemy.boss && s.enemies.length < 100) for (let i = 0; i < 2; i++) { const child = { id: uid(), ...ENEMIES.runner, type: "runner", x: enemy.x + rand(-20,20), y: enemy.y + rand(-20,20), maxHp: enemy.maxHp * .28, hp: enemy.maxHp * .28, speed: enemy.speed * 1.15, damage: enemy.damage * .65, attackCooldown: .5, abilityCooldown: 0, hitFlash: 0, angle: 0, phase: rand(0,8), dead:false }; s.enemies.push(child); }
     if (Math.random() < .035 + s.player.lootBonus / 1200) s.pickups.push({ type: Math.random() < .35 ? "heal" : "credit", x: enemy.x, y: enemy.y, value: Math.random() < .35 ? 16 : 10 + s.wave * 2, life: 14, phase: 0 });
     if (enemy.boss) { showCombatMessage(`${enemy.name} BESIEGT`); grantLoot(s.wave, true); }
   }
@@ -1405,23 +1490,20 @@ function damagePlayerV116(amount, source) {
   if (p.armorItem?.durability > 0 && damage > 0) p.armorItem.durability = Math.max(0, p.armorItem.durability - damage * .11);
   if (p.hp <= 0) {
     if (p.revive > 0) { p.revive -= 1; p.hp = p.maxHp * .5; p.shield = p.maxShield; showCombatMessage("PHÖNIX-WIEDERBELEBUNG"); spawnParticles(p.x,p.y,"#ff9a37",45,360); }
+    else if (s.coop) { p.hp=0;p.moving=false;p.vx=0;p.vy=0;showCombatMessage(`${p.coopName||"SPIELER"} IST K.O. · TEAMKAMERAD KÄMPFT WEITER`);spawnParticles(p.x,p.y,"#ff4f61",30,260); }
     else finishCombat("dead");
   }
 }
 
   function updatePickups(dt) {
-    const s = UI.session, p = s.player;
-    for (const item of s.pickups) {
-      item.life -= dt; item.phase += dt * 4;
-      const d = Math.hypot(p.x - item.x, p.y - item.y);
-      if (d < 110) { item.x += (p.x - item.x) * dt * 6; item.y += (p.y - item.y) * dt * 6; }
-      if (d < p.radius + 15) {
-        item.life = 0;
-        if (item.type === "heal") { p.hp = Math.min(p.maxHp, p.hp + item.value); addDamageText(p.x,p.y-25,`+${item.value}`,"#5bffae",18); }
-        else { s.moneyEarned += item.value; s.score += item.value * 5; addDamageText(p.x,p.y-25,`+${item.value} €`,"#ffd55e",17); }
-      }
+    const s=UI.session,players=combatPlayers();
+    for(const item of s.pickups){
+      item.life-=dt;item.phase+=dt*4;let target=null,targetDistance=Infinity;
+      for(const player of players){const d=Math.hypot(player.x-item.x,player.y-item.y);if(d<targetDistance){targetDistance=d;target=player;}}
+      if(target&&targetDistance<110){item.x+=(target.x-item.x)*dt*6;item.y+=(target.y-item.y)*dt*6;}
+      if(target&&targetDistance<target.radius+15){item.life=0;if(item.type==="heal"){target.hp=Math.min(target.maxHp,target.hp+item.value);addDamageText(target.x,target.y-25,`+${item.value}`,"#5bffae",18);}else{s.moneyEarned+=item.value;s.score+=item.value*5;addDamageText(target.x,target.y-25,`+${item.value} €`,"#ffd55e",17);}}
     }
-    s.pickups = s.pickups.filter(item => item.life > 0);
+    s.pickups=s.pickups.filter(item=>item.life>0);
   }
   function updateParticles(dt) {
     const s = UI.session;
@@ -1438,7 +1520,7 @@ function damagePlayerV116(amount, source) {
     const s = UI.session; if (!s) return;
     const reward = Math.round(60 + wave * 24); s.moneyEarned += reward; s.score += wave * 250;
     if (wave % 3 === 0) grantLoot(wave, false);
-    if (wave % 5 === 0) { s.player.hp = Math.min(s.player.maxHp, s.player.hp + s.player.maxHp * .18); s.player.shield = Math.min(s.player.maxShield, s.player.shield + s.player.maxShield * .25); }
+    if (wave % 5 === 0) { for(const player of combatPlayers(true)){if(player.hp>0)player.hp=Math.min(player.maxHp,player.hp+player.maxHp*.18);player.shield=Math.min(player.maxShield,player.shield+player.maxShield*.25);} }
     if (wave % 10 === 0) cycleArenaTheme();
     safeSave();
   }
@@ -1492,8 +1574,8 @@ function updateHud() {
     for (const bullet of s.projectiles) drawBullet(ctx,s,bullet,false);
     for (const bullet of s.enemyProjectiles) drawBullet(ctx,s,bullet,true);
     for (const enemy of s.enemies) drawEnemy(ctx,s,enemy,now);
-    drawCompanion(ctx,s,now);
-    drawPlayer(ctx,s,now);
+    if(s.coop?.remote)drawCoopPlayerEntity(ctx,s,s.coop.remote,now,false);
+    drawCoopPlayerEntity(ctx,s,s.coop?.local||s.player,now,true);
     drawParticles(ctx,s);
     drawTexts(ctx,s);
   }
@@ -1599,7 +1681,7 @@ function updateHud() {
     const modal=showModal(`<div style="font-size:64px">${reason==="dead"?"☠️":"🚪"}</div><small class="fkl-kicker">${reason==="dead"?"RUN BEENDET":"RUN VERLASSEN"}</small><h3>${reason==="dead"?`Welle ${completedWave} erreicht`:"Kampf verlassen"}</h3><div class="fkl-summary-grid"><div><small>Kills</small><b>${s.kills}</b></div><div><small>Score</small><b>${NUMBER.format(Math.floor(s.score))}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Fight-Level</small><b>${data.level}</b></div><div><small>Beste Welle</small><b>${data.bestWave}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><p><b>Gefundene Items</b><br>${loot}</p><div class="fkl-modal-actions"><button class="fkl-btn primary" type="button" data-fkl-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-summary-home>Hauptmenü</button></div>`);
     modal.querySelector("[data-fkl-again]").addEventListener("click",()=>{modal.remove();UI.session=null;startCombat()});modal.querySelector("[data-fkl-summary-inventory]").addEventListener("click",()=>{modal.remove();UI.session=null;renderInventory()});modal.querySelector("[data-fkl-summary-home]").addEventListener("click",()=>{modal.remove();UI.session=null;renderDashboard()});
   }
-  function stopCombat(saveState=true){UI.shell?.classList.remove("combat-active");const s=UI.session;if(!s)return;cancelAnimationFrame(UI.raf);UI.raf=0;s.resizeObserver?.disconnect();UI.session=null;UI.pointer.fire=false;if(saveState)safeSave()}
+  function stopCombat(saveState=true){UI.shell?.classList.remove("combat-active");const s=UI.session;if(!s)return;if(s.coop)stopCoopNetwork(true);cancelAnimationFrame(UI.raf);UI.raf=0;s.resizeObserver?.disconnect();UI.session=null;UI.pointer.fire=false;if(saveState)safeSave()}
   function onKeyDown(event) {
     if(!UI.overlay)return; UI.keys[event.code]=true;
     if(event.code==="Escape"){event.preventDefault();if(UI.session)pauseCombat();else returnToTopGames();}
@@ -1618,11 +1700,10 @@ function updateHud() {
     const data = ensureStateV116();
     if (!data) return null;
     data.version = VERSION;
-    if (!Array.isArray(data.inventory)) data.inventory = defaultInventory();
-    if (!data.starterCompanionGrantedV125) {
-      if (!data.inventory.some(item => item.baseId === "street-dog")) data.inventory.push(makeItem("street-dog"));
-      data.starterCompanionGrantedV125 = true;
-    }
+    if (!Array.isArray(data.inventory)) data.inventory = [];
+    // Inventar darf absichtlich leer beziehungsweise bis auf ein Item verkauft sein.
+    // Es werden nachträglich keine Starter-Items oder Begleiter automatisch ergänzt.
+    data.starterCompanionGrantedV125 = true;
     data.equipped ||= {};
     const companion = data.inventory.find(item => item.uid === data.equipped.companion && itemDef(item).category === "companion") || data.inventory.find(item => itemDef(item).category === "companion");
     data.equipped.companion = companion?.uid || "";
@@ -1639,6 +1720,14 @@ function updateHud() {
     data.staffTools.grantRarity = RARITIES[data.staffTools.grantRarity] ? data.staffTools.grantRarity : "common";
     data.staffTools.grantStar = clamp(Math.floor(Number(data.staffTools.grantStar) || 0), 0, MAX_STAR);
     data.staffTools.grantQuantity = clamp(Math.floor(Number(data.staffTools.grantQuantity) || 1), 1, 10);
+    const migratedCheckpoint = Math.max(1, Math.floor(Math.max(0, Number(data.bestWave) || 0) / 10) * 10);
+    data.unlockedWaveStart = normalizeWaveCheckpoint(Math.max(Number(data.unlockedWaveStart) || 1, migratedCheckpoint), MAX_WAVE_CHECKPOINT);
+    data.selectedStartWave = normalizeWaveCheckpoint(data.selectedStartWave || 1, data.unlockedWaveStart);
+    const selectedUid = String(data.staffTools.selectedInventoryUid || "");
+    if (!data.inventory.some(item => item.uid === selectedUid)) {
+      const automatic = ["primary","sidearm","melee","armor","companion","mount"].map(slot => data.inventory.find(item => item.uid === data.equipped[slot])).find(Boolean) || data.inventory[0] || null;
+      data.staffTools.selectedInventoryUid = automatic?.uid || "";
+    }
     return data;
   }
 
@@ -1715,7 +1804,7 @@ function updateHud() {
     const categories=[["all","Alle"],["weapon","Waffen"],["armor","Rüstung"],["companion","Begleiter"],["companioncare","Haustierpflege"],["mount","Reittiere"],["mountcare","Reittierpflege"],["chip","Module"],["charm","Talismane"]];
     const list=inventoryFilteredItems();
     const filter=`<section class="fkl-panel fkl-inventory-toolbar"><div class="fkl-inventory-tabs">${categories.map(([id,label])=>`<button class="${UI.inventoryCategory===id?"active":""}" type="button" data-fkl-inv-cat="${id}">${label}</button>`).join("")}</div><label class="fkl-search"><span>⌕</span><input type="search" value="${escapeHtml(UI.inventorySearch)}" placeholder="Item, Seltenheit oder Effekt suchen" data-fkl-inv-search></label><select data-fkl-inv-sort><option value="rarity" ${UI.inventorySort==="rarity"?"selected":""}>Seltenheit</option><option value="power" ${UI.inventorySort==="power"?"selected":""}>Power</option><option value="new" ${UI.inventorySort==="new"?"selected":""}>Neu erhalten</option><option value="name" ${UI.inventorySort==="name"?"selected":""}>Name</option></select><div class="fkl-inv-count"><b>${list.length}</b><small>angezeigt</small></div></section>`;
-    UI.main.innerHTML=`<div class="fkl-page fkl-inventory-page">${pageHeader("Inventar & Charakter",`${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Zwei identische Items ergeben den nächsten Stern. Jedes Inventar-Item kann für 30 % seines Werts verkauft werden.`,`${fightAdminButtonHtml()}<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size===2?"":"disabled"}>✨ ${UI.selected.size}/2 matchen</button>`)}${loadoutPanelHtml()}${filter}<div class="fkl-inventory-layout"><section class="fkl-inventory">${list.map(itemCard).join("")||`<div class="fkl-empty-inventory">Keine passenden Items gefunden.</div>`}</section>${detailHtml(detail)}</div></div>`;
+    UI.main.innerHTML=`<div class="fkl-page fkl-inventory-page">${pageHeader("Inventar & Charakter",`${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Zwei identische Items ergeben den nächsten Stern. Alle Items außer dem letzten verbleibenden können für 30 % ihres Werts verkauft werden.`,`${fightAdminButtonHtml()}<button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size===2?"":"disabled"}>✨ ${UI.selected.size}/2 matchen</button>`)}${loadoutPanelHtml()}${filter}<div class="fkl-inventory-layout"><section class="fkl-inventory">${list.map(itemCard).join("")||`<div class="fkl-empty-inventory">Keine passenden Items gefunden.</div>`}</section>${detailHtml(detail)}</div></div>`;
     bindPageHome();
     UI.main.querySelectorAll("[data-fkl-inv-cat]").forEach(btn=>btn.addEventListener("click",()=>{UI.inventoryCategory=btn.dataset.fklInvCat;drawInventory();}));
     UI.main.querySelector("[data-fkl-inv-sort]")?.addEventListener("change",e=>{UI.inventorySort=e.currentTarget.value;drawInventory();});
@@ -1737,9 +1826,20 @@ function updateHud() {
   }
 
   function renderDashboard() {
-    if(!UI.main)return; stopCombat(false); stopDuel(false); const data=ensureState(),need=data.level>=MAX_LEVEL?1:levelNeed(data.level),pct=data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),comp=equipped("companion");
-    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · BEGLEITER · ONLINE-DUELLE</small><h1>FIGHT<span>.KL</span></h1><p>Merge dein Arsenal, rüste drei Waffen und einen kämpfenden Begleiter aus und überlebe unendliche Bot-Wellen. Ab Fight-Level 5 trittst du online im 1-gegen-1 gegen andere Spieler an.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button>${fightAdminButtonHtml()}</div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${escapeHtml(comp?itemDef(comp).name:"Keiner")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Online-Duelle</small><b>${data.duel.wins} S · ${data.duel.losses} N</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, elf Slots, Filter, Suche, Sortierung und Merge-System.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Waffen, Begleiter, Talismane, Module, Rüstungen und Reparatursets.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
-    UI.main.querySelector("[data-fkl-start]").addEventListener("click",startCombat);UI.main.querySelectorAll("[data-fkl-inventory]").forEach(btn=>btn.addEventListener("click",renderInventory));UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn=>btn.addEventListener("click",renderShop));UI.main.querySelectorAll("[data-fkl-duel]").forEach(btn=>btn.addEventListener("click",renderDuelLobby));UI.main.querySelectorAll("[data-fkl-admin-open]").forEach(btn=>btn.addEventListener("click",openFightAdminMenu));UI.main.querySelector("[data-fkl-leader]").addEventListener("click",renderLeaderboard);updateHead();
+    if(!UI.main)return;
+    stopCoopWaiting(true); stopCombat(false); stopDuel(false);
+    const data=ensureState(),need=data.level>=MAX_LEVEL?1:levelNeed(data.level),pct=data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),comp=equipped("companion");
+    const startOptions=waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart);
+    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · WELLEN-KOOP · BOSS-CHECKPOINTS</small><h1>FIGHT<span>.KL</span></h1><p>Erreichte Zehner-Wellen bleiben als Startpunkte freigeschaltet. Du kannst weiterhin bei Welle 1 beginnen oder direkt an einem erreichten Boss-Abschnitt einsteigen.</p><div class="fkl-wave-start-card"><label><span>Startwelle</span><select data-fkl-start-wave>${startOptions}</select></label><small>Freigeschaltet bis Welle ${data.unlockedWaveStart}. Neue Punkte erhältst du bei 10, 20, 30, 40 und immer weiter.</small></div><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena starten</button><button class="fkl-btn gold" type="button" data-fkl-coop>🤝 Wellen-KOOP</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button>${fightAdminButtonHtml()}</div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${escapeHtml(comp?itemDef(comp).name:"Keiner")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, Ausrüstung, Pflege-Sets, Filter und Zwei-Item-Merge.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Waffen, Begleiter, Talismane, Module, Rüstungen und Pflege-Sets.</small></article><article class="fkl-panel fkl-feature" data-fkl-coop><i>🤝</i><b>Wellen-KOOP</b><small>Zwei Spieler kämpfen gemeinsam ab einer Startwelle, die beide freigeschaltet haben.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
+    const startSelect=UI.main.querySelector("[data-fkl-start-wave]");
+    startSelect?.addEventListener("change",()=>{data.selectedStartWave=normalizeWaveCheckpoint(startSelect.value,data.unlockedWaveStart);safeSave();});
+    UI.main.querySelector("[data-fkl-start]").addEventListener("click",()=>{const wave=normalizeWaveCheckpoint(startSelect?.value||data.selectedStartWave,data.unlockedWaveStart);data.selectedStartWave=wave;safeSave();startCombat(wave);});
+    UI.main.querySelectorAll("[data-fkl-inventory]").forEach(btn=>btn.addEventListener("click",renderInventory));
+    UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn=>btn.addEventListener("click",renderShop));
+    UI.main.querySelectorAll("[data-fkl-coop]").forEach(btn=>btn.addEventListener("click",renderCoopLobby));
+    UI.main.querySelectorAll("[data-fkl-duel]").forEach(btn=>btn.addEventListener("click",renderDuelLobby));
+    UI.main.querySelectorAll("[data-fkl-admin-open]").forEach(btn=>btn.addEventListener("click",openFightAdminMenu));
+    UI.main.querySelector("[data-fkl-leader]").addEventListener("click",renderLeaderboard);updateHead();
   }
 
   function dailyShopItems(category=UI.shopCategory){return ITEMS.filter(def=>{if(["pistol","automatic","shotgun","melee"].includes(category))return def.category==="weapon"&&def.family===category;if(["helmet","armor","suit","boots","chip","charm","companion","companioncare","mount","mountcare"].includes(category))return def.category===category;return false}).sort((a,b)=>rarityIndex(a.rarity)-rarityIndex(b.rarity)||(a.price||0)-(b.price||0));}
@@ -1778,7 +1878,7 @@ function updateHud() {
       if(c.cooldown<=0&&d<=Math.max(c.range,desired+18)){
         c.cooldown=1/Math.max(.2,c.rate);c.attackAnim=.22;
         if(isMelee){damageEnemy(target,c.damage,false,c.splash);spawnParticles(target.x,target.y,rarityDef(c.item).color,8,150);c.x+=Math.cos(c.angle)*8;c.y+=Math.sin(c.angle)*8;}
-        else{const projectileSpeed=620;s.projectiles.push({x:c.x,y:c.y,vx:Math.cos(c.angle)*projectileSpeed,vy:Math.sin(c.angle)*projectileSpeed,radius:4,damage:c.damage,life:2.2,pierce:c.pierce,splash:c.splash,crit:false,color:rarityDef(c.item).color,hit:new Set()});}
+        else{const projectileSpeed=620;s.projectiles.push({x:c.x,y:c.y,vx:Math.cos(c.angle)*projectileSpeed,vy:Math.sin(c.angle)*projectileSpeed,radius:4,damage:c.damage,life:2.2,pierce:c.pierce,splash:c.splash,crit:false,color:rarityDef(c.item).color,ownerKey:coopOwnerKey(p),hit:new Set()});}
         if(c.roar&&Math.random()<.12)for(const enemy of s.enemies)if(distance(enemy,c)<165){enemy.statusTimer=Math.max(enemy.statusTimer,.8);enemy.statusType="stasis";}
       }
       if(d<target.radius+28&&c.hitCooldown<=0){
@@ -1820,8 +1920,8 @@ function updateHud() {
 
   function damageCompanion(amount,source,multiplier=.5){const c=UI.session?.player?.companion;if(!c||c.dead)return false;const incoming=Math.max(1,Number(amount)||1)*clamp(Number(multiplier)||.5,.05,1);c.hp=Math.max(0,c.hp-incoming);c.hitCooldown=.35;addDamageText(c.x,c.y-28,`-${Math.round(incoming)}`,"#ff9aa0",15);spawnParticles(c.x,c.y,rarityDef(c.item).color,7,120);if(c.hp<=0){c.dead=true;showCombatMessage(`${itemDef(c.item).name} AUSGEFALLEN`);spawnParticles(c.x,c.y,rarityDef(c.item).color,24,230);}return true;}
   function damageMount(amount,source,multiplier=.5){const p=UI.session?.player;if(!p?.mountItem||!p.mountActive||p.mountArmor<=0)return false;const incoming=Math.max(1,Number(amount)||1)*clamp(Number(multiplier)||.5,.05,1);p.mountArmor=Math.max(0,p.mountArmor-incoming);addDamageText(p.x,p.y+31,`REITTIER -${Math.round(incoming)}`,"#ffca6a",15);spawnParticles(p.x,p.y,"#ffae52",6,110);if(p.mountArmor<=0){p.mountActive=false;showCombatMessage(`${itemDef(p.mountItem).name} AUSGEFALLEN`);spawnParticles(p.x,p.y,"#ffae52",24,240);}return true;}
-  function useCompanionCare(){const p=UI.session?.player,c=p?.companion,care=p?.companionCare;if(!p)return;if(!c)return toast("Kein Begleiter","Rüste zuerst einen Begleiter aus.");if(!care)return toast("Keine Haustierpflege","Rüste im neuen Slot 4 ein Pflege- oder Rettungsset aus.");if(care.timer>0)return toast("Haustierpflege lädt",`${care.timer.toFixed(1)} Sekunden verbleiben.`);const restored=Math.max(1,c.maxHp*care.healPct/100);if(c.dead){c.dead=false;c.hp=Math.min(c.maxHp,restored);c.x=p.x-42;c.y=p.y+35;showCombatMessage(`${itemDef(c.item).name} GERETTET`);}else{c.hp=Math.min(c.maxHp,c.hp+restored);showCombatMessage(`${itemDef(c.item).name} +${Math.round(restored)} LP`);}care.timer=care.cooldown;spawnParticles(c.x,c.y,"#67ffae",22,180);updateHud();}
-  function useMountCare(){const p=UI.session?.player,care=p?.mountCare;if(!p)return;if(!p.mountItem)return toast("Kein Reittier","Rüste zuerst ein Reittier aus.");if(!care)return toast("Keine Reittierpflege","Rüste im neuen Slot 5 ein Pflege- oder Rettungsset aus.");if(care.timer>0)return toast("Reittierpflege lädt",`${care.timer.toFixed(1)} Sekunden verbleiben.`);const restored=Math.max(1,p.mountMaxArmor*care.healPct/100);if(!p.mountActive){p.mountActive=true;p.mountArmor=Math.min(p.mountMaxArmor,restored);p.speed=p.baseSpeed*(1+p.mountSpeedPct/100);showCombatMessage(`${itemDef(p.mountItem).name} GERETTET`);}else{p.mountArmor=Math.min(p.mountMaxArmor,p.mountArmor+restored);showCombatMessage(`${itemDef(p.mountItem).name} +${Math.round(restored)} PANZERUNG`);}care.timer=care.cooldown;spawnParticles(p.x,p.y,"#ffd46a",22,180);updateHud();}
+  function useCompanionCare(){const s=UI.session;if(s?.coop?.role==="guest"){s.coop.careCompanionSeq++;sendCoopInput(0);showCombatMessage("HAUSTIERPFLEGE AN HOST GESENDET");return;}const p=s?.player,c=p?.companion,care=p?.companionCare;if(!p)return;if(!c)return toast("Kein Begleiter","Rüste zuerst einen Begleiter aus.");if(!care)return toast("Keine Haustierpflege","Rüste im neuen Slot 4 ein Pflege- oder Rettungsset aus.");if(care.timer>0)return toast("Haustierpflege lädt",`${care.timer.toFixed(1)} Sekunden verbleiben.`);const restored=Math.max(1,c.maxHp*care.healPct/100);if(c.dead){c.dead=false;c.hp=Math.min(c.maxHp,restored);c.x=p.x-42;c.y=p.y+35;showCombatMessage(`${itemDef(c.item).name} GERETTET`);}else{c.hp=Math.min(c.maxHp,c.hp+restored);showCombatMessage(`${itemDef(c.item).name} +${Math.round(restored)} LP`);}care.timer=care.cooldown;spawnParticles(c.x,c.y,"#67ffae",22,180);updateHud();}
+  function useMountCare(){const s=UI.session;if(s?.coop?.role==="guest"){s.coop.careMountSeq++;sendCoopInput(0);showCombatMessage("REITTIERPFLEGE AN HOST GESENDET");return;}const p=s?.player,care=p?.mountCare;if(!p)return;if(!p.mountItem)return toast("Kein Reittier","Rüste zuerst ein Reittier aus.");if(!care)return toast("Keine Reittierpflege","Rüste im neuen Slot 5 ein Pflege- oder Rettungsset aus.");if(care.timer>0)return toast("Reittierpflege lädt",`${care.timer.toFixed(1)} Sekunden verbleiben.`);const restored=Math.max(1,p.mountMaxArmor*care.healPct/100);if(!p.mountActive){p.mountActive=true;p.mountArmor=Math.min(p.mountMaxArmor,restored);p.speed=p.baseSpeed*(1+p.mountSpeedPct/100);showCombatMessage(`${itemDef(p.mountItem).name} GERETTET`);}else{p.mountArmor=Math.min(p.mountMaxArmor,p.mountArmor+restored);showCombatMessage(`${itemDef(p.mountItem).name} +${Math.round(restored)} PANZERUNG`);}care.timer=care.cooldown;spawnParticles(p.x,p.y,"#ffd46a",22,180);updateHud();}
 
   function damagePlayer(amount,source){
     const s=UI.session,p=s?.player;if(!p)return;
@@ -1832,7 +1932,7 @@ function updateHud() {
     return damagePlayerV116(Math.max(.1,Number(amount||0)*(1-companionReduction)/staffDivisor),source);
   }
 
-  function updateHud(){const s=UI.session;if(!s||!UI.main)return;const p=s.player,data=ensureState(),need=levelNeed(data.level),set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));set("[data-fkl-wave]",p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`);set("[data-fkl-kills]",s.kills);set("[data-fkl-score]",NUMBER.format(Math.floor(s.score)));set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`);set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;const mountPill=UI.main.querySelector("[data-fkl-mount-pill]");if(mountPill)mountPill.hidden=!p.mountItem;set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");const compPill=UI.main.querySelector("[data-fkl-companion-pill]");if(compPill)compPill.hidden=!p.companion;set("[data-fkl-companion]",p.companion?(p.companion.dead?"AUSGEFALLEN":`${Math.ceil(p.companion.hp)}/${p.companion.maxHp}`):"—");set("[data-fkl-companion-bonus]",p.companion?`+${p.companion.ownerDamageBonus}% DMG · +${p.companion.ownerDefenseBonus}% DEF`:"");const specialButton=UI.main.querySelector("[data-fkl-special]"),specialCircle=UI.main.querySelector("[data-fkl-special-circle]"),spec=SPECIALS[p.specialType];if(specialCircle){specialCircle.style.setProperty("--special-progress",`${Math.round(p.specialCharge*3.6)}deg`);specialCircle.style.setProperty("--special-color",spec?.color||"#62d9ff")}set("[data-fkl-special-icon]",spec?.icon||"✦");set("[data-fkl-special-name]",spec?.name||"Kein Special");set("[data-fkl-special-text]",p.specialType?(p.specialReady?"BEREIT":`${Math.floor(p.specialCharge)} %`):"—");specialButton?.classList.toggle("ready",!!p.specialReady);specialButton?.classList.toggle("disabled",!p.specialType);if(specialButton)specialButton.disabled=!p.specialType;UI.main.querySelectorAll("[data-fkl-weapon-switch]").forEach(btn=>{const slot=btn.dataset.fklWeaponSwitch;btn.classList.toggle("active",slot===p.activeWeaponSlot);const runtime=p.weaponRuntimes[slot];btn.classList.toggle("broken",!!runtime?.item&&runtime.item.durability<=0)});const companionCareButton=UI.main.querySelector("[data-fkl-care-companion]"),mountCareButton=UI.main.querySelector("[data-fkl-care-mount]");if(companionCareButton){const ready=!!p.companionCare&&p.companionCare.timer<=0;companionCareButton.disabled=!p.companionCare||!p.companion;companionCareButton.classList.toggle("ready",ready);set("[data-fkl-care-companion-text]",!p.companionCare?"Pflege ausrüsten":p.companionCare.timer>0?`${p.companionCare.timer.toFixed(1)} s`:p.companion?.dead?"Begleiter retten":"Begleiter heilen");}if(mountCareButton){const ready=!!p.mountCare&&p.mountCare.timer<=0;mountCareButton.disabled=!p.mountCare||!p.mountItem;mountCareButton.classList.toggle("ready",ready);set("[data-fkl-care-mount-text]",!p.mountCare?"Pflege ausrüsten":p.mountCare.timer>0?`${p.mountCare.timer.toFixed(1)} s`:!p.mountActive?"Reittier retten":"Reittier heilen");}const bossWrap=UI.main.querySelector("[data-fkl-boss-wrap]");if(bossWrap){bossWrap.hidden=!s.boss;if(s.boss){set("[data-fkl-boss-name]",s.boss.name);const bar=UI.main.querySelector("[data-fkl-boss-bar]");if(bar)bar.style.width=`${clamp(s.boss.hp/s.boss.maxHp*100,0,100)}%`}}}
+  function updateHud(){const s=UI.session;if(!s||!UI.main)return;const p=s.player,data=ensureState(),need=levelNeed(data.level),set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};set("[data-fkl-hp-text]",`${Math.ceil(p.hp)}/${p.maxHp}`);set("[data-fkl-shield]",Math.ceil(p.shield));set("[data-fkl-wave]",s.coop?`KOOP · WELLE ${s.wave}`:p.godMode?`WELLE ${s.wave} · GOD MODE`:`WELLE ${s.wave}`);set("[data-fkl-kills]",s.kills);set("[data-fkl-score]",NUMBER.format(Math.floor(s.score)));set("[data-fkl-weapon-name]",p.weapon.name||"Waffe");set("[data-fkl-ammo]",p.weapon.attack==="melee"?"NAHKAMPF":p.reloading?"NACHLADEN":`${p.ammo}/${Math.round(p.weapon.magazine||1)}`);set("[data-fkl-durability]",p.weaponItem?`Haltbarkeit ${Math.ceil(p.weaponItem.durability)}/${itemMaxDurability(p.weaponItem)}`:"Fäuste");const hpBar=UI.main.querySelector("[data-fkl-hp-bar]"),xpBar=UI.main.querySelector("[data-fkl-xp-bar]");if(hpBar)hpBar.style.width=`${clamp(p.hp/p.maxHp*100,0,100)}%`;if(xpBar)xpBar.style.width=`${data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100)}%`;const mountPill=UI.main.querySelector("[data-fkl-mount-pill]");if(mountPill)mountPill.hidden=!p.mountItem;set("[data-fkl-mount]",p.mountItem?(p.mountActive?`${Math.ceil(p.mountArmor)}/${p.mountMaxArmor}`:"AUSGEFALLEN"):"—");const compPill=UI.main.querySelector("[data-fkl-companion-pill]");if(compPill)compPill.hidden=!p.companion;set("[data-fkl-companion]",p.companion?(p.companion.dead?"AUSGEFALLEN":`${Math.ceil(p.companion.hp)}/${p.companion.maxHp}`):"—");set("[data-fkl-companion-bonus]",p.companion?`+${p.companion.ownerDamageBonus}% DMG · +${p.companion.ownerDefenseBonus}% DEF`:"");const specialButton=UI.main.querySelector("[data-fkl-special]"),specialCircle=UI.main.querySelector("[data-fkl-special-circle]"),spec=SPECIALS[p.specialType];if(specialCircle){specialCircle.style.setProperty("--special-progress",`${Math.round(p.specialCharge*3.6)}deg`);specialCircle.style.setProperty("--special-color",spec?.color||"#62d9ff")}set("[data-fkl-special-icon]",spec?.icon||"✦");set("[data-fkl-special-name]",spec?.name||"Kein Special");set("[data-fkl-special-text]",p.specialType?(p.specialReady?"BEREIT":`${Math.floor(p.specialCharge)} %`):"—");specialButton?.classList.toggle("ready",!!p.specialReady);specialButton?.classList.toggle("disabled",!p.specialType);if(specialButton)specialButton.disabled=!p.specialType;UI.main.querySelectorAll("[data-fkl-weapon-switch]").forEach(btn=>{const slot=btn.dataset.fklWeaponSwitch;btn.classList.toggle("active",slot===p.activeWeaponSlot);const runtime=p.weaponRuntimes[slot];btn.classList.toggle("broken",!!runtime?.item&&runtime.item.durability<=0)});const companionCareButton=UI.main.querySelector("[data-fkl-care-companion]"),mountCareButton=UI.main.querySelector("[data-fkl-care-mount]");if(companionCareButton){const ready=!!p.companionCare&&p.companionCare.timer<=0;companionCareButton.disabled=!p.companionCare||!p.companion;companionCareButton.classList.toggle("ready",ready);set("[data-fkl-care-companion-text]",!p.companionCare?"Pflege ausrüsten":p.companionCare.timer>0?`${p.companionCare.timer.toFixed(1)} s`:p.companion?.dead?"Begleiter retten":"Begleiter heilen");}if(mountCareButton){const ready=!!p.mountCare&&p.mountCare.timer<=0;mountCareButton.disabled=!p.mountCare||!p.mountItem;mountCareButton.classList.toggle("ready",ready);set("[data-fkl-care-mount-text]",!p.mountCare?"Pflege ausrüsten":p.mountCare.timer>0?`${p.mountCare.timer.toFixed(1)} s`:!p.mountActive?"Reittier retten":"Reittier heilen");}const bossWrap=UI.main.querySelector("[data-fkl-boss-wrap]");if(bossWrap){bossWrap.hidden=!s.boss;if(s.boss){set("[data-fkl-boss-name]",s.boss.name);const bar=UI.main.querySelector("[data-fkl-boss-bar]");if(bar)bar.style.width=`${clamp(s.boss.hp/s.boss.maxHp*100,0,100)}%`}}updateCoopHud();}
 
   function duelProfile(){
     const data=ensureState(),stats=aggregateLoadoutStats(),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),w=weapon?effectiveStats(weapon):{damage:10,fireRate:1,range:80,family:"melee",attack:"melee",rarity:"common"},companion=equipped("companion"),bonus=companionOwnerBonuses(companion);
@@ -1873,9 +1973,192 @@ function updateHud() {
   function finishDuelUI(match){const d=UI.duel;if(!d||d.ended)return;d.ended=true;clearTimeout(UI.duelPollTimer);cancelAnimationFrame(UI.duelRaf);d.resizeObserver?.disconnect?.();const data=ensureState(),winner=match.winnerSide,result=winner===d.youSide?"win":winner?"loss":"draw";if(result==="win")data.duel.wins++;else if(result==="loss")data.duel.losses++;else data.duel.draws++;safeSave();const modal=showModal(`<div style="font-size:64px">${result==="win"?"🏆":result==="loss"?"💥":"🤝"}</div><small class="fkl-kicker">ONLINE-DUELL BEENDET</small><h3>${result==="win"?"Sieg!":result==="loss"?"Niederlage":"Unentschieden"}</h3><p>${escapeHtml(match.finishReason||"Das Duell wurde ausgewertet.")}</p><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-duel-again>Noch ein Duell</button><button class="fkl-btn" type="button" data-fkl-duel-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-duel-again]").addEventListener("click",()=>{modal.remove();renderDuelLobby()});modal.querySelector("[data-fkl-duel-home]").addEventListener("click",()=>{modal.remove();renderDashboard()});}
   async function leaveOnlineDuel(returnPhone=false){const d=UI.duel;try{if(d?.matchId)await firebaseCallable(DUEL_LEAVE_FUNCTION,{matchId:d.matchId});else if(d?.waiting)await firebaseCallable(DUEL_LEAVE_FUNCTION,{});}catch{}stopDuel(false);if(returnPhone)returnToTopGames();else renderDashboard();}
 
+
+  function withSessionPlayer(player, callback) {
+    const s=UI.session;if(!s||!player)return undefined;
+    const original=s.player;s.player=player;
+    try{return callback();}finally{s.player=original;}
+  }
+  function coopOwnerKey(player){const s=UI.session;if(!s?.coop)return"local";return player===s.coop.remote?"remote":"local";}
+  function coopProjectileOwner(projectile){const s=UI.session;if(!s?.coop||projectile?.ownerKey!=="remote")return s?.coop?.local||s?.player;return s.coop.remote;}
+  function damageEnemyForPlayer(player,enemy,amount,crit=false,splash=0){if(!player)return damageEnemy(enemy,amount,crit,splash);return withSessionPlayer(player,()=>damageEnemy(enemy,amount,crit,splash));}
+  function drawCoopPlayerEntity(ctx,s,player,now,isLocal){
+    if(!player)return;
+    if(player.hp>0){withSessionPlayer(player,()=>{drawCompanion(ctx,s,now);drawPlayer(ctx,s,now);});}
+    const x=sx(s,player.x),y=sy(s,player.y);
+    ctx.save();ctx.textAlign="center";ctx.font="800 12px system-ui";ctx.fillStyle=isLocal?"#67f5c8":"#7dc6ff";ctx.shadowColor="#000";ctx.shadowBlur=5;ctx.fillText(player.coopName|| (isLocal?playerName():"Mitspieler"),x,y-58);
+    if(player.hp<=0){ctx.font="28px system-ui";ctx.fillText("💀",x,y-15);ctx.font="800 11px system-ui";ctx.fillStyle="#ff7b83";ctx.fillText("K.O. · Team kämpft weiter",x,y+18);}
+    ctx.restore();
+  }
+  function cleanCoopData(value){return JSON.parse(JSON.stringify(value));}
+  function coopItemData(item){return item?{baseId:item.baseId,rarity:rarityKey(item),star:Number(item.star||0),durability:itemMaxDurability(item)||999999}:null;}
+  function coopProfile(){
+    const p=buildPlayer(),data=ensureState();
+    const weapons={};
+    for(const [slot,runtime] of Object.entries(p.weaponRuntimes||{}))weapons[slot]={item:coopItemData(runtime.item),stats:cleanCoopData(runtime.stats)};
+    return cleanCoopData({
+      name:playerName(),level:data.level,power:powerScore(),style:p.cosmetics,weapons,activeWeaponSlot:p.activeWeaponSlot,
+      maxHp:p.maxHp,maxShield:p.maxShield,baseSpeed:p.baseSpeed,mountSpeedPct:p.mountSpeedPct,mountMaxArmor:p.mountMaxArmor,
+      armor:p.armor,dodge:p.dodge,dodgeHeal:p.dodgeHeal,dodgeBurst:p.dodgeBurst,regen:p.regen,crit:p.crit,critDamage:p.critDamage,
+      lifesteal:p.lifesteal,bossDamage:p.bossDamage,lootBonus:p.lootBonus,revive:p.revive,damageMult:p.damageMult,
+      companionDefensePct:p.companionDefensePct||0,
+      mount:p.mountItem?{item:coopItemData(p.mountItem),stats:cleanCoopData(p.mountStats||{}),maxArmor:p.mountMaxArmor}:null,
+      companion:p.companion?{item:coopItemData(p.companion.item),stats:cleanCoopData(p.companion.stats||{}),maxHp:p.companion.maxHp,damage:p.companion.damage,rate:p.companion.rate,range:p.companion.range,speed:p.companion.speed,type:p.companion.type,heal:p.companion.heal,splash:p.companion.splash,pierce:p.companion.pierce,roar:p.companion.roar,ownerDamageBonus:p.companion.ownerDamageBonus,ownerDefenseBonus:p.companion.ownerDefenseBonus}:null,
+      companionCare:p.companionCare?{item:coopItemData(p.companionCare.item),healPct:p.companionCare.healPct,cooldown:p.companionCare.cooldown}:null,
+      mountCare:p.mountCare?{item:coopItemData(p.mountCare.item),healPct:p.mountCare.healPct,cooldown:p.mountCare.cooldown}:null,
+      unlockedWaveStart:data.unlockedWaveStart,
+      selectedStartWave:data.selectedStartWave
+    });
+  }
+  function buildCoopPlayer(profile,x,y){
+    const weapons={};for(const [slot,runtime] of Object.entries(profile?.weapons||{})){if(!runtime?.item)continue;weapons[slot]={slot,item:{...runtime.item,uid:`coop-${slot}`},stats:{...runtime.stats},ammo:Math.max(1,Math.round(runtime.stats?.magazine||1)),reloading:false,reloadTimer:0,specialCharge:0,specialReady:false};}
+    let active=weapons[profile?.activeWeaponSlot]?profile.activeWeaponSlot:Object.keys(weapons)[0];
+    if(!active){active="fists";weapons.fists={slot:"fists",item:null,stats:{id:"fists",name:"Fäuste",attack:"melee",family:"melee",rarity:"common",damage:9,fireRate:1.2,range:62,arc:1.5},ammo:1,reloading:false,reloadTimer:0,specialCharge:0,specialReady:false};}
+    const runtime=weapons[active];
+    const companionProfile=profile?.companion;
+    const companion=companionProfile?{item:{...companionProfile.item,uid:"coop-companion"},stats:{...companionProfile.stats},x:x-55,y:y+55,hp:companionProfile.maxHp,maxHp:companionProfile.maxHp,damage:companionProfile.damage,rate:companionProfile.rate,range:companionProfile.range,speed:companionProfile.speed,type:companionProfile.type,heal:companionProfile.heal,splash:companionProfile.splash,pierce:companionProfile.pierce,roar:companionProfile.roar,cooldown:0,hitCooldown:0,dead:false,angle:0,attackAnim:0,moving:false,runPhase:0,ownerDamageBonus:companionProfile.ownerDamageBonus||0,ownerDefenseBonus:companionProfile.ownerDefenseBonus||0}:null;
+    return {coopName:String(profile?.name||"Mitspieler").slice(0,24),x,y,radius:18,maxHp:Number(profile?.maxHp||130),hp:Number(profile?.maxHp||130),maxShield:Number(profile?.maxShield||0),shield:Number(profile?.maxShield||0),baseSpeed:Number(profile?.baseSpeed||250),mountSpeedPct:Number(profile?.mountSpeedPct||0),mountMaxArmor:Number(profile?.mountMaxArmor||0),mountArmor:Number(profile?.mountMaxArmor||0),mountActive:!!profile?.mount,mountItem:profile?.mount?.item?{...profile.mount.item,uid:"coop-mount"}:null,mountStats:{...(profile?.mount?.stats||{})},mountCare:profile?.mountCare?{item:{...profile.mountCare.item,uid:"coop-mountcare"},healPct:Number(profile.mountCare.healPct||25),cooldown:Number(profile.mountCare.cooldown||18),timer:0}:null,speed:Number(profile?.baseSpeed||250),armor:Number(profile?.armor||0),dodge:Number(profile?.dodge||0),dodgeHeal:Number(profile?.dodgeHeal||0),dodgeBurst:Number(profile?.dodgeBurst||0),regen:Number(profile?.regen||0),crit:Number(profile?.crit||.05),critDamage:Number(profile?.critDamage||1.75),lifesteal:Number(profile?.lifesteal||0),bossDamage:Number(profile?.bossDamage||1),lootBonus:Number(profile?.lootBonus||0),revive:Number(profile?.revive||0),armorItem:{durability:999999},weaponRuntimes:weapons,activeWeaponSlot:active,weaponItem:runtime.item,weapon:runtime.stats,ammo:runtime.ammo,reloading:false,reloadTimer:0,moduleSpecial:"",damageMult:Number(profile?.damageMult||1),fireCooldown:0,attackAnim:0,hitFlash:0,angle:-Math.PI/2,vx:0,vy:0,moving:false,weaponBroken:false,cosmetics:profile?.style||CHARACTER_STYLES[0],lookX:0,lookY:-1,specialType:runtime.stats?.special||"",specialCharge:0,specialReady:false,specialPulse:0,companion,companionCare:profile?.companionCare?{item:{...profile.companionCare.item,uid:"coop-compcare"},healPct:Number(profile.companionCare.healPct||25),cooldown:Number(profile.companionCare.cooldown||18),timer:0}:null,companionDefensePct:Number(profile?.companionDefensePct||0),staffDefenseMultiplier:1,godMode:false};
+  }
+  async function loadCoopFirebase(){
+    const core=window.LifeBuilderFirebaseCore;if(!core?.load)throw new Error("Firebase-Laufzeit fehlt.");
+    const fb=await core.load(),user=await core.waitForAuth(8500);if(!user)throw new Error("Melde dich mit deinem JK.Games-Konto an.");return{fb,user};
+  }
+  function renderCoopLobby(){
+    if(!UI.main)return;stopCombat(false);stopDuel(false);stopCoopWaiting(true);
+    const data=ensureState();
+    UI.main.innerHTML=`<div class="fkl-page">${pageHeader("Wellen-KOOP","Zwei Spieler kämpfen gemeinsam gegen dieselben Wellen. Die tatsächliche Startwelle wird auf den höchsten Startpunkt begrenzt, den beide Spieler freigeschaltet haben.")}<section class="fkl-panel fkl-coop-lobby"><div class="fkl-coop-emblem">🤝</div><small class="fkl-kicker">TEAM-ARENA</small><h2>Gemeinsam gegen endlose Bot-Wellen</h2><p>Die Bots greifen immer den nächsten lebenden Spieler an. Friendly Fire ist deaktiviert. Wird ein Spieler K.O., kämpft der andere weiter.</p><label class="fkl-coop-wave-select"><span>Gewünschte Startwelle</span><select data-fkl-coop-start-wave>${waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart)}</select><small>Deine Freischaltung: bis Welle ${data.unlockedWaveStart}</small></label><div class="fkl-coop-rules"><span>👥 2 Spieler</span><span>🤖 Gemeinsame Bots</span><span>🛡 Kein Friendly Fire</span><span>🏁 Gemeinsamer Startpunkt</span></div><button class="fkl-btn gold" type="button" data-fkl-find-coop>Mitspieler suchen</button><button class="fkl-btn" type="button" data-fkl-cancel-coop hidden>Suche abbrechen</button><div class="fkl-online-state" data-fkl-coop-status>Firebase ist bereit für die Suche.</div></section></div>`;
+    bindPageHome();
+    UI.main.querySelector("[data-fkl-coop-start-wave]")?.addEventListener("change",event=>{data.selectedStartWave=normalizeWaveCheckpoint(event.currentTarget.value,data.unlockedWaveStart);safeSave();});
+    UI.main.querySelector("[data-fkl-find-coop]")?.addEventListener("click",joinWaveCoop);UI.main.querySelector("[data-fkl-cancel-coop]")?.addEventListener("click",()=>stopCoopWaiting(true));
+  }
+  async function joinWaveCoop(){
+    const status=UI.main?.querySelector("[data-fkl-coop-status]"),find=UI.main?.querySelector("[data-fkl-find-coop]"),cancel=UI.main?.querySelector("[data-fkl-cancel-coop]");
+    if(status)status.textContent="Firebase wird verbunden …";if(find)find.disabled=true;
+    try{
+      const data=ensureState(),selectedNode=UI.main?.querySelector("[data-fkl-coop-start-wave]");
+      data.selectedStartWave=normalizeWaveCheckpoint(selectedNode?.value||data.selectedStartWave,data.unlockedWaveStart);safeSave();
+      const{fb,user}=await loadCoopFirebase(),profile=coopProfile(),lobbyRef=fb.doc(fb.db,...COOP_LOBBY_PATH),ownInvite=fb.doc(fb.db,COOP_INVITE_COLLECTION,user.uid);
+      await fb.deleteDoc(ownInvite).catch(()=>{});
+      const matchRef=fb.doc(fb.collection(fb.db,COOP_MATCH_COLLECTION));
+      const result=await fb.runTransaction(fb.db,async transaction=>{
+        const lobby=await transaction.get(lobbyRef),data=lobby.exists()?lobby.data():null,valid=data?.waitingUid&&data.waitingUid!==user.uid&&Date.now()-Number(data.createdAtMs||0)<90000;
+        if(valid){
+          const hostLimit=normalizeWaveCheckpoint(data.profile?.unlockedWaveStart||1,MAX_WAVE_CHECKPOINT),guestLimit=normalizeWaveCheckpoint(profile.unlockedWaveStart||1,MAX_WAVE_CHECKPOINT);
+          const hostRequest=normalizeWaveCheckpoint(data.profile?.selectedStartWave||1,hostLimit),guestRequest=normalizeWaveCheckpoint(profile.selectedStartWave||1,guestLimit);
+          const startWave=Math.min(hostRequest,guestRequest,hostLimit,guestLimit);
+          const match={id:matchRef.id,status:"playing",hostUid:data.waitingUid,guestUid:user.uid,participantUids:[data.waitingUid,user.uid],hostProfile:data.profile,guestProfile:profile,startWave,createdAtMs:Date.now(),updatedAtMs:Date.now(),wave:startWave,snapshot:null};
+          transaction.set(matchRef,match);transaction.set(fb.doc(fb.db,COOP_INVITE_COLLECTION,data.waitingUid),{matchId:matchRef.id,createdAtMs:Date.now()});transaction.delete(lobbyRef);return{matched:true,match};
+        }
+        transaction.set(lobbyRef,{waitingUid:user.uid,profile,createdAtMs:Date.now()});return{matched:false};
+      });
+      if(result.matched){if(status)status.textContent="Mitspieler gefunden · Arena startet …";startCoopArena(result.match,fb,user);return;}
+      UI.coopWaiting={fb,user,lobbyRef,inviteRef:ownInvite};if(status)status.textContent="Warteschlange aktiv · Mitspieler wird gesucht …";if(cancel)cancel.hidden=false;pollCoopInvite();
+    }catch(error){if(status)status.textContent=`KOOP nicht verfügbar: ${error.message||error}`;if(find)find.disabled=false;}
+  }
+  async function pollCoopInvite(){
+    const waiting=UI.coopWaiting;if(!waiting)return;
+    try{const snap=await waiting.fb.getDoc(waiting.inviteRef);if(snap.exists()){const matchId=snap.data()?.matchId,matchSnap=matchId?await waiting.fb.getDoc(waiting.fb.doc(waiting.fb.db,COOP_MATCH_COLLECTION,matchId)):null;if(matchSnap?.exists()){await waiting.fb.deleteDoc(waiting.inviteRef).catch(()=>{});const match=matchSnap.data();stopCoopWaiting(false);startCoopArena(match,waiting.fb,waiting.user);return;}}}catch{}
+    UI.coopPollTimer=setTimeout(pollCoopInvite,700);
+  }
+  async function stopCoopWaiting(removeLobby=true){
+    clearTimeout(UI.coopPollTimer);UI.coopPollTimer=0;const waiting=UI.coopWaiting;UI.coopWaiting=null;if(!waiting)return;
+    if(removeLobby)try{await waiting.fb.runTransaction(waiting.fb.db,async transaction=>{const snap=await transaction.get(waiting.lobbyRef);if(snap.exists()&&snap.data()?.waitingUid===waiting.user.uid)transaction.delete(waiting.lobbyRef);});}catch{}
+    const status=UI.main?.querySelector("[data-fkl-coop-status]"),find=UI.main?.querySelector("[data-fkl-find-coop]"),cancel=UI.main?.querySelector("[data-fkl-cancel-coop]");if(status)status.textContent="Suche beendet.";if(find)find.disabled=false;if(cancel)cancel.hidden=true;
+  }
+  function startCoopArena(match,fb,user){
+    const startAt=normalizeWaveCheckpoint(match.startWave||match.wave||1,MAX_WAVE_CHECKPOINT);
+    stopCoopWaiting(false);startCombat(startAt);const s=UI.session;if(!s)return;
+    const role=match.hostUid===user.uid?"host":"guest",localProfile=role==="host"?match.hostProfile:match.guestProfile,remoteProfile=role==="host"?match.guestProfile:match.hostProfile;
+    const local=s.player;local.coopName=String(localProfile?.name||playerName());local.x=WORLD_W/2+(role==="host"?-130:130);local.y=WORLD_H/2;local.hp=local.maxHp;
+    const remote=buildCoopPlayer(remoteProfile,WORLD_W/2+(role==="host"?130:-130),WORLD_H/2);
+    s.coop={role,matchId:match.id||match.matchId,fb,user,local,remote,remoteInput:null,inputSeq:0,specialSeq:0,careCompanionSeq:0,careMountSeq:0,lastInputWrite:0,lastSnapshotWrite:0,snapshotPending:false,lastSnapshotAt:0,ended:false,connected:true,matchRef:fb.doc(fb.db,COOP_MATCH_COLLECTION,match.id||match.matchId)};
+    s.player=local;s.camera.x=(local.x+remote.x)/2;s.camera.y=local.y-80;s.wave=startAt;
+    if(role==="guest"){s.spawnQueue=[];s.enemies=[];s.projectiles=[];s.enemyProjectiles=[];s.pickups=[];s.waveStarted=false;s.waveClearAt=0;s.boss=null;}
+    const stage=UI.main?.querySelector(".fkl-stage");stage?.insertAdjacentHTML("beforeend",`<div class="fkl-coop-team" data-fkl-coop-team><div class="local"><small>${escapeHtml(local.coopName)}</small><div><i data-fkl-coop-local-bar></i></div><b data-fkl-coop-local-hp></b></div><span>🤝 KOOP</span><div class="remote"><small>${escapeHtml(remote.coopName)}</small><div><i data-fkl-coop-remote-bar></i></div><b data-fkl-coop-remote-hp></b></div></div><button class="fkl-coop-leave" type="button" data-fkl-coop-leave>KOOP verlassen</button>`);UI.main?.querySelector("[data-fkl-coop-leave]")?.addEventListener("click",leaveWaveCoop);
+    setupCoopNetwork();showCombatMessage(role==="host"?"KOOP GESTARTET · DU BIST HOST":"KOOP GESTARTET · MIT HOST VERBUNDEN");updateHud();
+  }
+  function setupCoopNetwork(){
+    const s=UI.session,c=s?.coop;if(!c)return;const fb=c.fb,selfRef=fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.user.uid);c.selfRef=selfRef;c.inputRefs=Array.from({length:16},(_,index)=>fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",c.user.uid,"inputs",String(index)));
+    fb.setDoc(selfRef,{uid:c.user.uid,name:c.local.coopName,left:false,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});
+    if(c.role==="host"){
+      const participantSnapPromise=fb.getDoc(c.matchRef);
+      participantSnapPromise.then(matchSnap=>{if(!UI.session?.coop||!matchSnap.exists())return;const data=matchSnap.data(),uidValue=data.hostUid===c.user.uid?data.guestUid:data.hostUid;c.remoteUid=uidValue;const remoteRef=fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",uidValue);UI.coopUnsubs.push(fb.onSnapshot(remoteRef,snap=>{if(!UI.session?.coop||!snap.exists())return;const presence=snap.data();if(presence.left)c.remoteInput={...(c.remoteInput||{}),left:true,updatedAtMs:Number(presence.updatedAtMs||Date.now())};}));const inputRefs=Array.from({length:16},(_,index)=>fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"players",uidValue,"inputs",String(index)));for(const inputRef of inputRefs)UI.coopUnsubs.push(fb.onSnapshot(inputRef,snap=>{if(!UI.session?.coop||!snap.exists())return;const input=snap.data();if(Number(input.updatedAtMs||0)>=Number(c.remoteInput?.updatedAtMs||0))c.remoteInput=input;}));});
+      UI.coopUnsubs.push(fb.onSnapshot(c.matchRef,snap=>{if(!snap.exists()||!UI.session?.coop)return;const data=snap.data();if(data.status==="ended"&&!c.ended)finishCoopGuest(data.finishReason||"KOOP wurde beendet.");}));
+    }else{
+      UI.coopUnsubs.push(fb.onSnapshot(c.matchRef,snap=>{if(!snap.exists()||!UI.session?.coop)return;const data=snap.data();if(data.status==="ended")finishCoopGuest(data.finishReason||"Der KOOP-Lauf wurde beendet.");}));
+      c.frameRefs=Array.from({length:8},(_,index)=>fb.doc(fb.db,COOP_MATCH_COLLECTION,c.matchId,"frames",String(index)));
+      for(const frameRef of c.frameRefs)UI.coopUnsubs.push(fb.onSnapshot(frameRef,snap=>{if(!snap.exists()||!UI.session?.coop)return;applyCoopSnapshot({status:"playing",snapshot:snap.data()?.snapshot});}));
+    }
+  }
+  function updateCoopGuest(dt,now){
+    const s=UI.session,c=s?.coop,p=c?.local;if(!s||!c||!p)return;
+    if(p.hp>0){let mx=0,my=0;if(UI.keys.KeyW||UI.keys.ArrowUp)my-=1;if(UI.keys.KeyS||UI.keys.ArrowDown)my+=1;if(UI.keys.KeyA||UI.keys.ArrowLeft)mx-=1;if(UI.keys.KeyD||UI.keys.ArrowRight)mx+=1;mx+=s.joystick.x;my+=s.joystick.y;const len=Math.hypot(mx,my);if(len>1){mx/=len;my/=len;}p.speed=p.baseSpeed*(1+(p.mountActive?p.mountSpeedPct:0)/100);p.vx=mx*p.speed;p.vy=my*p.speed;p.moving=Math.hypot(mx,my)>.08;p.x=clamp(p.x+p.vx*dt,p.radius,WORLD_W-p.radius);p.y=clamp(p.y+p.vy*dt,p.radius,WORLD_H-p.radius);const target=nearestEnemy(p.x,p.y,p.weapon.range||1600);if(target)p.angle=Math.atan2(target.y-p.y,target.x-p.x);else if(Number.isFinite(UI.pointer.aimX))p.angle=Math.atan2(UI.pointer.aimY-p.y,UI.pointer.aimX-p.x);if(p.moving){p.lookX=mx;p.lookY=my;}else{p.lookX=Math.cos(p.angle);p.lookY=Math.sin(p.angle);}}
+    if(c.remoteTarget){const r=c.remote,alpha=1-Math.pow(.0008,dt);r.x+=(c.remoteTarget.x-r.x)*alpha;r.y+=(c.remoteTarget.y-r.y)*alpha;r.angle=lerpCoopAngle(r.angle,c.remoteTarget.angle,alpha);r.moving=!!c.remoteTarget.moving;}
+    const worldAlpha=1-Math.pow(.0003,dt);for(const enemy of s.enemies){if(Number.isFinite(enemy.targetX)){enemy.x+=(enemy.targetX-enemy.x)*worldAlpha;enemy.y+=(enemy.targetY-enemy.y)*worldAlpha;enemy.angle=lerpCoopAngle(Number(enemy.angle||0),Number(enemy.targetAngle ?? enemy.angle ?? 0),worldAlpha);}}for(const bullet of s.projectiles){bullet.x+=Number(bullet.vx||0)*dt;bullet.y+=Number(bullet.vy||0)*dt;bullet.life-=dt;}for(const bullet of s.enemyProjectiles){bullet.x+=Number(bullet.vx||0)*dt;bullet.y+=Number(bullet.vy||0)*dt;bullet.life-=dt;}s.projectiles=s.projectiles.filter(b=>b.life>0);s.enemyProjectiles=s.enemyProjectiles.filter(b=>b.life>0);
+    const cameraTarget=p.hp>0?p:c.remote,cameraSpeed=1-Math.pow(.001,dt);s.camera.x+=(cameraTarget.x-s.camera.x)*cameraSpeed;s.camera.y+=((cameraTarget.y-s.viewH*.12)-s.camera.y)*cameraSpeed;
+    sendCoopInput(now);updateHud();
+  }
+  function sendCoopInput(now=performance.now()){
+    const s=UI.session,c=s?.coop,p=c?.local;if(!c||c.role!=="guest"||c.writePending||now-c.lastInputWrite<COOP_INPUT_INTERVAL)return;c.lastInputWrite=now;c.writePending=true;
+    const target=nearestEnemy(p.x,p.y,p.weapon.range||1600),fire=!!(p.hp>0&&target&&(s.autoFire||UI.pointer.fire||UI.keys.Space));
+    c.inputFrameIndex=(Number(c.inputFrameIndex||0)+1)%c.inputRefs.length;const inputRef=c.inputRefs[c.inputFrameIndex];
+    c.fb.setDoc(inputRef,{x:Number(p.x.toFixed(2)),y:Number(p.y.toFixed(2)),angle:Number(p.angle.toFixed(4)),moving:!!p.moving,fire,activeWeaponSlot:p.activeWeaponSlot,seq:++c.inputSeq,specialSeq:c.specialSeq,careCompanionSeq:c.careCompanionSeq,careMountSeq:c.careMountSeq,updatedAtMs:Date.now()},{merge:false}).catch(()=>{}).finally(()=>{if(UI.session?.coop)c.writePending=false;});
+  }
+  function lerpCoopAngle(from,to,amount){let delta=(to-from+Math.PI)%(Math.PI*2)-Math.PI;if(delta< -Math.PI)delta+=Math.PI*2;return from+delta*amount;}
+  function updateCoopRemotePlayer(dt,now){
+    const s=UI.session,c=s?.coop,p=c?.remote,input=c?.remoteInput;if(!c||!p)return;
+    if(p.companionCare)p.companionCare.timer=Math.max(0,p.companionCare.timer-dt);if(p.mountCare)p.mountCare.timer=Math.max(0,p.mountCare.timer-dt);
+    p.fireCooldown=Math.max(0,p.fireCooldown-dt);if(p.reloading){p.reloadTimer-=dt;if(p.reloadTimer<=0){p.reloading=false;p.ammo=Math.max(1,Math.round(p.weapon.magazine||1));}}
+    if(!input)return;if(input.left&&p.hp>0){p.hp=0;p.moving=false;showCombatMessage(`${p.coopName} HAT DEN KOOP VERLASSEN · DU KÄMPFST WEITER`);return;}if(p.hp<=0){p.moving=false;p.vx=0;p.vy=0;return;}const age=Date.now()-Number(input.updatedAtMs||0);c.connected=age<10000;if(age>20000&&p.hp>0){p.hp=0;p.moving=false;showCombatMessage(`${p.coopName} VERBINDUNG VERLOREN · DU KÄMPFST WEITER`);return;}
+    const maxStep=Math.max(35,p.speed*dt*1.7),dx=Number(input.x||p.x)-p.x,dy=Number(input.y||p.y)-p.y,d=Math.hypot(dx,dy);if(d>0){const step=Math.min(d,maxStep);p.x+=dx/d*step;p.y+=dy/d*step;}p.angle=lerpCoopAngle(p.angle,Number(input.angle||p.angle),Math.min(1,dt*15));p.moving=!!input.moving;p.lookX=p.moving?Math.cos(p.angle):Math.cos(p.angle);p.lookY=p.moving?Math.sin(p.angle):Math.sin(p.angle);
+    if(input.activeWeaponSlot&&input.activeWeaponSlot!==p.activeWeaponSlot)coopSwitchRemoteWeapon(p,input.activeWeaponSlot);
+    if(Number(input.specialSeq||0)>Number(c.lastRemoteSpecialSeq||0)){c.lastRemoteSpecialSeq=Number(input.specialSeq||0);withSessionPlayer(p,()=>triggerSpecial());}
+    if(Number(input.careCompanionSeq||0)>Number(c.lastRemoteCompCareSeq||0)){c.lastRemoteCompCareSeq=Number(input.careCompanionSeq||0);withSessionPlayer(p,()=>useCompanionCare());}
+    if(Number(input.careMountSeq||0)>Number(c.lastRemoteMountCareSeq||0)){c.lastRemoteMountCareSeq=Number(input.careMountSeq||0);withSessionPlayer(p,()=>useMountCare());}
+    if(input.fire&&p.hp>0){const target=nearestEnemy(p.x,p.y,p.weapon.range||1600);if(target)coopRemoteAttack(p,target);}
+  }
+  function coopSwitchRemoteWeapon(player,slot){const runtime=player.weaponRuntimes?.[slot];if(!runtime)return;player.activeWeaponSlot=slot;player.weaponItem=runtime.item;player.weapon=runtime.stats;player.ammo=runtime.ammo;player.reloading=runtime.reloading;player.reloadTimer=runtime.reloadTimer;player.specialType=runtime.stats.special||"";}
+  function coopRemoteAttack(player,target){
+    const s=UI.session,w=player.weapon;if(player.fireCooldown>0||player.reloading)return;if(w.attack!=="melee"&&player.ammo<=0){player.reloading=true;player.reloadTimer=Math.max(.35,w.reload||1.5);return;}const rate=Math.max(.15,Number(w.fireRate)||1);player.fireCooldown=1/rate;player.attackAnim=Math.min(.3,1/rate);player.angle=Math.atan2(target.y-player.y,target.x-player.x);
+    if(w.attack==="melee"){const range=w.range||80,arc=w.arc||1.6;for(const enemy of [...s.enemies]){const dx=enemy.x-player.x,dy=enemy.y-player.y,d=Math.hypot(dx,dy);if(d>range+enemy.radius)continue;const diff=Math.atan2(Math.sin(Math.atan2(dy,dx)-player.angle),Math.cos(Math.atan2(dy,dx)-player.angle));if(Math.abs(diff)>arc/2)continue;const crit=Math.random()<player.crit;damageEnemyForPlayer(player,enemy,w.damage*player.damageMult*(crit?player.critDamage:1),crit,w.splash||0);}s.particles.push({type:"slash",x:player.x,y:player.y,angle:player.angle,radius:range,life:.24,maxLife:.24,color:RARITIES[w.rarity]?.color||"#fff"});}
+    else{player.ammo-=1;const count=w.attack==="shotgun"?Math.max(1,Math.round(w.pellets||7)):1;for(let i=0;i<count;i++){const angle=player.angle+(w.spread||0)*rand(-1,1),crit=Math.random()<player.crit;s.projectiles.push({x:player.x+Math.cos(angle)*28,y:player.y+Math.sin(angle)*28,vx:Math.cos(angle)*(w.attack==="shotgun"?760:940),vy:Math.sin(angle)*(w.attack==="shotgun"?760:940),radius:rarityIndex(w.rarity)>=5?5:3,damage:w.damage*player.damageMult*(crit?player.critDamage:1),life:(w.range||620)/900,color:crit?"#ffe05a":RARITIES[w.rarity]?.color||"#fff",crit,pierce:Math.max(0,Math.round(w.pierce||0)),splash:Number(w.splash||0),ownerKey:"remote",hit:new Set()});}if(player.ammo<=0){player.reloading=true;player.reloadTimer=Math.max(.35,w.reload||1.5);}}
+  }
+  function serializeCoopPlayer(player){return cleanCoopData({x:player.x,y:player.y,angle:player.angle,moving:player.moving,hp:player.hp,maxHp:player.maxHp,shield:player.shield,maxShield:player.maxShield,activeWeaponSlot:player.activeWeaponSlot,ammo:player.ammo,reloading:player.reloading,specialCharge:player.specialCharge,specialReady:player.specialReady,companionCareTimer:player.companionCare?.timer||0,mountCareTimer:player.mountCare?.timer||0,mountActive:player.mountActive,mountArmor:player.mountArmor,mountMaxArmor:player.mountMaxArmor,companion:player.companion?{x:player.companion.x,y:player.companion.y,angle:player.companion.angle,moving:player.companion.moving,hp:player.companion.hp,maxHp:player.companion.maxHp,dead:player.companion.dead,attackAnim:player.companion.attackAnim}:null});}
+  function writeCoopSnapshot(now=performance.now()){
+    const s=UI.session,c=s?.coop;if(!c||c.role!=="host"||c.snapshotPending||now-c.lastSnapshotWrite<COOP_SNAPSHOT_INTERVAL)return;c.lastSnapshotWrite=now;c.snapshotPending=true;
+    const snapshot=cleanCoopData({wave:s.wave,score:s.score,kills:s.kills,themeIndex:s.themeIndex,players:{host:serializeCoopPlayer(c.local),guest:serializeCoopPlayer(c.remote)},enemies:s.enemies,projectiles:s.projectiles.map(({hit,...rest})=>rest),enemyProjectiles:s.enemyProjectiles,pickups:s.pickups,bossId:s.boss?.id||"",updatedAtMs:Date.now()});
+    c.frameRefs ||= Array.from({length:8},(_,index)=>c.fb.doc(c.fb.db,COOP_MATCH_COLLECTION,c.matchId,"frames",String(index)));
+    c.frameIndex=(Number(c.frameIndex||0)+1)%c.frameRefs.length;
+    c.fb.setDoc(c.frameRefs[c.frameIndex],{snapshot,updatedAtMs:Date.now()},{merge:false}).catch(()=>{}).finally(()=>{if(UI.session?.coop)c.snapshotPending=false;});
+  }
+  function applyCoopSnapshot(data){
+    const s=UI.session,c=s?.coop,snap=data?.snapshot;if(!s||!c)return;if(data.status==="ended"){finishCoopGuest(data.finishReason||"Der KOOP-Lauf wurde beendet.");return;}if(!snap||Number(snap.updatedAtMs||0)<=Number(c.lastSnapshotAt||0))return;c.lastSnapshotAt=Number(snap.updatedAtMs||0);s.wave=Number(snap.wave||s.wave);s.score=Number(snap.score||0);s.kills=Number(snap.kills||0);s.themeIndex=Number(snap.themeIndex||0);s.theme=ARENA_THEMES[s.themeIndex%ARENA_THEMES.length]||ARENA_THEMES[0];
+    const oldEnemies=new Map(s.enemies.map(enemy=>[enemy.id,enemy]));s.enemies=(snap.enemies||[]).map(raw=>{const old=oldEnemies.get(raw.id);return old?{...raw,x:old.x,y:old.y,angle:old.angle,targetX:Number(raw.x),targetY:Number(raw.y),targetAngle:Number(raw.angle||0)}:{...raw,targetX:Number(raw.x),targetY:Number(raw.y),targetAngle:Number(raw.angle||0)};});s.projectiles=(snap.projectiles||[]).map(raw=>({...raw,hit:new Set()}));s.enemyProjectiles=(snap.enemyProjectiles||[]).map(raw=>({...raw}));s.pickups=(snap.pickups||[]).map(raw=>({...raw}));s.boss=s.enemies.find(enemy=>enemy.id===snap.bossId)||null;
+    const own=snap.players?.guest,host=snap.players?.host;if(own){c.local.hp=Number(own.hp||0);c.local.shield=Number(own.shield||0);c.local.activeWeaponSlot=own.activeWeaponSlot||c.local.activeWeaponSlot;coopSwitchRemoteWeapon(c.local,c.local.activeWeaponSlot);c.local.ammo=Number(own.ammo??c.local.ammo);c.local.reloading=!!own.reloading;c.local.specialCharge=Number(own.specialCharge||0);c.local.specialReady=!!own.specialReady;if(c.local.companionCare)c.local.companionCare.timer=Number(own.companionCareTimer||0);if(c.local.mountCare)c.local.mountCare.timer=Number(own.mountCareTimer||0);c.local.mountActive=!!own.mountActive;c.local.mountArmor=Number(own.mountArmor||0);if(c.local.companion&&own.companion){Object.assign(c.local.companion,own.companion);}}
+    if(host){c.remoteTarget={x:Number(host.x||c.remote.x),y:Number(host.y||c.remote.y),angle:Number(host.angle||c.remote.angle),moving:!!host.moving};applyCoopPlayerState(c.remote,host);}
+    updateHud();
+  }
+  function applyCoopPlayerState(player,state){if(!player||!state)return;player.hp=Number(state.hp||0);player.shield=Number(state.shield||0);player.activeWeaponSlot=state.activeWeaponSlot||player.activeWeaponSlot;coopSwitchRemoteWeapon(player,player.activeWeaponSlot);player.ammo=Number(state.ammo??player.ammo);player.reloading=!!state.reloading;player.specialCharge=Number(state.specialCharge||0);player.specialReady=!!state.specialReady;if(player.companionCare)player.companionCare.timer=Number(state.companionCareTimer||0);if(player.mountCare)player.mountCare.timer=Number(state.mountCareTimer||0);player.mountActive=!!state.mountActive;player.mountArmor=Number(state.mountArmor||0);if(player.companion&&state.companion)Object.assign(player.companion,state.companion);}
+  async function finishCoopHost(reason){const s=UI.session,c=s?.coop;if(!c||c.ended)return;c.ended=true;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;try{await c.fb.setDoc(c.matchRef,{status:"ended",finishReason:reason,finalWave:s.wave,updatedAtMs:Date.now()},{merge:true});}catch{}finishCoopRun(reason);}
+  function finishCoopGuest(reason){const s=UI.session,c=s?.coop;if(!c||c.ended)return;c.ended=true;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;finishCoopRun(reason);}
+  function finishCoopRun(reason){
+    const s=UI.session,c=s?.coop;if(!s||!c)return;const activeWave=!!(s.enemies.length||s.spawnQueue.length),completedWave=Math.max(0,s.wave-(activeWave?1:0)),score=Math.floor(s.score||0),kills=Math.floor(s.kills||0),durationMs=Math.max(1000,performance.now()-s.startedAt),reward=Math.min(250000,Math.round(s.moneyEarned+completedWave*115+kills*7+score/900));
+    const data=ensureState();data.runs+=1;data.totalKills+=kills;data.bestWave=Math.max(data.bestWave,completedWave);data.bestScore=Math.max(data.bestScore,score);addFightXp(Math.round(completedWave*40+kills*2));if(reward)awardMoney(reward,"Fight.KL Wellen-KOOP");safeSave();updateHead();
+    stopCoopNetwork(false);s.resizeObserver?.disconnect?.();UI.shell?.classList.remove("combat-active");UI.session=null;UI.pointer.fire=false;
+    const modal=showModal(`<div style="font-size:64px">🤝</div><small class="fkl-kicker">WELLEN-KOOP BEENDET</small><h3>Team-Lauf beendet</h3><p>${escapeHtml(reason)}</p><div class="fkl-summary-grid"><div><small>Geschaffte Wellen</small><b>${completedWave}</b></div><div><small>Team-Kills</small><b>${kills}</b></div><div><small>Team-Score</small><b>${NUMBER.format(score)}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Fight-Level</small><b>${data.level}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-coop-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-coop-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-coop-again]")?.addEventListener("click",()=>{modal.remove();renderCoopLobby();});modal.querySelector("[data-fkl-summary-inventory]")?.addEventListener("click",()=>{modal.remove();renderInventory();});modal.querySelector("[data-fkl-coop-home]")?.addEventListener("click",()=>{modal.remove();renderDashboard();});
+  }
+  function stopCoopNetwork(markLeft=true){
+    clearTimeout(UI.coopPollTimer);UI.coopPollTimer=0;for(const unsub of UI.coopUnsubs.splice(0)){try{unsub();}catch{}}
+    const c=UI.session?.coop;if(!c)return;if(markLeft&&!c.ended){if(c.role==="guest"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,fire:false,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});}
+  }
+  function leaveWaveCoop(){const c=UI.session?.coop;if(c&&!c.ended){if(c.role==="guest"&&c.selfRef)c.fb?.setDoc?.(c.selfRef,{left:true,fire:false,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});else c.fb?.setDoc?.(c.matchRef,{status:"ended",finishReason:`${c.local?.coopName||"Der Host"} hat den KOOP beendet.`,updatedAtMs:Date.now()},{merge:true}).catch(()=>{});c.ended=true;}stopCoopNetwork(false);stopCombat(false);renderDashboard();}
+  function updateCoopHud(){const s=UI.session,c=s?.coop;if(!c)return;const set=(sel,val)=>{const n=UI.main?.querySelector(sel);if(n)n.textContent=val},local=c.local,remote=c.remote;set("[data-fkl-coop-local-hp]",local.hp>0?`${Math.ceil(local.hp)}/${local.maxHp}`:"K.O.");set("[data-fkl-coop-remote-hp]",remote.hp>0?`${Math.ceil(remote.hp)}/${remote.maxHp}`:"K.O.");const lb=UI.main?.querySelector("[data-fkl-coop-local-bar]"),rb=UI.main?.querySelector("[data-fkl-coop-remote-bar]");if(lb)lb.style.width=`${clamp(local.hp/local.maxHp*100,0,100)}%`;if(rb)rb.style.width=`${clamp(remote.hp/remote.maxHp*100,0,100)}%`;}
+
   function adminSelectedInventoryItem() {
     const data=ensureState();
-    return data.inventory.find(item=>item.uid===data.staffTools.selectedInventoryUid)||equipped("primary")||equipped("sidearm")||equipped("melee")||data.inventory[0]||null;
+    const item=data.inventory.find(entry=>entry.uid===data.staffTools.selectedInventoryUid)||["primary","sidearm","melee","armor","companion","mount"].map(equipped).find(Boolean)||data.inventory[0]||null;
+    if(item&&data.staffTools.selectedInventoryUid!==item.uid)data.staffTools.selectedInventoryUid=item.uid;
+    return item;
   }
 
   function adminCharacterCardHtml() {
@@ -1892,11 +2175,17 @@ function updateHud() {
     const catalog=ITEMS.slice().sort((a,b)=>a.category.localeCompare(b.category)||rarityIndex(a.rarity)-rarityIndex(b.rarity)||a.name.localeCompare(b.name,"de"));
     const rarityOptions=RARITY_ORDER.map(id=>`<option value="${id}" ${tools.grantRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("");
     const selectedRarity=selected?rarityKey(selected):"common";
-    UI.main.innerHTML=`<div class="fkl-page fkl-mod-page">${pageHeader("Admin / Owner Mod-Menü","Direkte Fight.KL-Verwaltung. Dieser Bereich wird ausschließlich bei aktiver Admin- oder Owner-Rolle angezeigt.",`<button class="fkl-btn" type="button" data-fkl-mod-inventory>🎒 Inventar</button>`)}<div class="fkl-mod-layout">${adminCharacterCardHtml()}<section class="fkl-panel fkl-mod-tools"><div class="fkl-mod-title"><div><small class="fkl-kicker">KAMPF-CHEATS</small><h3>Ingame-Einstellungen</h3></div><b>${staffRoleLabel()}</b></div><div class="fkl-mod-toggle-row"><button class="fkl-mod-toggle ${tools.godMode?"active":""}" type="button" data-fkl-mod-god><span>♾</span><div><b>God Mode</b><small>${tools.godMode?"Aktiv · unendlich Leben":"Aus"}</small></div></button></div><div class="fkl-mod-control-grid"><label><span>Schaden</span><select data-fkl-mod-setting="damageMultiplier">${[1,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.damageMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Speed</span><select data-fkl-mod-setting="speedMultiplier">${[1,1.5,2,3,5,8,10].map(v=>`<option value="${v}" ${Number(tools.speedMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Verteidigung</span><select data-fkl-mod-setting="defenseMultiplier">${[1,1.5,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.defenseMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label></div><small class="fkl-mod-note">Die Einstellungen gelten für die Bot-Arena. Online-Duelle bleiben serverseitig normal.</small></section><section class="fkl-panel fkl-mod-money"><small class="fkl-kicker">GELD</small><h3>Geld hinzufügen</h3><div class="fkl-mod-money-actions">${[10000,100000,1000000,10000000].map(v=>`<button type="button" data-fkl-mod-money="${v}">+${NUMBER.format(v)} €</button>`).join("")}</div><label class="fkl-mod-custom-money"><input type="number" min="1" step="1000" placeholder="Eigener Betrag" data-fkl-mod-money-input><button type="button" data-fkl-mod-money-custom>Hinzufügen</button></label><p>Aktuell: <b>${EURO.format(playerFunds())}</b></p></section><section class="fkl-panel fkl-mod-equipped"><small class="fkl-kicker">CHARAKTER-AUSRÜSTUNG</small><h3>Slot anklicken und bearbeiten</h3><div class="fkl-mod-equipped-grid">${equippedCards}</div></section><section class="fkl-panel fkl-mod-item-editor"><small class="fkl-kicker">ITEM-EDITOR</small><h3>${escapeHtml(selectedDef?.name||"Kein Item")}</h3>${selected?`<div class="fkl-mod-selected"><span>${selectedDef.icon}</span><div><b>${rarityDef(selected).name}</b><small>${starText(selected.star)} · ${itemMaxDurability(selected)?`${Math.round(selected.durability)}/${itemMaxDurability(selected)} Haltbarkeit`:"Ohne Haltbarkeit"}</small></div></div><div class="fkl-mod-control-grid"><label><span>Seltenheit</span><select data-fkl-mod-item-rarity>${RARITY_ORDER.map(id=>`<option value="${id}" ${selectedRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("")}</select></label><label><span>Sterne</span><select data-fkl-mod-item-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(selected.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label></div><div class="fkl-mod-item-actions"><button type="button" data-fkl-mod-item-repair>Max. Haltbarkeit</button><button type="button" data-fkl-mod-item-duplicate>Duplizieren</button></div>`:`<p>Rüste zuerst ein Item aus.</p>`}</section><section class="fkl-panel fkl-mod-grant"><small class="fkl-kicker">SHOP / ITEM-GEBER</small><h3>Beliebiges Item geben</h3><div class="fkl-mod-grant-grid"><label><span>Item</span><select data-fkl-mod-grant-item>${catalog.map(def=>`<option value="${def.id}" ${tools.selectedItemId===def.id?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${RARITIES[def.rarity].name}</option>`).join("")}</select></label><label><span>Seltenheit</span><select data-fkl-mod-grant-rarity>${rarityOptions}</select></label><label><span>Sterne</span><select data-fkl-mod-grant-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(tools.grantStar)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><label><span>Anzahl</span><select data-fkl-mod-grant-quantity>${[1,2,5,10].map(v=>`<option value="${v}" ${Number(tools.grantQuantity)===v?"selected":""}>${v}</option>`).join("")}</select></label></div><button class="fkl-btn gold fkl-mod-grant-button" type="button" data-fkl-mod-grant>Item geben</button></section></div></div>`;
+    const inventorySelect=data.inventory.map(item=>{const def=itemDef(item);return `<option value="${item.uid}" ${selected?.uid===item.uid?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${rarityDef(item).name} · ${starText(item.star)}</option>`}).join("");
+    const unlockOptions=waveCheckpointValues(MAX_WAVE_CHECKPOINT).map(wave=>`<option value="${wave}" ${data.unlockedWaveStart===wave?"selected":""}>${wave===1?"Nur Welle 1":`Bis Welle ${wave}`}</option>`).join("");
+    const activeWaveOptions=waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart);
+    UI.main.innerHTML=`<div class="fkl-page fkl-mod-page">${pageHeader("Admin / Owner Mod-Menü","Direkte Fight.KL-Verwaltung. Dieser Bereich wird ausschließlich bei aktiver Admin- oder Owner-Rolle angezeigt.",`<button class="fkl-btn" type="button" data-fkl-mod-inventory>🎒 Inventar</button>`)}<div class="fkl-mod-layout">${adminCharacterCardHtml()}<section class="fkl-panel fkl-mod-tools"><div class="fkl-mod-title"><div><small class="fkl-kicker">KAMPF-CHEATS</small><h3>Ingame-Einstellungen</h3></div><b>${staffRoleLabel()}</b></div><div class="fkl-mod-toggle-row"><button class="fkl-mod-toggle ${tools.godMode?"active":""}" type="button" data-fkl-mod-god><span>♾</span><div><b>God Mode</b><small>${tools.godMode?"Aktiv · unendlich Leben":"Aus"}</small></div></button></div><div class="fkl-mod-control-grid"><label><span>Schaden</span><select data-fkl-mod-setting="damageMultiplier">${[1,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.damageMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Speed</span><select data-fkl-mod-setting="speedMultiplier">${[1,1.5,2,3,5,8,10].map(v=>`<option value="${v}" ${Number(tools.speedMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Verteidigung</span><select data-fkl-mod-setting="defenseMultiplier">${[1,1.5,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.defenseMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label></div><small class="fkl-mod-note">Die Einstellungen gelten für die Bot-Arena. Online-Duelle bleiben serverseitig normal.</small></section><section class="fkl-panel fkl-mod-waves"><small class="fkl-kicker">WELLEN-STARTPUNKTE</small><h3>Startwellen verwalten</h3><div class="fkl-mod-control-grid"><label><span>Freigeschaltet</span><select data-fkl-mod-wave-unlock>${unlockOptions}</select></label><label><span>Aktive Startwelle</span><select data-fkl-mod-wave-active>${activeWaveOptions}</select></label></div><p>Spieler schalten regulär alle zehn Wellen einen neuen Startpunkt frei. Admin und Owner können diese Grenze hier direkt festlegen.</p></section><section class="fkl-panel fkl-mod-money"><small class="fkl-kicker">GELD</small><h3>Geld hinzufügen</h3><div class="fkl-mod-money-actions">${[10000,100000,1000000,10000000].map(v=>`<button type="button" data-fkl-mod-money="${v}">+${NUMBER.format(v)} €</button>`).join("")}</div><label class="fkl-mod-custom-money"><input type="number" min="1" step="1000" placeholder="Eigener Betrag" data-fkl-mod-money-input><button type="button" data-fkl-mod-money-custom>Hinzufügen</button></label><p>Aktuell: <b>${EURO.format(playerFunds())}</b></p></section><section class="fkl-panel fkl-mod-equipped"><small class="fkl-kicker">CHARAKTER-AUSRÜSTUNG</small><h3>Slot anklicken und bearbeiten</h3><div class="fkl-mod-equipped-grid">${equippedCards}</div></section><section class="fkl-panel fkl-mod-item-editor"><small class="fkl-kicker">ITEM-EDITOR</small><h3>Item direkt bearbeiten</h3>${data.inventory.length?`<label class="fkl-mod-inventory-picker"><span>Vorhandenes Item</span><select data-fkl-mod-inventory-select>${inventorySelect}</select></label>`:""}${selected?`<div class="fkl-mod-selected"><span>${selectedDef.icon}</span><div><b>${rarityDef(selected).name}</b><small>${starText(selected.star)} · ${itemMaxDurability(selected)?`${Math.round(selected.durability)}/${itemMaxDurability(selected)} Haltbarkeit`:"Ohne Haltbarkeit"}</small></div></div><div class="fkl-mod-control-grid"><label><span>Seltenheit</span><select data-fkl-mod-item-rarity>${RARITY_ORDER.map(id=>`<option value="${id}" ${selectedRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("")}</select></label><label><span>Sterne</span><select data-fkl-mod-item-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(selected.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label></div><div class="fkl-mod-item-actions"><button type="button" data-fkl-mod-item-repair>Max. Haltbarkeit</button><button type="button" data-fkl-mod-item-duplicate>Duplizieren</button></div>`:`<p>Dein Inventar ist leer. Über den Item-Geber kannst du direkt einen Gegenstand hinzufügen.</p>`}</section><section class="fkl-panel fkl-mod-grant"><small class="fkl-kicker">SHOP / ITEM-GEBER</small><h3>Beliebiges Item geben</h3><div class="fkl-mod-grant-grid"><label><span>Item</span><select data-fkl-mod-grant-item>${catalog.map(def=>`<option value="${def.id}" ${tools.selectedItemId===def.id?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${RARITIES[def.rarity].name}</option>`).join("")}</select></label><label><span>Seltenheit</span><select data-fkl-mod-grant-rarity>${rarityOptions}</select></label><label><span>Sterne</span><select data-fkl-mod-grant-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(tools.grantStar)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><label><span>Anzahl</span><select data-fkl-mod-grant-quantity>${[1,2,5,10].map(v=>`<option value="${v}" ${Number(tools.grantQuantity)===v?"selected":""}>${v}</option>`).join("")}</select></label></div><button class="fkl-btn gold fkl-mod-grant-button" type="button" data-fkl-mod-grant>Item geben</button></section></div></div>`;
     bindPageHome();
     UI.main.querySelector("[data-fkl-mod-inventory]")?.addEventListener("click",renderInventory);
     UI.main.querySelector("[data-fkl-mod-god]")?.addEventListener("click",()=>{tools.godMode=!tools.godMode;safeSave();renderFightAdminMenu();});
     UI.main.querySelectorAll("[data-fkl-mod-setting]").forEach(select=>select.addEventListener("change",()=>{tools[select.dataset.fklModSetting]=Number(select.value)||1;safeSave();renderFightAdminMenu();}));
+    UI.main.querySelector("[data-fkl-mod-wave-unlock]")?.addEventListener("change",event=>{data.unlockedWaveStart=normalizeWaveCheckpoint(event.currentTarget.value,MAX_WAVE_CHECKPOINT);data.selectedStartWave=normalizeWaveCheckpoint(data.selectedStartWave,data.unlockedWaveStart);safeSave();renderFightAdminMenu();});
+    UI.main.querySelector("[data-fkl-mod-wave-active]")?.addEventListener("change",event=>{data.selectedStartWave=normalizeWaveCheckpoint(event.currentTarget.value,data.unlockedWaveStart);safeSave();renderFightAdminMenu();});
+    UI.main.querySelector("[data-fkl-mod-inventory-select]")?.addEventListener("change",event=>{tools.selectedInventoryUid=event.currentTarget.value;safeSave();renderFightAdminMenu();});
     UI.main.querySelectorAll("[data-fkl-mod-money]").forEach(btn=>btn.addEventListener("click",()=>addFightAdminMoney(Number(btn.dataset.fklModMoney))));
     UI.main.querySelector("[data-fkl-mod-money-custom]")?.addEventListener("click",()=>addFightAdminMoney(Number(UI.main.querySelector("[data-fkl-mod-money-input]")?.value||0)));
     UI.main.querySelectorAll("[data-fkl-mod-select]").forEach(btn=>btn.addEventListener("click",()=>{if(btn.dataset.fklModSelect){tools.selectedInventoryUid=btn.dataset.fklModSelect;safeSave();renderFightAdminMenu();}}));
@@ -1921,7 +2210,7 @@ function updateHud() {
   function duplicateFightAdminItem(uidValue){if(!canUseStaffModMenu())return;const data=ensureState(),item=data.inventory.find(entry=>entry.uid===uidValue);if(!item||data.inventory.length>=INVENTORY_LIMIT)return toast("Inventar voll");const copy=makeItem(item.baseId,item.star,null,rarityKey(item));data.inventory.unshift(copy);data.staffTools.selectedInventoryUid=copy.uid;safeSave();renderFightAdminMenu();}
   function grantFightAdminItems(){if(!canUseStaffModMenu())return;const data=ensureState(),tools=data.staffTools,def=ITEM_MAP.get(tools.selectedItemId);if(!def)return;const room=INVENTORY_LIMIT-data.inventory.length,quantity=Math.min(room,clamp(Math.floor(Number(tools.grantQuantity)||1),1,10));if(quantity<=0)return toast("Inventar voll");for(let i=0;i<quantity;i++)data.inventory.unshift(makeItem(def.id,tools.grantStar,null,tools.grantRarity));safeSave();updateHead();toast("Item gegeben",`${quantity}× ${def.name} · ${RARITIES[tools.grantRarity].name} · ${starText(tools.grantStar)}`);renderFightAdminMenu();}
 
-  function close(returnPhone=false){stopCombat(false);stopDuel(false);window.removeEventListener("keydown",onKeyDown);window.removeEventListener("keyup",onKeyUp);UI.overlay?.remove();UI.overlay=null;UI.shell=null;UI.main=null;document.body.classList.remove("fight-kl-open");if(returnPhone)returnToTopGames();}
+  function close(returnPhone=false){stopCoopWaiting(true);stopCombat(false);stopDuel(false);window.removeEventListener("keydown",onKeyDown);window.removeEventListener("keyup",onKeyUp);UI.overlay?.remove();UI.overlay=null;UI.shell=null;UI.main=null;document.body.classList.remove("fight-kl-open");if(returnPhone)returnToTopGames();}
   function onKeyDown(event){if(!UI.overlay)return;UI.keys[event.code]=true;if(UI.duel){if(event.code==="Escape"){event.preventDefault();leaveOnlineDuel(false)}if(event.code==="Space"){event.preventDefault();sendDuelAction("attack")}if(event.code==="ShiftLeft"||event.code==="ShiftRight"){event.preventDefault();sendDuelAction("dodge")}if(event.code==="KeyE"||event.code==="KeyQ"){event.preventDefault();sendDuelAction("special")}return;}if(event.code==="Escape"){event.preventDefault();if(UI.session)pauseCombat();else returnToTopGames()}if(event.code==="KeyR"&&UI.session){event.preventDefault();beginReload()}if((event.code==="KeyE"||event.code==="KeyQ")&&UI.session){event.preventDefault();triggerSpecial()}if(UI.session&&["Digit1","Numpad1","Digit2","Numpad2","Digit3","Numpad3"].includes(event.code)){event.preventDefault();const n=event.code.includes("1")?0:event.code.includes("2")?1:2;switchCombatWeapon(WEAPON_SLOT_KEYS[n])}if(UI.session&&["Digit4","Numpad4"].includes(event.code)){event.preventDefault();useCompanionCare()}if(UI.session&&["Digit5","Numpad5"].includes(event.code)){event.preventDefault();useMountCare()}if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.code))event.preventDefault();}
 
   window.FightKL=Object.freeze({version:VERSION,open,close,returnToTopGames});
