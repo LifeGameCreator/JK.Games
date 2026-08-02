@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-fight-kl-v145-four-player-friends-loadout";
+  const VERSION = "20260802-fight-kl-v146-friends-ui-ai-spacing-fix";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -1457,7 +1457,7 @@ function startCombat(startAtWave = null, options = {}) {
   if (!player.weaponItem || player.weaponItem.durability <= 0) switchCombatWeapon(equipmentSlotForDef(itemDef(usable)), false);
   const special = SPECIALS[player.specialType];
   const weaponButtons = WEAPON_SLOT_KEYS.map((slot,index) => { const item = equipped(slot), def = item ? itemDef(item) : null; return `<button class="fkl-weapon-slot ${slot === player.activeWeaponSlot ? "active" : ""}" type="button" data-fkl-weapon-switch="${slot}" ${item ? "" : "disabled"}><span>${index+1}</span><i>${def?.icon || SLOT_META[slot].icon}</i><small>${escapeHtml(def?.name || "Leer")}</small></button>`; }).join("");
-  UI.main.innerHTML = `<section class="fkl-combat"><div class="fkl-combat-hud"><div class="fkl-hud-left"><button class="fkl-icon-btn" type="button" data-fkl-combat-pause>Ⅱ</button><div class="fkl-health-wrap"><small>LEBEN <b data-fkl-hp-text></b></small><div class="fkl-bar fkl-health"><i data-fkl-hp-bar></i></div><div class="fkl-bar fkl-xp" style="margin-top:4px;height:6px"><i data-fkl-xp-bar></i></div></div><div class="fkl-hud-pill"><small>SHIELD</small><b data-fkl-shield>0</b></div><div class="fkl-hud-pill fkl-mount-pill" data-fkl-mount-pill><small>REITTIER</small><b data-fkl-mount>—</b></div><div class="fkl-hud-pill fkl-companion-pill" data-fkl-companion-pill><small>BEGLEITER</small><b data-fkl-companion>—</b><em data-fkl-companion-bonus></em></div></div><div class="fkl-wave" data-fkl-wave>WELLE 1</div><div class="fkl-hud-right"><div class="fkl-hud-pill"><small>KILLS</small><b data-fkl-kills>0</b></div><div class="fkl-hud-pill"><small>SCORE</small><b data-fkl-score>0</b></div><div class="fkl-hud-pill"><small>POWER</small><b>${NUMBER.format(powerScore())}</b></div></div></div><div class="fkl-stage"><canvas class="fkl-canvas" data-fkl-canvas></canvas><div class="fkl-vignette"></div><div class="fkl-combat-message" data-fkl-message></div><div class="fkl-boss-wrap" data-fkl-boss-wrap hidden><b data-fkl-boss-name>BOSS</b><div class="fkl-bar fkl-boss"><i data-fkl-boss-bar></i></div></div><div class="fkl-weapon-switch">${weaponButtons}</div><div class="fkl-ammo"><small data-fkl-weapon-name></small><b data-fkl-ammo></b><small data-fkl-durability></small></div><div class="fkl-care-actions"><button class="fkl-care-button" type="button" data-fkl-care-companion><span>4</span><i>${equipped("companioncare")?itemDef(equipped("companioncare")).icon:"🩹"}</i><small data-fkl-care-companion-text>Haustierpflege</small></button><button class="fkl-care-button" type="button" data-fkl-care-mount><span>5</span><i>${equipped("mountcare")?itemDef(equipped("mountcare")).icon:"🧰"}</i><small data-fkl-care-mount-text>Reittierpflege</small></button></div><button class="fkl-special-button ${special ? "" : "disabled"}" type="button" data-fkl-special ${special ? "" : "disabled"}><div class="fkl-special-circle" data-fkl-special-circle style="--special-color:${special?.color || '#62d9ff'};--special-progress:0deg"><span data-fkl-special-icon>${special?.icon || "✦"}</span></div><div class="fkl-special-meta"><small data-fkl-special-name>${special?.name || "Kein Special"}</small><b data-fkl-special-text>${special ? "0 %" : "—"}</b></div></button><div class="fkl-touch"><div class="fkl-stick" data-fkl-stick><div class="fkl-stick-knob" data-fkl-stick-knob></div></div><button class="fkl-auto" type="button" data-fkl-auto>AUTO AN</button><button class="fkl-fire" type="button" data-fkl-fire>FEUER</button></div></div></section>`;
+  UI.main.innerHTML = `<section class="fkl-combat"><div class="fkl-combat-hud"><div class="fkl-hud-left"><button class="fkl-icon-btn" type="button" data-fkl-combat-pause>Ⅱ</button><div class="fkl-health-wrap"><small>LEBEN <b data-fkl-hp-text></b></small><div class="fkl-bar fkl-health"><i data-fkl-hp-bar></i></div><div class="fkl-bar fkl-xp" style="margin-top:4px;height:6px"><i data-fkl-xp-bar></i></div></div><div class="fkl-hud-pill"><small>SHIELD</small><b data-fkl-shield>0</b></div><div class="fkl-hud-pill fkl-mount-pill" data-fkl-mount-pill><small>REITTIER</small><b data-fkl-mount>—</b></div><div class="fkl-hud-pill fkl-companion-pill" data-fkl-companion-pill><small>BEGLEITER</small><b data-fkl-companion>—</b><em data-fkl-companion-bonus></em></div></div><div class="fkl-wave" data-fkl-wave>WELLE 1</div><div class="fkl-hud-right"><div class="fkl-hud-pill"><small>KILLS</small><b data-fkl-kills>0</b></div><div class="fkl-hud-pill"><small>SCORE</small><b data-fkl-score>0</b></div><div class="fkl-hud-pill"><small>POWER</small><b>${NUMBER.format(powerScore())}</b></div></div></div><div class="fkl-stage"><canvas class="fkl-canvas" data-fkl-canvas></canvas><div class="fkl-vignette"></div><div class="fkl-combat-message" data-fkl-message></div><div class="fkl-boss-wrap" data-fkl-boss-wrap hidden><b data-fkl-boss-name>BOSS</b><div class="fkl-bar fkl-boss"><i data-fkl-boss-bar></i></div></div><div class="fkl-friend-combat-hud" data-fkl-friend-combat-hud hidden></div><div class="fkl-weapon-switch">${weaponButtons}</div><div class="fkl-ammo"><small data-fkl-weapon-name></small><b data-fkl-ammo></b><small data-fkl-durability></small></div><div class="fkl-care-actions"><button class="fkl-care-button" type="button" data-fkl-care-companion><span>4</span><i>${equipped("companioncare")?itemDef(equipped("companioncare")).icon:"🩹"}</i><small data-fkl-care-companion-text>Haustierpflege</small></button><button class="fkl-care-button" type="button" data-fkl-care-mount><span>5</span><i>${equipped("mountcare")?itemDef(equipped("mountcare")).icon:"🧰"}</i><small data-fkl-care-mount-text>Reittierpflege</small></button></div><button class="fkl-special-button ${special ? "" : "disabled"}" type="button" data-fkl-special ${special ? "" : "disabled"}><div class="fkl-special-circle" data-fkl-special-circle style="--special-color:${special?.color || '#62d9ff'};--special-progress:0deg"><span data-fkl-special-icon>${special?.icon || "✦"}</span></div><div class="fkl-special-meta"><small data-fkl-special-name>${special?.name || "Kein Special"}</small><b data-fkl-special-text>${special ? "0 %" : "—"}</b></div></button><div class="fkl-touch"><div class="fkl-stick" data-fkl-stick><div class="fkl-stick-knob" data-fkl-stick-knob></div></div><button class="fkl-auto" type="button" data-fkl-auto>AUTO AN</button><button class="fkl-fire" type="button" data-fkl-fire>FEUER</button></div></div></section>`;
   const canvas = UI.main.querySelector("[data-fkl-canvas]");
   UI.session = { canvas, ctx: canvas.getContext("2d", { alpha: false }), player, viewW: 1280, viewH: 720, screenW:1280, screenH:720, zoom:1, dpr: 1, camera: { x: player.x, y: player.y - 90 }, wave: 0, waveStarted: false, waveClearAt: 0, spawnQueue: [], spawnTimer: 0, enemies: [], projectiles: [], enemyProjectiles: [], particles: [], texts: [], pickups: [], score: 0, kills: 0, startedAt: performance.now(), paused: false, ended: false, autoFire: data.settings.autoFire !== false, joystick: { active: false, id: null, x: 0, y: 0, ox: 0, oy: 0 }, resizeObserver: null, boss: null, moneyEarned: 0, lootEarned: [], lastSave: 0, waveMessage: "", themeIndex: 0, theme: ARENA_THEMES[0], decorations: createArenaDecorations(0), frameCount: 0, fpsClock: performance.now(), fps: 60, specialInProgress: false, trackSoloProgress: options.trackSoloProgress !== false };
   bindCombatControls(); resizeCombat(); UI.session.resizeObserver = new ResizeObserver(resizeCombat); UI.session.resizeObserver.observe(canvas.parentElement);
@@ -1781,13 +1781,46 @@ function beginReload() {
   function combatTargets(includeDead=false){
     const players=combatPlayers(includeDead),friends=players.flatMap(player=>friendList(player).filter(friend=>includeDead||friend.hp>0));return [...players,...friends];
   }
+  function combatEntityKey(entity){
+    if(!entity)return"";
+    if(entity.friendUnit)return`friend:${entity.owner?.coopUid||entity.owner?.coopName||"local"}:${entity.role}:${entity.id}`;
+    return`player:${entity.coopUid||entity.coopName||entity.name||"local"}`;
+  }
+  function enemyAggroLoad(key,skipEnemy){
+    if(!key)return 0;let count=0;
+    for(const other of UI.session?.enemies||[])if(other!==skipEnemy&&!other.dead&&other.aggroTargetKey===key)count++;
+    return count;
+  }
+  function stableEnemyNumber(enemy){
+    const value=String(enemy?.id||enemy?.netId||enemy?.type||"enemy");let hash=0;
+    for(let i=0;i<value.length;i++)hash=(hash*31+value.charCodeAt(i))>>>0;
+    return hash;
+  }
   function nearestCombatPlayer(enemy) {
-    let best=null,bestDistance=Infinity;
-    for(const entity of combatTargets()){
-      const raw=Math.hypot(entity.x-enemy.x,entity.y-enemy.y),weighted=raw-(entity.friendUnit&&entity.role==="tank"?145:0);
-      if(weighted<bestDistance){bestDistance=weighted;best=entity;}
+    const targets=combatTargets();if(!targets.length)return null;
+    enemy.aggroTimer=Math.max(0,Number(enemy.aggroTimer||0));
+    let best=null,bestScore=Infinity;
+    const existing=targets.find(entity=>combatEntityKey(entity)===enemy.aggroTargetKey);
+    if(existing&&enemy.aggroTimer>0)best=existing;
+    if(!best){
+      for(const entity of targets){
+        const key=combatEntityKey(entity),raw=Math.hypot(entity.x-enemy.x,entity.y-enemy.y);
+        const tankBonus=entity.friendUnit&&entity.role==="tank"?(isBossEnemy(enemy)?175:125):0;
+        const saturation=enemyAggroLoad(key,enemy)*(isBossEnemy(enemy)?58:36);
+        const score=raw-tankBonus+saturation;
+        if(score<bestScore){bestScore=score;best=entity;}
+      }
+      enemy.aggroTargetKey=combatEntityKey(best);enemy.aggroTimer=.75+(stableEnemyNumber(enemy)%85)/100;
     }
-    if(!best)return null;const dx=best.x-enemy.x,dy=best.y-enemy.y;return{player:best,distance:Math.hypot(dx,dy),dx,dy};
+    if(!best)return null;
+    const dx=best.x-enemy.x,dy=best.y-enemy.y;
+    return{player:best,distance:Math.hypot(dx,dy),dx,dy};
+  }
+  function enemyEngagementPoint(enemy,target){
+    const seed=stableEnemyNumber(enemy),angle=(seed%360)*Math.PI/180;
+    const lane=Math.floor(seed/360)%3;
+    const base=Number(enemy.radius||16)+Number(target.radius||18)+8+lane*5;
+    return{x:target.x+Math.cos(angle)*base,y:target.y+Math.sin(angle)*base};
   }
   function damageCombatPlayer(target,amount,source){
     const s=UI.session;if(!s||!target||target.hp<=0)return;
@@ -1798,7 +1831,7 @@ function beginReload() {
   function updateEnemies(dt) {
     const s = UI.session;
     for (const enemy of [...s.enemies]) {
-      if (enemy.dead) continue; enemy.phase += dt * 8; enemy.hitFlash = Math.max(0, enemy.hitFlash - dt); enemy.attackCooldown -= dt; enemy.abilityCooldown -= dt;
+      if (enemy.dead) continue; enemy.phase += dt * 8; enemy.hitFlash = Math.max(0, enemy.hitFlash - dt); enemy.attackCooldown -= dt; enemy.abilityCooldown -= dt; enemy.aggroTimer=Math.max(0,Number(enemy.aggroTimer||0)-dt);
       if (enemy.statusTimer > 0) { enemy.statusTimer -= dt; if (enemy.statusType === "emp" || enemy.statusType === "stasis") { enemy.x += Math.sin(enemy.phase) * .15; continue; } }
       const targetInfo=nearestCombatPlayer(enemy);if(!targetInfo)continue;
       const target=targetInfo.player,dx=targetInfo.dx,dy=targetInfo.dy,d=targetInfo.distance||1;enemy.angle=Math.atan2(dy,dx);
@@ -1813,15 +1846,21 @@ function beginReload() {
         else enemy.y += Math.sin(enemy.phase) * 18 * dt;
         if (enemy.attackCooldown <= 0 && d < (enemy.type === "sniper" ? 980 : 680)) { enemy.attackCooldown = 1 / enemy.attackRate; fireEnemyProjectile(enemy, enemy.angle, enemy.damage); }
       } else {
-        enemy.x += dx / d * enemy.speed * dt; enemy.y += dy / d * enemy.speed * dt;
-        if (d < enemy.radius + target.radius + 5 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; if (enemy.explosive) { damageCombatPlayer(target,enemy.damage * 1.35,enemy); s.particles.push({type:"blast",x:enemy.x,y:enemy.y,radius:10,maxRadius:150,life:.45,maxLife:.45,color:enemy.color}); killEnemy(enemy); } else damageCombatPlayer(target,enemy.damage,enemy); }
+        const engage=enemyEngagementPoint(enemy,target),edx=engage.x-enemy.x,edy=engage.y-enemy.y,ed=Math.hypot(edx,edy)||1;
+        const contact=enemy.radius+target.radius+8;
+        if(d>contact+5&&ed>4){enemy.x+=edx/ed*enemy.speed*dt;enemy.y+=edy/ed*enemy.speed*dt;}
+        else if(d<contact-5){enemy.x-=dx/d*enemy.speed*.42*dt;enemy.y-=dy/d*enemy.speed*.42*dt;}
+        if(d<contact+7&&enemy.attackCooldown<=0){enemy.attackCooldown=1/enemy.attackRate;if(enemy.explosive){damageCombatPlayer(target,enemy.damage*1.35,enemy);s.particles.push({type:"blast",x:enemy.x,y:enemy.y,radius:10,maxRadius:150,life:.45,maxLife:.45,color:enemy.color});killEnemy(enemy);}else damageCombatPlayer(target,enemy.damage,enemy);}
       }
       enemy.x = clamp(enemy.x, enemy.radius, WORLD_W - enemy.radius); enemy.y = clamp(enemy.y, enemy.radius, WORLD_H - enemy.radius);
     }
   }
   function updateBoss(enemy, target, dt, d, nx, ny) {
-    enemy.x += nx * enemy.speed * dt; enemy.y += ny * enemy.speed * dt;
-    if (d < enemy.radius + target.radius + 14 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; damageCombatPlayer(target,enemy.damage,enemy); }
+    const engage=enemyEngagementPoint(enemy,target),dx=engage.x-enemy.x,dy=engage.y-enemy.y,ed=Math.hypot(dx,dy)||1;
+    const contact=enemy.radius+target.radius+18;
+    if(d>contact+8){enemy.x+=dx/ed*enemy.speed*dt;enemy.y+=dy/ed*enemy.speed*dt;}
+    else if(d<contact-7){enemy.x-=nx*enemy.speed*.35*dt;enemy.y-=ny*enemy.speed*.35*dt;}
+    if (d < contact + 8 && enemy.attackCooldown <= 0) { enemy.attackCooldown = 1 / enemy.attackRate; damageCombatPlayer(target,enemy.damage,enemy); }
     if (enemy.abilityCooldown > 0) return;
     if (enemy.ability === "slam") { enemy.abilityCooldown = 4.2; UI.session.particles.push({ type:"ring",x:enemy.x,y:enemy.y,radius:10,maxRadius:240,life:.65,maxLife:.65,color:enemy.color }); for(const player of combatTargets())if(distance(player,enemy)<235)damageCombatPlayer(player,enemy.damage*1.45,enemy); }
     else if (enemy.ability === "burst") { enemy.abilityCooldown = 3.8; for (let i=0;i<14;i++) fireEnemyProjectile(enemy,i/14*Math.PI*2,enemy.damage*.72); }
@@ -2281,9 +2320,9 @@ function updateHud() {
 
   function loadoutPanelHtml() {
     const data=ensureState(),stats=aggregateLoadoutStats(),style=styleById(data.cosmetics.active),comp1=equipped("companion"),comp2=equipped("companion2"),companions=[comp1,comp2].filter(Boolean),bonus=combinedCompanionOwnerBonuses(companions);
-    const companionBadge=companions.length?`<div class="fkl-loadout-companion-stack">${companions.map((comp,index)=>`<div class="fkl-loadout-companion-icon rarity-${rarityKey(comp)}" style="${itemStyle(comp)}" title="${escapeHtml(itemDef(comp).name)}"><span>${itemDef(comp).icon}</span><small>${index+1}</small></div>`).join("")}<b>${companions.length} Begleiter · +${Math.round(bonus.damage)}% DMG · +${Math.round(bonus.defense)}% DEF</b></div>`:"";
+    const companionBadge=companions.length?`<div class="fkl-loadout-companion-summary"><div class="fkl-loadout-companion-mini">${companions.map((comp,index)=>`<span class="rarity-${rarityKey(comp)}" style="${itemStyle(comp)}" title="${escapeHtml(itemDef(comp).name)}"><i>${itemDef(comp).icon}</i><b>${index+1}</b></span>`).join("")}</div><small><strong>${companions.length} Begleiter</strong><em>+${Math.round(bonus.damage)}% DMG · +${Math.round(bonus.defense)}% DEF</em></small></div>`:`<div class="fkl-loadout-companion-summary empty"><small><strong>Keine Begleiter</strong><em>Begleiter 1 und 2 befinden sich links.</em></small></div>`;
     const care1=equipped("companioncare"),care2=equipped("mountcare");
-    return `<section class="fkl-panel fkl-loadout-panel v141"><div class="fkl-loadout-title"><div><small class="fkl-kicker">CHARAKTER · DOPPEL-BEGLEITER · PFLEGE-LADUNGEN</small><h3>${escapeHtml(playerName())}</h3><p>Zwei Begleiter sind möglich. Beide behalten ihre Angriffe und Specials, teilen sich aber exakt den Lebenspool des Hauptbegleiters. Pflege ist pro Run begrenzt: Basis 1×, danach pro Stern eine weitere Nutzung.</p></div><div class="fkl-loadout-power">GESAMT-POWER <b>${NUMBER.format(stats.power)}</b></div></div><div class="fkl-loadout-grid"><div class="fkl-loadout-side left">${["helmet","armor","suit","boots","companion","companion2","companioncare"].map(loadoutSlotHtml).join("")}</div><div class="fkl-character-card" style="--body:${style.body};--accent:${style.accent};--accent2:${style.accent2||style.accent};--trim:${style.trim}"><div class="fkl-character-aura"></div>${characterPreviewHtml(style)}${companionBadge}<strong>${escapeHtml(playerName())}</strong><small>${escapeHtml(style.name)} · Fight-Level ${data.level}</small>${friendTrayHtml(data)}</div><div class="fkl-loadout-side right">${["melee","sidearm","primary","chip","charm","mount","mountcare"].map(loadoutSlotHtml).join("")}</div></div><div class="fkl-loadout-stats"><div><small>Stärke</small><b>${NUMBER.format(stats.damage)}</b></div><div><small>Schadensbonus</small><b>+${stats.damagePct}%</b></div><div><small>Tempo</small><b>+${stats.speed}%</b></div><div><small>Leben</small><b>${NUMBER.format(stats.health)}</b></div><div><small>Rüstung</small><b>${stats.armor}%</b></div><div><small>Schild</small><b>${NUMBER.format(stats.shield)}</b></div><div><small>Krit</small><b>${stats.crit}%</b></div><div><small>Ausweichen</small><b>${stats.dodge}%</b></div><div><small>Beute</small><b>+${stats.loot}%</b></div><div><small>Reittier</small><b>${NUMBER.format(stats.mountArmor)}</b></div><div><small>Begleiter gesamt</small><b>${companions.length}</b></div><div><small>Geteiltes Begleiter-Leben</small><b>${NUMBER.format(stats.companionHealth)}</b></div><div><small>Begleiter-Schaden</small><b>${NUMBER.format(stats.companionDamage)}</b></div><div class="fkl-comp-bonus"><small>Schadensbonus durch Team</small><b>+${stats.companionOwnerDamage}%</b></div><div class="fkl-comp-bonus"><small>Verteidigungsbonus durch Team</small><b>+${stats.companionOwnerDefense}%</b></div><div class="fkl-care-stat"><small>Haustierpflege</small><b>${care1?`${careUseLimit(care1)}× pro Run · ${stats.companionCareHealPct}% Heilung`:"Nicht ausgerüstet"}</b></div><div class="fkl-care-stat"><small>Reittierpflege</small><b>${care2?`${careUseLimit(care2)}× pro Run · ${stats.mountCareHealPct}% Heilung`:"Nicht ausgerüstet"}</b></div></div></section>`;
+    return `<section class="fkl-panel fkl-loadout-panel v141"><div class="fkl-loadout-title"><div><small class="fkl-kicker">CHARAKTER · DOPPEL-BEGLEITER · PFLEGE-LADUNGEN</small><h3>${escapeHtml(playerName())}</h3><p>Zwei Begleiter sind möglich. Beide behalten ihre Angriffe und Specials, teilen sich aber exakt den Lebenspool des Hauptbegleiters. Pflege ist pro Run begrenzt: Basis 1×, danach pro Stern eine weitere Nutzung.</p></div><div class="fkl-loadout-power">GESAMT-POWER <b>${NUMBER.format(stats.power)}</b></div></div><div class="fkl-loadout-grid"><div class="fkl-loadout-side left">${["helmet","armor","suit","boots","companion","companion2","companioncare"].map(loadoutSlotHtml).join("")}</div><div class="fkl-character-card" style="--body:${style.body};--accent:${style.accent};--accent2:${style.accent2||style.accent};--trim:${style.trim}"><div class="fkl-character-aura"></div>${characterPreviewHtml(style)}<div class="fkl-character-loadout-info"><strong>${escapeHtml(playerName())}</strong><small>${escapeHtml(style.name)} · Fight-Level ${data.level}</small>${companionBadge}${friendTrayHtml(data)}</div></div><div class="fkl-loadout-side right">${["melee","sidearm","primary","chip","charm","mount","mountcare"].map(loadoutSlotHtml).join("")}</div></div><div class="fkl-loadout-stats"><div><small>Stärke</small><b>${NUMBER.format(stats.damage)}</b></div><div><small>Schadensbonus</small><b>+${stats.damagePct}%</b></div><div><small>Tempo</small><b>+${stats.speed}%</b></div><div><small>Leben</small><b>${NUMBER.format(stats.health)}</b></div><div><small>Rüstung</small><b>${stats.armor}%</b></div><div><small>Schild</small><b>${NUMBER.format(stats.shield)}</b></div><div><small>Krit</small><b>${stats.crit}%</b></div><div><small>Ausweichen</small><b>${stats.dodge}%</b></div><div><small>Beute</small><b>+${stats.loot}%</b></div><div><small>Reittier</small><b>${NUMBER.format(stats.mountArmor)}</b></div><div><small>Begleiter gesamt</small><b>${companions.length}</b></div><div><small>Geteiltes Begleiter-Leben</small><b>${NUMBER.format(stats.companionHealth)}</b></div><div><small>Begleiter-Schaden</small><b>${NUMBER.format(stats.companionDamage)}</b></div><div class="fkl-comp-bonus"><small>Schadensbonus durch Team</small><b>+${stats.companionOwnerDamage}%</b></div><div class="fkl-comp-bonus"><small>Verteidigungsbonus durch Team</small><b>+${stats.companionOwnerDefense}%</b></div><div class="fkl-care-stat"><small>Haustierpflege</small><b>${care1?`${careUseLimit(care1)}× pro Run · ${stats.companionCareHealPct}% Heilung`:"Nicht ausgerüstet"}</b></div><div class="fkl-care-stat"><small>Reittierpflege</small><b>${care2?`${careUseLimit(care2)}× pro Run · ${stats.mountCareHealPct}% Heilung`:"Nicht ausgerüstet"}</b></div></div></section>`;
   }
 
   function drawInventory() {
@@ -2376,9 +2415,9 @@ function updateHud() {
     for(const friend of friendList(p)){
       friend.cooldown=Math.max(0,friend.cooldown-dt);friend.healCooldown=Math.max(0,friend.healCooldown-dt);friend.hitFlash=Math.max(0,friend.hitFlash-dt);friend.attackAnim=Math.max(0,friend.attackAnim-dt);
       if(friend.hp<=0){friend.dead=true;continue;}friend.dead=false;
-      const slotAngle=p.angle+Math.PI+(friend.index-1)*.5,followDist=friend.role==="tank"?72:friend.role==="healer"?92:80,followX=p.x+Math.cos(slotAngle)*followDist,followY=p.y+Math.sin(slotAngle)*followDist;
+      const formationOffset=friend.role==="tank"?0:friend.role==="dd"?-.68:.68,slotAngle=p.angle+Math.PI+formationOffset,followDist=friend.role==="tank"?78:friend.role==="healer"?112:96,followX=p.x+Math.cos(slotAngle)*followDist,followY=p.y+Math.sin(slotAngle)*followDist;
       const target=nearestEnemy(friend.x,friend.y,friend.range+260);friend.moving=false;
-      if(target){const dx=target.x-friend.x,dy=target.y-friend.y,d=Math.hypot(dx,dy)||1;friend.angle=Math.atan2(dy,dx);const desired=friend.role==="tank"?target.radius+31:friend.role==="dd"?Math.min(430,friend.range*.72):Math.min(350,friend.range*.75);if(d>desired+20){friend.x+=dx/d*friend.speed*dt;friend.y+=dy/d*friend.speed*dt;friend.moving=true;}if(friend.cooldown<=0&&d<=friend.range){friend.cooldown=1/Math.max(.2,friend.attackRate);friend.attackAnim=.22;const amount=Math.max(1,Number(p.weapon?.damage||10)*Number(p.damageMult||1)*friend.damageFactor*friendScale({rarity:friend.rarity,star:friend.star}));if(friend.role==="tank"){damageEnemyForPlayer(p,target,amount,false,18);spawnParticles(target.x,target.y,friend.color,6,120);}else{s.projectiles.push({netId:uid(),x:friend.x,y:friend.y,vx:Math.cos(friend.angle)*720,vy:Math.sin(friend.angle)*720,radius:friend.role==="healer"?4:5,damage:amount,life:Math.max(.7,friend.range/720),color:friend.color,crit:false,pierce:friend.role==="dd"&&friendRarityIndex({rarity:friend.rarity})>=4?1:0,splash:friend.role==="dd"?12:0,ownerKey:coopOwnerKey(p),hit:new Set(),friendShot:true});}}}
+      if(target){const dx=target.x-friend.x,dy=target.y-friend.y,d=Math.hypot(dx,dy)||1;friend.angle=Math.atan2(dy,dx);const roleAngle=friend.role==="tank"?Math.PI:friend.role==="dd"?-1.05:1.05,desired=friend.role==="tank"?target.radius+39:friend.role==="dd"?Math.min(455,friend.range*.76):Math.min(380,friend.range*.8),goalX=target.x+Math.cos(friend.angle+roleAngle)*desired,goalY=target.y+Math.sin(friend.angle+roleAngle)*desired,gdx=goalX-friend.x,gdy=goalY-friend.y,gd=Math.hypot(gdx,gdy)||1;if(gd>18){friend.x+=gdx/gd*friend.speed*dt;friend.y+=gdy/gd*friend.speed*dt;friend.moving=true;}if(friend.cooldown<=0&&d<=friend.range){friend.cooldown=1/Math.max(.2,friend.attackRate);friend.attackAnim=.22;const amount=Math.max(1,Number(p.weapon?.damage||10)*Number(p.damageMult||1)*friend.damageFactor*friendScale({rarity:friend.rarity,star:friend.star}));if(friend.role==="tank"){damageEnemyForPlayer(p,target,amount,false,18);spawnParticles(target.x,target.y,friend.color,6,120);}else{s.projectiles.push({netId:uid(),x:friend.x,y:friend.y,vx:Math.cos(friend.angle)*720,vy:Math.sin(friend.angle)*720,radius:friend.role==="healer"?4:5,damage:amount,life:Math.max(.7,friend.range/720),color:friend.color,crit:false,pierce:friend.role==="dd"&&friendRarityIndex({rarity:friend.rarity})>=4?1:0,splash:friend.role==="dd"?12:0,ownerKey:coopOwnerKey(p),hit:new Set(),friendShot:true});}}}
       else{const d=Math.hypot(followX-friend.x,followY-friend.y)||1;if(d>28){friend.angle=Math.atan2(followY-friend.y,followX-friend.x);friend.x+=(followX-friend.x)/d*friend.speed*.88*dt;friend.y+=(followY-friend.y)/d*friend.speed*.88*dt;friend.moving=true;}}
       if(friend.role==="healer"&&friend.healCooldown<=0){friend.healCooldown=Math.max(.95,2.35-friendRarityIndex({rarity:friend.rarity})*.12-Number(friend.star||0)*.08);healFriendTeam(p,friend);}
       friend.x=clamp(friend.x,20,WORLD_W-20);friend.y=clamp(friend.y,20,WORLD_H-20);
@@ -2394,7 +2433,7 @@ function updateHud() {
     else if(friend.role==="dd"){ctx.strokeStyle=def.accent2;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(12,-1);ctx.lineTo(27,-15);ctx.stroke();ctx.strokeStyle=def.accent;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(23,-15);ctx.lineTo(32,-20);ctx.stroke();}
     else{ctx.strokeStyle=def.accent;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(15,9);ctx.lineTo(25,-15);ctx.stroke();ctx.fillStyle=def.accent2;ctx.beginPath();ctx.arc(26,-18,6,0,Math.PI*2);ctx.fill();ctx.fillStyle="#fff";ctx.fillRect(23,-20,6,4);ctx.fillRect(24,-21,4,6);}
     if(friend.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,34,-2.5,-.2);ctx.stroke();}ctx.restore();
-    const pct=clamp(friend.hp/friend.maxHp,0,1);ctx.fillStyle="#020607dd";ctx.fillRect(x-26,y-52,52,5);ctx.fillStyle=meta.color;ctx.fillRect(x-26,y-52,52*pct,5);ctx.fillStyle=meta.color;ctx.font="800 9px system-ui";ctx.textAlign="center";ctx.fillText(`${meta.icon} ${def.name}`,x,y-58);
+    ctx.save();ctx.textAlign="center";ctx.font="900 10px system-ui";ctx.shadowColor=meta.color;ctx.shadowBlur=6;ctx.fillStyle=meta.color;ctx.fillText(meta.icon,x,y-48);ctx.restore();
   }
   function drawFriends(ctx,s,now){for(const friend of friendList(s.player))drawOneFriend(ctx,s,now,friend);}
   function buildPlayer() {
@@ -2472,6 +2511,12 @@ function updateHud() {
     return damagePlayerV116(Math.max(.1,Number(amount||0)*(1-companionReduction)/staffDivisor),source);
   }
 
+  function updateFriendCombatHud(){
+    const s=UI.session,p=s?.player,box=UI.main?.querySelector("[data-fkl-friend-combat-hud]");if(!box||!p)return;
+    const friends=friendList(p);box.hidden=!friends.length;
+    box.innerHTML=friends.map(friend=>{const meta=friendRoleMeta(friend.role),pct=friend.maxHp>0?Math.round(clamp(friend.hp/friend.maxHp,0,1)*100):0,label=friend.role==="tank"?"TANK":friend.role==="dd"?"DD":"HEIL";return`<div class="fkl-friend-combat-chip ${friend.hp<=0?"down":""}" style="--friend-color:${meta.color}"><span>${meta.icon}</span><b>${label}</b><strong>${friend.hp<=0?"K.O.":`${pct}%`}</strong></div>`;}).join("");
+  }
+
   function updateHud(){
     const s=UI.session;if(!s||!UI.main)return;
     const p=s.player,data=ensureState(),need=levelNeed(data.level),set=(sel,val)=>{const n=UI.main.querySelector(sel);if(n)n.textContent=val};
@@ -2491,6 +2536,7 @@ function updateHud() {
     UI.main.querySelectorAll("[data-fkl-weapon-switch]").forEach(btn=>{const slot=btn.dataset.fklWeaponSwitch;btn.classList.toggle("active",slot===p.activeWeaponSlot);const runtime=p.weaponRuntimes[slot];btn.classList.toggle("broken",!!runtime?.item&&runtime.item.durability<=0)});
     const companionCareButton=UI.main.querySelector("[data-fkl-care-companion]"),mountCareButton=UI.main.querySelector("[data-fkl-care-mount]");if(companionCareButton){const ready=!!p.companionCare&&p.companionCare.timer<=0&&p.companionCare.charges>0;companionCareButton.disabled=!p.companionCare||!companions.length||p.companionCare.charges<=0;companionCareButton.classList.toggle("ready",ready);set("[data-fkl-care-companion-text]",!p.companionCare?"Pflege ausrüsten":p.companionCare.charges<=0?"Aufgebraucht":p.companionCare.timer>0?`${p.companionCare.timer.toFixed(1)} s · ${p.companionCare.charges}×`:`Begleiter heilen · ${p.companionCare.charges}×`);}if(mountCareButton){const ready=!!p.mountCare&&p.mountCare.timer<=0&&p.mountCare.charges>0;mountCareButton.disabled=!p.mountCare||!p.mountItem||p.mountCare.charges<=0;mountCareButton.classList.toggle("ready",ready);set("[data-fkl-care-mount-text]",!p.mountCare?"Pflege ausrüsten":p.mountCare.charges<=0?"Aufgebraucht":p.mountCare.timer>0?`${p.mountCare.timer.toFixed(1)} s · ${p.mountCare.charges}×`:`Reittier heilen · ${p.mountCare.charges}×`);}
     const bossWrap=UI.main.querySelector("[data-fkl-boss-wrap]");if(bossWrap){const visible=!!activeBoss||bossPending;bossWrap.hidden=!visible;bossWrap.classList.toggle("pending",bossPending&&!activeBoss);bossWrap.classList.toggle("active",!!activeBoss);if(visible){const expected=s.expectedBoss||(bossWave?BOSSES[Math.floor(s.wave/10-1)%BOSSES.length]:null);set("[data-fkl-boss-name]",activeBoss?`👹 ${activeBoss.name} · HAUPTBOSS · 2× STÄRKE`:`⚠ ${expected?.name||"HAUPTBOSS"} KOMMT · WELLE ${s.wave}`);const bar=UI.main.querySelector("[data-fkl-boss-bar]");if(bar)bar.style.width=activeBoss?`${clamp(activeBoss.hp/activeBoss.maxHp*100,0,100)}%`:"100%";}}
+    updateFriendCombatHud();
     updateCoopHud();
   }
 

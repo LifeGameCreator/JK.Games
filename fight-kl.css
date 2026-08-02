@@ -318,3 +318,114 @@ body.fight-kl-open{overflow:hidden!important}
   .fkl-coop-others{min-width:106px;max-width:46vw;gap:3px}.fkl-coop-mini{padding:4px 5px;border-radius:8px;font-size:7.5px;line-height:1.05}.fkl-coop-mini strong{max-width:62px}.fkl-coop-mini .hp,.fkl-coop-mini .power{font-size:8px}
   .fkl-boss-wrap{top:80px}
 }
+
+
+/* V146 · Friends-UI, mobile percentage display and combat spacing fix */
+.fkl-loadout-panel.v141 .fkl-character-card{
+  min-height:590px;
+  padding:0 10px 10px;
+  overflow:hidden;
+  justify-content:flex-start;
+  display:block;
+}
+.fkl-loadout-panel.v141 .fkl-character-card .fkl-character-model{top:38px}
+.fkl-loadout-panel.v141 .fkl-character-card .fkl-character-aura{top:42px}
+.fkl-character-loadout-info{
+  position:absolute;
+  left:9px;
+  right:9px;
+  bottom:9px;
+  display:grid;
+  gap:5px;
+  z-index:7;
+  text-align:center;
+}
+.fkl-character-loadout-info>strong{font-size:19px;line-height:1.05;color:#effbfc}
+.fkl-character-loadout-info>small{color:#9fb4b9;font-size:10px}
+.fkl-loadout-companion-summary{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:39px;
+  gap:8px;
+  padding:5px 8px;
+  border:1px solid rgba(101,174,190,.25);
+  border-radius:11px;
+  background:linear-gradient(180deg,rgba(6,24,29,.96),rgba(3,13,17,.96));
+  overflow:hidden;
+}
+.fkl-loadout-companion-summary.empty{opacity:.68}
+.fkl-loadout-companion-summary>small{display:grid;text-align:left;gap:1px;min-width:0}
+.fkl-loadout-companion-summary>small strong{font:900 9px/1.1 system-ui;color:#e8f8f8}
+.fkl-loadout-companion-summary>small em{font:800 8px/1.1 system-ui;color:#8fa8ad;font-style:normal;white-space:nowrap}
+.fkl-loadout-companion-mini{display:flex;gap:4px;flex:0 0 auto}
+.fkl-loadout-companion-mini>span{position:relative;width:29px;height:29px;border-radius:9px;display:grid;place-items:center;background:#050d10;border:1px solid var(--rarity);box-shadow:0 0 9px var(--rarity-glow)}
+.fkl-loadout-companion-mini i{font-style:normal;font-size:16px}
+.fkl-loadout-companion-mini b{position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:6px;background:#ffd45d;color:#281900;display:grid;place-items:center;font:1000 8px system-ui}
+.fkl-loadout-companion-stack{display:none!important}
+.fkl-character-loadout-info .fkl-friend-tray{width:100%;margin:0;padding:6px;border-radius:12px;box-sizing:border-box;overflow:hidden}
+.fkl-character-loadout-info .fkl-friend-tray-head{margin-bottom:5px;font-size:8px}
+.fkl-character-loadout-info .fkl-friend-slots{gap:4px}
+.fkl-character-loadout-info .fkl-friend-slot{min-height:70px;padding:4px 3px;gap:2px;border-radius:9px}
+.fkl-character-loadout-info .fkl-friend-avatar{width:29px;height:36px;transform:scale(.82);transform-origin:center}
+.fkl-character-loadout-info .fkl-friend-slot small{font-size:7px}
+.fkl-character-loadout-info .fkl-friend-slot strong{font-size:8.5px}
+.fkl-character-loadout-info .fkl-friend-slot span>i{font-size:6px}
+
+.fkl-friend-combat-hud{
+  position:absolute;
+  right:12px;
+  top:92px;
+  z-index:18;
+  display:grid;
+  gap:4px;
+  pointer-events:none;
+  min-width:76px;
+}
+.fkl-friend-combat-hud[hidden]{display:none}
+.fkl-friend-combat-chip{
+  display:grid;
+  grid-template-columns:17px 1fr auto;
+  align-items:center;
+  gap:4px;
+  min-height:25px;
+  padding:4px 6px;
+  border:1px solid color-mix(in srgb,var(--friend-color) 42%,#233f46);
+  border-radius:9px;
+  background:rgba(3,14,18,.9);
+  box-shadow:0 6px 14px rgba(0,0,0,.28),inset 0 0 10px color-mix(in srgb,var(--friend-color) 7%,transparent);
+  color:#e9f7f8;
+}
+.fkl-friend-combat-chip span{font-size:12px;text-align:center}
+.fkl-friend-combat-chip b{font:900 7px/1 system-ui;color:var(--friend-color);letter-spacing:.05em}
+.fkl-friend-combat-chip strong{font:1000 10px/1 system-ui;color:#f4fcfc;min-width:29px;text-align:right}
+.fkl-friend-combat-chip.down{opacity:.48;filter:grayscale(.7)}
+
+@media(max-width:1000px){
+  .fkl-loadout-panel.v141 .fkl-character-card{min-height:560px}
+  .fkl-loadout-panel.v141 .fkl-character-card .fkl-character-model{top:30px;transform:translateX(-50%) scale(.9);transform-origin:top}
+}
+@media(max-width:720px){
+  .fkl-loadout-panel.v141 .fkl-character-card{min-height:515px;grid-column:1/-1;grid-row:1}
+  .fkl-loadout-panel.v141 .fkl-character-card .fkl-character-model{top:18px;transform:translateX(-50%) scale(.78);transform-origin:top}
+  .fkl-loadout-panel.v141 .fkl-character-card .fkl-character-aura{top:18px;width:180px;height:180px}
+  .fkl-character-loadout-info{left:7px;right:7px;bottom:7px;gap:4px}
+  .fkl-character-loadout-info>strong{font-size:16px}
+  .fkl-character-loadout-info>small{font-size:8px}
+  .fkl-loadout-companion-summary{min-height:31px;padding:3px 5px;gap:5px}
+  .fkl-loadout-companion-mini>span{width:24px;height:24px;border-radius:7px}
+  .fkl-loadout-companion-mini i{font-size:13px}
+  .fkl-loadout-companion-summary>small strong{font-size:8px}
+  .fkl-loadout-companion-summary>small em{font-size:6.5px}
+  .fkl-character-loadout-info .fkl-friend-slot{min-height:58px;padding:3px 2px}
+  .fkl-character-loadout-info .fkl-friend-avatar{height:29px;transform:scale(.68)}
+  .fkl-character-loadout-info .fkl-friend-slot strong{font-size:7.5px}
+  .fkl-character-loadout-info .fkl-friend-slot span>i{display:none}
+  .fkl-friend-combat-hud{right:7px;top:94px;gap:3px;min-width:64px}
+  .fkl-friend-combat-chip{grid-template-columns:14px 1fr auto;min-height:20px;padding:3px 4px;border-radius:7px;gap:2px}
+  .fkl-friend-combat-chip span{font-size:10px}
+  .fkl-friend-combat-chip b{font-size:6px}
+  .fkl-friend-combat-chip strong{font-size:8px;min-width:24px}
+  .fkl-coop-team.v145+.fkl-friend-combat-hud{top:116px}
+}
