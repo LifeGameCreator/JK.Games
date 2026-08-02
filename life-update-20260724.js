@@ -1,119 +1,189 @@
 (() => {
   "use strict";
 
-  const UPDATE_VERSION = "2026-07-27-jkgames-v61-status-pet-food";
+  const UPDATE_VERSION = "2026-08-01-jkgames-v115-top-games-mega-update";
   const DRIVER_APPLICATION_FEE = 3200;
   const DRIVER_THEORY_RETRY_FEE = 450;
   const DRIVER_PRACTICAL_RETRY_FEE = 650;
 
   const PATCH_SECTIONS = [
     {
-      icon: "🛡️",
-      title: "Sicherheitsrelevante Updates & wichtige Bugfixes",
+      icon: "🎮",
+      tone: "topgames",
+      badge: "4 SPIELE",
+      title: "Top Games ist jetzt eine vollständige Spiele-App",
       bullets: [
-        "Telefon, SMS und Notizen wurden technisch stabilisiert und öffnen sich jetzt in eigenen App-Fenstern.",
-        "Online-Telefonnummern werden korrekt zugeordnet: andere Spieler können dich anrufen und du kannst sie anrufen.",
-        "Annehmen, Ablehnen und Auflegen wurden überarbeitet, damit Anrufe nicht mehr in einem festhängenden Zustand bleiben.",
-        "Neue Nachrichten und Anrufe werden klar angezeigt, ohne den geöffneten Smartphone-Bereich unnötig neu aufzubauen."
+        "Top Games ist im App Store verfügbar und bündelt Runner.KL, City.KL, Match.KL und Fight.KL in einer gemeinsamen Übersicht.",
+        "Alle vier Spiele besitzen eigene Spielstände, eigene Fortschrittssysteme und einen sauberen Rücksprung zum bereits gekauften Smartphone.",
+        "Das Ultra-Smartphone und alle freigeschalteten Apps bleiben nach dem Verlassen eines Spiels erhalten.",
+        "Runner.KL, City.KL, Match.KL und Fight.KL können unabhängig erweitert werden, ohne die anderen Spielbereiche zurückzusetzen."
       ]
     },
     {
-      icon: "🏦",
-      title: "Komplett neue Bank-App",
+      icon: "🏃",
+      tone: "runner",
+      badge: "RUNNER.KL",
+      title: "Runner.KL – Cottbus als endlose Laufstrecke",
       bullets: [
-        "Die Bank öffnet sich jetzt wie Telefon und SMS in einem eigenen, modernen App-Fenster.",
-        "Kontostand, IBAN, Kreditrahmen, Bargeld, Schulden, Steuern und die letzten Umsätze werden übersichtlich angezeigt.",
-        "Ein neues Kontodiagramm zeigt Einnahmen und Ausgaben der letzten 30 Tage.",
-        "Empfänger werden nur noch gezielt per IBAN oder Namen gesucht und anschließend als Bankkontakt gespeichert.",
-        "Jeder angemeldete Spieler erhält eine eigene persönliche IBAN.",
-        "Überweisungen erscheinen bei Sender und Empfänger mit Name, Betrag, Status und Verwendungszweck."
+        "Runner.KL wurde mit Cottbuser Straßen, Straßenbahnen, Schienen, wechselnden Welten, Wetter, Schatten und mehreren Grafikstufen erweitert.",
+        "CB-Magnet, Raketenrucksack, Power-Schuhe, Punkte-Turbo, Sprungfeder und Neonboard bilden das neue Boost-System.",
+        "Straßenbahnen mit der Anzeige „2 Sandow“, begehbare Zugdächer, Kollisionsreaktionen, Missionen und ein überarbeitetes HUD wurden ergänzt.",
+        "Performance, Beleuchtung, Coins, Kameraführung, Charakterauswahl und der Rücksprung zu Top Games wurden mehrfach stabilisiert.",
+        "World Records und Monatsbonus sind für die Firebase-Anbindung vorbereitet; Online-Funktionen benötigen die veröffentlichten Functions."
       ]
     },
     {
-      icon: "⚡",
-      title: "Normale Überweisung & Blitzüberweisung",
+      icon: "🎲",
+      tone: "city",
+      badge: "CITY.KL",
+      title: "City.KL – Immobilienbrettspiel gegen Bots",
       bullets: [
-        "Normale Überweisungen werden online vorgemerkt und nach einer echten Stunde zur Buchung freigegeben.",
-        "Blitzüberweisungen werden sofort gebucht und kosten 1.000 € Gebühr.",
-        "Die Gebühr wird erst in der Auswahl der Blitzüberweisung angezeigt.",
-        "Normale Überweisungen werden nach einer Stunde gebucht; JK.Games kann währenddessen geschlossen werden.",
-        "Auch nach dem Schließen der App bleibt die Überweisung vorgemerkt und wird beim nächsten Online-Kontakt des Empfängers zugestellt."
+        "City.KL wurde zu einem rundenbasierten Immobilienbrettspiel mit dir und bis zu drei Bots umgebaut.",
+        "Cottbuser Straßen können gekauft, versteigert, bebaut, beliehen und gegen Miete genutzt werden.",
+        "Bahnhöfe, Versorgungsfelder, Ereignisse, Gefängnis, Freiparken-Pot, Pasch-Regeln und Bankrott gehören zum vollständigen Spielablauf.",
+        "Die Bots würfeln, kaufen und bauen selbstständig; die 3D-Würfel landen mit dem tatsächlichen Ergebnis sichtbar auf dem Brett.",
+        "Bedienelemente wurden vom Spielfeld getrennt und für Handy sowie PC neu angeordnet."
+      ]
+    },
+    {
+      icon: "💎",
+      tone: "match",
+      badge: "MATCH.KL",
+      title: "Match.KL – 80 Level mit Spezialsteinen",
+      bullets: [
+        "Match.KL enthält 80 Level in acht Cottbuser Bereichen, eine Levelkarte, Sterne, Leben, Match-Coins und gespeicherten Fortschritt.",
+        "Vierer-, Fünfer-, L- und T-Kombinationen erzeugen Liniensteine, Bomben und Farbbomben mit leuchtenden Effekten.",
+        "Kisten, Eis, Beton, Ketten, Graffiti, Wasser, Lieferpakete und Förderbänder sorgen für unterschiedliche Levelaufgaben.",
+        "Booster, Tagesaufgaben, Restaurierungsprojekte, Tagesgeschenk und Cottbus-Cup wurden eingebaut.",
+        "Das Spielfeld lädt beim Tauschen nicht mehr schwarz neu; beim Verlassen warnt das Spiel, dass das aktuelle Level neu begonnen werden muss."
+      ]
+    },
+    {
+      icon: "⚔️",
+      tone: "fight",
+      badge: "FIGHT.KL",
+      title: "Fight.KL – Merge-Inventar und endlose Arena",
+      bullets: [
+        "Fight.KL verbindet ein eigenes Inventar mit einer endlosen Bot-Arena, Bosswellen, Fight-Level 1 bis 100 und öffentlichen Scores.",
+        "Fünf identische Items werden zu einem höheren Stern gemerged; 5-Sterne-Items steigen zur nächsten Seltenheit auf.",
+        "Die Stufen reichen von Gewöhnlich über Ungewöhnlich, Selten, Episch, Legendär und Special bis Mystisch und Exotisch.",
+        "Das Arsenal enthält Pistolen, Revolver, Automatikwaffen, Schrotflinten, Nahkampfwaffen, Rüstungen, Schuhe, Module, Talismane und Reparatursets.",
+        "Aufladbare Blitz-, Explosions-, Stasis-, EMP- und Durchbruch-Specials sowie stärkere Gegner ab höheren Wellen wurden ergänzt.",
+        "Die Firebase-Online-Rangliste ist vorbereitet und prüft eingereichte Werte serverseitig, sobald die Functions veröffentlicht sind."
       ]
     },
     {
       icon: "📱",
-      title: "Neues Design bei Telefon, SMS und Notizen",
+      tone: "phone",
+      badge: "SMARTPHONE",
+      title: "Telefon, App Store und App-Fenster angepasst",
       bullets: [
-        "Telefon, SMS und Notizen besitzen eigene Fenster und müssen nicht mehr unter den App-Symbolen gesucht werden.",
-        "Chats bleiben an der aktuellen Position und springen nach neuen Nachrichten nicht mehr automatisch nach oben.",
-        "Kontakte, einzelne Unterhaltungen, Klingelton, Freizeichen und die Anrufsteuerung wurden verbessert.",
-        "SMS und Anrufe lassen sich über die obere Benachrichtigung direkt öffnen."
+        "Das Smartphone merkt sich beim Wechsel zwischen Top Games und den einzelnen Spielen das tatsächlich besessene Gerät.",
+        "Der Fehler, durch den nach der Rückkehr fälschlich ein Einsteiger-Smartphone erkannt und Apps gesperrt wurden, ist behoben.",
+        "Telefon, SMS, Notizen und weitere Apps öffnen übersichtlicher in eigenen Fenstern und berücksichtigen mobile Sicherheitsbereiche.",
+        "Top Games wurde als eigene App ergänzt und zeigt die vier großen JK.Games-Spiele in einer gemeinsamen, erweiterbaren Oberfläche.",
+        "App-Positionen, Ladewege, Cache-Versionen und Rücksprünge wurden für PC und Smartphone stabilisiert."
       ]
     },
     {
-      icon: "👤",
-      title: "Charakter, Haustier und Bedienung",
+      icon: "🏦",
+      tone: "bank",
+      badge: "BANK",
+      title: "Bank-App vollständig überarbeitet",
       bullets: [
-        "Das Charakterfenster steht im Anpassungsmenü oben; die Auswahl für Inventar, Skills, Friseur und weitere Bereiche liegt darunter.",
-        "Charakter und Füße bleiben auf Handy und PC vollständig sichtbar.",
-        "Das aktive Haustier bleibt neben den Füßen anklickbar und wird beim Verschieben des Charakterbereichs mitgeführt.",
-        "Mehrere mobile Layout- und Scrollfehler wurden korrigiert."
+        "Die Bank besitzt ein eigenes modernes App-Fenster mit Kontostand, Bargeld, Schulden, Kreditrahmen, Steuern, IBAN und Umsatzübersicht.",
+        "Persönliche IBANs, Bankkontakte, Empfängersuche und nachvollziehbare Buchungen wurden eingebaut.",
+        "Normale Überweisungen werden vorgemerkt; Blitzüberweisungen werden sofort ausgeführt und zeigen ihre Gebühr vor der Bestätigung.",
+        "Kontoverlauf und Diagramm machen Einnahmen und Ausgaben besser nachvollziehbar.",
+        "Online-Buchungen bleiben auch nach dem Schließen der App erhalten und werden beim nächsten verfügbaren Kontakt verarbeitet."
       ]
     },
     {
-      icon: "🎮",
-      title: "Spiele und Karten",
+      icon: "⚙️",
+      tone: "settings",
+      badge: "EINSTELLUNGEN",
+      title: "Einstellungen, Support und Online-Bedienung wieder vollständig",
       bullets: [
-        "Mehrere Spiele-Bugs und fehlerhafte Aktualisierungsschleifen wurden weiter reduziert.",
-        "Casino- und Business-Karten lassen sich auf dem Handy in alle Richtungen verschieben und berücksichtigen die iPhone-Sicherheitsbereiche.",
-        "Der Startbildschirm lädt wichtige App- und Online-Bausteine bereits während des Ladebalkens vor.",
-        "App-interne Neuheiten werden künftig pro Spielstand einmal angezeigt und bleiben über Einstellungen → Neuheiten erneut abrufbar."
-      ]
-    },
-    {
-      icon: "📊",
-      title: "Grafik, Statusfelder und Ladebild",
-      bullets: [
-        "Beim Wechsel der Grafikstufe verwendet JK.Games auf dem Handy jetzt dasselbe bildschirmfüllende Hochformat-Ladebild wie beim App-Start.",
-        "Hunger, Energie, Durst, Stimmung und Zentrale wurden auf kleinen Displays kompakter, mittig und besser lesbar angeordnet.",
-        "Das Vorladen bleibt aktiv, bevor die neue Grafikansicht wieder freigegeben wird."
+        "Das Einstellungsmenü wurde wieder vollständig angebunden und enthält die Neuheiten dauerhaft zum erneuten Öffnen.",
+        "Grafik-, Audio-, Online-, Sitzungs- und Charaktereinstellungen wurden stabilisiert und klarer getrennt.",
+        "Support-Tickets, Rollenansichten und wichtige Online-Statusanzeigen bleiben erreichbar.",
+        "Ladebildschirme, App-Wechsel und mehrere Fensterzustände wurden gegen festhängende oder unsichtbar blockierende Overlays abgesichert."
       ]
     },
     {
       icon: "❤️",
-      title: "Charakterwerte und Leben geprüft",
+      tone: "relationship",
+      badge: "CHARAKTER",
+      title: "Freundin, Beziehung und Haustier sauber ausgerichtet",
       bullets: [
-        "Hunger, Durst und Energie verändern sich wieder langsam mit der verstrichenen Zeit und zusätzlich beim Schlafen beziehungsweise bei Aktionen.",
-        "Das Leben sinkt nicht grundlos: Abzüge entstehen erst bei Vernachlässigung, sehr schlechten Bedürfnissen, Krankheit oder dauerhaft schlechter Stimmung.",
-        "Ungültige alte Zeitwerte können das Statussystem nicht mehr dauerhaft einfrieren."
+        "Die Freundin steht im Hauptbildschirm wieder auf derselben Fuß- und Namenshöhe wie der eigene Charakter.",
+        "Ungewollte sichtbare Umrandungen und die alten Kürzel unter der Freundin wurden entfernt; sie bleibt trotzdem vollständig anklickbar.",
+        "Beziehung und Stimmung werden platzsparend senkrecht neben der Figur angezeigt, ohne das Charakterfenster zu verschieben.",
+        "Die Hundeumrandung und die Klickfunktion des Haustiers bleiben erhalten.",
+        "Charakter-, Partner- und Haustierwerte werden kontrolliert beim Tageswechsel durch Schlafen verarbeitet und nicht mehr durch alte Offline-Zeitstempel verfälscht."
       ]
     },
     {
-      icon: "🐾",
-      title: "Haustierwerte funktionieren wieder",
+      icon: "🌆",
+      tone: "center",
+      badge: "CENTER",
+      title: "Center und die 3D-Welt weiter verbessert",
       bullets: [
-        "Hunger, Durst, Freude und Pflege der Haustiere sinken wieder zuverlässig mit der verstrichenen Zeit.",
-        "Der Fehler bei älteren Spielständen ohne gespeicherten Tier-Zeitpunkt wurde behoben.",
-        "Auch nach einer geschlossenen App werden die verstrichenen Tierwerte beim nächsten Öffnen korrekt nachgeholt."
+        "Der frühere Bereich „Zentrale“ heißt jetzt kurz und passend „Center“.",
+        "Die 3D-Cottbus-Welt, Charaktermodelle, Online-Spieler, Kamera und Bewegung wurden weiter optimiert.",
+        "Der exklusive Owner-Skin bleibt ausschließlich der Owner-Rolle vorbehalten; normale Spieler nutzen ihre Mann- oder Frau-Figur.",
+        "Online-Bewegungen und Nachladevorgänge wurden reduziert, damit andere Spieler ruhiger dargestellt werden.",
+        "Center ist bereits spielbar und wird in kommenden Updates um weitere Orte, Aktivitäten und Online-Funktionen erweitert."
       ]
     },
     {
-      icon: "🍽️",
-      title: "Mehr Essen und Getränke",
+      icon: "🛡️",
+      tone: "security",
+      badge: "SICHERHEIT",
+      title: "Sicherheits- und Stabilitätsupdates",
       bullets: [
-        "Kaufhalle und Supermärkte bieten zusätzliche Getränke wie Zitronenwasser, Mate, Multivitaminsaft, Sportdrink, Smoothie und Kakao.",
-        "Neue Essensvarianten umfassen unter anderem Käsebrötchen, Wrap, Obstbecher, Müsli-Joghurt, Pizza-Stück und Reis-Gemüse-Bowl.",
-        "Die neuen Artikel landen wie gewohnt im Inventar und wirken auf Hunger, Durst, Energie oder Gesundheit."
+        "Online-Scores von Runner.KL und Fight.KL wurden mit serverseitigen Plausibilitätsprüfungen vorbereitet.",
+        "Firebase-Funktionen wurden in getrennte Codebases aufgeteilt, damit bestehende Funktionen nicht versehentlich als fehlend behandelt werden.",
+        "Rollen, Owner-Skins, Online-Sitzungen, Spielstände und wichtige App-Berechtigungen wurden weiter geschützt.",
+        "Deployments überschreiben vorhandene Firestore-Regeln nicht automatisch.",
+        "Mehrere doppelte Aktualisierungsschleifen, blockierende Overlays, falsche Smartphone-Rücksprünge und unbeabsichtigte Seitenneuladungen wurden beseitigt."
       ]
     },
     {
-      icon: "🏠",
-      title: "Finanz- und Wohnhilfe geschützt",
+      icon: "🚀",
+      tone: "performance",
+      badge: "LEISTUNG",
+      title: "Grafik und Leistung besser ausbalanciert",
       bullets: [
-        "Finanz- und Wohnhilfe kann nur bei aktivem Obdachlosenstatus geöffnet werden.",
-        "Sobald wieder eine feste Unterkunft vorhanden ist, wird der Bereich automatisch gesperrt.",
-        "Der Button zeigt klar an, ob Krisenhilfe verfügbar oder gesperrt ist.",
-        "Alle bisherigen Hilfen und Rückzahlungsfunktionen bleiben unverändert erhalten."
+        "Runner.KL nutzt optimierte Schatten, Texturen, Coins, Straßenobjekte und automatische interne Auflösungsanpassung.",
+        "Nicht sichtbare beziehungsweise doppelte 3D-Objekte wurden reduziert, um die Bildrate auf schwächeren Geräten zu verbessern.",
+        "Match.KL aktualisiert Steine gezielt, statt bei jedem Zug die gesamte Ansicht neu aufzubauen.",
+        "Fight.KL zeigt mehr Gegner, Geschosse und Effekte, ohne für jeden Treffer die komplette Oberfläche neu zu rendern.",
+        "Cache-Kennungen wurden aktualisiert, damit GitHub Pages nach einem Update nicht dauerhaft alte Dateien verwendet."
+      ]
+    },
+    {
+      icon: "✨",
+      tone: "quality",
+      badge: "KLEINE FIXES",
+      title: "Viele sichtbare Detailverbesserungen",
+      bullets: [
+        "„Hotelzimmer“ wurde zu „Hotel“ und „Zentrale“ zu „Center“ gekürzt, damit die Beschriftungen sauber in ihre Buttons passen.",
+        "Cottbuser Bezeichnungen, Spielfeld-Bedienelemente, Missionsanzeigen, HUDs und mobile Layouts wurden mehrfach nachgebessert.",
+        "Spielausgänge fragen bei laufenden Runden nach, bevor nicht gespeicherter Fortschritt verworfen wird.",
+        "Alle Top-Games-Bereiche besitzen eigene Ladebildschirme beziehungsweise Startansichten und bleiben voneinander getrennt gespeichert."
+      ]
+    },
+    {
+      icon: "🧭",
+      tone: "future",
+      badge: "AUSBLICK",
+      title: "Was als Nächstes weiter ausgebaut wird",
+      bullets: [
+        "Center erhält weitere begehbare Bereiche, mehr Interaktionen und zusätzliche Online-Aktivitäten.",
+        "Top Games kann später um Events, gemeinsame Ranglisten, Saisons und weitere eigenständige Spiele ergänzt werden.",
+        "Runner.KL, City.KL, Match.KL und Fight.KL bleiben erweiterbar und erhalten nach Tests weitere Balancing-, Grafik- und Inhaltsupdates.",
+        "Diese Punkte sind ein Ausblick und noch nicht vollständig im aktuellen Stand enthalten."
       ]
     }
   ];
@@ -253,7 +323,7 @@
     overlay.querySelector("[data-guide-eyebrow]").textContent = item.eyebrow;
     overlay.querySelector("[data-guide-title]").textContent = item.title;
     overlay.querySelector("[data-guide-subtitle]").textContent = item.subtitle;
-    overlay.querySelector("[data-guide-content]").innerHTML = item.sections.map((section) => `<article class="life-guide-section"><span>${section.icon || "✓"}</span><div><h3>${escapeHtml?.(section.title) || section.title}</h3><ul>${(section.bullets || []).map((bullet) => `<li>${escapeHtml?.(bullet) || bullet}</li>`).join("")}</ul></div></article>`).join("");
+    overlay.querySelector("[data-guide-content]").innerHTML = item.sections.map((section) => `<article class="life-guide-section" data-tone="${section.tone || "default"}"><span>${section.icon || "✓"}</span><div>${section.badge ? `<small class="life-guide-badge">${escapeHtml?.(section.badge) || section.badge}</small>` : ""}<h3>${escapeHtml?.(section.title) || section.title}</h3><ul>${(section.bullets || []).map((bullet) => `<li>${escapeHtml?.(bullet) || bullet}</li>`).join("")}</ul></div></article>`).join("");
     overlay.classList.add("show");
     document.body.classList.add("life-guide-open");
   }
@@ -298,9 +368,9 @@
       return;
     }
     showGuide({
-      eyebrow: "NEUES JK.GAMES-UPDATE",
-      title: "Was ist neu?",
-      subtitle: "Die wichtigsten Änderungen dieses Updates. Du kannst diese Übersicht später im Einstellungsmenü erneut öffnen.",
+      eyebrow: "JK.GAMES V115 · GROSSES UPDATE",
+      title: "Das ist neu in JK.Games",
+      subtitle: "Alle großen Spiele, Systemverbesserungen und Bugfixes seit V99. Diese Übersicht bleibt dauerhaft unter Einstellungen → Neuheiten erreichbar.",
       sections: PATCH_SECTIONS,
       onClose: () => {
         markPatchVersionSeen(guidance);

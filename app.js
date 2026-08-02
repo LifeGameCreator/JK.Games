@@ -2707,6 +2707,50 @@ window.JKGamesCottbus3DBridge = Object.freeze({
     return true;
   }
 });
+
+// Persistenz- und Fortschrittsbrücke für die neue Center-Dynastie-Welt.
+// Die Welt speichert bewusst nur kompakte, JSON-kompatible Daten im aktiven Spielstand.
+window.JKGamesCenterBridge = Object.freeze({
+  getPlayer() {
+    if (!state) return null;
+    const centerState = state.centerMedieval && typeof state.centerMedieval === "object"
+      ? JSON.parse(JSON.stringify(state.centerMedieval))
+      : null;
+    return {
+      firstName: String(state.firstName || "Spieler"),
+      lastName: String(state.lastName || ""),
+      gender: state.gender === "female" ? "female" : "male",
+      level: Math.max(0, Math.floor(Number(state.level || 0))),
+      slot: Math.max(0, Math.floor(Number(typeof selectedSlot !== "undefined" ? selectedSlot : activeSlot || 0))),
+      centerState
+    };
+  },
+  saveCenterState(nextCenterState) {
+    if (!state || !nextCenterState || typeof nextCenterState !== "object") return false;
+    try {
+      const serialized = JSON.stringify(nextCenterState);
+      if (serialized.length > 220000) return false;
+      state.centerMedieval = JSON.parse(serialized);
+      save();
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  addMainXp(amount, reason = "Center") {
+    const value = Math.max(0, Math.min(5000, Math.floor(Number(amount) || 0)));
+    if (!state || !value) return false;
+    try {
+      addXp(value, String(reason || "Center"));
+      return true;
+    } catch {
+      state.xp = Math.max(0, Number(state.xp || 0) + value);
+      save();
+      return true;
+    }
+  }
+});
+
 function saveRemoteRealtimeState() {
   if (window.LifeBuilderSaveControl?.applyRemote) return window.LifeBuilderSaveControl.applyRemote(() => save());
   window.__lifeBuilderRemoteApplying = true;

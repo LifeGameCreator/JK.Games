@@ -281,3 +281,71 @@ body.driver-school-open { overflow: hidden !important; }
   max-width: 112px !important;
   line-height: 1.05;
 }
+
+
+/* V115 – große Neuheitenübersicht */
+.life-guide-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin: 0 0 7px;
+  padding: 3px 8px;
+  border: 1px solid rgba(116,238,192,.25);
+  border-radius: 999px;
+  color: #9ff4ce !important;
+  background: rgba(116,238,192,.08);
+  font-size: .66rem !important;
+  font-weight: 1000;
+  letter-spacing: .12em !important;
+  line-height: 1;
+}
+.life-guide-section {
+  position: relative;
+  overflow: hidden;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.life-guide-section::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--guide-accent, #75eec0);
+  opacity: .82;
+}
+.life-guide-section:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--guide-accent, #75eec0) 42%, transparent);
+  background: color-mix(in srgb, var(--guide-accent, #75eec0) 7%, rgba(255,255,255,.035));
+}
+.life-guide-section[data-tone="topgames"] { --guide-accent: #ffd76a; }
+.life-guide-section[data-tone="runner"] { --guide-accent: #55d7ff; }
+.life-guide-section[data-tone="city"] { --guide-accent: #ffc45e; }
+.life-guide-section[data-tone="match"] { --guide-accent: #df7cff; }
+.life-guide-section[data-tone="fight"] { --guide-accent: #ff6d77; }
+.life-guide-section[data-tone="phone"] { --guide-accent: #69b7ff; }
+.life-guide-section[data-tone="bank"] { --guide-accent: #70e2b3; }
+.life-guide-section[data-tone="settings"] { --guide-accent: #a6b8c9; }
+.life-guide-section[data-tone="relationship"] { --guide-accent: #ff7fb5; }
+.life-guide-section[data-tone="center"] { --guide-accent: #8ee8c7; }
+.life-guide-section[data-tone="security"] { --guide-accent: #70a8ff; }
+.life-guide-section[data-tone="performance"] { --guide-accent: #75eec0; }
+.life-guide-section[data-tone="quality"] { --guide-accent: #f4d76f; }
+.life-guide-section[data-tone="future"] { --guide-accent: #b78cff; }
+.life-guide-section[data-tone] > span {
+  border: 1px solid color-mix(in srgb, var(--guide-accent) 34%, transparent);
+  color: var(--guide-accent);
+  background: color-mix(in srgb, var(--guide-accent) 12%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--guide-accent) 12%, transparent);
+}
+.life-guide-section[data-tone] h3 { color: var(--guide-accent); }
+.life-guide-section[data-tone] .life-guide-badge {
+  border-color: color-mix(in srgb, var(--guide-accent) 35%, transparent);
+  color: var(--guide-accent) !important;
+  background: color-mix(in srgb, var(--guide-accent) 9%, transparent);
+}
+@media (max-width: 560px) {
+  .life-guide-scroll { padding: 13px 13px 18px; }
+  .life-guide-section { grid-template-columns: 44px minmax(0,1fr); gap: 11px; padding: 13px; }
+  .life-guide-section > span { width: 44px; height: 44px; border-radius: 14px; font-size: 1.35rem; }
+  .life-guide-section ul { padding-left: 17px; font-size: .9rem; }
+}
