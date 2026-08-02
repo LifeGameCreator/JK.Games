@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-dungeon-kl-v154-real-topdown-dungeon-maps";
+  const VERSION = "20260802-dungeon-kl-v155-canvas-minimap-layer-fix";
   const MAX_LEVEL = 100;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
