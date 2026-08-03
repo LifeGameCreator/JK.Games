@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-dungeon-kl-v162-mmo-character-skilltree-runtime-fix";
+  const VERSION = "20260803-dungeon-kl-v164-projectile-render-character-stability-fix";
   const MAX_LEVEL = 100;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
@@ -76,15 +76,17 @@
   ];
 
   const CHARACTER_PRESETS = [
-    { id:"vanguard", name:"Vanguard", icon:"⚔", body:"athletic", skin:"medium", hair:"dark", accent:"#66f3c0", description:"Ausgewogener Abenteurer mit klarer Rüstungssilhouette." },
-    { id:"ironborn", name:"Ironborn", icon:"🛡", body:"broad", skin:"light", hair:"brown", accent:"#72cfff", description:"Breite Schultern und schwere Plattenoptik für Tanks." },
-    { id:"sylvan", name:"Sylvan", icon:"🌿", body:"slim", skin:"light", hair:"blond", accent:"#74e98d", description:"Schlanke Waldläufer- und Druidenoptik." },
-    { id:"ember", name:"Emberborn", icon:"🔥", body:"athletic", skin:"dark", hair:"silver", accent:"#ff8a54", description:"Dunkle Rüstung mit glühenden Runenlinien." },
-    { id:"runeborn", name:"Runeborn", icon:"✦", body:"slim", skin:"medium", hair:"silver", accent:"#b47aff", description:"Magische Stoffrüstung und leuchtende Runen." },
-    { id:"sunwarden", name:"Sunwarden", icon:"☀", body:"broad", skin:"dark", hair:"dark", accent:"#ffd45f", description:"Goldene Heiligenschein- und Paladinoptik." },
-    { id:"voidkin", name:"Voidkin", icon:"◉", body:"slim", skin:"dark", hair:"silver", accent:"#d56cff", description:"Leerenmagie, dunkle Roben und violette Energie." },
-    { id:"frostguard", name:"Frostguard", icon:"❄", body:"broad", skin:"light", hair:"silver", accent:"#7fdcff", description:"Eisige Metallrüstung und kristalline Details." }
+    { id:"human", name:"Valorianer", icon:"⚔", race:"human", body:"athletic", skin:"medium", hair:"dark", accent:"#66f3c0", height:1, width:1, description:"Vielseitiger Mensch mit ausgewogener Statur und klarer Rüstungssilhouette." },
+    { id:"hornborn", name:"Horngeborener", icon:"♉", race:"hornborn", body:"colossus", skin:"dark", hair:"dark", accent:"#d59a55", height:1.18, width:1.34, description:"Massiver Hornkrieger mit Hufen, breitem Oberkörper und mächtigen Schulterplatten." },
+    { id:"revenant", name:"Grabwandler", icon:"☠", race:"revenant", body:"hunched", skin:"medium", hair:"silver", accent:"#86d79a", height:1.02, width:.92, description:"Untoter Kämpfer mit eingefallener Silhouette, Knochenpartien und kaltem Leuchten." },
+    { id:"warborn", name:"Kriegsklaue", icon:"◆", race:"warborn", body:"broad", skin:"dark", hair:"dark", accent:"#d66e50", height:1.08, width:1.2, description:"Grünhäutiger Frontkämpfer mit Stoßzähnen, Muskelpanzer und schwerer Bewaffnung." },
+    { id:"sylvan", name:"Sylvaner", icon:"❧", race:"sylvan", body:"slim", skin:"light", hair:"blond", accent:"#74e98d", height:1.07, width:.88, description:"Hochgewachsener Waldläufer mit langen Ohren, leichter Rüstung und agiler Haltung." },
+    { id:"ironkin", name:"Eisenzwerg", icon:"⚒", race:"ironkin", body:"compact", skin:"medium", hair:"brown", accent:"#72cfff", height:.82, width:1.22, description:"Kompakter Bergkrieger mit breitem Bart, schweren Stiefeln und dicker Plattenrüstung." },
+    { id:"drakeborn", name:"Drakonier", icon:"◇", race:"drakeborn", body:"broad", skin:"dark", hair:"silver", accent:"#7fdcff", height:1.12, width:1.14, description:"Geschuppter Drachenkrieger mit Hörnern, Schweif und kristallinen Rüstungsdetails." },
+    { id:"voidkin", name:"Leerengeborener", icon:"◉", race:"voidkin", body:"slim", skin:"dark", hair:"silver", accent:"#d56cff", height:1.08, width:.9, description:"Schlanke Schattenrasse mit leuchtenden Augen, schwebenden Runen und dunkler Magie." }
   ];
+
+  const PRESET_MIGRATION = {vanguard:"human",ironborn:"ironkin",ember:"hornborn",runeborn:"voidkin",sunwarden:"human",frostguard:"drakeborn"};
 
   const TALENT_TREES = {
     tank: [
@@ -306,13 +308,15 @@
     data.stats ||= { kills: 0, bosses: 0, chests: 0, runs: 0, deaths: 0 };
     data.shop ||= { generatedAt: 0, stock: [] };
     data.settings ||= { sound: true, particles: "high", damageNumbers: true };
-    data.appearance ||= { gender: "male", skin: "medium", hair: "dark", preset: "vanguard", hairStyle: "short", accent: "#66f3c0" };
+    data.appearance ||= { gender: "male", skin: "medium", hair: "dark", preset: "human", hairStyle: "short", accent: "#66f3c0", ready:false };
     data.appearance.gender = ["male", "female"].includes(data.appearance.gender) ? data.appearance.gender : "male";
     data.appearance.skin = ["light", "medium", "dark"].includes(data.appearance.skin) ? data.appearance.skin : "medium";
     data.appearance.hair = ["dark", "brown", "blond", "silver"].includes(data.appearance.hair) ? data.appearance.hair : "dark";
-    data.appearance.preset = CHARACTER_PRESETS.some(p => p.id === data.appearance.preset) ? data.appearance.preset : "vanguard";
+    data.appearance.preset = PRESET_MIGRATION[data.appearance.preset] || data.appearance.preset;
+    data.appearance.preset = CHARACTER_PRESETS.some(p => p.id === data.appearance.preset) ? data.appearance.preset : "human";
     data.appearance.hairStyle = ["short", "long", "mohawk", "braid", "hooded"].includes(data.appearance.hairStyle) ? data.appearance.hairStyle : "short";
     data.appearance.accent = /^#[0-9a-f]{6}$/i.test(String(data.appearance.accent||"")) ? data.appearance.accent : presetById(data.appearance.preset).accent;
+    data.appearance.ready = !!data.appearance.ready;
     data.talents ||= {};
     for(const role of Object.keys(TALENT_TREES)) for(const branch of TALENT_TREES[role]) for(const node of branch.nodes){
       if(data.talents[node.id] != null) data.talents[node.id] = clamp(Math.floor(Number(data.talents[node.id])||0),0,node.max);
@@ -347,7 +351,19 @@
     d.inventory.unshift(item); if (message) toast("Beute gefunden", `${item.name} · ${RARITIES[item.rarity].name} · Level ${item.level}`); safeSave(); return true;
   }
 
-  function skinColor(name){return name==="light"?"#e9b08f":name==="dark"?"#7c4b35":"#c98e72";}
+  function skinColor(name,raceId="human"){
+    const palettes={
+      human:{light:"#efbc9c",medium:"#c98e72",dark:"#80513c"},
+      hornborn:{light:"#b98a62",medium:"#78563f",dark:"#3d3430"},
+      revenant:{light:"#b5b9ad",medium:"#7e9484",dark:"#52645b"},
+      warborn:{light:"#7ea56a",medium:"#547c4d",dark:"#35563b"},
+      sylvan:{light:"#efc2a0",medium:"#c59175",dark:"#795343"},
+      ironkin:{light:"#e7ae8a",medium:"#b87b5d",dark:"#744735"},
+      drakeborn:{light:"#6f9a9d",medium:"#456f78",dark:"#293f4b"},
+      voidkin:{light:"#9891bd",medium:"#685c91",dark:"#40345f"}
+    };
+    return palettes[raceId]?.[name]||palettes.human[name]||palettes.human.medium;
+  }
   function hairColor(name){return name==="brown"?"#70462f":name==="blond"?"#d9ad55":name==="silver"?"#c8d0d6":"#241b1a";}
   function gearVisualFromState(data=ensureState()){
     const item=slot=>data.inventory.find(x=>x.uid===data.equipped[slot])||null;
@@ -360,8 +376,73 @@
   }
   function currentAppearance(){const d=ensureState();return {...d.appearance};}
   function characterPreviewHtml(extra=""){
-    const d=ensureState(),g=gearVisualFromState(d),a=d.appearance,preset=presetById(a.preset);
-    return `<div class="dkl-avatar ${extra} role-${d.role} class-${d.classId} gender-${a.gender} body-${preset.body} helmet-${g.helmetType} hair-${a.hairStyle}" style="--skin:${skinColor(a.skin)};--hair:${hairColor(a.hair)};--armor:${g.armor};--trim:${g.trim};--helmet:${g.helmet};--boots:${g.boots};--gloves:${g.gloves};--accent:${a.accent||preset.accent}"><i></i><b></b><span>${CLASSES[d.classId].icon}</span><u></u><em></em><strong></strong></div>`;
+    return `<canvas class="dkl-character-canvas ${extra}" width="420" height="520" data-dkl-character-preview></canvas>`;
+  }
+  function drawCharacterWeaponModel(ctx,c,g,side=1,casting=false,attack=false,scale=1){
+    const color=g.weapon||c.color,module=g.weaponModule||"steel",swing=attack*(side>0?-.38:.38);
+    ctx.save();ctx.translate(side*31*scale,-45*scale);ctx.rotate(swing);ctx.shadowColor=color;ctx.shadowBlur=module==="steel"?5:18;
+    if(c.weaponType==="bow"){
+      ctx.strokeStyle=color;ctx.lineWidth=4*scale;ctx.beginPath();ctx.arc(0,0,25*scale,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.strokeStyle="#eaf5f6";ctx.lineWidth=1.5*scale;ctx.beginPath();ctx.moveTo(0,-25*scale);ctx.lineTo(0,25*scale);ctx.stroke();
+    }else if(c.weaponType==="tome"){
+      ctx.fillStyle="#21152d";ctx.strokeStyle=color;ctx.lineWidth=2*scale;ctx.beginPath();ctx.roundRect(-15*scale,-19*scale,30*scale,38*scale,4*scale);ctx.fill();ctx.stroke();ctx.fillStyle=color;ctx.fillRect(-2*scale,-18*scale,4*scale,36*scale);
+    }else if(c.projectile){
+      ctx.strokeStyle=color;ctx.lineWidth=6*scale;ctx.beginPath();ctx.moveTo(0,-32*scale);ctx.lineTo(0,32*scale);ctx.stroke();ctx.fillStyle="#eefcff";ctx.beginPath();ctx.arc(0,-36*scale,(casting?10:7)*scale,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3*scale;ctx.beginPath();ctx.arc(0,-36*scale,(casting?17:12)*scale,0,Math.PI*2);ctx.stroke();
+    }else{
+      ctx.strokeStyle=color;ctx.lineWidth=7*scale;ctx.beginPath();ctx.moveTo(-5*scale,-34*scale);ctx.lineTo(7*scale,34*scale);ctx.stroke();ctx.strokeStyle="#8b5d36";ctx.lineWidth=5*scale;ctx.beginPath();ctx.moveTo(-7*scale,8*scale);ctx.lineTo(8*scale,13*scale);ctx.stroke();
+    }
+    if(module!=="steel"){ctx.fillStyle=color;for(let i=0;i<4;i++){ctx.globalAlpha=.45+i*.12;ctx.beginPath();ctx.arc(Math.sin(i*1.9)*10*scale,(-38-i*8)*scale,(2+i*.5)*scale,0,Math.PI*2);ctx.fill();}}
+    ctx.restore();
+  }
+  function drawFantasyCharacter(ctx,opts={}){
+    const a=opts.appearance||currentAppearance(),preset=presetById(a.preset),race=preset.race||preset.id,c=CLASSES[opts.classId]||CLASSES[ensureState()?.classId]||CLASSES.guardian,role=opts.role||c.role,g=opts.gear||gearVisualFromState(),now=opts.now||performance.now(),scale=(opts.scale||1)*(preset.height||1),wide=preset.width||1,walk=opts.walk||0,attack=!!opts.attack,casting=!!opts.casting,side=opts.side||1,portrait=!!opts.portrait;
+    const skin=skinColor(a.skin,race),hair=hairColor(a.hair),accent=a.accent||preset.accent,armor=g.armor||accent,trim=g.trim||accent;
+    const bodyW=22*wide,shoulder=bodyW+10+(role==="tank"?7:0),headY=-83,torsoTop=-70,torsoBottom=-22,legSwing=Math.sin(walk)*5;
+    ctx.save();ctx.scale(scale,scale);ctx.lineCap="round";ctx.lineJoin="round";
+    if(!portrait){ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,5,32*wide,10,0,0,Math.PI*2);ctx.fill();}
+    if(race==="drakeborn"||race==="hornborn"){
+      ctx.strokeStyle=race==="drakeborn"?skin:"#342925";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-3,-25);ctx.quadraticCurveTo(-30,-8,-37,8);ctx.stroke();ctx.fillStyle=race==="drakeborn"?accent:"#6a5140";ctx.beginPath();ctx.moveTo(-38,8);ctx.lineTo(-47,0);ctx.lineTo(-42,15);ctx.fill();
+    }
+    if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"){
+      ctx.fillStyle=`${accent}66`;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-bodyW+4,torsoTop+8);ctx.lineTo(-bodyW-10,torsoBottom+22);ctx.lineTo(0,7);ctx.lineTo(bodyW+10,torsoBottom+22);ctx.lineTo(bodyW-4,torsoTop+8);ctx.closePath();ctx.fill();ctx.stroke();
+    }
+    const short=race==="ironkin";const legLen=short?26:35;
+    ctx.strokeStyle="#172129";ctx.lineWidth=(short?13:11)*wide;ctx.beginPath();ctx.moveTo(-8*wide,torsoBottom);ctx.lineTo((-9+legSwing)*wide,torsoBottom+legLen);ctx.moveTo(8*wide,torsoBottom);ctx.lineTo((9-legSwing)*wide,torsoBottom+legLen);ctx.stroke();
+    ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?11:8)*wide;ctx.beginPath();ctx.moveTo((-10+legSwing)*wide,torsoBottom+legLen);ctx.lineTo((-19+legSwing)*wide,torsoBottom+legLen+3);ctx.moveTo((10-legSwing)*wide,torsoBottom+legLen);ctx.lineTo((19-legSwing)*wide,torsoBottom+legLen+3);ctx.stroke();
+    if(race==="hornborn"){ctx.fillStyle="#231d1a";ctx.beginPath();ctx.moveTo(-22*wide,torsoBottom+legLen+1);ctx.lineTo(-8*wide,torsoBottom+legLen-6);ctx.lineTo(-13*wide,torsoBottom+legLen+8);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(22*wide,torsoBottom+legLen+1);ctx.lineTo(8*wide,torsoBottom+legLen-6);ctx.lineTo(13*wide,torsoBottom+legLen+8);ctx.closePath();ctx.fill();}
+    ctx.shadowColor=armor;ctx.shadowBlur=14;const grad=ctx.createLinearGradient(-bodyW,0,bodyW,0);grad.addColorStop(0,"#101820");grad.addColorStop(.35,armor);grad.addColorStop(.65,armor);grad.addColorStop(1,"#101820");ctx.fillStyle=grad;ctx.strokeStyle=trim;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(-bodyW,torsoTop);ctx.quadraticCurveTo(-bodyW-7,torsoTop+22,-bodyW+1,torsoBottom);ctx.lineTo(bodyW-1,torsoBottom);ctx.quadraticCurveTo(bodyW+7,torsoTop+22,bodyW,torsoTop);ctx.quadraticCurveTo(0,torsoTop-13,-bodyW,torsoTop);ctx.closePath();ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle="#10171d99";ctx.fillRect(-bodyW+2,torsoBottom-9,bodyW*2-4,7);ctx.fillStyle=trim;ctx.fillRect(-bodyW+4,torsoTop+19,bodyW*2-8,4);
+    for(const sx0 of [-1,1]){ctx.save();ctx.scale(sx0,1);ctx.fillStyle=g.helmet||armor;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bodyW-3,torsoTop+2);ctx.lineTo(shoulder+8,torsoTop+8);ctx.lineTo(shoulder+3,torsoTop+22);ctx.lineTo(bodyW-4,torsoTop+17);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+    const armSwing=attack?12:Math.sin(walk)*3;ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?14:10)*wide;ctx.beginPath();ctx.moveTo(-shoulder+5,torsoTop+13);ctx.lineTo(-shoulder-7,torsoBottom-2+armSwing);ctx.moveTo(shoulder-5,torsoTop+13);ctx.lineTo(shoulder+7,torsoBottom-2-armSwing);ctx.stroke();
+    if(race==="revenant"){ctx.strokeStyle="#d3d7c7";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-bodyW+5,torsoTop+10);ctx.lineTo(bodyW-5,torsoBottom-5);ctx.moveTo(bodyW-5,torsoTop+10);ctx.lineTo(-bodyW+5,torsoBottom-5);ctx.stroke();}
+    ctx.fillStyle=skin;ctx.strokeStyle="#151a1f";ctx.lineWidth=2;
+    if(race==="hornborn"){ctx.beginPath();ctx.ellipse(0,headY,17*wide,19,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#2a2220";ctx.beginPath();ctx.ellipse(0,headY+10,13*wide,8,0,0,Math.PI*2);ctx.fill();}
+    else if(race==="drakeborn"){ctx.beginPath();ctx.moveTo(-14,headY-12);ctx.lineTo(11,headY-15);ctx.lineTo(18,headY+1);ctx.lineTo(6,headY+16);ctx.lineTo(-13,headY+11);ctx.lineTo(-18,headY-2);ctx.closePath();ctx.fill();ctx.stroke();}
+    else{ctx.beginPath();ctx.ellipse(0,headY,(race==="warborn"?15:13)*wide,race==="revenant"?17:16,0,0,Math.PI*2);ctx.fill();ctx.stroke();}
+    if(race==="hornborn"){
+      ctx.strokeStyle="#c78b42";ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(-11*wide,headY-9);ctx.quadraticCurveTo(-29*wide,headY-25,-39*wide,headY-10);ctx.moveTo(11*wide,headY-9);ctx.quadraticCurveTo(29*wide,headY-25,39*wide,headY-10);ctx.stroke();ctx.strokeStyle="#f0bb67";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-38*wide,headY-10);ctx.lineTo(-44*wide,headY-4);ctx.moveTo(38*wide,headY-10);ctx.lineTo(44*wide,headY-4);ctx.stroke();
+    }else if(race==="sylvan"){
+      ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(-10,headY-5);ctx.lineTo(-29,headY-12);ctx.lineTo(-12,headY+4);ctx.fill();ctx.beginPath();ctx.moveTo(10,headY-5);ctx.lineTo(29,headY-12);ctx.lineTo(12,headY+4);ctx.fill();
+    }else if(race==="drakeborn"){
+      ctx.strokeStyle=accent;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-8,headY-11);ctx.lineTo(-17,headY-28);ctx.moveTo(8,headY-11);ctx.lineTo(17,headY-28);ctx.stroke();
+    }
+    if(race==="warborn"){ctx.fillStyle="#eee0b6";ctx.beginPath();ctx.moveTo(-7,headY+10);ctx.lineTo(-3,headY+22);ctx.lineTo(0,headY+9);ctx.fill();ctx.beginPath();ctx.moveTo(7,headY+10);ctx.lineTo(3,headY+22);ctx.lineTo(0,headY+9);ctx.fill();}
+    if(g.helmetType==="hood"){ctx.fillStyle=g.helmet||armor;ctx.beginPath();ctx.arc(0,headY-2,20*wide,Math.PI,Math.PI*2);ctx.lineTo(15*wide,headY+13);ctx.lineTo(-15*wide,headY+13);ctx.closePath();ctx.fill();}
+    else if(g.helmetType==="helmet"){ctx.fillStyle=g.helmet||armor;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,headY-2,18*wide,Math.PI,Math.PI*2);ctx.lineTo(15*wide,headY+3);ctx.lineTo(-15*wide,headY+3);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle="#11191f";ctx.fillRect(-11*wide,headY-4,22*wide,5);}
+    else if(g.helmetType==="crown"){ctx.fillStyle=g.helmet||"#ffd45a";ctx.beginPath();ctx.moveTo(-14,headY-15);ctx.lineTo(-9,headY-31);ctx.lineTo(0,headY-20);ctx.lineTo(9,headY-32);ctx.lineTo(14,headY-15);ctx.closePath();ctx.fill();}
+    else if(race!=="hornborn"&&race!=="drakeborn"){
+      ctx.fillStyle=hair;ctx.beginPath();ctx.arc(0,headY-5,14*wide,Math.PI,Math.PI*2);ctx.lineTo(12*wide,headY);ctx.lineTo(-12*wide,headY);ctx.fill();if(a.hairStyle==="long"||a.hairStyle==="braid"){ctx.fillRect(-13*wide,headY-6,5,27);ctx.fillRect(8*wide,headY-6,5,a.hairStyle==="braid"?36:27);}if(a.hairStyle==="mohawk"){ctx.beginPath();ctx.moveTo(-4,headY-16);ctx.lineTo(0,headY-38);ctx.lineTo(5,headY-16);ctx.fill();}
+    }
+    if(race==="ironkin"){ctx.fillStyle=hair;ctx.beginPath();ctx.moveTo(-12,headY+7);ctx.quadraticCurveTo(0,headY+31,12,headY+7);ctx.lineTo(8,headY+28);ctx.lineTo(0,headY+38);ctx.lineTo(-8,headY+28);ctx.closePath();ctx.fill();}
+    const eyeColor=race==="revenant"?"#8cffbe":race==="voidkin"?"#d88cff":race==="drakeborn"?"#77efff":"#15181b";ctx.fillStyle=eyeColor;ctx.shadowColor=eyeColor;ctx.shadowBlur=(race==="revenant"||race==="voidkin"||race==="drakeborn")?10:0;ctx.beginPath();ctx.arc(-5*wide,headY-1,2,0,Math.PI*2);ctx.arc(5*wide,headY-1,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    if(race==="voidkin"){ctx.strokeStyle=accent;ctx.globalAlpha=.7;ctx.lineWidth=2;for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(Math.sin(now*.002+i*2.1)*34,headY+Math.cos(now*.002+i)*25,3+i,0,Math.PI*2);ctx.stroke();}ctx.globalAlpha=1;}
+    drawCharacterWeaponModel(ctx,c,g,side,casting,attack,1);
+    if(role==="tank"){ctx.save();ctx.translate(-side*35,-42);ctx.fillStyle=g.offhand||"#496a7c";ctx.strokeStyle=trim;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-27);ctx.lineTo(20,-17);ctx.lineTo(17,19);ctx.lineTo(0,30);ctx.lineTo(-17,19);ctx.lineTo(-20,-17);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+    ctx.restore();
+  }
+  function renderCharacterCanvases(root=UI.main){
+    const d=ensureState();if(!d||!root)return;const stats=playerStats();
+    root.querySelectorAll("[data-dkl-character-preview]").forEach(canvas=>{const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height,preset=presetById(d.appearance.preset);ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w*.5,h*.42,10,w*.5,h*.42,w*.55);bg.addColorStop(0,`${preset.accent}35`);bg.addColorStop(.55,"#0c1722");bg.addColorStop(1,"#04070b");ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);ctx.strokeStyle=`${preset.accent}55`;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(w*.5,h*.45,w*.36,h*.4,0,0,Math.PI*2);ctx.stroke();ctx.save();ctx.translate(w*.5,h*.76);drawFantasyCharacter(ctx,{appearance:d.appearance,gear:gearVisualFromState(d),classId:d.classId,role:d.role,scale:2.6,portrait:true,now:performance.now()});ctx.restore();ctx.fillStyle="#ffffff";ctx.font="900 22px system-ui";ctx.textAlign="center";ctx.fillText(playerName(),w*.5,h-44);ctx.fillStyle=preset.accent;ctx.font="800 13px system-ui";ctx.fillText(`${preset.name} · ${CLASSES[d.classId].name} · PWR ${formatPower(stats.power)}`,w*.5,h-20);});
   }
   function refreshSessionLoadout(){
     const s=UI.session;if(!s)return;
@@ -379,10 +460,10 @@
     UI.overlay.innerHTML = `<section class="dkl-shell"><header class="dkl-head"><div class="dkl-brand"><span>◈</span><div><small>PARTY DUNGEON RPG</small><h2>DUNGEON<span>.KL</span></h2></div></div><div class="dkl-head-stats" data-dkl-head></div><div class="dkl-head-actions"><button data-dkl-home title="Hauptlobby">⌂</button><button data-dkl-close title="Zurück">×</button></div></header><main class="dkl-main" data-dkl-main></main><div class="dkl-toast" data-dkl-toast></div></section>`;
     document.body.appendChild(UI.overlay); document.body.classList.add("dungeon-kl-open");
     UI.main = UI.overlay.querySelector("[data-dkl-main]"); UI.head = UI.overlay.querySelector("[data-dkl-head]");
-    UI.overlay.querySelector("[data-dkl-home]").addEventListener("click", () => UI.session ? showExitDialog() : renderHome());
+    UI.overlay.querySelector("[data-dkl-home]").addEventListener("click", () => UI.session ? showExitDialog() : renderCharacterStudio());
     UI.overlay.querySelector("[data-dkl-close]").addEventListener("click", () => UI.session ? showExitDialog() : returnToTopGames());
     window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp);
-    updateHead(); renderHome();
+    updateHead(); renderCharacterStudio();
     const d = ensureState(); if (!d.tutorialDone) setTimeout(showTutorial, 250);
   }
   function close(returnPhone = false) {
@@ -408,28 +489,30 @@
   }
   function appearancePresetCards(){
     const d=ensureState();
-    return CHARACTER_PRESETS.map(p=>`<button class="dkl-preset-card ${d.appearance.preset===p.id?"active":""}" data-dkl-preset="${p.id}" style="--preset:${p.accent}"><span>${p.icon}</span><div><b>${p.name}</b><small>${p.description}</small></div></button>`).join("");
+    return CHARACTER_PRESETS.map(p=>`<button class="dkl-race-card ${d.appearance.preset===p.id?"active":""}" data-dkl-preset="${p.id}" style="--preset:${p.accent}"><span>${p.icon}</span><div><b>${p.name}</b><small>${p.description}</small></div></button>`).join("");
   }
   function renderCharacterStudio(){
-    UI.view="character"; const d=ensureState(),stats=playerStats(),preset=presetById(d.appearance.preset);
-    UI.main.innerHTML=`<div class="dkl-character-studio"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>← Hauptlobby</button><div><small>CHARAKTERSTUDIO</small><h2>${esc(playerName())} · ${esc(CLASSES[d.classId].name)}</h2><p>Wähle Körperbau, Erscheinung, Klasse und sichtbare Ausrüstung.</p></div><button class="dkl-btn gold" data-dkl-skilltree>Skillbaum</button></header>
-      <section class="dkl-studio-grid"><aside class="dkl-studio-presets"><h3>Charaktere</h3>${appearancePresetCards()}</aside>
-      <article class="dkl-studio-stage" style="--studio-accent:${preset.accent}"><div class="dkl-studio-aura"></div>${characterPreviewHtml("studio")}<h2>${esc(playerName())}</h2><b>${ROLES[d.role].icon} ${ROLES[d.role].name} · ${CLASSES[d.classId].name}</b><div class="dkl-studio-stats"><span>❤ ${NUMBER.format(stats.health)}</span><span>⚔ ${NUMBER.format(stats.damage)}</span><span>✚ ${NUMBER.format(stats.healing)}</span><span>🛡 ${Math.round(stats.armor*100)} %</span><span>PWR ${formatPower(stats.power)}</span></div></article>
-      <aside class="dkl-studio-options"><h3>Erscheinung</h3><label>Geschlecht<div><button data-dkl-studio-gender="male" class="${d.appearance.gender==="male"?"active":""}">Mann</button><button data-dkl-studio-gender="female" class="${d.appearance.gender==="female"?"active":""}">Frau</button></div></label><label>Haut<div>${["light","medium","dark"].map(x=>`<button data-dkl-studio-skin="${x}" class="${d.appearance.skin===x?"active":""}">${x==="light"?"Hell":x==="dark"?"Dunkel":"Mittel"}</button>`).join("")}</div></label><label>Haare<div>${["dark","brown","blond","silver"].map(x=>`<button data-dkl-studio-hair="${x}" class="${d.appearance.hair===x?"active":""}">${x==="dark"?"Schwarz":x==="brown"?"Braun":x==="blond"?"Blond":"Silber"}</button>`).join("")}</div></label><label>Frisur<div>${["short","long","mohawk","braid","hooded"].map(x=>`<button data-dkl-studio-hairstyle="${x}" class="${d.appearance.hairStyle===x?"active":""}">${x==="short"?"Kurz":x==="long"?"Lang":x==="mohawk"?"Iro":x==="braid"?"Zopf":"Kapuze"}</button>`).join("")}</div></label><label>Akzent<input type="color" data-dkl-studio-accent value="${esc(d.appearance.accent)}"></label><button class="dkl-btn primary" data-dkl-studio-inventory>Charakterfenster & Ausrüstung</button></aside></section>
-      <section class="dkl-panel"><header><div><small>ROLLE & KLASSE</small><h3>Kampfstil auswählen</h3></div></header>${roleClassCards()}</section></div>`;
+    stopSession(false);UI.view="character";const d=ensureState(),stats=playerStats(),preset=presetById(d.appearance.preset);
+    UI.main.innerHTML=`<div class="dkl-character-select"><header><div><small>DUNGEON.KL · CHARAKTERAUSWAHL</small><h1>Wähle deinen Helden</h1><p>Dein Charakter, deine Rasse, deine Rolle und deine Ausrüstung werden im Dungeon sichtbar dargestellt.</p></div><button class="dkl-btn" data-dkl-exit-game>← Top Games</button></header>
+      <section class="dkl-character-select-grid"><aside class="dkl-race-list"><h3>Fantasy-Rassen</h3>${appearancePresetCards()}</aside>
+      <article class="dkl-character-focus" style="--studio-accent:${preset.accent}">${characterPreviewHtml("studio")}<div class="dkl-character-summary"><b>${preset.name}</b><span>${ROLES[d.role].icon} ${ROLES[d.role].name} · ${CLASSES[d.classId].name}</span><small>Level ${d.level} · Power ${NUMBER.format(stats.power)}</small></div></article>
+      <aside class="dkl-character-controls"><h3>Erscheinung</h3><label>Geschlecht<div><button data-dkl-studio-gender="male" class="${d.appearance.gender==="male"?"active":""}">Mann</button><button data-dkl-studio-gender="female" class="${d.appearance.gender==="female"?"active":""}">Frau</button></div></label><label>Farbvariante<div>${["light","medium","dark"].map(x=>`<button data-dkl-studio-skin="${x}" class="${d.appearance.skin===x?"active":""}">${x==="light"?"Hell":x==="dark"?"Dunkel":"Mittel"}</button>`).join("")}</div></label><label>Haare/Fell<div>${["dark","brown","blond","silver"].map(x=>`<button data-dkl-studio-hair="${x}" class="${d.appearance.hair===x?"active":""}">${x==="dark"?"Schwarz":x==="brown"?"Braun":x==="blond"?"Blond":"Silber"}</button>`).join("")}</div></label><label>Stil<div>${["short","long","mohawk","braid","hooded"].map(x=>`<button data-dkl-studio-hairstyle="${x}" class="${d.appearance.hairStyle===x?"active":""}">${x==="short"?"Kurz":x==="long"?"Lang":x==="mohawk"?"Iro":x==="braid"?"Zopf":"Kapuze"}</button>`).join("")}</div></label><label>Rüstungsakzent<input type="color" data-dkl-studio-accent value="${esc(d.appearance.accent)}"></label><div class="dkl-character-tools"><button class="dkl-btn" data-dkl-studio-inventory>Ausrüstung</button><button class="dkl-btn gold" data-dkl-skilltree>Skillbaum</button></div></aside></section>
+      <section class="dkl-character-class-select"><header><small>ROLLE & KLASSE</small><h2>Bestimme deinen Kampfstil</h2></header>${roleClassCards()}</section>
+      <footer class="dkl-character-confirm"><div><b>${preset.name} ist ausgewählt</b><small>Du kannst den Charakter später jederzeit wieder bearbeiten.</small></div><button class="dkl-btn primary" data-dkl-character-confirm>CHARAKTER ÜBERNEHMEN</button></footer></div>`;
     const redraw=()=>renderCharacterStudio();
-    UI.main.querySelector("[data-dkl-back]").addEventListener("click",UI.session?renderInventory:renderHome);
+    UI.main.querySelector("[data-dkl-exit-game]").addEventListener("click",returnToTopGames);
     UI.main.querySelector("[data-dkl-skilltree]").addEventListener("click",renderSkillTree);
     UI.main.querySelector("[data-dkl-studio-inventory]").addEventListener("click",renderInventory);
-    UI.main.querySelectorAll("[data-dkl-preset]").forEach(btn=>btn.addEventListener("click",()=>{const d=ensureState(),p=presetById(btn.dataset.dklPreset);d.appearance.preset=p.id;d.appearance.skin=p.skin;d.appearance.hair=p.hair;d.appearance.accent=p.accent;safeSave();redraw();}));
+    UI.main.querySelector("[data-dkl-character-confirm]").addEventListener("click",()=>{const data=ensureState();data.appearance.ready=true;safeSave();renderHome();});
+    UI.main.querySelectorAll("[data-dkl-preset]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),p=presetById(btn.dataset.dklPreset);data.appearance.preset=p.id;data.appearance.skin=p.skin;data.appearance.hair=p.hair;data.appearance.accent=p.accent;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-gender]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.gender=btn.dataset.dklStudioGender;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-skin]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.skin=btn.dataset.dklStudioSkin;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-hair]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.hair=btn.dataset.dklStudioHair;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-hairstyle]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.hairStyle=btn.dataset.dklStudioHairstyle;safeSave();redraw();}));
-    UI.main.querySelector("[data-dkl-studio-accent]").addEventListener("input",e=>{ensureState().appearance.accent=e.target.value;safeSave();});
-    UI.main.querySelectorAll("[data-dkl-role]").forEach(el=>el.addEventListener("click",()=>{const d=ensureState(),roleId=el.dataset.dklRole;if(!ROLES[roleId])return;d.role=roleId;d.classId=Object.keys(CLASSES).find(id=>CLASSES[id].role===roleId)||"guardian";safeSave();redraw();}));
-    UI.main.querySelectorAll("[data-dkl-class]").forEach(el=>el.addEventListener("click",()=>{const d=ensureState(),id=el.dataset.dklClass;if(!CLASSES[id]||CLASSES[id].role!==d.role)return;d.classId=id;safeSave();redraw();}));
-    updateHead();
+    UI.main.querySelector("[data-dkl-studio-accent]").addEventListener("input",e=>{ensureState().appearance.accent=e.target.value;safeSave();renderCharacterCanvases();});
+    UI.main.querySelectorAll("[data-dkl-role]").forEach(el=>el.addEventListener("click",()=>{const data=ensureState(),roleId=el.dataset.dklRole;if(!ROLES[roleId])return;data.role=roleId;data.classId=Object.keys(CLASSES).find(id=>CLASSES[id].role===roleId)||"guardian";safeSave();redraw();}));
+    UI.main.querySelectorAll("[data-dkl-class]").forEach(el=>el.addEventListener("click",()=>{const data=ensureState(),id=el.dataset.dklClass;if(!CLASSES[id]||CLASSES[id].role!==data.role)return;data.classId=id;safeSave();redraw();}));
+    renderCharacterCanvases();updateHead();
   }
   function renderSkillTree(){
     UI.view="skills";const d=ensureState(),available=talentPointsAvailable(d),total=talentPointsTotal(d),tree=talentTreeFor(d.role);
@@ -442,24 +525,28 @@
   }
 
   function renderHome() {
-    stopSession(false); UI.view = "home"; const d = ensureState(), stats = playerStats(), dungeon = DUNGEONS.find(x => x.id === UI.selectedDungeon) || DUNGEONS[0], preset=presetById(d.appearance.preset);
-    UI.main.innerHTML = `<div class="dkl-home dkl-mmo-home"><section class="dkl-mmo-hero" style="--hero-accent:${dungeon.color}"><div class="dkl-mmo-copy"><small>DUNGEON.KL · PARTY MMORPG</small><h1>${esc(dungeon.name)}</h1><p>Stelle Tank, DD oder Heiler zusammen, entwickle deinen Skillbaum und sammle Ausrüstung direkt in langen Dungeon-Instanzen.</p><div class="dkl-hero-actions"><button class="dkl-btn primary" data-dkl-start-solo>Dungeon starten</button><button class="dkl-btn gold" data-dkl-party-open>Gruppe erstellen</button><button class="dkl-btn" data-dkl-party-join>Lobby-Code</button></div><div class="dkl-mmo-shortcuts"><span>WASD Bewegung</span><span>1–5 Fähigkeiten</span><span>R Wiederbelebung</span><span>I Inventar</span></div></div><div class="dkl-mmo-character" style="--char-accent:${preset.accent}">${characterPreviewHtml("hero")}<div><small>${preset.name}</small><h2>${esc(playerName())}</h2><b>${ROLES[d.role].icon} ${CLASSES[d.classId].name}</b><div class="dkl-mini-stats"><span>❤ ${NUMBER.format(stats.health)}</span><span>⚔ ${NUMBER.format(stats.damage)}</span><span>✚ ${NUMBER.format(stats.healing)}</span><span>PWR ${formatPower(stats.power)}</span></div></div><button class="dkl-btn" data-dkl-character>Charakter bearbeiten</button></div></section>
-      <section class="dkl-mmo-dashboard"><article class="dkl-panel dkl-build"><header><div><small>ROLLE & KLASSE</small><h3>Dein Kampfstil</h3></div><button class="dkl-link" data-dkl-character>Charakterstudio</button></header>${roleClassCards()}</article><article class="dkl-panel dkl-dungeons"><header><div><small>DUNGEONS</small><h3>Instanzen & Bossräume</h3></div><span>${DUNGEONS.length} Gebiete</span></header><div class="dkl-dungeon-list">${dungeonCards()}</div></article></section>
-      <section class="dkl-hub-cards dkl-mmo-hub"><button data-dkl-character><span>🧍</span><b>Charakter</b><small>Figur, Körperbau, Haare und Ausrüstung.</small></button><button data-dkl-inventory><span>🎒</span><b>Charakterfenster</b><small>Items anlegen und Werte vergleichen.</small></button><button data-dkl-skilltree><span>✦</span><b>Skillbaum</b><small>${talentPointsAvailable(d)} freie Talentpunkte.</small></button><button data-dkl-shop><span>🏪</span><b>Händler</b><small>Levelgerechte Ausrüstung kaufen.</small></button><button data-dkl-auction><span>⚖</span><b>Auktionshaus</b><small>Items online kaufen und verkaufen.</small></button><button data-dkl-party-open><span>👥</span><b>Gruppenhalle</b><small>Solo, Duo, Trio oder Vierergruppe.</small></button></section></div>`;
-    bindHome(); updateHead();
+    stopSession(false);UI.view="home";const d=ensureState(),stats=playerStats(),dungeon=DUNGEONS.find(x=>x.id===UI.selectedDungeon)||DUNGEONS[0],preset=presetById(d.appearance.preset);
+    UI.main.innerHTML=`<div class="dkl-game-portal" style="--portal:${dungeon.color}"><nav><button data-dkl-character><span>◉</span><b>Charakter</b></button><button data-dkl-inventory><span>▣</span><b>Ausrüstung</b></button><button data-dkl-skilltree><span>✦</span><b>Skillbaum</b></button><button data-dkl-shop><span>◆</span><b>Händler</b></button><button data-dkl-auction><span>⚖</span><b>Auktion</b></button></nav>
+      <main><header><small>DUNGEON-AUSWAHL</small><h1>${esc(dungeon.name)}</h1><p>Level ${dungeon.level} · ${dungeon.rooms} Räume · 3 Bosskämpfe</p></header><section class="dkl-portal-dungeons">${dungeonCards()}</section><div class="dkl-portal-info"><span>Empfohlen: ${dungeon.level<=d.level?"Bereit":"Level zu niedrig"}</span><span>Bestzeit: ${d.bestDungeon[dungeon.id]?.time?formatTime(d.bestDungeon[dungeon.id].time):"—"}</span><span>Gruppe: 1–4 Spieler</span></div></main>
+      <aside><div class="dkl-portal-character" style="--race:${preset.accent}">${characterPreviewHtml("portal")}<h2>${esc(playerName())}</h2><b>${preset.name}</b><span>${ROLES[d.role].name} · ${CLASSES[d.classId].name}</span><div><small>LEVEL ${d.level}</small><small>PWR ${NUMBER.format(stats.power)}</small></div></div><button class="dkl-btn primary dkl-play-button" data-dkl-play>SPIEL STARTEN</button><small>Danach wählst du Solo, Gruppe oder Lobby-Code.</small></aside></div>`;
+    UI.main.querySelectorAll("[data-dkl-dungeon]").forEach(el=>el.addEventListener("click",()=>{const x=DUNGEONS.find(d=>d.id===el.dataset.dklDungeon);if(ensureState().level<x.level)return toast("Dungeon gesperrt",`Level ${x.level} erforderlich.`);UI.selectedDungeon=x.id;renderHome();}));
+    UI.main.querySelector("[data-dkl-character]").addEventListener("click",renderCharacterStudio);
+    UI.main.querySelector("[data-dkl-inventory]").addEventListener("click",renderInventory);
+    UI.main.querySelector("[data-dkl-skilltree]").addEventListener("click",renderSkillTree);
+    UI.main.querySelector("[data-dkl-shop]").addEventListener("click",renderShop);
+    UI.main.querySelector("[data-dkl-auction]").addEventListener("click",renderAuction);
+    UI.main.querySelector("[data-dkl-play]").addEventListener("click",renderModeLoading);
+    renderCharacterCanvases();updateHead();
   }
-  function bindHome() {
-    UI.main.querySelectorAll("[data-dkl-role]").forEach(el => el.addEventListener("click", () => changeRole(el.dataset.dklRole)));
-    UI.main.querySelectorAll("[data-dkl-class]").forEach(el => el.addEventListener("click", () => changeClass(el.dataset.dklClass)));
-    UI.main.querySelectorAll("[data-dkl-dungeon]").forEach(el => el.addEventListener("click", () => { const x = DUNGEONS.find(d => d.id === el.dataset.dklDungeon); if (ensureState().level < x.level) return toast("Dungeon gesperrt", `Level ${x.level} erforderlich.`); UI.selectedDungeon = x.id; renderHome(); }));
-    UI.main.querySelector("[data-dkl-start-solo]")?.addEventListener("click", () => startDungeon(UI.selectedDungeon, { partySize: 1 }));
-    UI.main.querySelectorAll("[data-dkl-party-open]").forEach(el => el.addEventListener("click", renderPartyHall));
-    UI.main.querySelector("[data-dkl-party-join]")?.addEventListener("click", showJoinDialog);
-    UI.main.querySelectorAll("[data-dkl-inventory]").forEach(el => el.addEventListener("click", renderInventory));
-    UI.main.querySelectorAll("[data-dkl-character]").forEach(el => el.addEventListener("click", renderCharacterStudio));
-    UI.main.querySelectorAll("[data-dkl-skilltree]").forEach(el => el.addEventListener("click", renderSkillTree));
-    UI.main.querySelector("[data-dkl-shop]")?.addEventListener("click", renderShop);
-    UI.main.querySelector("[data-dkl-auction]")?.addEventListener("click", renderAuction);
+  function renderModeLoading(){
+    const dungeon=DUNGEONS.find(x=>x.id===UI.selectedDungeon)||DUNGEONS[0];UI.view="mode-loading";const token=++UI.loadingToken;
+    UI.main.innerHTML=`<div class="dkl-menu-loading" style="--load:${dungeon.color}"><div><i></i><i></i><i></i></div><small>ABENTEUER WIRD VORBEREITET</small><h2>${esc(dungeon.name)}</h2><p>Gruppenoptionen und Dungeon-Zugang werden geladen …</p><span><b></b></span></div>`;
+    const bar=UI.main.querySelector(".dkl-menu-loading span b");let n=0;const timer=setInterval(()=>{if(token!==UI.loadingToken){clearInterval(timer);return;}n=Math.min(100,n+14);if(bar)bar.style.width=`${n}%`;if(n>=100){clearInterval(timer);setTimeout(()=>{if(token===UI.loadingToken)renderModeSelect();},120);}},65);UI.timers.push(timer);
+  }
+  function renderModeSelect(){
+    UI.view="mode";const dungeon=DUNGEONS.find(x=>x.id===UI.selectedDungeon)||DUNGEONS[0],d=ensureState();
+    UI.main.innerHTML=`<div class="dkl-mode-select" style="--mode:${dungeon.color}"><header><button class="dkl-btn" data-dkl-mode-back>← Dungeon-Auswahl</button><div><small>SPIELMODUS</small><h1>${esc(dungeon.name)}</h1><p>Wähle, wie du den Dungeon betreten möchtest.</p></div></header><section class="dkl-mode-grid"><button data-dkl-mode-solo><span>1</span><h2>Solo</h2><p>Alleine spielen. Weniger Bonusbeute, aber sofort startklar.</p><b>SOFORT BETRETEN</b></button><button data-dkl-mode-party><span>2–4</span><h2>Gruppe erstellen</h2><p>Erstelle eine Online-Gruppe und lade bis zu drei Mitspieler ein.</p><b>LOBBY ERSTELLEN</b></button><button data-dkl-mode-join><span>#</span><h2>Code beitreten</h2><p>Betritt eine bestehende Gruppe mit einem sechsstelligen Lobby-Code.</p><b>CODE EINGEBEN</b></button></section><footer><span>${presetById(d.appearance.preset).name}</span><span>${CLASSES[d.classId].name}</span><span>PWR ${formatPower(playerStats().power)}</span></footer></div>`;
+    UI.main.querySelector("[data-dkl-mode-back]").addEventListener("click",renderHome);UI.main.querySelector("[data-dkl-mode-solo]").addEventListener("click",()=>startDungeon(UI.selectedDungeon,{partySize:1}));UI.main.querySelector("[data-dkl-mode-party]").addEventListener("click",renderPartyHall);UI.main.querySelector("[data-dkl-mode-join]").addEventListener("click",showJoinDialog);updateHead();
   }
   function changeRole(roleId) { const d = ensureState(); if (!ROLES[roleId]) return; d.role = roleId; d.classId = Object.keys(CLASSES).find(id => CLASSES[id].role === roleId) || "guardian"; d.lastClassChange = Date.now(); safeSave(); toast("Rolle gewählt", ROLES[roleId].name); renderHome(); }
   function changeClass(classId) { const d = ensureState(); if (!CLASSES[classId] || CLASSES[classId].role !== d.role) return; d.classId = classId; d.lastClassChange = Date.now(); safeSave(); toast("Klasse gewählt", CLASSES[classId].name); renderHome(); }
@@ -467,7 +554,7 @@
   function renderInventory() {
     UI.view = "inventory"; const d = ensureState(), stats = playerStats(), talents=talentBonuses(d);
     const filtered = d.inventory.filter(item => (UI.inventoryRarity === "all" || item.rarity === UI.inventoryRarity) && (UI.inventorySlot === "all" || item.slot === UI.inventorySlot) && (!UI.inventorySearch || item.name.toLowerCase().includes(UI.inventorySearch.toLowerCase()))).sort((a, b) => rarityIndex(b.rarity) - rarityIndex(a.rarity) || b.level - a.level || b.power - a.power);
-    const backLabel = UI.session ? "← Zurück zum Dungeon" : "← Hauptlobby";
+    const backLabel = UI.session ? "← Zurück zum Dungeon" : "← Spielmenü";
     const backHandler = UI.session ? renderDungeonStage : renderHome;
     const leftSlots=["helmet","chest","gloves","boots"],rightSlots=["weapon","offhand","ring","amulet","relic"];
     UI.main.innerHTML = `<div class="dkl-page dkl-character-sheet"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>${backLabel}</button><div><small>CHARAKTERFENSTER</small><h2>${esc(playerName())} · ${CLASSES[d.classId].name}</h2><p>${d.inventory.length}/${MAX_INVENTORY} Items · Power ${NUMBER.format(stats.power)}</p></div><div class="dkl-sheet-head-actions"><button class="dkl-btn" data-dkl-sheet-character>Optik</button><button class="dkl-btn gold" data-dkl-sheet-skills>Skillbaum</button></div></header>
@@ -480,7 +567,7 @@
     UI.main.querySelector("[data-dkl-inv-slot]").addEventListener("change", e => { UI.inventorySlot = e.target.value; renderInventory(); });
     UI.main.querySelector("[data-dkl-inv-search]").addEventListener("input", e => { UI.inventorySearch = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(renderInventory, 180); });
     UI.main.querySelector("[data-dkl-sell-filtered]").addEventListener("click", () => sellFiltered(filtered));
-    bindItemButtons(renderInventory);
+    bindItemButtons(renderInventory);renderCharacterCanvases();
   }
   function loadoutSlotHtml(slot) { const item = equippedItem(slot); return `<article class="dkl-equip-slot ${item ? `rarity-${item.rarity}` : "empty"}"><span>${SLOT_DEFS[slot].icon}</span><div><small>${SLOT_DEFS[slot].name}</small><b>${item ? esc(item.name) : "Leer"}</b>${item ? `<em>${RARITIES[item.rarity].name} · L${item.level} · PWR ${formatPower(item.power)}</em>` : ""}</div>${item ? `<button data-dkl-unequip="${slot}">×</button>` : ""}</article>`; }
   function itemCardHtml(item) {
@@ -629,7 +716,7 @@
       if (UI.overlay) renderHome();
     }
   }
-  function makePlayer({ uid: id, name, role, classId, stats, local, x, y, appearance=null, gearVisual=null }) { const r = ROLES[role] || ROLES.dps, c = CLASSES[classId] || CLASSES.berserker; return { uid: id, name, role, classId, local, x, y, vx: 0, vy: 0, angle: -Math.PI / 2, radius: 20, maxHp: stats.health, hp: stats.health, damage: stats.damage, healing: stats.healing, armor: stats.armor, crit: stats.crit, haste: stats.haste, power: stats.power, cooldownReduction:stats.cooldownReduction||0, shieldBonus:stats.shieldBonus||0, moveBonus:stats.moveBonus||0, range: c.range, attackRate: c.attackRate, projectile: c.projectile, attackCd: 0, skillSeq: 0, skillRequested: 0, reviveSeq:0, reviveRequested:false, dead: false, downedAt: 0, shield: 0, buffs: {}, color: c.color, moving: false, climbing: false, walkPhase: 0, attackAnim: 0, castAnim: 0, skillAnim: 0, netX: x, netY: y, targetUid: "", targetEnemyId: "", targetX: x, targetY: y, appearance:appearance||{gender:"male",skin:"medium",hair:"dark",preset:"vanguard",hairStyle:"short",accent:c.color}, gearVisual:gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,offhand:c.color,helmetType:role==="tank"?"helmet":role==="healer"?"hood":"none",weaponModule:"steel"} }; }
+  function makePlayer({ uid: id, name, role, classId, stats, local, x, y, appearance=null, gearVisual=null }) { const r = ROLES[role] || ROLES.dps, c = CLASSES[classId] || CLASSES.berserker; return { uid: id, name, role, classId, local, x, y, vx: 0, vy: 0, angle: -Math.PI / 2, radius: 20, maxHp: stats.health, hp: stats.health, damage: stats.damage, healing: stats.healing, armor: stats.armor, crit: stats.crit, haste: stats.haste, power: stats.power, cooldownReduction:stats.cooldownReduction||0, shieldBonus:stats.shieldBonus||0, moveBonus:stats.moveBonus||0, range: c.range, attackRate: c.attackRate, projectile: c.projectile, attackCd: 0, skillSeq: 0, skillRequested: 0, reviveSeq:0, reviveRequested:false, dead: false, downedAt: 0, shield: 0, buffs: {}, color: c.color, moving: false, climbing: false, walkPhase: 0, attackAnim: 0, castAnim: 0, skillAnim: 0, netX: x, netY: y, targetUid: "", targetEnemyId: "", targetX: x, targetY: y, appearance:appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human",hairStyle:"short",accent:c.color,ready:true}, gearVisual:gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,offhand:c.color,helmetType:role==="tank"?"helmet":role==="healer"?"hood":"none",weaponModule:"steel"} }; }
   function renderDungeonLoading(session,done){
     const tips=["Tanks eröffnen den Kampf und binden Gegner.","Kisten enthalten Gold und tragbare Ausrüstung.","Mit I kannst du dein Loadout im Dungeon wechseln.","Heiler können Sühne offensiv oder defensiv einsetzen.","Mauern unterbrechen Sichtlinien und Angriffe."];
     const symbol=session.dungeon.theme==="ice"?"❄":session.dungeon.theme==="forest"?"🌿":session.dungeon.theme==="void"?"◉":session.dungeon.theme==="universe"?"✦":"◆";
@@ -1132,11 +1219,28 @@
     }
   }
 
+  function safeDrawLayer(s,label,draw){
+    try{draw();return true;}catch(error){reportRuntimeError(s,label,error);return false;}
+  }
   function drawSession(s, now) {
-    const ctx = s.ctx; if (!ctx) return;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    drawDungeonGround(ctx, s, now); drawDungeonProps(ctx,s,now,"back"); drawTraps(ctx, s, now); drawChests(ctx, s); drawDungeonDoor(ctx,s,now); if (s.bossTelegraph) drawTelegraph(ctx, s, s.bossTelegraph); for(const z of s.zones||[])drawZone(ctx,s,z,now); for (const e of s.effects) drawEffect(ctx, s, e); for (const b of s.projectiles) drawProjectile(ctx, s, b);
-    const actors=[...s.enemies.filter(e=>!e.dead).map(e=>({y:e.y,kind:"enemy",value:e})),...s.players.filter(Boolean).map(p=>({y:p.y,kind:"player",value:p}))].sort((a,b)=>a.y-b.y);for(const actor of actors)safeDrawActor(ctx,s,actor.value,actor.kind,now);
-    drawDungeonProps(ctx,s,now,"front"); for (const text of s.texts) drawText(ctx, s, text); if (s.messageUntil > now) drawCenterMessage(ctx, s.message); if (s.exitOpen) drawPortal(ctx, s, now); drawMiniMap(s);
+    const ctx = s.ctx; if (!ctx) return;
+    ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    safeDrawLayer(s,"Dungeon-Boden",()=>drawDungeonGround(ctx,s,now));
+    safeDrawLayer(s,"Hintergrund-Objekte",()=>drawDungeonProps(ctx,s,now,"back"));
+    safeDrawLayer(s,"Fallen",()=>drawTraps(ctx,s,now));
+    safeDrawLayer(s,"Kisten",()=>drawChests(ctx,s));
+    safeDrawLayer(s,"Dungeon-Tor",()=>drawDungeonDoor(ctx,s,now));
+    if(s.bossTelegraph)safeDrawLayer(s,"Boss-Markierung",()=>drawTelegraph(ctx,s,s.bossTelegraph));
+    for(const z of s.zones||[])safeDrawLayer(s,"Zauberzone",()=>drawZone(ctx,s,z,now));
+    for(const e of s.effects||[])safeDrawLayer(s,"Kampfeffekt",()=>drawEffect(ctx,s,e));
+    for(const b of s.projectiles||[])safeDrawLayer(s,"Projektil",()=>drawProjectile(ctx,s,b,now));
+    const actors=[...s.enemies.filter(e=>!e.dead).map(e=>({y:e.y,kind:"enemy",value:e})),...s.players.filter(Boolean).map(p=>({y:p.y,kind:"player",value:p}))].sort((a,b)=>a.y-b.y);
+    for(const actor of actors)safeDrawActor(ctx,s,actor.value,actor.kind,now);
+    safeDrawLayer(s,"Vordergrund-Objekte",()=>drawDungeonProps(ctx,s,now,"front"));
+    for(const entry of s.texts||[])safeDrawLayer(s,"Kampftext",()=>drawText(ctx,s,entry));
+    if(s.messageUntil>now)safeDrawLayer(s,"Raum-Nachricht",()=>drawCenterMessage(ctx,s.message));
+    if(s.exitOpen)safeDrawLayer(s,"Ausgangsportal",()=>drawPortal(ctx,s,now));
+    safeDrawLayer(s,"Minimap",()=>drawMiniMap(s));
   }
   function sx(s, x) { return x - s.camera.x + CANVAS_W / 2; } function sy(s, y) { return y - s.camera.y + CANVAS_H / 2; }
   function floorTileVisible(s,x,y,size){const px=sx(s,x),py=sy(s,y);return px>-size&&py>-size&&px<CANVAS_W+size&&py<CANVAS_H+size;}
@@ -1173,28 +1277,12 @@
   function drawMiniMap(s){const c=s.minimap;if(!c||!s.layout)return;const ctx=c.getContext("2d"),scale=Math.min(c.width/WORLD_W,c.height/WORLD_H);ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#020509dd";ctx.fillRect(0,0,c.width,c.height);ctx.save();ctx.scale(scale,scale);ctx.fillStyle=s.layout.palette.floor;for(const z of s.layout.walkable)ctx.fillRect(z.x,z.y,z.w,z.h);ctx.fillStyle=s.layout.palette.void;for(const z of s.layout.blocked)ctx.fillRect(z.x,z.y,z.w,z.h);ctx.fillStyle=s.roomExitOpen||s.completed?"#6fffd0":"#9a6b43";ctx.fillRect(s.layout.exit.x-18,s.layout.exit.y-18,36,36);for(const p of s.players){ctx.fillStyle=p.local?"#ffffff":ROLES[p.role]?.color||"#7ff";ctx.beginPath();ctx.arc(p.x,p.y,14,0,Math.PI*2);ctx.fill();}ctx.fillStyle="#ff6479";for(const e of s.enemies)if(!e.dead){ctx.beginPath();ctx.arc(e.x,e.y,e.boss?18:8,0,Math.PI*2);ctx.fill();}ctx.restore();ctx.strokeStyle="#58737c";ctx.strokeRect(.5,.5,c.width-1,c.height-1);}
 
   function drawPlayer(ctx,s,p,now){
-    const selected=s.selectedTargetUid===p.uid,x=sx(s,p.x),y=sy(s,p.y),c=CLASSES[p.classId]||CLASSES.berserker,r=ROLES[p.role]||ROLES.dps,a=p.appearance||{gender:"male",skin:"medium",hair:"dark"},g=p.gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,helmetType:p.role==="tank"?"helmet":p.role==="healer"?"hood":"none"};
-    const preset=presetById(a.preset),phase=p.moving?Math.sin((p.walkPhase||now*.012))*5:0,bob=p.moving?Math.abs(Math.sin((p.walkPhase||now*.012)))*2:0,side=Math.cos(p.angle)>=0?1:-1,back=Math.sin(p.angle)<-.35,attack=(p.attackAnim||0)>.01,casting=(p.castAnim||0)>0,bodyWidth=(preset.body==="broad"?22:preset.body==="slim"?14:18)+(a.gender==="female"?-1:1),skin=skinColor(a.skin),hair=hairColor(a.hair),torsoY=-30-bob,accent=a.accent||preset.accent||c.color;
+    const selected=s.selectedTargetUid===p.uid,x=sx(s,p.x),y=sy(s,p.y),c=CLASSES[p.classId]||CLASSES.berserker,r=ROLES[p.role]||ROLES.dps,a=p.appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human"},g=p.gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,helmetType:p.role==="tank"?"helmet":p.role==="healer"?"hood":"none"},phase=p.moving?(p.walkPhase||now*.012):0,side=Math.cos(p.angle)>=0?1:-1;
     ctx.save();ctx.translate(x,y);ctx.globalAlpha=p.dead?.35:1;
-    if(selected){ctx.strokeStyle="#66f3a5";ctx.shadowColor="#66f3a5";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,8,33,14,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;}
-    ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,8,27,10,0,0,Math.PI*2);ctx.fill();
-    if((p.shield||0)>0){const ratio=clamp(p.shield/Math.max(1,p.maxHp),0,1.8),pulse=.75+.18*Math.sin(now*.009);ctx.strokeStyle="#9fe9ff";ctx.fillStyle="#7bdcff18";ctx.shadowColor="#9fe9ff";ctx.shadowBlur=18;ctx.lineWidth=3+ratio;ctx.beginPath();ctx.ellipse(0,-15,30*pulse,44*pulse,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;}
-    const legSwing=p.climbing?phase*1.1:phase*.55;ctx.lineCap="round";
-    if(back||p.role==="healer"){ctx.fillStyle=`${accent}88`;ctx.strokeStyle=g.trim||accent;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-bodyWidth+3,torsoY-8);ctx.lineTo(-bodyWidth-7,torsoY+31);ctx.lineTo(0,torsoY+43+phase*.25);ctx.lineTo(bodyWidth+7,torsoY+31);ctx.lineTo(bodyWidth-3,torsoY-8);ctx.closePath();ctx.fill();ctx.stroke();}
-    ctx.strokeStyle="#172229";ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(-7,-5);ctx.lineTo(-9+legSwing,18);ctx.moveTo(7,-5);ctx.lineTo(9-legSwing,18);ctx.stroke();ctx.strokeStyle=g.boots||c.color;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-10+legSwing,18);ctx.lineTo(-18+legSwing,21);ctx.moveTo(10-legSwing,18);ctx.lineTo(18-legSwing,21);ctx.stroke();
-    ctx.shadowColor=g.armor||c.color;ctx.shadowBlur=10;ctx.fillStyle=g.armor||c.color;ctx.strokeStyle=g.trim||"#dcecf0";ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-bodyWidth,torsoY-12);ctx.quadraticCurveTo(-bodyWidth-5,torsoY+8,-bodyWidth+2,torsoY+25);ctx.lineTo(bodyWidth-2,torsoY+25);ctx.quadraticCurveTo(bodyWidth+5,torsoY+8,bodyWidth,torsoY-12);ctx.quadraticCurveTo(0,torsoY-22,-bodyWidth,torsoY-12);ctx.closePath();ctx.fill();ctx.stroke();ctx.shadowBlur=0;
-    ctx.fillStyle=g.helmet||accent;ctx.strokeStyle=g.trim||"#dcecf0";ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-bodyWidth-9,torsoY-14,15,12,5);ctx.roundRect(bodyWidth-6,torsoY-14,15,12,5);ctx.fill();ctx.stroke();
-    ctx.fillStyle=g.trim||c.color;ctx.fillRect(-bodyWidth+3,torsoY-5,bodyWidth*2-6,5);ctx.fillStyle="#10182099";ctx.fillRect(-bodyWidth+2,torsoY+15,bodyWidth*2-4,5);
-    if(p.role==="tank"){ctx.fillStyle=g.helmet||c.color;ctx.strokeStyle=g.trim||"#fff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(-bodyWidth-3,torsoY-8,9,0,Math.PI*2);ctx.arc(bodyWidth+3,torsoY-8,9,0,Math.PI*2);ctx.fill();ctx.stroke();}
-    ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=8;ctx.beginPath();const arm=attack?13:phase*.32;ctx.moveTo(-bodyWidth+2,torsoY-8);ctx.lineTo(-bodyWidth-9,torsoY+10+arm);ctx.moveTo(bodyWidth-2,torsoY-8);ctx.lineTo(bodyWidth+9,torsoY+10-arm);ctx.stroke();
-    ctx.fillStyle=skin;ctx.beginPath();ctx.ellipse(0,torsoY-28,11,14,0,0,Math.PI*2);ctx.fill();
-    if(g.helmetType==="hood"){ctx.fillStyle=g.helmet||c.color;ctx.beginPath();ctx.arc(0,torsoY-31,15,Math.PI,Math.PI*2);ctx.lineTo(12,torsoY-18);ctx.lineTo(-12,torsoY-18);ctx.closePath();ctx.fill();}
-    else if(g.helmetType==="helmet"){ctx.fillStyle=g.helmet||"#73828c";ctx.strokeStyle=g.trim||"#d8e4ea";ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,torsoY-31,14,Math.PI,Math.PI*2);ctx.lineTo(12,torsoY-24);ctx.lineTo(-12,torsoY-24);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle="#172027";ctx.fillRect(-9,torsoY-29,18,4);}
-    else if(g.helmetType==="crown"){ctx.fillStyle=g.helmet||"#ffd45a";ctx.beginPath();ctx.moveTo(-11,torsoY-38);ctx.lineTo(-7,torsoY-51);ctx.lineTo(0,torsoY-41);ctx.lineTo(7,torsoY-52);ctx.lineTo(11,torsoY-38);ctx.closePath();ctx.fill();}
-    else{ctx.fillStyle=hair;ctx.beginPath();ctx.arc(0,torsoY-33,11,Math.PI,Math.PI*2);ctx.lineTo(10,torsoY-26);ctx.quadraticCurveTo(0,torsoY-20,-10,torsoY-26);ctx.fill();if(a.hairStyle==="long"||a.hairStyle==="braid"){ctx.fillRect(-10,torsoY-29,5,22);ctx.fillRect(5,torsoY-29,5,a.hairStyle==="braid"?30:22);}if(a.hairStyle==="mohawk"){ctx.beginPath();ctx.moveTo(-3,torsoY-43);ctx.lineTo(0,torsoY-58);ctx.lineTo(4,torsoY-43);ctx.fill();}}
-    if(!back){ctx.fillStyle="#15181b";ctx.beginPath();ctx.arc(-4,torsoY-28,1.3,0,Math.PI*2);ctx.arc(4,torsoY-28,1.3,0,Math.PI*2);ctx.fill();}
-    if(p.role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"){ctx.strokeStyle=g.trim||c.color;ctx.globalAlpha=.45;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,torsoY+2,12,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}
-    drawPlayerWeapon(ctx,p,c,torsoY,side,attack,casting);ctx.fillStyle="#fff";ctx.font="900 11px system-ui";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=5;ctx.fillText(p.name,0,torsoY-56);ctx.fillStyle=r.color;ctx.font="800 10px system-ui";ctx.fillText(`${r.icon} ${Math.round(p.hp/Math.max(1,p.maxHp)*100)}%`,0,torsoY-44);ctx.restore();}
+    if(selected){ctx.strokeStyle="#66f3a5";ctx.shadowColor="#66f3a5";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,8,38,15,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;}
+    if((p.shield||0)>0){const pulse=.82+.1*Math.sin(now*.009);ctx.strokeStyle="#9fe9ff";ctx.fillStyle="#7bdcff18";ctx.shadowColor="#9fe9ff";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,-37,36*pulse,58*pulse,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;}
+    drawFantasyCharacter(ctx,{appearance:a,gear:g,classId:p.classId,role:p.role,scale:.82,walk:phase,attack:(p.attackAnim||0)>.01,casting:(p.castAnim||0)>0,side,now});
+    const preset=presetById(a.preset);ctx.fillStyle="#fff";ctx.font="900 11px system-ui";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=5;ctx.fillText(p.name,0,-91*(preset.height||1));ctx.fillStyle=r.color;ctx.font="800 10px system-ui";ctx.fillText(`${r.icon} ${Math.round(p.hp/Math.max(1,p.maxHp)*100)}%`,0,-79*(preset.height||1));ctx.restore();}
   function drawPlayerWeapon(ctx,p,c,torsoY,side,attack,casting){const gv=p.gearVisual||{},weaponColor=gv.weapon||c.color,module=gv.weaponModule||"steel";ctx.save();ctx.translate(side*(casting?9:19),torsoY+(casting?-18:4));const swing=attack?(side>0?-.7:.7):0;ctx.shadowColor=weaponColor;ctx.shadowBlur=module==="steel"?4:module==="holy"?18:14;if(p.role==="tank"){ctx.fillStyle="#496a7c";ctx.strokeStyle="#8fe8ff";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(-side*34,3,14,20,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.rotate(swing);ctx.strokeStyle=weaponColor;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,-24);ctx.lineTo(side*11,24);ctx.stroke();ctx.strokeStyle="#9a6b3f";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-side*3,9);ctx.lineTo(side*7,13);ctx.stroke();}
     else if(c.weaponType==="bow"){ctx.strokeStyle="#c2ef7e";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,20,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(0,20);ctx.stroke();ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(24,0);ctx.stroke();}
     else if(c.projectile){ctx.rotate(swing*.5);ctx.strokeStyle=weaponColor;ctx.shadowColor=weaponColor;ctx.shadowBlur=casting?25:12;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,casting?-40:-22);ctx.lineTo(0,casting?22:25);ctx.stroke();ctx.fillStyle=casting?"#eafff1":"#fff";ctx.beginPath();ctx.arc(0,casting?-43:-25,casting?9:6,0,Math.PI*2);ctx.fill();if(casting){ctx.strokeStyle="#87ffc0";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-43,15,0,Math.PI*2);ctx.stroke();}}
@@ -1203,6 +1291,22 @@
 
   function drawEnemy(ctx,s,e,now){const selected=(s.selectedEnemyId===e.id);const x=sx(s,e.x),y=sy(s,e.y),pulse=.5+.5*Math.sin(now*.006),scale=e.boss?1.35:e.elite?1.12:1,phase=e.moving?Math.sin(e.walkPhase||now*.01)*5:0,kind=e.archetype||monsterArchetype(e.name);ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(selected){ctx.strokeStyle="#ffe47a";ctx.shadowColor="#ffe47a";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,10,e.radius+12,e.radius*.45,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;}ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,8,e.radius*.95,e.radius*.3,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#17191e";ctx.lineWidth=8;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-6,-1);ctx.lineTo(-8+phase*.5,16);ctx.moveTo(6,-1);ctx.lineTo(8-phase*.5,16);ctx.stroke();ctx.shadowColor=e.color;ctx.shadowBlur=e.boss?22:10;ctx.fillStyle=e.color;ctx.strokeStyle=e.boss?"#fff":e.elite?"#ffd85d":"#20242a";ctx.lineWidth=e.boss?3:2;ctx.beginPath();if(kind==="beast"){ctx.moveTo(-e.radius*.78,-18);ctx.quadraticCurveTo(-e.radius,-4,-e.radius*.72,12);ctx.lineTo(-10,22);ctx.quadraticCurveTo(0,28,10,22);ctx.lineTo(e.radius*.72,12);ctx.quadraticCurveTo(e.radius,-4,e.radius*.78,-18);ctx.quadraticCurveTo(0,-44,-e.radius*.78,-18);ctx.closePath();}else if(kind==="skeleton"){ctx.rect(-e.radius*.6,-26,e.radius*1.2,38);}else if(kind==="cultist"){ctx.moveTo(-e.radius*.7,-24);ctx.quadraticCurveTo(0,-42,e.radius*.7,-24);ctx.lineTo(e.radius*.88,10);ctx.lineTo(-e.radius*.88,10);ctx.closePath();}else{ctx.moveTo(-e.radius*.7,-24);ctx.quadraticCurveTo(-e.radius,-4,-e.radius*.6,10);ctx.lineTo(e.radius*.6,10);ctx.quadraticCurveTo(e.radius,-4,e.radius*.7,-24);ctx.quadraticCurveTo(0,-40,-e.radius*.7,-24);ctx.closePath();}ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle="#a77463";ctx.beginPath();ctx.arc(0,-34,11+(e.boss?4:0),0,Math.PI*2);ctx.fill();ctx.fillStyle="#17141a";ctx.beginPath();if(kind==="beast"){ctx.arc(-4,-38,2.2,0,Math.PI*2);ctx.arc(4,-38,2.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle=e.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-46);ctx.lineTo(-15,-60);ctx.moveTo(7,-46);ctx.lineTo(15,-60);ctx.stroke();ctx.fillStyle="#fff0a0";ctx.fillRect(-4,-28,2,8);ctx.fillRect(2,-28,2,8);}else{ctx.arc(-4,-34,1.9,0,Math.PI*2);ctx.arc(4,-34,1.9,0,Math.PI*2);ctx.fill();}ctx.fillStyle="#ffdf6a";ctx.beginPath();ctx.arc(-4,-34,1.5,0,Math.PI*2);ctx.arc(4,-34,1.5,0,Math.PI*2);ctx.fill();if(kind==="skeleton"){ctx.strokeStyle="#e7edf1";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(8,-8);ctx.moveTo(0,-26);ctx.lineTo(0,10);ctx.moveTo(-8,-17);ctx.lineTo(8,1);ctx.moveTo(8,-17);ctx.lineTo(-8,1);ctx.stroke();}if(e.boss){ctx.strokeStyle=e.color;ctx.globalAlpha=.45+pulse*.35;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-15,e.radius+10+pulse*5,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}if(e.ranged){ctx.strokeStyle="#d9e2e8";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(17,-25);ctx.lineTo(25,6);ctx.stroke();ctx.fillStyle=e.color;ctx.beginPath();ctx.arc(17,-28,5,0,Math.PI*2);ctx.fill();}else{ctx.strokeStyle="#e7edf1";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(17,-24);ctx.lineTo(28,8+(e.attackAnim?8:0));ctx.stroke();}ctx.scale(1/scale,1/scale);const w=Math.max(50,e.radius*2.4);ctx.fillStyle="#19080b";ctx.fillRect(-w/2,-e.radius*scale-42,w,6);ctx.fillStyle=e.boss?"#ff526f":"#7ce98d";ctx.fillRect(-w/2,-e.radius*scale-42,w*clamp(e.hp/e.maxHp,0,1),6);ctx.fillStyle="#fff";ctx.font="800 10px system-ui";ctx.textAlign="center";ctx.fillText(e.name,0,-e.radius*scale-49);ctx.restore();}
   function drawChests(ctx,s){for(const c of s.chests||[]){const opened=s.openedChestIds?.has(c.id),x=sx(s,c.x),y=sy(s,c.y),near=!opened&&Math.hypot(s.player.x-c.x,s.player.y-c.y)<=CHEST_INTERACT_RANGE;ctx.save();ctx.translate(x,y);ctx.shadowColor=opened?"transparent":"#ffd96a";ctx.shadowBlur=near?22:9;ctx.fillStyle=opened?"#332b24":"#9b622c";ctx.strokeStyle=opened?"#6f6254":"#ffd77a";ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(-28,-22,56,42,6);ctx.fill();ctx.stroke();ctx.fillStyle=opened?"#4c4034":"#cf8b39";ctx.fillRect(-28,-24,56,14);ctx.strokeRect(-28,-24,56,14);ctx.fillStyle=opened?"#6f6254":"#fff0a0";ctx.fillRect(-5,-23,10,43);if(near){ctx.fillStyle="#fff";ctx.font="900 13px system-ui";ctx.textAlign="center";ctx.fillText("E",0,-35);}ctx.restore();}}
+  function drawProjectile(ctx,s,b,now=performance.now()){
+    const x=sx(s,finite(b?.x,0)),y=sy(s,finite(b?.y,0));
+    if(x<-60||y<-60||x>CANVAS_W+60||y>CANVAS_H+60)return;
+    const radius=clamp(finite(b?.radius,5),2,18),color=String(b?.color|| (b?.friendly?"#8fffd5":"#ff667c"));
+    const speed=Math.hypot(finite(b?.vx,0),finite(b?.vy,0)),angle=Math.atan2(finite(b?.vy,0),finite(b?.vx,1));
+    const pulse=.82+.18*Math.sin(now*.018+finite(b?.x,0)*.01);
+    ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+    ctx.globalCompositeOperation="lighter";ctx.shadowColor=color;ctx.shadowBlur=14+radius;
+    const trail=Math.min(34,8+speed*.025);
+    const gradient=ctx.createLinearGradient(-trail,0,radius,0);gradient.addColorStop(0,"rgba(255,255,255,0)");gradient.addColorStop(.72,color);gradient.addColorStop(1,"#ffffff");
+    ctx.strokeStyle=gradient;ctx.lineWidth=Math.max(2,radius*.9);ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-trail,0);ctx.lineTo(radius,0);ctx.stroke();
+    ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,radius*pulse,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#ffffff";ctx.globalAlpha=.92;ctx.beginPath();ctx.arc(radius*.12,-radius*.12,Math.max(1.5,radius*.38),0,Math.PI*2);ctx.fill();
+    if(b?.homingId||radius>=8){ctx.globalAlpha=.5;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,radius*1.7,0,Math.PI*2);ctx.stroke();}
+    ctx.restore();
+  }
   function drawTelegraph(ctx,s,t){ctx.save();ctx.translate(sx(s,t.x),sy(s,t.y));ctx.fillStyle="#ff405522";ctx.strokeStyle="#ff5367";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,t.radius,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();}
   function drawEffect(ctx,s,e){ctx.save();ctx.translate(sx(s,e.x),sy(s,e.y));ctx.globalAlpha=clamp(e.life,0,1);ctx.strokeStyle=e.color;ctx.fillStyle=`${e.color}22`;ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,0,e.radius*(1+(1-e.life)*.25),0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();}
   function drawZone(ctx,s,z,now){const alpha=clamp(z.life/Math.max(1,z.maxLife||7),0,1),pulse=.82+.12*Math.sin(now*.008);ctx.save();ctx.translate(sx(s,z.x),sy(s,z.y));ctx.globalAlpha=.28+.45*alpha;ctx.fillStyle=`${z.color}24`;ctx.strokeStyle=z.color;ctx.shadowColor=z.color;ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,z.radius*pulse,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.globalAlpha=.75*alpha;for(let i=0;i<8;i++){const a=now*.0015+i*Math.PI/4,r=z.radius*.68;ctx.beginPath();ctx.arc(Math.cos(a)*r,Math.sin(a)*r,3,0,Math.PI*2);ctx.fillStyle=z.color;ctx.fill();}ctx.restore();}
@@ -1227,7 +1331,7 @@
   }
   function formatTime(ms){const total=Math.floor(ms/1000),m=Math.floor(total/60),s=total%60;return `${m}:${String(s).padStart(2,"0")}`;}
   function finishDungeonExit(){const s=UI.session;if(!s)return;if(!s.completed)return;endDungeon(true,"Dungeon abgeschlossen.");}
-  function endDungeon(success,reason){const s=UI.session;if(!s)return;const d=ensureState(),elapsed=Date.now()-s.startedAt;if(success){const current=d.bestDungeon[s.dungeon.id];if(!current||elapsed<current.time)d.bestDungeon[s.dungeon.id]={time:elapsed,partySize:s.partySize,at:Date.now()};d.completed[s.dungeon.id]=(d.completed[s.dungeon.id]||0)+1;d.gold+=Math.round((500+s.dungeon.level*90)*Math.max(.7,1+(s.partySize-2)*.18));addXp(Math.round((800+s.dungeon.level*160)*Math.max(.7,1+(s.partySize-2)*.18)));}safeSave();stopSession(false);UI.view="result";const online=!!s.online;UI.main.innerHTML=`<div class="dkl-result ${success?"success":"fail"}"><span>${success?"🏆":"☠"}</span><small>${esc(s.dungeon.name)}</small><h2>${success?"Dungeon abgeschlossen":"Gruppe besiegt"}</h2><p>${esc(reason)}</p><div><b>Zeit ${formatTime(elapsed)}</b><b>Räume ${s.room}/${s.dungeon.rooms}</b><b>Gruppe ${s.partySize}</b></div><button class="dkl-btn primary" data-dkl-result-home>${online?"Zur Gruppenlobby":"Zur Hauptlobby"}</button></div>`;UI.main.querySelector("[data-dkl-result-home]").addEventListener("click",()=>returnAfterDungeon(s));}
+  function endDungeon(success,reason){const s=UI.session;if(!s)return;const d=ensureState(),elapsed=Date.now()-s.startedAt;if(success){const current=d.bestDungeon[s.dungeon.id];if(!current||elapsed<current.time)d.bestDungeon[s.dungeon.id]={time:elapsed,partySize:s.partySize,at:Date.now()};d.completed[s.dungeon.id]=(d.completed[s.dungeon.id]||0)+1;d.gold+=Math.round((500+s.dungeon.level*90)*Math.max(.7,1+(s.partySize-2)*.18));addXp(Math.round((800+s.dungeon.level*160)*Math.max(.7,1+(s.partySize-2)*.18)));}safeSave();stopSession(false);UI.view="result";const online=!!s.online;UI.main.innerHTML=`<div class="dkl-result ${success?"success":"fail"}"><span>${success?"🏆":"☠"}</span><small>${esc(s.dungeon.name)}</small><h2>${success?"Dungeon abgeschlossen":"Gruppe besiegt"}</h2><p>${esc(reason)}</p><div><b>Zeit ${formatTime(elapsed)}</b><b>Räume ${s.room}/${s.dungeon.rooms}</b><b>Gruppe ${s.partySize}</b></div><button class="dkl-btn primary" data-dkl-result-home>${online?"Zur Gruppenlobby":"Zum Spielmenü"}</button></div>`;UI.main.querySelector("[data-dkl-result-home]").addEventListener("click",()=>returnAfterDungeon(s));}
   async function returnAfterDungeon(session){
     if(!session.online){renderHome();return;}
     UI.view="partyReturn";const party=UI.party;
