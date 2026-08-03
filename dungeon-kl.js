@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-dungeon-kl-v167-three-character-slots-side-view-actionbar-loot";
+  const VERSION = "20260803-dungeon-kl-v168-leg-animation-expanded-skilltrees-cooldowns";
   const MAX_LEVEL = 100;
   const MAX_CHARACTERS = 3;
   const MAX_INVENTORY = 900;
@@ -143,21 +143,107 @@
     ]
   };
 
-  // V167: Talentpunkte können neben passiven Verbesserungen auch neue Fähigkeiten freischalten.
-  TALENT_TREES.tank[2].nodes.push({id:"tank_unlock_charge",name:"Unaufhaltsamer Ansturm",icon:"➤",max:1,effect:"ability",ability:"guardian_charge",text:"Fähigkeit freischalten"});
-  TALENT_TREES.dps[1].nodes.push({id:"dps_unlock_signature",name:"Signaturtechnik",icon:"✹",max:1,effect:"ability",ability:"class_signature",text:"Klassenfähigkeit freischalten"});
-  TALENT_TREES.healer[1].nodes.push({id:"heal_unlock_spear",name:"Heiliger Speer",icon:"⚡",max:1,effect:"ability",ability:"cleric_holy_spear",text:"Angriffsfähigkeit freischalten"});
-  TALENT_TREES.healer[2].nodes.push({id:"heal_unlock_radiance",name:"Strahlende Gnade",icon:"☀",max:1,effect:"ability",ability:"healer_radiance",text:"Gruppenheilung freischalten"});
+  // V168: Jede Klasse besitzt zusätzlich einen eigenen aktiven Talentpfad. Die
+  // Freischaltungen kosten je einen Talentpunkt und können danach frei in die
+  // sechs Felder der Aktionsleiste gelegt werden.
+  const CLASS_ABILITY_NODES = {
+    guardian:[
+      {branch:0,id:"tank_unlock_charge",name:"Unaufhaltsamer Ansturm",icon:"➤",ability:"guardian_charge",cooldown:18},
+      {branch:0,id:"guardian_unlock_throw",name:"Schildwurf",icon:"◒",ability:"guardian_shield_throw",cooldown:12},
+      {branch:1,id:"guardian_unlock_slam",name:"Erdbebenstoß",icon:"✹",ability:"guardian_groundslam",cooldown:17},
+      {branch:2,id:"guardian_unlock_banner",name:"Banner der Wacht",icon:"⚑",ability:"guardian_banner",cooldown:25},
+      {branch:2,id:"guardian_unlock_laststand",name:"Letztes Bollwerk",icon:"◆",ability:"guardian_laststand",cooldown:32}
+    ],
+    berserker:[
+      {branch:0,id:"dps_unlock_signature",name:"Blutsturm",icon:"✹",ability:"berserker_signature",cooldown:20},
+      {branch:0,id:"berserker_unlock_cleave",name:"Kettenschnitt",icon:"⚔",ability:"berserker_cleave",cooldown:10},
+      {branch:1,id:"berserker_unlock_rage",name:"Blutrausch",icon:"♨",ability:"berserker_rage",cooldown:22},
+      {branch:1,id:"berserker_unlock_execute",name:"Hinrichtung",icon:"☠",ability:"berserker_execute",cooldown:18},
+      {branch:2,id:"berserker_unlock_leap",name:"Kriegssprung",icon:"➤",ability:"berserker_leap",cooldown:20}
+    ],
+    ranger:[
+      {branch:0,id:"dps_unlock_signature",name:"Bestienruf",icon:"🐾",ability:"ranger_signature",cooldown:24},
+      {branch:0,id:"ranger_unlock_poison",name:"Giftpfeil",icon:"☣",ability:"ranger_poison",cooldown:11},
+      {branch:1,id:"ranger_unlock_volley",name:"Pfeilsalve",icon:"➹",ability:"ranger_volley",cooldown:18},
+      {branch:2,id:"ranger_unlock_mendpet",name:"Tierheilung",icon:"❤",ability:"ranger_mend_pet",cooldown:20},
+      {branch:2,id:"ranger_unlock_trap",name:"Frostfalle",icon:"❄",ability:"ranger_frost_trap",cooldown:16}
+    ],
+    arcanist:[
+      {branch:0,id:"dps_unlock_signature",name:"Frostlanze",icon:"❄",ability:"arcanist_signature",cooldown:16},
+      {branch:0,id:"arcanist_unlock_fireball",name:"Feuerkugel",icon:"☄",ability:"arcanist_fireball",cooldown:10},
+      {branch:1,id:"arcanist_unlock_nova",name:"Arkane Nova",icon:"✦",ability:"arcanist_nova",cooldown:18},
+      {branch:1,id:"arcanist_unlock_blink",name:"Arkanschritt",icon:"➤",ability:"arcanist_blink",cooldown:12},
+      {branch:2,id:"arcanist_unlock_barrier",name:"Prismabarriere",icon:"◇",ability:"arcanist_barrier",cooldown:24}
+    ],
+    warlock:[
+      {branch:0,id:"dps_unlock_signature",name:"Seelenexplosion",icon:"☄",ability:"warlock_signature",cooldown:21},
+      {branch:0,id:"warlock_unlock_drain",name:"Lebensentzug",icon:"◉",ability:"warlock_drain",cooldown:14},
+      {branch:1,id:"warlock_unlock_curse",name:"Fluchregen",icon:"☂",ability:"warlock_curse_rain",cooldown:18},
+      {branch:1,id:"warlock_unlock_soulfire",name:"Seelenfeuer",icon:"✦",ability:"warlock_soulfire",cooldown:20},
+      {branch:2,id:"warlock_unlock_guard",name:"Dämonenwache",icon:"◈",ability:"warlock_demon_guard",cooldown:26}
+    ],
+    cleric:[
+      {branch:0,id:"heal_unlock_spear",name:"Heiliger Speer",icon:"⚡",ability:"cleric_holy_spear",cooldown:15},
+      {branch:0,id:"cleric_unlock_judgment",name:"Urteil des Lichts",icon:"☀",ability:"cleric_judgment",cooldown:14},
+      {branch:1,id:"cleric_unlock_nova",name:"Göttliche Nova",icon:"✦",ability:"cleric_divine_nova",cooldown:20},
+      {branch:1,id:"cleric_unlock_beacon",name:"Lichtzeichen",icon:"◎",ability:"cleric_beacon",cooldown:24},
+      {branch:2,id:"heal_unlock_radiance",name:"Strahlende Gnade",icon:"☀",ability:"cleric_radiance",cooldown:24},
+      {branch:2,id:"cleric_unlock_angel",name:"Schutzengel",icon:"♢",ability:"cleric_guardian_angel",cooldown:28}
+    ],
+    druid:[
+      {branch:0,id:"heal_unlock_radiance",name:"Smaragdblüte",icon:"❧",ability:"druid_radiance",cooldown:24},
+      {branch:0,id:"druid_unlock_regrowth",name:"Nachwachsen",icon:"🌿",ability:"druid_regrowth",cooldown:15},
+      {branch:1,id:"druid_unlock_moonfire",name:"Mondfeuer",icon:"☾",ability:"druid_moonfire",cooldown:10},
+      {branch:1,id:"druid_unlock_cyclone",name:"Zyklon",icon:"◌",ability:"druid_cyclone",cooldown:18},
+      {branch:2,id:"druid_unlock_barkskin",name:"Eisenborke",icon:"◈",ability:"druid_barkskin",cooldown:24},
+      {branch:2,id:"druid_unlock_tranquility",name:"Gelassenheit",icon:"✿",ability:"druid_tranquility",cooldown:30}
+    ]
+  };
 
   const EXTRA_ABILITIES = {
     guardian_charge:{classId:"guardian",name:"Sturmangriff",icon:"➤",kind:"charge",cooldown:18,talent:"tank_unlock_charge",description:"Stürmt zum Ziel, verursacht Schaden und bindet es."},
+    guardian_shield_throw:{classId:"guardian",name:"Schildwurf",icon:"◒",kind:"shieldthrow",cooldown:12,talent:"guardian_unlock_throw",action:"target_projectile",power:1.45,color:"#8fe8ff",description:"Wirft den Schild auf das Ziel und verursacht hohen Schaden."},
+    guardian_groundslam:{classId:"guardian",name:"Erdbebenstoß",icon:"✹",kind:"groundslam",cooldown:17,talent:"guardian_unlock_slam",action:"area_damage",power:1.75,radius:190,color:"#ffd27a",description:"Erschüttert den Boden und trifft Gegner im Umkreis."},
+    guardian_banner:{classId:"guardian",name:"Banner der Wacht",icon:"⚑",kind:"guardianbanner",cooldown:25,talent:"guardian_unlock_banner",action:"group_shield",power:.24,color:"#65d9ff",description:"Gibt der sichtbaren Gruppe einen Schutzschild und zieht Gegner an."},
+    guardian_laststand:{classId:"guardian",name:"Letztes Bollwerk",icon:"◆",kind:"laststand",cooldown:32,talent:"guardian_unlock_laststand",action:"last_stand",power:.46,color:"#9fe9ff",description:"Heilt dich, verstärkt deine Verteidigung und gibt einen großen Schild."},
+
     berserker_signature:{classId:"berserker",name:"Blutsturm",icon:"✹",kind:"bloodstorm",cooldown:20,talent:"dps_unlock_signature",description:"Mehrere schnelle Treffer um den Charakter."},
+    berserker_cleave:{classId:"berserker",name:"Kettenschnitt",icon:"⚔",kind:"cleave",cooldown:10,talent:"berserker_unlock_cleave",action:"area_damage",power:1.38,radius:135,color:"#ff6377",description:"Ein schneller Rundumschlag mit kurzer Abklingzeit."},
+    berserker_rage:{classId:"berserker",name:"Blutrausch",icon:"♨",kind:"rage",cooldown:22,talent:"berserker_unlock_rage",action:"combat_buff",power:.28,color:"#ff4d66",description:"Erhöht vorübergehend Tempo und Angriffskraft."},
+    berserker_execute:{classId:"berserker",name:"Hinrichtung",icon:"☠",kind:"execute",cooldown:18,talent:"berserker_unlock_execute",action:"execute",power:2.35,color:"#ff304f",description:"Sehr starker Treffer; gegen geschwächte Ziele noch mächtiger."},
+    berserker_leap:{classId:"berserker",name:"Kriegssprung",icon:"➤",kind:"warleap",cooldown:20,talent:"berserker_unlock_leap",action:"dash_area",power:1.8,radius:150,color:"#ff805f",description:"Springt zum Ziel und schlägt beim Auftreffen im Umkreis ein."},
+
     ranger_signature:{classId:"ranger",name:"Bestienruf",icon:"🐾",kind:"beastcall",cooldown:24,talent:"dps_unlock_signature",description:"Begleiter verursacht einen verstärkten Angriff."},
+    ranger_poison:{classId:"ranger",name:"Giftpfeil",icon:"☣",kind:"poisonarrow",cooldown:11,talent:"ranger_unlock_poison",action:"target_projectile",power:1.35,color:"#7bed73",dotPower:.38,description:"Ein giftiger Pfeil trifft das Ziel und hinterlässt eine Schadenszone."},
+    ranger_volley:{classId:"ranger",name:"Pfeilsalve",icon:"➹",kind:"volley",cooldown:18,talent:"ranger_unlock_volley",action:"volley",power:.72,color:"#c9f17d",description:"Feuert fünf Pfeile fächerförmig auf das ausgewählte Ziel."},
+    ranger_mend_pet:{classId:"ranger",name:"Tierheilung",icon:"❤",kind:"mendpet",cooldown:20,talent:"ranger_unlock_mendpet",action:"pet_heal",power:.62,color:"#8ff1a3",description:"Heilt den aktiven Jäger-Begleiter und gibt ihm kurz Schutz."},
+    ranger_frost_trap:{classId:"ranger",name:"Frostfalle",icon:"❄",kind:"frosttrap",cooldown:16,talent:"ranger_unlock_trap",action:"zone_damage",power:.58,radius:145,duration:7,color:"#80dcff",description:"Legt am Ziel eine anhaltende Frostfalle ab."},
+
     arcanist_signature:{classId:"arcanist",name:"Frostlanze",icon:"❄",kind:"frostlance",cooldown:16,talent:"dps_unlock_signature",description:"Ein mächtiges magisches Geschoss auf das Ziel."},
+    arcanist_fireball:{classId:"arcanist",name:"Feuerkugel",icon:"☄",kind:"fireball",cooldown:10,talent:"arcanist_unlock_fireball",action:"target_projectile",power:1.55,color:"#ff8b45",splash:95,description:"Eine Feuerkugel explodiert am Ziel und trifft nahe Gegner."},
+    arcanist_nova:{classId:"arcanist",name:"Arkane Nova",icon:"✦",kind:"arcanenova",cooldown:18,talent:"arcanist_unlock_nova",action:"area_damage",power:1.85,radius:205,color:"#ae7dff",description:"Eine große arkane Explosion um den Magier."},
+    arcanist_blink:{classId:"arcanist",name:"Arkanschritt",icon:"➤",kind:"blink",cooldown:12,talent:"arcanist_unlock_blink",action:"blink",power:0,color:"#7de7ff",description:"Teleportiert dich ein kurzes Stück in Blickrichtung."},
+    arcanist_barrier:{classId:"arcanist",name:"Prismabarriere",icon:"◇",kind:"prismbarrier",cooldown:24,talent:"arcanist_unlock_barrier",action:"self_shield",power:.72,color:"#9fdfff",description:"Erzeugt eine starke magische Barriere um dich."},
+
     warlock_signature:{classId:"warlock",name:"Seelenexplosion",icon:"☄",kind:"soulburst",cooldown:21,talent:"dps_unlock_signature",description:"Leerenexplosion am ausgewählten Ziel."},
+    warlock_drain:{classId:"warlock",name:"Lebensentzug",icon:"◉",kind:"drain",cooldown:14,talent:"warlock_unlock_drain",action:"drain",power:1.45,color:"#d45cff",description:"Entzieht dem Gegner Leben und heilt dich um einen Teil des Schadens."},
+    warlock_curse_rain:{classId:"warlock",name:"Fluchregen",icon:"☂",kind:"curserain",cooldown:18,talent:"warlock_unlock_curse",action:"zone_damage",power:.72,radius:165,duration:8,color:"#b14cff",description:"Erzeugt eine anhaltende Leerenzone am Gegner."},
+    warlock_soulfire:{classId:"warlock",name:"Seelenfeuer",icon:"✦",kind:"soulfire",cooldown:20,talent:"warlock_unlock_soulfire",action:"target_projectile",power:2.35,color:"#e569ff",splash:80,description:"Ein langsames, sehr starkes Seelenprojektil."},
+    warlock_demon_guard:{classId:"warlock",name:"Dämonenwache",icon:"◈",kind:"demonguard",cooldown:26,talent:"warlock_unlock_guard",action:"self_shield_aura",power:.58,color:"#9a55ff",description:"Gibt dir einen Schild und schädigt Gegner in deiner Nähe."},
+
     cleric_holy_spear:{classId:"cleric",name:"Heiliger Speer",icon:"⚡",kind:"holyspear",cooldown:15,talent:"heal_unlock_spear",description:"Ein langer Lichtstoß verursacht hohen Schaden."},
     cleric_radiance:{classId:"cleric",name:"Strahlende Gnade",icon:"☀",kind:"radiance",cooldown:24,talent:"heal_unlock_radiance",description:"Heilt die sichtbare Gruppe und gibt kurz Schutz."},
-    druid_radiance:{classId:"druid",name:"Smaragdblüte",icon:"❧",kind:"radiance",cooldown:24,talent:"heal_unlock_radiance",description:"Heilt die sichtbare Gruppe mit Naturenergie."}
+    cleric_judgment:{classId:"cleric",name:"Urteil des Lichts",icon:"☀",kind:"judgment",cooldown:14,talent:"cleric_unlock_judgment",action:"drain",power:1.55,healRatio:.55,color:"#fff08b",description:"Schädigt einen Gegner und heilt dich mit heiligem Licht."},
+    cleric_divine_nova:{classId:"cleric",name:"Göttliche Nova",icon:"✦",kind:"divinenova",cooldown:20,talent:"cleric_unlock_nova",action:"hybrid_nova",power:1.18,healPower:.82,radius:190,color:"#fff2a6",description:"Schädigt Gegner und heilt Verbündete gleichzeitig."},
+    cleric_beacon:{classId:"cleric",name:"Lichtzeichen",icon:"◎",kind:"beacon",cooldown:24,talent:"cleric_unlock_beacon",action:"zone_heal",power:.46,radius:115,duration:9,color:"#aaffcf",description:"Legt eine länger anhaltende Heilzone auf das ausgewählte Ziel."},
+    cleric_guardian_angel:{classId:"cleric",name:"Schutzengel",icon:"♢",kind:"guardianangel",cooldown:28,talent:"cleric_unlock_angel",action:"heal_shield",power:1.25,shieldPower:.48,color:"#dffaff",description:"Heilt einen Verbündeten stark und gibt zusätzlich einen Schild."},
+
+    druid_radiance:{classId:"druid",name:"Smaragdblüte",icon:"❧",kind:"radiance",cooldown:24,talent:"heal_unlock_radiance",description:"Heilt die sichtbare Gruppe mit Naturenergie."},
+    druid_regrowth:{classId:"druid",name:"Nachwachsen",icon:"🌿",kind:"regrowth",cooldown:15,talent:"druid_unlock_regrowth",action:"zone_heal",power:.56,radius:105,duration:8,color:"#72ef9b",description:"Eine konzentrierte Heilung über Zeit auf dem Ziel."},
+    druid_moonfire:{classId:"druid",name:"Mondfeuer",icon:"☾",kind:"moonfire",cooldown:10,talent:"druid_unlock_moonfire",action:"target_projectile",power:1.45,color:"#a7c9ff",dotPower:.32,description:"Ein schneller Mondstrahl mit nachwirkendem Schaden."},
+    druid_cyclone:{classId:"druid",name:"Zyklon",icon:"◌",kind:"cyclone",cooldown:18,talent:"druid_unlock_cyclone",action:"control",power:1.15,color:"#b7fff2",description:"Wirbelt das Ziel auf, verursacht Schaden und verzögert seinen Angriff."},
+    druid_barkskin:{classId:"druid",name:"Eisenborke",icon:"◈",kind:"barkskin",cooldown:24,talent:"druid_unlock_barkskin",action:"ally_shield",power:.64,color:"#8de19a",description:"Gibt dir oder einem Verbündeten einen Natur-Schutzschild."},
+    druid_tranquility:{classId:"druid",name:"Gelassenheit",icon:"✿",kind:"tranquility",cooldown:30,talent:"druid_unlock_tranquility",action:"group_zone_heal",power:.42,radius:210,duration:10,color:"#78f0a0",description:"Große anhaltende Gruppenheilung um den Druiden."}
   };
   const BASE_ABILITY_ICONS = {
     guardian:["🛡","♜","⚔","◈","◆"],berserker:["✹","⚡","➤","〽","☠"],ranger:["➹","❄","➤","◎","☄"],
@@ -172,7 +258,7 @@
     const extra=EXTRA_ABILITIES[id];return extra?{id,...extra}:null;
   }
   function abilityUnlocked(data,id){if(!id)return true;if(/^base:[0-4]$/.test(id))return true;if(id==="revive")return data.role==="healer";const extra=EXTRA_ABILITIES[id];return !!extra&&extra.classId===data.classId&&talentRank(data,extra.talent)>0;}
-  function abilityCatalog(data){const ids=["base:0","base:1","base:2","base:3","base:4"];if(data.role==="healer")ids.push("revive");if(data.classId==="guardian")ids.push("guardian_charge");const signature=classSignatureAbilityId(data.classId);if(signature)ids.push(signature);if(data.classId==="cleric")ids.push("cleric_holy_spear","cleric_radiance");if(data.classId==="druid")ids.push("druid_radiance");return ids.map(id=>abilityInfo(data.classId,id)).filter(Boolean);}
+  function abilityCatalog(data){const ids=["base:0","base:1","base:2","base:3","base:4"];if(data.role==="healer")ids.push("revive");for(const [id,extra] of Object.entries(EXTRA_ABILITIES))if(extra.classId===data.classId)ids.push(id);return [...new Set(ids)].map(id=>abilityInfo(data.classId,id)).filter(Boolean);}
   function ensureActionBarData(data){data.actionBars ||= {};let bar=Array.isArray(data.actionBars[data.classId])?data.actionBars[data.classId].slice(0,6):defaultActionBar(data.classId);while(bar.length<6)bar.push("");bar=bar.map(id=>abilityInfo(data.classId,String(id||""))?String(id):"");data.actionBars[data.classId]=bar;return bar;}
 
   const SLOT_DEFS = {
@@ -206,7 +292,16 @@
   const formatPower = value => value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : String(Math.round(value));
   const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const presetById = id => CHARACTER_PRESETS.find(p => p.id === id) || CHARACTER_PRESETS[0];
-  const talentTreeFor = role => TALENT_TREES[role] || TALENT_TREES.dps;
+  function talentTreeFor(value){
+    const data=value&&typeof value==="object"?value:null,role=data?.role||value||"dps",classId=data?.classId||"";
+    const base=TALENT_TREES[role]||TALENT_TREES.dps;
+    const tree=base.map(branch=>({...branch,nodes:branch.nodes.map(node=>({...node}))}));
+    for(const node of CLASS_ABILITY_NODES[classId]||[]){
+      const info=EXTRA_ABILITIES[node.ability],cooldown=Number(node.cooldown||info?.cooldown||0);
+      tree[clamp(Number(node.branch)||0,0,tree.length-1)].nodes.push({id:node.id,name:node.name,icon:node.icon,max:1,effect:"ability",ability:node.ability,text:`Fähigkeit freischalten · ${cooldown.toFixed(0)} s Abklingzeit`});
+    }
+    return tree;
+  }
   function talentRank(data, id){ return clamp(Math.floor(Number(data?.talents?.[id]) || 0), 0, 5); }
   function talentPointsTotal(data){ return Math.max(0, Math.floor((Math.max(1, Number(data?.level) || 1) - 1) / 2)); }
   function talentPointsSpent(data){
@@ -215,7 +310,7 @@
   function talentPointsAvailable(data){ return Math.max(0, talentPointsTotal(data) - talentPointsSpent(data)); }
   function talentBonuses(data){
     const out={health:0,damage:0,healing:0,armor:0,crit:0,haste:0,cooldown:0,shield:0,move:0,power:0};
-    for(const branch of talentTreeFor(data?.role)) for(const node of branch.nodes){
+    for(const branch of talentTreeFor(data)) for(const node of branch.nodes){
       const rank=clamp(talentRank(data,node.id),0,node.max);
       if(rank&&Object.prototype.hasOwnProperty.call(out,node.effect)) out[node.effect]+=rank*node.amount;
     }
@@ -444,29 +539,22 @@
     ctx.restore();
   }
   function drawFantasyCharacterSide(ctx,{a,preset,race,c,role,g,now,wide,walk,attack,casting,skin,hair,accent,armor,trim,portrait}){
-    const short=race==="ironkin",bodyScale=wide*(race==="hornborn"?1.08:1),headY=-82,torsoTop=-68,torsoBottom=-22,legLen=short?25:35,step=Math.sin(walk)*5;
-    if(!portrait){ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,7,24*wide,9,0,0,Math.PI*2);ctx.fill();}
-    // Das Cape liegt in der Seitenansicht sichtbar hinter dem Körper. Durch die Spiegelung
-    // der Gesamtfigur wechselt es beim Lauf nach links automatisch auf die rechte Seite.
-    if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"||race==="sylvan"||race==="voidkin"){ctx.fillStyle=`${accent}b5`;ctx.strokeStyle=trim;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-11*bodyScale,torsoTop+4);ctx.quadraticCurveTo(-32*bodyScale,torsoBottom+6,-24*bodyScale,torsoBottom+legLen+14);ctx.lineTo(-5*bodyScale,torsoBottom+legLen+4);ctx.lineTo(-3*bodyScale,torsoTop+8);ctx.closePath();ctx.fill();ctx.stroke();}
+    const short=race==="ironkin",bodyScale=wide*(race==="hornborn"?1.08:1),headY=-82,torsoTop=-68,torsoBottom=-22,legLen=short?25:35,stride=Math.sin(walk)*4.2,lift=Math.max(0,Math.cos(walk))*2.2;
+    if(!portrait){ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,8,25*wide,9,0,0,Math.PI*2);ctx.fill();}
+    // Cape konsequent hinter Rücken und Beinen.
+    if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"||race==="sylvan"||race==="voidkin"){ctx.fillStyle=`${accent}b5`;ctx.strokeStyle=trim;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-10*bodyScale,torsoTop+5);ctx.quadraticCurveTo(-31*bodyScale,torsoBottom+4,-26*bodyScale,torsoBottom+legLen+15);ctx.lineTo(-7*bodyScale,torsoBottom+legLen+7);ctx.lineTo(-3*bodyScale,torsoTop+8);ctx.closePath();ctx.fill();ctx.stroke();}
     if(race==="drakeborn"||race==="hornborn"){ctx.strokeStyle=race==="drakeborn"?skin:"#342925";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-9,-25);ctx.quadraticCurveTo(-34,-8,-39,9);ctx.stroke();}
-    // Hinteres Bein und hinterer Arm. Beide liegen nah am Körper statt seitlich abzustehen.
-    ctx.strokeStyle="#121a21";ctx.lineWidth=(short?12:10)*bodyScale;ctx.beginPath();ctx.moveTo(-4,torsoBottom);ctx.lineTo(-7-step*.35,torsoBottom+legLen);ctx.stroke();ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?10:7)*bodyScale;ctx.beginPath();ctx.moveTo(-7-step*.35,torsoBottom+legLen);ctx.lineTo(-18-step*.35,torsoBottom+legLen+3);ctx.stroke();
-    ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?13:9)*bodyScale;ctx.beginPath();ctx.moveTo(-4,torsoTop+10);ctx.lineTo(-8,torsoBottom-1+(attack?7:Math.sin(walk)*2));ctx.stroke();
-    // Profil des Oberkörpers. Nur eine schmale Brust-/Rückenlinie ist sichtbar.
+    const drawSideLeg=(front)=>{const dir=front?1:-1,hipX=front?5:-4,kneeX=dir*(5+stride*.55),footX=dir*(17+stride),kneeY=torsoBottom+legLen*.48+(front?lift:0),footY=torsoBottom+legLen+(front?0:lift*.5);ctx.strokeStyle=front?"#18242c":"#111920";ctx.lineWidth=(short?13:11)*bodyScale;ctx.beginPath();ctx.moveTo(hipX,torsoBottom);ctx.lineTo(kneeX,kneeY);ctx.lineTo(footX,footY);ctx.stroke();ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?10:8)*bodyScale;ctx.beginPath();ctx.moveTo(footX-2,footY);ctx.lineTo(footX+11,footY+2);ctx.stroke();};
+    drawSideLeg(false);
+    ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?13:9)*bodyScale;ctx.beginPath();ctx.moveTo(-4,torsoTop+10);ctx.lineTo(-9,torsoBottom-1-Math.sin(walk)*2);ctx.stroke();
     const profileW=(race==="hornborn"?18:race==="ironkin"?16:13)*bodyScale;ctx.shadowColor=armor;ctx.shadowBlur=13;const grad=ctx.createLinearGradient(-profileW,0,profileW,0);grad.addColorStop(0,"#111820");grad.addColorStop(.55,armor);grad.addColorStop(1,trim);ctx.fillStyle=grad;ctx.strokeStyle=trim;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-profileW,torsoTop+2);ctx.quadraticCurveTo(profileW+7,torsoTop+8,profileW,torsoBottom);ctx.lineTo(-profileW+4,torsoBottom);ctx.quadraticCurveTo(-profileW-5,torsoTop+24,-profileW,torsoTop+2);ctx.closePath();ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle="#10171dbb";ctx.fillRect(-profileW+2,torsoBottom-9,profileW*2-2,6);ctx.fillStyle=trim;ctx.fillRect(-profileW+3,torsoTop+19,profileW*1.75,4);
-    // Vorderes Bein und Arm liegen vor dem Körper und zeigen in Laufrichtung.
-    ctx.strokeStyle="#172129";ctx.lineWidth=(short?13:11)*bodyScale;ctx.beginPath();ctx.moveTo(5,torsoBottom);ctx.lineTo(8+step*.45,torsoBottom+legLen);ctx.stroke();ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?11:8)*bodyScale;ctx.beginPath();ctx.moveTo(8+step*.45,torsoBottom+legLen);ctx.lineTo(22+step*.45,torsoBottom+legLen+2);ctx.stroke();
-    ctx.fillStyle=g.helmet||armor;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-4,torsoTop+3);ctx.lineTo(17*bodyScale,torsoTop+8);ctx.lineTo(13*bodyScale,torsoTop+20);ctx.lineTo(-2,torsoTop+16);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?14:10)*bodyScale;ctx.beginPath();ctx.moveTo(7,torsoTop+12);ctx.lineTo(13,torsoBottom+(attack?11:Math.sin(walk)*-2));ctx.stroke();
-    // Kopf im Profil mit Nase/Schnauze und nur einem sichtbaren Auge.
+    drawSideLeg(true);
+    ctx.fillStyle=g.helmet||armor;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-4,torsoTop+3);ctx.lineTo(17*bodyScale,torsoTop+8);ctx.lineTo(13*bodyScale,torsoTop+20);ctx.lineTo(-2,torsoTop+16);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?14:10)*bodyScale;ctx.beginPath();ctx.moveTo(7,torsoTop+12);ctx.lineTo(14,torsoBottom+(attack?11:Math.sin(walk)*2));ctx.stroke();
     ctx.fillStyle=skin;ctx.strokeStyle="#151a1f";ctx.lineWidth=2;ctx.beginPath();if(race==="drakeborn"){ctx.moveTo(-11,headY-13);ctx.lineTo(12,headY-14);ctx.lineTo(23,headY-1);ctx.lineTo(9,headY+14);ctx.lineTo(-10,headY+10);ctx.closePath();}else if(race==="hornborn"){ctx.ellipse(0,headY,16*wide,19,0,0,Math.PI*2);}else{ctx.ellipse(0,headY,(race==="warborn"?14:12)*wide,16,0,0,Math.PI*2);}ctx.fill();ctx.stroke();
-    if(race==="hornborn"){ctx.fillStyle="#2a2220";ctx.beginPath();ctx.ellipse(11*wide,headY+7,12*wide,7,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#c78b42";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-6,headY-11);ctx.quadraticCurveTo(-24,headY-28,-34,headY-10);ctx.stroke();}
-    else if(race==="warborn"){ctx.fillStyle="#eee0b6";ctx.beginPath();ctx.moveTo(11,headY+8);ctx.lineTo(19,headY+16);ctx.lineTo(10,headY+13);ctx.fill();}
-    else{ctx.fillStyle=hair;ctx.beginPath();ctx.arc(-2,headY-5,13*wide,Math.PI,Math.PI*2);ctx.lineTo(8,headY);ctx.lineTo(-13,headY);ctx.fill();}
+    if(race==="hornborn"){ctx.fillStyle="#2a2220";ctx.beginPath();ctx.ellipse(11*wide,headY+7,12*wide,7,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#c78b42";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-6,headY-11);ctx.quadraticCurveTo(-24,headY-28,-34,headY-10);ctx.stroke();}else if(race==="warborn"){ctx.fillStyle="#eee0b6";ctx.beginPath();ctx.moveTo(11,headY+8);ctx.lineTo(19,headY+16);ctx.lineTo(10,headY+13);ctx.fill();}else{ctx.fillStyle=hair;ctx.beginPath();ctx.arc(-2,headY-5,13*wide,Math.PI,Math.PI*2);ctx.lineTo(8,headY);ctx.lineTo(-13,headY);ctx.fill();}
     if(g.helmetType==="hood"){ctx.fillStyle=g.helmet||armor;ctx.beginPath();ctx.arc(-2,headY-2,19*wide,Math.PI,Math.PI*2);ctx.lineTo(12,headY+12);ctx.lineTo(-14,headY+12);ctx.closePath();ctx.fill();}else if(g.helmetType==="helmet"){ctx.fillStyle=g.helmet||armor;ctx.beginPath();ctx.arc(-2,headY-2,17*wide,Math.PI,Math.PI*2);ctx.lineTo(12,headY+3);ctx.lineTo(-13,headY+3);ctx.closePath();ctx.fill();ctx.stroke();}
     const eyeColor=race==="revenant"?"#8cffbe":race==="voidkin"?"#d88cff":race==="drakeborn"?"#77efff":"#15181b";ctx.fillStyle=eyeColor;ctx.shadowColor=eyeColor;ctx.shadowBlur=(race==="revenant"||race==="voidkin"||race==="drakeborn")?10:0;ctx.beginPath();ctx.arc(7*wide,headY-2,2.2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(10*wide,headY+1);ctx.lineTo(18*wide,headY+5);ctx.lineTo(10*wide,headY+7);ctx.fill();
     if(role==="tank"){ctx.save();ctx.translate(-24,-43);ctx.fillStyle=g.offhand||"#496a7c";ctx.strokeStyle=trim;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,0,11,23,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();}
-    // Waffe/Zepter sitzt sichtbar in der vorderen Hand.
     ctx.save();ctx.translate(4,0);drawCharacterWeaponModel(ctx,c,g,1,casting,attack,1);ctx.restore();
   }
 
@@ -483,9 +571,9 @@
     if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"||race==="sylvan"||race==="voidkin"){
       ctx.fillStyle=`${accent}66`;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-bodyW+4,torsoTop+8);ctx.lineTo(-bodyW-10,torsoBottom+22);ctx.lineTo(0,7);ctx.lineTo(bodyW+10,torsoBottom+22);ctx.lineTo(bodyW-4,torsoTop+8);ctx.closePath();ctx.fill();ctx.stroke();
     }
-    const short=race==="ironkin";const legLen=short?26:35;
-    ctx.strokeStyle="#172129";ctx.lineWidth=(short?13:11)*wide;ctx.beginPath();ctx.moveTo(-8*wide,torsoBottom);ctx.lineTo((-9+legSwing)*wide,torsoBottom+legLen);ctx.moveTo(8*wide,torsoBottom);ctx.lineTo((9-legSwing)*wide,torsoBottom+legLen);ctx.stroke();
-    ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?11:8)*wide;ctx.beginPath();ctx.moveTo((-10+legSwing)*wide,torsoBottom+legLen);ctx.lineTo((-19+legSwing)*wide,torsoBottom+legLen+3);ctx.moveTo((10-legSwing)*wide,torsoBottom+legLen);ctx.lineTo((19-legSwing)*wide,torsoBottom+legLen+3);ctx.stroke();
+    const short=race==="ironkin";const legLen=short?26:35,stride=clamp(legSwing,-4.2,4.2),kneeY=torsoBottom+legLen*.48,footY=torsoBottom+legLen;
+    const drawFrontLeg=(dir)=>{const hipX=dir*8*wide,kneeX=(dir*8+stride*dir*.42)*wide,footX=(dir*11+stride*dir)*wide;ctx.strokeStyle=dir<0?"#172129":"#1b2831";ctx.lineWidth=(short?13:11)*wide;ctx.beginPath();ctx.moveTo(hipX,torsoBottom);ctx.lineTo(kneeX,kneeY);ctx.lineTo(footX,footY);ctx.stroke();ctx.strokeStyle=g.boots||armor;ctx.lineWidth=(short?11:8)*wide;ctx.beginPath();ctx.moveTo(footX,footY);ctx.lineTo(footX+dir*10*wide,footY+2);ctx.stroke();};
+    drawFrontLeg(-1);drawFrontLeg(1);
     if(race==="hornborn"){ctx.fillStyle="#231d1a";ctx.beginPath();ctx.moveTo(-22*wide,torsoBottom+legLen+1);ctx.lineTo(-8*wide,torsoBottom+legLen-6);ctx.lineTo(-13*wide,torsoBottom+legLen+8);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(22*wide,torsoBottom+legLen+1);ctx.lineTo(8*wide,torsoBottom+legLen-6);ctx.lineTo(13*wide,torsoBottom+legLen+8);ctx.closePath();ctx.fill();}
     ctx.shadowColor=armor;ctx.shadowBlur=14;const grad=ctx.createLinearGradient(-bodyW,0,bodyW,0);grad.addColorStop(0,"#101820");grad.addColorStop(.35,armor);grad.addColorStop(.65,armor);grad.addColorStop(1,"#101820");ctx.fillStyle=grad;ctx.strokeStyle=trim;ctx.lineWidth=2.5;
     ctx.beginPath();ctx.moveTo(-bodyW,torsoTop);ctx.quadraticCurveTo(-bodyW-7,torsoTop+22,-bodyW+1,torsoBottom);ctx.lineTo(bodyW-1,torsoBottom);ctx.quadraticCurveTo(bodyW+7,torsoTop+22,bodyW,torsoTop);ctx.quadraticCurveTo(0,torsoTop-13,-bodyW,torsoTop);ctx.closePath();ctx.fill();ctx.stroke();ctx.shadowBlur=0;
@@ -616,10 +704,21 @@
     UI.main.querySelectorAll("[data-dkl-class]").forEach(el=>el.addEventListener("click",()=>{const data=ensureState(),id=el.dataset.dklClass;if(!CLASSES[id]||CLASSES[id].role!==data.role)return;data.classId=id;data.inventory=starterInventory(data.classId);data.equipped={};normalizeCharacterData(data);safeSave();redraw();}));
     renderCharacterCanvases();updateHead();
   }
+  function effectiveAbilityCooldown(data,info){
+    if(!info)return 0;
+    const stats=playerStats(data),base=Math.max(.5,Number(info.cooldown||0));
+    if(info.kind==="holyshield")return 30;
+    return Math.max(.5,base*(1-clamp((stats.cooldownReduction||0)+(stats.haste||0)*.12,0,.45)));
+  }
+  function abilityCooldownText(data,info){
+    if(!info)return "";
+    const base=Math.max(.5,Number(info.cooldown||0)),effective=effectiveAbilityCooldown(data,info);
+    return Math.abs(base-effective)<.05?`${base.toFixed(1)} s Abklingzeit`:`${base.toFixed(1)} s Basis · ${effective.toFixed(1)} s aktuell`;
+  }
   function renderSkillTree(){
-    UI.view="skills";const d=ensureState(),available=talentPointsAvailable(d),total=talentPointsTotal(d),tree=talentTreeFor(d.role),bar=ensureActionBarData(d),catalog=abilityCatalog(d);
-    const slots=bar.map((id,index)=>{const info=abilityInfo(d.classId,id);return `<button data-dkl-action-edit-slot="${index}" class="${UI.actionEditSlot===index?"selected":""} ${info?"":"empty"}"><span>${index+1}</span>${abilityArtHtml(info)}<b>${esc(info?.name||"Leer")}</b><small>${info?"Aktive Belegung":"Fähigkeit auswählen"}</small></button>`;}).join("");
-    const abilities=catalog.map(info=>{const unlocked=abilityUnlocked(d,info.id),active=bar.includes(info.id);return `<button data-dkl-action-ability="${esc(info.id)}" class="${unlocked?"unlocked":"locked"} ${active?"equipped":""}" ${unlocked?"":"disabled"}>${abilityArtHtml(info)}<div><b>${esc(info.name)}</b><small>${esc(info.description||"")}</small><em>${unlocked?(active?"In Aktionsleiste":"Verfügbar"):`Im Skillbaum freischalten`}</em></div></button>`;}).join("");
+    UI.view="skills";const d=ensureState(),available=talentPointsAvailable(d),total=talentPointsTotal(d),tree=talentTreeFor(d),bar=ensureActionBarData(d),catalog=abilityCatalog(d);
+    const slots=bar.map((id,index)=>{const info=abilityInfo(d.classId,id);return `<button data-dkl-action-edit-slot="${index}" class="${UI.actionEditSlot===index?"selected":""} ${info?"":"empty"}"><span>${index+1}</span>${abilityArtHtml(info)}<b>${esc(info?.name||"Leer")}</b><small>${info?abilityCooldownText(d,info):"Fähigkeit auswählen"}</small></button>`;}).join("");
+    const abilities=catalog.map(info=>{const unlocked=abilityUnlocked(d,info.id),active=bar.includes(info.id),cooldown=abilityCooldownText(d,info);return `<button data-dkl-action-ability="${esc(info.id)}" class="${unlocked?"unlocked":"locked"} ${active?"equipped":""}" ${unlocked?"":"disabled"}>${abilityArtHtml(info)}<div><b>${esc(info.name)}</b><small>${esc(info.description||"")}</small><em>${unlocked?(active?"In Aktionsleiste":"Verfügbar"):`Im Skillbaum freischalten`} · ${esc(cooldown)}</em></div></button>`;}).join("");
     UI.main.innerHTML=`<div class="dkl-skill-page"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>← Charakter</button><div><small>SKILLBAUM & AKTIONSLEISTE</small><h2>${ROLES[d.role].icon} ${CLASSES[d.classId].name}</h2><p>Alle zwei Dungeon-Level erhältst du einen Talentpunkt. Neue Fähigkeiten können freigeschaltet und frei auf sechs Plätze gelegt werden.</p></div><div class="dkl-skill-points"><b>${available}</b><small>frei · ${total} gesamt</small></div></header>
       <section class="dkl-action-editor"><header><div><small>DEINE SECHS FELDER</small><h3>Aktionsleiste anpassen</h3><p>Wähle zuerst einen Platz und danach eine freigeschaltete Fähigkeit. Auch Wiederbelebung kann entfernt oder auf einen anderen Platz gelegt werden.</p></div><button class="dkl-btn danger" data-dkl-action-clear>Platz leeren</button></header><div class="dkl-action-editor-slots">${slots}</div><div class="dkl-action-library">${abilities}</div></section>
       <section class="dkl-skill-branches">${tree.map((branch,branchIndex)=>`<article style="--branch:${branchIndex}"><header><span>${branch.icon}</span><div><small>PFAD ${branchIndex+1}</small><h3>${branch.branch}</h3></div></header><div class="dkl-skill-nodes">${branch.nodes.map((node,index)=>{const rank=talentRank(d,node.id);return `<button data-dkl-talent="${node.id}" class="${rank?"active":""} ${rank>=node.max?"maxed":""}" style="--node:${index}"><span>${node.icon}</span><b>${node.name}</b><small>${node.text}</small><em>${rank}/${node.max}</em></button>`}).join("")}</div></article>`).join("")}</section><footer><button class="dkl-btn danger" data-dkl-talents-reset>Talente zurücksetzen</button><button class="dkl-btn primary" data-dkl-skills-inventory>Charakterfenster öffnen</button></footer></div>`;
@@ -627,8 +726,8 @@
     UI.main.querySelectorAll("[data-dkl-action-edit-slot]").forEach(btn=>btn.addEventListener("click",()=>{UI.actionEditSlot=clamp(Number(btn.dataset.dklActionEditSlot)||0,0,5);renderSkillTree();}));
     UI.main.querySelectorAll("[data-dkl-action-ability]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),id=btn.dataset.dklActionAbility;if(!abilityUnlocked(data,id))return toast("Fähigkeit gesperrt","Zuerst im Skillbaum freischalten.");setActionBarSlot(data,UI.actionEditSlot,id);renderSkillTree();}));
     UI.main.querySelector("[data-dkl-action-clear]").addEventListener("click",()=>{setActionBarSlot(ensureState(),UI.actionEditSlot,"");renderSkillTree();});
-    UI.main.querySelectorAll("[data-dkl-talent]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),node=talentTreeFor(data.role).flatMap(branch=>branch.nodes).find(n=>n.id===btn.dataset.dklTalent);if(!node)return;const rank=talentRank(data,node.id);if(rank>=node.max)return toast("Talent vollständig",node.name);if(talentPointsAvailable(data)<=0)return toast("Keine Talentpunkte","Alle zwei Level erhältst du einen neuen Punkt.");data.talents[node.id]=rank+1;safeSave();renderSkillTree();}));
-    UI.main.querySelector("[data-dkl-talents-reset]").addEventListener("click",()=>{if(!confirm("Alle Talentpunkte dieser Rolle zurücksetzen? Freigeschaltete Fähigkeiten werden aus der Aktionsleiste entfernt."))return;const data=ensureState();for(const branch of talentTreeFor(data.role))for(const node of branch.nodes)delete data.talents[node.id];const bar=ensureActionBarData(data);data.actionBars[data.classId]=bar.map(id=>abilityUnlocked(data,id)?id:"");safeSave();renderSkillTree();});
+    UI.main.querySelectorAll("[data-dkl-talent]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),node=talentTreeFor(data).flatMap(branch=>branch.nodes).find(n=>n.id===btn.dataset.dklTalent);if(!node)return;const rank=talentRank(data,node.id);if(rank>=node.max)return toast("Talent vollständig",node.name);if(talentPointsAvailable(data)<=0)return toast("Keine Talentpunkte","Alle zwei Level erhältst du einen neuen Punkt.");data.talents[node.id]=rank+1;safeSave();renderSkillTree();}));
+    UI.main.querySelector("[data-dkl-talents-reset]").addEventListener("click",()=>{if(!confirm("Alle Talentpunkte dieser Rolle zurücksetzen? Freigeschaltete Fähigkeiten werden aus der Aktionsleiste entfernt."))return;const data=ensureState();for(const branch of talentTreeFor(data))for(const node of branch.nodes)delete data.talents[node.id];const bar=ensureActionBarData(data);data.actionBars[data.classId]=bar.map(id=>abilityUnlocked(data,id)?id:"");safeSave();renderSkillTree();});
     updateHead();
   }
 
@@ -887,14 +986,39 @@
   function actionButtonHtml(classId,abilityId,slot){const info=abilityInfo(classId,abilityId);if(!info)return `<button data-dkl-action-slot="${slot}" class="empty"><i class="dkl-ready-sweep" data-dkl-action-fill="${slot}"></i><span class="dkl-action-number">${slot+1}</span><b>Leer</b>${abilityArtHtml(null)}<small data-dkl-action-cd="${slot}">Nicht belegt</small></button>`;return `<button data-dkl-action-slot="${slot}" class="ready"><i class="dkl-ready-sweep" data-dkl-action-fill="${slot}"></i><span class="dkl-action-number">${slot+1}</span><b>${esc(info.name)}</b>${abilityArtHtml(info)}<small data-dkl-action-cd="${slot}">Bereit</small></button>`;}
   function setActionBarSlot(data,slot,abilityId){const bar=ensureActionBarData(data);slot=clamp(Math.floor(Number(slot)||0),0,5);if(abilityId&&!abilityUnlocked(data,abilityId))return false;const existing=bar.indexOf(abilityId);if(abilityId&&existing>=0&&existing!==slot)[bar[existing],bar[slot]]=[bar[slot],bar[existing]];else bar[slot]=abilityId||"";data.actionBars[data.classId]=bar;safeSave();return true;}
   function actionCooldownFor(player,info){return Math.max(.5,Number(info?.cooldown||8)*(1-clamp((player.cooldownReduction||0)+player.haste*.12,0,.45)));}
-  function executeExtraAbility(s,p,id){const info=abilityInfo(p.classId,id),target=activeEnemyTarget(s,p,760);if(!info)return false;
-    if(id==="guardian_charge"){if(!target)return p.local?(showMessage("Gegner auswählen",1300),false):false;const angle=Math.atan2(target.y-p.y,target.x-p.x);tryMoveEntity(s,p,Math.cos(angle)*Math.min(120,Math.max(0,distance(p,target)-55)),Math.sin(angle)*Math.min(120,Math.max(0,distance(p,target)-55)));damageEnemy(s,target,p.damage*1.65,p);target.targetUid=p.uid;target.alerted=true;}
-    else if(id==="berserker_signature"){areaDamage(s,p.x,p.y,175,p.damage*2.1,p);}
-    else if(id==="ranger_signature"){if(!target)return p.local?(showMessage("Gegner auswählen",1300),false):false;if(p.hunterPet){p.hunterPet.attackAnim=.7;damageEnemy(s,target,p.damage*1.9,p);}else damageEnemy(s,target,p.damage*1.25,p);}
-    else if(id==="arcanist_signature"||id==="cleric_holy_spear"){if(!target)return p.local?(showMessage("Gegner auswählen",1300),false):false;const a=Math.atan2(target.y-p.y,target.x-p.x);s.projectiles.push({x:p.x,y:p.y-14,vx:Math.cos(a)*690,vy:Math.sin(a)*690,radius:9,damage:p.damage*(id==="cleric_holy_spear"?2.15:2.45),ownerUid:p.uid,friendly:true,life:1.8,color:id==="cleric_holy_spear"?"#fff09a":"#9bdcff",homingId:target.id,kind:"penance",trail:68});}
-    else if(id==="warlock_signature"){if(!target)return p.local?(showMessage("Gegner auswählen",1300),false):false;areaDamage(s,target.x,target.y,180,p.damage*2.3,p);}
-    else if(id==="cleric_radiance"||id==="druid_radiance"){for(const ally of s.players)if(!ally.dead&&lineWalkable(s,p,ally,5)){healPlayer(s,ally,p.healing*1.25);ally.shield=Math.max(ally.shield||0,Math.round(ally.maxHp*.12));}s.effects.push({type:id==="druid_radiance"?"cleanse":"lightwave",x:p.x,y:p.y,radius:170,life:1.1,color:id==="druid_radiance"?"#72f39a":"#fff2a0"});}
-    else return false;p.castAnim=.8;p.attackAnim=.3;p.skillAnim=7;s.effects.push({type:"skill",x:target?.x||p.x,y:target?.y||p.y,radius:115,life:.8,color:p.color});playSound("skill");return true;
+  function executeExtraAbility(s,p,id){
+    const info=abilityInfo(p.classId,id),target=activeEnemyTarget(s,p,780),ally=activePlayerTarget(s,p,false)||p;if(!info)return false;
+    const requireTarget=()=>{if(target)return true;if(p.local)showMessage("Gegner auswählen",1300);return false;};
+    const castProjectile=(damageMultiplier,color=info.color||p.color,extra={})=>{if(!requireTarget())return false;const a=Math.atan2(target.y-p.y,target.x-p.x);s.projectiles.push({x:p.x,y:p.y-14,vx:Math.cos(a)*(extra.speed||690),vy:Math.sin(a)*(extra.speed||690),radius:extra.radius||8,damage:p.damage*damageMultiplier,ownerUid:p.uid,friendly:true,life:extra.life||1.8,color,homingId:target.id,kind:extra.kind||info.kind,trail:extra.trail||52,splashRadius:extra.splashRadius||0,splashPower:extra.splashPower||0,dotPower:extra.dotPower||0});return true;};
+    let effectTarget=target||ally||p,effectType=info.kind||"skill",used=true;
+    if(id==="guardian_charge"){if(!requireTarget())return false;const angle=Math.atan2(target.y-p.y,target.x-p.x);tryMoveEntity(s,p,Math.cos(angle)*Math.min(120,Math.max(0,distance(p,target)-55)),Math.sin(angle)*Math.min(120,Math.max(0,distance(p,target)-55)));damageEnemy(s,target,p.damage*1.65,p);target.targetUid=p.uid;target.alerted=true;}
+    else if(id==="berserker_signature"){areaDamage(s,p.x,p.y,175,p.damage*2.1,p);effectTarget=p;effectType="bloodburst";}
+    else if(id==="ranger_signature"){if(!requireTarget())return false;if(p.hunterPet){p.hunterPet.attackAnim=.7;damageEnemy(s,target,p.damage*1.9,p);}else damageEnemy(s,target,p.damage*1.25,p);effectType="natureburst";}
+    else if(id==="arcanist_signature"||id==="cleric_holy_spear"){used=castProjectile(id==="cleric_holy_spear"?2.15:2.45,id==="cleric_holy_spear"?"#fff09a":"#9bdcff",{radius:9,kind:"penance",trail:68});effectType=id==="cleric_holy_spear"?"lightwave":"frostburst";}
+    else if(id==="warlock_signature"){if(!requireTarget())return false;areaDamage(s,target.x,target.y,180,p.damage*2.3,p);effectType="voidburst";}
+    else if(id==="cleric_radiance"||id==="druid_radiance"){for(const member of s.players)if(!member.dead&&lineWalkable(s,p,member,5)){healPlayer(s,member,p.healing*1.25);member.shield=Math.max(member.shield||0,Math.round(member.maxHp*.12));}effectTarget=p;effectType=id==="druid_radiance"?"natureburst":"lightwave";}
+    else if(info.action==="target_projectile"){used=castProjectile(info.power||1.4,info.color,{radius:info.kind==="soulfire"?10:7,speed:info.kind==="soulfire"?520:700,kind:info.kind,trail:info.kind==="soulfire"?74:56,splashRadius:info.splash||0,splashPower:(info.power||1.4)*.55,dotPower:info.dotPower||0});effectType=info.kind.includes("fire")?"fireburst":info.kind.includes("poison")||info.kind.includes("moon")?"natureburst":"skill";}
+    else if(info.action==="area_damage"){areaDamage(s,p.x,p.y,info.radius||165,p.damage*(info.power||1.5),p);effectTarget=p;effectType=info.kind==="groundslam"?"groundslam":info.kind==="arcanenova"?"arcaneburst":"bloodburst";}
+    else if(info.action==="group_shield"){for(const member of s.players)if(!member.dead&&lineWalkable(s,p,member,5))member.shield=Math.max(member.shield||0,Math.round(member.maxHp*(info.power||.2)*(1+(p.shieldBonus||0))));for(const enemy of s.enemies)if(!enemy.dead&&distance(p,enemy)<360){enemy.targetUid=p.uid;enemy.alerted=true;}effectTarget=p;effectType="shieldburst";}
+    else if(info.action==="last_stand"){healPlayer(s,p,p.maxHp*(info.power||.4));p.shield=Math.max(p.shield||0,Math.round(p.maxHp*.65*(1+(p.shieldBonus||0))));p.buffs.fortress=Math.max(p.buffs.fortress||0,10);effectTarget=p;effectType="shieldburst";}
+    else if(info.action==="combat_buff"){p.buffs.haste=Math.max(p.buffs.haste||0,10);p.buffs.damageBoost=Math.max(p.buffs.damageBoost||0,10);effectTarget=p;effectType="bloodburst";}
+    else if(info.action==="execute"){if(!requireTarget())return false;const bonus=target.hp/Math.max(1,target.maxHp)<.35?1.75:1;damageEnemy(s,target,p.damage*(info.power||2.2)*bonus,p);effectType="bloodburst";}
+    else if(info.action==="dash_area"){if(!requireTarget())return false;const angle=Math.atan2(target.y-p.y,target.x-p.x),travel=Math.min(170,Math.max(0,distance(p,target)-48));tryMoveEntity(s,p,Math.cos(angle)*travel,Math.sin(angle)*travel);areaDamage(s,p.x,p.y,info.radius||145,p.damage*(info.power||1.7),p);effectTarget=p;effectType="groundslam";}
+    else if(info.action==="volley"){if(!requireTarget())return false;const base=Math.atan2(target.y-p.y,target.x-p.x);for(let i=0;i<5;i++){const a=base+(i-2)*.08;s.projectiles.push({x:p.x,y:p.y-10,vx:Math.cos(a)*690,vy:Math.sin(a)*690,radius:5,damage:p.damage*(info.power||.7),ownerUid:p.uid,friendly:true,life:1.6,color:info.color,kind:"volley",trail:42});}effectType="arrowrain";}
+    else if(info.action==="pet_heal"){if(!p.hunterPet){if(p.local)showMessage("Kein aktiver Begleiter",1300);return false;}p.hunterPet.hp=Math.min(p.hunterPet.maxHp,p.hunterPet.hp+p.hunterPet.maxHp*(info.power||.6));p.hunterPet.shield=Math.round(p.hunterPet.maxHp*.3);effectTarget=p.hunterPet;effectType="natureburst";s.texts.push({x:p.hunterPet.x,y:p.hunterPet.y-30,text:"TIER GEHEILT",color:info.color,life:1});}
+    else if(info.action==="zone_damage"){if(!requireTarget())return false;s.zones.push({id:uid(),type:"damage",x:target.x,y:target.y,radius:info.radius||150,life:info.duration||7,maxLife:info.duration||7,tick:0,ownerUid:p.uid,amount:Math.max(1,p.damage*(info.power||.6)),color:info.color});effectType=info.kind.includes("frost")?"frostburst":info.kind.includes("curse")?"voidburst":"skill";}
+    else if(info.action==="blink"){const dx=Math.cos(p.angle)*185,dy=Math.sin(p.angle)*185;tryMoveEntity(s,p,dx,0);tryMoveEntity(s,p,0,dy);effectTarget=p;effectType="arcaneburst";}
+    else if(info.action==="self_shield"){p.shield=Math.max(p.shield||0,Math.round(p.maxHp*(info.power||.65)*(1+(p.shieldBonus||0))));effectTarget=p;effectType="shieldburst";}
+    else if(info.action==="drain"){if(!requireTarget())return false;const raw=p.damage*(info.power||1.4),before=target.hp;damageEnemy(s,target,raw,p);const dealt=Math.max(1,before-target.hp);healPlayer(s,p,dealt*(info.healRatio||.45));effectType="voidburst";}
+    else if(info.action==="self_shield_aura"){p.shield=Math.max(p.shield||0,Math.round(p.maxHp*(info.power||.55)*(1+(p.shieldBonus||0))));areaDamage(s,p.x,p.y,150,p.damage*.75,p);effectTarget=p;effectType="voidburst";}
+    else if(info.action==="hybrid_nova"){areaDamage(s,p.x,p.y,info.radius||190,p.damage*(info.power||1.1),p);for(const member of s.players)if(!member.dead&&distance(p,member)<(info.radius||190)+member.radius)healPlayer(s,member,p.healing*(info.healPower||.8));effectTarget=p;effectType="lightwave";}
+    else if(info.action==="zone_heal"){const anchor=ally||p;s.zones.push({id:uid(),type:"heal",x:anchor.x,y:anchor.y,radius:info.radius||110,life:info.duration||8,maxLife:info.duration||8,tick:0,ownerUid:p.uid,amount:Math.max(1,p.healing*(info.power||.5)),color:info.color});effectTarget=anchor;effectType="natureburst";}
+    else if(info.action==="heal_shield"){healPlayer(s,ally,p.healing*(info.power||1.2));ally.shield=Math.max(ally.shield||0,Math.round(ally.maxHp*(info.shieldPower||.4)*(1+(p.shieldBonus||0))));effectTarget=ally;effectType="shieldburst";}
+    else if(info.action==="control"){if(!requireTarget())return false;damageEnemy(s,target,p.damage*(info.power||1.1),p);target.specialCd=(target.specialCd||0)+3;target.attackCd=(target.attackCd||0)+2;effectType="frostburst";}
+    else if(info.action==="ally_shield"){const shieldTarget=ally||p;shieldTarget.shield=Math.max(shieldTarget.shield||0,Math.round(shieldTarget.maxHp*(info.power||.6)*(1+(p.shieldBonus||0))));effectTarget=shieldTarget;effectType="natureburst";}
+    else if(info.action==="group_zone_heal"){s.zones.push({id:uid(),type:"heal",x:p.x,y:p.y,radius:info.radius||210,life:info.duration||10,maxLife:info.duration||10,tick:0,ownerUid:p.uid,amount:Math.max(1,p.healing*(info.power||.42)),color:info.color});effectTarget=p;effectType="natureburst";}
+    else return false;
+    if(!used)return false;p.castAnim=.8;p.attackAnim=.3;p.skillAnim=7;s.effects.push({type:effectType,x:effectTarget?.x||p.x,y:effectTarget?.y||p.y,radius:info.radius||115,life:1,color:info.color||p.color});playSound("skill");return true;
   }
   function executeAbilityId(s,p,abilityId,slot=-1){const info=abilityInfo(p.classId,abilityId);if(!info)return false;let used=false;if(info.baseIndex!=null)used=executeSkill(s,p,info.baseIndex,{actionSlot:slot});else if(abilityId==="revive"){used=executeRevive(s,p);if(used&&p.local&&slot>=0){s.actionCooldowns[slot]=actionCooldownFor(p,info);s.actionCooldownTotals[slot]=s.actionCooldowns[slot];}}else{used=executeExtraAbility(s,p,abilityId);if(used&&p.local&&slot>=0){s.actionCooldowns[slot]=actionCooldownFor(p,info);s.actionCooldownTotals[slot]=s.actionCooldowns[slot];}}return used;}
   function useActionSlot(slot){unlockAudio();const s=UI.session;if(!s||s.player.dead)return;slot=clamp(Math.floor(Number(slot)||0),0,5);if((s.actionCooldowns[slot]||0)>0)return;const id=s.player.actionBar?.[slot]||"";if(!id)return showMessage("Dieser Platz ist leer",900);const used=executeAbilityId(s,s.player,id,slot);if(!used)return;if(s.online&&!s.host){s.player.actionSeq=(s.player.actionSeq||0)+1;s.player.actionSlotRequested=slot+1;}}
@@ -1173,8 +1297,8 @@
     }
   }
   function updatePartyCombat(s, dt) { for (const p of s.players) { if (p.local || p.dead) continue; p.attackCd = Math.max(0, p.attackCd - dt); const target=s.enemies.find(e=>e.id===p.targetEnemyId&&!e.dead); if (p.wantAttack && target && distance(p,target)<=p.range+12 && lineWalkable(s,p,target,8)) autoAttackPlayer(s, p, target); if(p.actionSlotRequested){const slot=p.actionSlotRequested-1,ability=p.actionBar?.[slot]||"";executeAbilityId(s,p,ability,-1);p.actionSlotRequested=0;}else if (p.skillRequested) { executeSkill(s, p, p.skillRequested - 1); p.skillRequested = 0; } if(p.reviveRequested){executeRevive(s,p);p.reviveRequested=false;} } }
-  function autoAttackPlayer(s, p, target) { if (p.attackCd > 0 || target.dead || distance(p,target)>p.range+12 || !lineWalkable(s,p,target,8)) return; p.attackCd = 1 / (p.attackRate * (1 + p.haste)); p.angle = Math.atan2(target.y - p.y, target.x - p.x); p.attackAnim=.24; if (p.projectile) s.projectiles.push({ x: p.x, y: p.y, vx: Math.cos(p.angle) * 620, vy: Math.sin(p.angle) * 620, radius: 5, damage: rollDamage(p.damage, p.crit), ownerUid: p.uid, friendly: true, life: 1.4, color: p.color }); else damageEnemy(s, target, rollDamage(p.damage, p.crit), p); playSound("attack"); }
-  function rollDamage(base, crit) { return Math.round(base * rand(.88, 1.12) * (Math.random() < crit ? 1.75 : 1)); }
+  function autoAttackPlayer(s, p, target) { if (p.attackCd > 0 || target.dead || distance(p,target)>p.range+12 || !lineWalkable(s,p,target,8)) return; p.attackCd = 1 / (p.attackRate * (1 + p.haste)); p.angle = Math.atan2(target.y - p.y, target.x - p.x); p.attackAnim=.24; if (p.projectile) s.projectiles.push({ x: p.x, y: p.y, vx: Math.cos(p.angle) * 620, vy: Math.sin(p.angle) * 620, radius: 5, damage: rollDamage(p.damage, p.crit, p), ownerUid: p.uid, friendly: true, life: 1.4, color: p.color }); else damageEnemy(s, target, rollDamage(p.damage, p.crit, p), p); playSound("attack"); }
+  function rollDamage(base, crit, source=null) { const boost=source?.buffs?.damageBoost>0?1.28:1;return Math.round(base*boost*rand(.88, 1.12)*(Math.random()<crit?1.75:1)); }
   function nearestEnemy(s,p,max=Infinity){let best=null,bestD=max;for(const e of s.enemies){if(e.dead||!lineWalkable(s,p,e,7))continue;const d=distance(p,e);if(d<bestD){bestD=d;best=e;}}return best;}
   function spawnGroundLoot(s,enemy){
     if(!s||!enemy)return;const d=ensureState(),baseLevel=Math.max(d.level,s.dungeon.level+s.room),drops=[];
@@ -1240,7 +1364,7 @@
       b.x += b.vx * dt;b.y += b.vy * dt;b.life -= dt;
       if(b.healing&&healTarget&&distance(b,healTarget)<=b.radius+healTarget.radius+5){healPlayer(s,healTarget,b.healAmount||1);b.life=0;continue;}
       if (b.life <= 0 || !isWalkable(s,b.x,b.y,Math.max(2,b.radius*.45))) { b.life=0; continue; }
-      if (b.friendly&&!b.healing) { for (const e of s.enemies) { if (e.dead || distance(b, e) > b.radius + e.radius) continue; damageEnemy(s, e, b.damage, s.players.find(p => p.uid === b.ownerUid)); b.life = 0; break; } }
+      if (b.friendly&&!b.healing) { for (const e of s.enemies) { if (e.dead || distance(b, e) > b.radius + e.radius) continue; const owner=s.players.find(p => p.uid === b.ownerUid);damageEnemy(s, e, b.damage, owner);if(b.splashRadius)areaDamage(s,e.x,e.y,b.splashRadius,(b.splashPower||.5)*(owner?.damage||b.damage),owner);if(b.dotPower)s.zones.push({id:uid(),type:"damage",x:e.x,y:e.y,radius:80,life:5,maxLife:5,tick:0,ownerUid:b.ownerUid,amount:Math.max(1,(owner?.damage||b.damage)*b.dotPower),color:b.color});b.life = 0; break; } }
       else if(!b.friendly){ for (const player of s.players) { if (player.dead || distance(b, player) > b.radius + player.radius) continue; damagePlayer(s, player, b.damage, null); b.life = 0; break; } }
     }
     s.projectiles = s.projectiles.filter(b => b.life > 0 && b.x > -50 && b.y > -50 && b.x < WORLD_W + 50 && b.y < WORLD_H + 50);
@@ -1509,7 +1633,13 @@
   function drawEffect(ctx,s,e){
     const x=sx(s,e.x),y=sy(s,e.y),life=clamp(e.life,0,1);ctx.save();ctx.translate(x,y);ctx.globalAlpha=life;ctx.shadowColor=e.color;ctx.shadowBlur=18;
     if(e.type==="lightwave"){ctx.strokeStyle="#fff6b0";ctx.lineWidth=7;for(let i=0;i<3;i++){ctx.globalAlpha=life*(1-i*.2);ctx.beginPath();ctx.arc(0,0,(28+i*22)*(1+(1-life)*.7),-Math.PI*.82,-Math.PI*.18);ctx.stroke();}ctx.fillStyle="#fff9c9";for(let i=0;i<8;i++){const a=-Math.PI*.85+i*Math.PI*.1,r=35+(1-life)*70;ctx.beginPath();ctx.arc(Math.cos(a)*r,Math.sin(a)*r,3,0,Math.PI*2);ctx.fill();}}
-    else if(e.type==="cleanse"){ctx.fillStyle="#78f29a";for(let i=0;i<12;i++){const a=i*Math.PI/6+(1-life)*2,r=28+(1-life)*60;ctx.save();ctx.translate(Math.cos(a)*r,Math.sin(a)*r);ctx.rotate(a);ctx.beginPath();ctx.ellipse(0,0,8,3,0,0,Math.PI*2);ctx.fill();ctx.restore();}}
+    else if(e.type==="cleanse"||e.type==="natureburst"){ctx.fillStyle=e.type==="cleanse"?"#78f29a":e.color;for(let i=0;i<12;i++){const a=i*Math.PI/6+(1-life)*2,r=28+(1-life)*60;ctx.save();ctx.translate(Math.cos(a)*r,Math.sin(a)*r);ctx.rotate(a);ctx.beginPath();ctx.ellipse(0,0,8,3,0,0,Math.PI*2);ctx.fill();ctx.restore();}}
+    else if(e.type==="shieldburst"){ctx.strokeStyle="#dffaff";ctx.lineWidth=5;for(let i=0;i<3;i++){ctx.globalAlpha=life*(1-i*.18);ctx.beginPath();ctx.arc(0,0,(34+i*17)*(1+(1-life)*.3),Math.PI*.08,Math.PI*.92);ctx.stroke();}}
+    else if(e.type==="fireburst"){ctx.strokeStyle="#ff9b55";ctx.lineWidth=5;for(let i=0;i<10;i++){const a=i*Math.PI/5,r=22+(1-life)*65;ctx.beginPath();ctx.moveTo(Math.cos(a)*r*.25,Math.sin(a)*r*.25);ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);ctx.stroke();}}
+    else if(e.type==="frostburst"){ctx.strokeStyle="#a7e9ff";ctx.lineWidth=4;for(let i=0;i<6;i++){const a=i*Math.PI/3,r=55*(1+(1-life)*.35);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);ctx.stroke();}}
+    else if(e.type==="voidburst"||e.type==="arcaneburst"){ctx.strokeStyle=e.color;ctx.lineWidth=4;for(let i=0;i<3;i++){ctx.globalAlpha=life*(1-i*.2);ctx.beginPath();ctx.ellipse(0,0,(28+i*18)*(1+(1-life)*.4),(18+i*13)*(1+(1-life)*.4),i*.45,0,Math.PI*2);ctx.stroke();}}
+    else if(e.type==="bloodburst"||e.type==="groundslam"){ctx.strokeStyle=e.color;ctx.lineWidth=6;for(let i=0;i<7;i++){const a=-Math.PI*.9+i*Math.PI*.3,r=30+(1-life)*65;ctx.beginPath();ctx.moveTo(Math.cos(a)*r*.2,Math.sin(a)*r*.2);ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);ctx.stroke();}}
+    else if(e.type==="arrowrain"){ctx.strokeStyle=e.color;ctx.lineWidth=3;for(let i=0;i<7;i++){const ox=(i-3)*13;ctx.beginPath();ctx.moveTo(ox,-55-(1-life)*20);ctx.lineTo(ox+7,18);ctx.stroke();}}
     else{ctx.strokeStyle=e.color;ctx.fillStyle=`${e.color}22`;ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,0,e.radius*(1+(1-life)*.25),0,Math.PI*2);ctx.fill();ctx.stroke();}
     ctx.restore();
   }

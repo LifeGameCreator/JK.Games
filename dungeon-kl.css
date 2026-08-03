@@ -181,3 +181,17 @@ body.dungeon-kl-open{overflow:hidden}.dkl-modal{position:fixed;inset:0;z-index:2
   .dkl-mmo-actionbar.target-combat .dkl-ability-art{width:34px;height:34px;border-radius:8px}
   .dkl-mmo-actionbar.target-combat .dkl-ability-art>em{font-size:16px}
 }
+
+/* V168: erweiterte Skillbibliothek und stabile Bein-/Aktionsdarstellung */
+.dkl-action-library [data-dkl-action-ability] em{display:block;margin-top:6px;color:#85e9c5;font-size:10px;font-style:normal;font-weight:800}
+.dkl-action-editor-slots>button small{min-height:26px;line-height:1.25;color:#9fdcc9}
+.dkl-skill-nodes button small{min-height:28px;line-height:1.25}
+.dkl-ability-art.shieldthrow,.dkl-ability-art.guardianbanner,.dkl-ability-art.laststand,.dkl-ability-art.prismbarrier,.dkl-ability-art.guardianangel,.dkl-ability-art.barkskin{background:radial-gradient(circle,#eaffff,#4babc6 42%,#10243b 76%)}
+.dkl-ability-art.groundslam,.dkl-ability-art.warleap{background:radial-gradient(circle,#ffd27a,#9a542c 43%,#29160c 76%)}
+.dkl-ability-art.cleave,.dkl-ability-art.rage,.dkl-ability-art.execute{background:radial-gradient(circle,#ffb0b9,#d83c57 40%,#3b0b15 76%)}
+.dkl-ability-art.poisonarrow,.dkl-ability-art.mendpet,.dkl-ability-art.regrowth,.dkl-ability-art.tranquility{background:radial-gradient(circle,#ddffd8,#4dad66 42%,#0b3219 76%)}
+.dkl-ability-art.volley,.dkl-ability-art.frosttrap,.dkl-ability-art.frostburst,.dkl-ability-art.cyclone{background:radial-gradient(circle,#e9fbff,#5aaed6 42%,#112d45 76%)}
+.dkl-ability-art.fireball,.dkl-ability-art.soulfire{background:radial-gradient(circle,#fff0b3,#ff7e35 42%,#4a1608 76%)}
+.dkl-ability-art.arcanenova,.dkl-ability-art.blink,.dkl-ability-art.curserain,.dkl-ability-art.demonguard,.dkl-ability-art.drain{background:radial-gradient(circle,#f0d7ff,#9e55df 42%,#251044 76%)}
+.dkl-ability-art.divinenova,.dkl-ability-art.judgment,.dkl-ability-art.beacon{background:radial-gradient(circle,#fffbd1,#dfb53d 42%,#45300a 76%)}
+@media(max-width:900px){.dkl-action-library [data-dkl-action-ability] em{font-size:9px}.dkl-action-editor-slots>button small{font-size:8px}}
