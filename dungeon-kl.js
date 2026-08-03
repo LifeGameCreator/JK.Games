@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-dungeon-kl-v164-projectile-render-character-stability-fix";
+  const VERSION = "20260803-dungeon-kl-v166-healer-target-chest-lock-character-lock-preview-fix";
   const MAX_LEVEL = 100;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
@@ -43,7 +43,7 @@
     berserker: { role: "dps", name: "Klingenbrecher", icon: "🗡", weaponType: "blade", offhand: "focus", range: 105, attackRate: 1.35, projectile: false, color: "#ff6c72", skills: [
       ["Wirbelklinge", "Mehrfachtreffer im Kreis."], ["Bluttempo", "Erhöht Angriffstempo."], ["Sprungschlag", "Springt zum Ziel."], ["Rissklinge", "Gerader Durchbruchangriff."], ["Hinrichtung", "Extremer Schaden gegen geschwächte Ziele."]
     ]},
-    ranger: { role: "dps", name: "Runenbogner", icon: "🏹", weaponType: "bow", offhand: "quiver", range: 520, attackRate: 1.1, projectile: true, color: "#9be866", skills: [
+    ranger: { role: "dps", name: "Jäger", icon: "🏹", weaponType: "bow", offhand: "quiver", range: 520, attackRate: 1.1, projectile: true, color: "#9be866", skills: [
       ["Dreifachpfeil", "Schießt drei Pfeile."], ["Frostfalle", "Verlangsamt Gegner im Bereich."], ["Durchbohrer", "Pfeil durchschlägt mehrere Ziele."], ["Adlerauge", "Erhöht kritische Treffer."], ["Pfeilsturm", "Großer Pfeilregen im Zielgebiet."]
     ]},
     arcanist: { role: "dps", name: "Arkanmagier", icon: "🔮", weaponType: "staff", offhand: "orb", range: 480, attackRate: .9, projectile: true, color: "#ac78ff", skills: [
@@ -61,10 +61,10 @@
   };
 
   const DUNGEONS = [
-    { id: "crypt", name: "Krypta der Asche", level: 1, rooms: 10, theme: "ember", layout: "catacomb", color: "#ff8056", creatures: ["Aschekriecher", "Knochensoldat", "Glutkultist"], bosses: ["Torwächter Morak", "Aschenbestie", "König der leeren Gruft"] },
-    { id: "grove", name: "Verdorbener Hain", level: 8, rooms: 11, theme: "forest", layout: "grove", color: "#76dc78", creatures: ["Dornenwolf", "Pilzwächter", "Verwachsener Jäger"], bosses: ["Wurzelmutter", "Der faule Hirsch", "Herz des Hains"] },
-    { id: "frost", name: "Frostzitadelle", level: 16, rooms: 12, theme: "ice", layout: "citadel", color: "#6edcff", creatures: ["Eissplitter", "Frostlegionär", "Schneeschamane"], bosses: ["Wächter Khar", "Weiße Hydra", "Königin Iskara"] },
-    { id: "prison", name: "Versunkenes Gefängnis", level: 22, rooms: 12, theme: "water", layout: "flooded", color: "#48cfff", creatures: ["Kettengeist", "Sumpfwächter", "Ertrunkener Schütze"], bosses: ["Kerkermeister Voss", "Flutkoloss", "König der Ertrunkenen"] },
+    { id: "crypt", name: "Krypta der Asche", level: 1, rooms: 10, theme: "ember", layout: "catacomb", color: "#ff8056", creatures: ["Aschekriecher", "Aschehund", "Knochensoldat", "Glutkultist"], bosses: ["Torwächter Morak", "Aschenbestie", "König der leeren Gruft"] },
+    { id: "grove", name: "Verdorbener Hain", level: 8, rooms: 11, theme: "forest", layout: "grove", color: "#76dc78", creatures: ["Dornenwolf", "Mooshund", "Pilzwächter", "Verwachsener Jäger"], bosses: ["Wurzelmutter", "Der faule Hirsch", "Herz des Hains"] },
+    { id: "frost", name: "Frostzitadelle", level: 16, rooms: 12, theme: "ice", layout: "citadel", color: "#6edcff", creatures: ["Frostwolf", "Eissplitter", "Frostlegionär", "Schneeschamane"], bosses: ["Wächter Khar", "Weiße Hydra", "Königin Iskara"] },
+    { id: "prison", name: "Versunkenes Gefängnis", level: 22, rooms: 12, theme: "water", layout: "flooded", color: "#48cfff", creatures: ["Kerkerhund", "Kettengeist", "Sumpfwächter", "Ertrunkener Schütze"], bosses: ["Kerkermeister Voss", "Flutkoloss", "König der Ertrunkenen"] },
     { id: "storm", name: "Sturmobservatorium", level: 25, rooms: 12, theme: "storm", layout: "tower", color: "#8798ff", creatures: ["Sturmdrohne", "Blitzjäger", "Himmelswächter"], bosses: ["Leiter VII", "Donnerkoloss", "Astrax der Sturmseher"] },
     { id: "forge", name: "Obsidian-Schmiede", level: 30, rooms: 13, theme: "forge", layout: "forge", color: "#ff784f", creatures: ["Schlackengolem", "Schmiededämon", "Glutarmbrustschütze"], bosses: ["Meister Krov", "Obsidianriese", "Die lebende Esse"] },
     { id: "abyss", name: "Abgrund von Veyra", level: 35, rooms: 13, theme: "void", layout: "abyss", color: "#c76cff", creatures: ["Leerenmade", "Rissschütze", "Schattenritter"], bosses: ["Risshüter", "Namenloser Schlund", "Veyra die Unendliche"] },
@@ -160,7 +160,7 @@
   const UI = {
     overlay: null, main: null, head: null, toastTimer: 0, phoneItem: "", view: "home", selectedDungeon: "crypt", selectedPartySize: 1,
     inventoryRarity: "all", inventorySlot: "all", inventorySearch: "", shopRole: "all", auctionLoading: false, auctionItems: [], party: null,
-    session: null, raf: 0, last: 0, keys: Object.create(null), pointer: { x: 0, y: 0, down: false }, audio: null, onlineUnsubs: [], timers: [], loadingToken: 0
+    session: null, raf: 0, last: 0, keys: Object.create(null), pointer: { x: 0, y: 0, down: false }, audio: null, onlineUnsubs: [], timers: [], loadingToken: 0, previewFacing: "front"
   };
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -285,6 +285,31 @@
   function starterInventory(classId) {
     return SLOT_KEYS.map(slot => createItem(1, "common", slot, classId));
   }
+  function starterHunterPet(level=1){
+    return { id: uid(), species:"wolf", name:"Runenwolf", level:clamp(Math.floor(level)||1,1,MAX_LEVEL), loyalty:1, acquiredAt:Date.now() };
+  }
+  function ensureHunterData(data){
+    data.hunter ||= { pets:[], activeId:"" };
+    data.hunter.pets = Array.isArray(data.hunter.pets) ? data.hunter.pets.slice(0,18).map(pet=>({
+      id:String(pet?.id||uid()), species:String(pet?.species||"wolf"), name:String(pet?.name||"Runenwolf").slice(0,28),
+      level:clamp(Math.floor(Number(data.level)||1),1,MAX_LEVEL), loyalty:clamp(Number(pet?.loyalty)||1,1,5), acquiredAt:Number(pet?.acquiredAt)||Date.now()
+    })) : [];
+    if(data.classId==="ranger" && !data.hunter.pets.length) data.hunter.pets.push(starterHunterPet(data.level));
+    if(data.classId==="ranger" && !data.hunter.pets.some(pet=>pet.id===data.hunter.activeId)) data.hunter.activeId=data.hunter.pets[0]?.id||"";
+    for(const pet of data.hunter.pets) pet.level=data.level;
+    return data.hunter;
+  }
+  function activeHunterPet(data=ensureState()){
+    if(!data||data.classId!=="ranger")return null;
+    const hunter=ensureHunterData(data);return hunter.pets.find(pet=>pet.id===hunter.activeId)||hunter.pets[0]||null;
+  }
+  function hunterPetSpecies(name=""){
+    const n=String(name).toLowerCase();
+    if(/wolf/.test(n))return "wolf";
+    if(/hund|hound/.test(n))return "hound";
+    if(/bestie|löwe|katze|panther/.test(n))return "beast";
+    return "";
+  }
   function ensureState() {
     const app = getAppState();
     if (!app) return null;
@@ -317,6 +342,9 @@
     data.appearance.hairStyle = ["short", "long", "mohawk", "braid", "hooded"].includes(data.appearance.hairStyle) ? data.appearance.hairStyle : "short";
     data.appearance.accent = /^#[0-9a-f]{6}$/i.test(String(data.appearance.accent||"")) ? data.appearance.accent : presetById(data.appearance.preset).accent;
     data.appearance.ready = !!data.appearance.ready;
+    data.appearance.lockedAtMs = Math.max(0, Math.floor(Number(data.appearance.lockedAtMs) || 0));
+    if (data.appearance.ready && !data.appearance.lockedAtMs) data.appearance.lockedAtMs = Date.now();
+    ensureHunterData(data);
     data.talents ||= {};
     for(const role of Object.keys(TALENT_TREES)) for(const branch of TALENT_TREES[role]) for(const node of branch.nodes){
       if(data.talents[node.id] != null) data.talents[node.id] = clamp(Math.floor(Number(data.talents[node.id])||0),0,node.max);
@@ -394,15 +422,15 @@
     ctx.restore();
   }
   function drawFantasyCharacter(ctx,opts={}){
-    const a=opts.appearance||currentAppearance(),preset=presetById(a.preset),race=preset.race||preset.id,c=CLASSES[opts.classId]||CLASSES[ensureState()?.classId]||CLASSES.guardian,role=opts.role||c.role,g=opts.gear||gearVisualFromState(),now=opts.now||performance.now(),scale=(opts.scale||1)*(preset.height||1),wide=preset.width||1,walk=opts.walk||0,attack=!!opts.attack,casting=!!opts.casting,side=opts.side||1,portrait=!!opts.portrait;
+    const a=opts.appearance||currentAppearance(),preset=presetById(a.preset),race=preset.race||preset.id,c=CLASSES[opts.classId]||CLASSES[ensureState()?.classId]||CLASSES.guardian,role=opts.role||c.role,g=opts.gear||gearVisualFromState(),now=opts.now||performance.now(),scale=(opts.scale||1)*(preset.height||1),wide=preset.width||1,walk=opts.walk||0,attack=!!opts.attack,casting=!!opts.casting,side=opts.side||1,portrait=!!opts.portrait,facing=opts.facing||"front",isBack=facing==="back",isSide=facing==="left"||facing==="right";
     const skin=skinColor(a.skin,race),hair=hairColor(a.hair),accent=a.accent||preset.accent,armor=g.armor||accent,trim=g.trim||accent;
     const bodyW=22*wide,shoulder=bodyW+10+(role==="tank"?7:0),headY=-83,torsoTop=-70,torsoBottom=-22,legSwing=Math.sin(walk)*5;
-    ctx.save();ctx.scale(scale,scale);ctx.lineCap="round";ctx.lineJoin="round";
+    ctx.save();ctx.scale(scale*(isSide?.68:1),scale);if(facing==="left")ctx.scale(-1,1);ctx.lineCap="round";ctx.lineJoin="round";
     if(!portrait){ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,5,32*wide,10,0,0,Math.PI*2);ctx.fill();}
     if(race==="drakeborn"||race==="hornborn"){
       ctx.strokeStyle=race==="drakeborn"?skin:"#342925";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-3,-25);ctx.quadraticCurveTo(-30,-8,-37,8);ctx.stroke();ctx.fillStyle=race==="drakeborn"?accent:"#6a5140";ctx.beginPath();ctx.moveTo(-38,8);ctx.lineTo(-47,0);ctx.lineTo(-42,15);ctx.fill();
     }
-    if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"){
+    if(role==="healer"||c.weaponType==="staff"||c.weaponType==="tome"||race==="sylvan"||race==="voidkin"){
       ctx.fillStyle=`${accent}66`;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-bodyW+4,torsoTop+8);ctx.lineTo(-bodyW-10,torsoBottom+22);ctx.lineTo(0,7);ctx.lineTo(bodyW+10,torsoBottom+22);ctx.lineTo(bodyW-4,torsoTop+8);ctx.closePath();ctx.fill();ctx.stroke();
     }
     const short=race==="ironkin";const legLen=short?26:35;
@@ -415,6 +443,7 @@
     for(const sx0 of [-1,1]){ctx.save();ctx.scale(sx0,1);ctx.fillStyle=g.helmet||armor;ctx.strokeStyle=trim;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bodyW-3,torsoTop+2);ctx.lineTo(shoulder+8,torsoTop+8);ctx.lineTo(shoulder+3,torsoTop+22);ctx.lineTo(bodyW-4,torsoTop+17);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
     const armSwing=attack?12:Math.sin(walk)*3;ctx.strokeStyle=g.gloves||skin;ctx.lineWidth=(race==="hornborn"?14:10)*wide;ctx.beginPath();ctx.moveTo(-shoulder+5,torsoTop+13);ctx.lineTo(-shoulder-7,torsoBottom-2+armSwing);ctx.moveTo(shoulder-5,torsoTop+13);ctx.lineTo(shoulder+7,torsoBottom-2-armSwing);ctx.stroke();
     if(race==="revenant"){ctx.strokeStyle="#d3d7c7";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-bodyW+5,torsoTop+10);ctx.lineTo(bodyW-5,torsoBottom-5);ctx.moveTo(bodyW-5,torsoTop+10);ctx.lineTo(-bodyW+5,torsoBottom-5);ctx.stroke();}
+    if(isBack){ctx.fillStyle=`${accent}bb`;ctx.strokeStyle=trim;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-shoulder+2,torsoTop+7);ctx.quadraticCurveTo(-bodyW-10,torsoBottom+18,-bodyW-4,torsoBottom+legLen+10);ctx.quadraticCurveTo(0,torsoBottom+legLen+19,bodyW+4,torsoBottom+legLen+10);ctx.quadraticCurveTo(bodyW+10,torsoBottom+18,shoulder-2,torsoTop+7);ctx.closePath();ctx.fill();ctx.stroke();ctx.strokeStyle=`${trim}aa`;ctx.beginPath();ctx.moveTo(0,torsoTop+8);ctx.lineTo(0,torsoBottom+legLen+12);ctx.stroke();}
     ctx.fillStyle=skin;ctx.strokeStyle="#151a1f";ctx.lineWidth=2;
     if(race==="hornborn"){ctx.beginPath();ctx.ellipse(0,headY,17*wide,19,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle="#2a2220";ctx.beginPath();ctx.ellipse(0,headY+10,13*wide,8,0,0,Math.PI*2);ctx.fill();}
     else if(race==="drakeborn"){ctx.beginPath();ctx.moveTo(-14,headY-12);ctx.lineTo(11,headY-15);ctx.lineTo(18,headY+1);ctx.lineTo(6,headY+16);ctx.lineTo(-13,headY+11);ctx.lineTo(-18,headY-2);ctx.closePath();ctx.fill();ctx.stroke();}
@@ -434,15 +463,24 @@
       ctx.fillStyle=hair;ctx.beginPath();ctx.arc(0,headY-5,14*wide,Math.PI,Math.PI*2);ctx.lineTo(12*wide,headY);ctx.lineTo(-12*wide,headY);ctx.fill();if(a.hairStyle==="long"||a.hairStyle==="braid"){ctx.fillRect(-13*wide,headY-6,5,27);ctx.fillRect(8*wide,headY-6,5,a.hairStyle==="braid"?36:27);}if(a.hairStyle==="mohawk"){ctx.beginPath();ctx.moveTo(-4,headY-16);ctx.lineTo(0,headY-38);ctx.lineTo(5,headY-16);ctx.fill();}
     }
     if(race==="ironkin"){ctx.fillStyle=hair;ctx.beginPath();ctx.moveTo(-12,headY+7);ctx.quadraticCurveTo(0,headY+31,12,headY+7);ctx.lineTo(8,headY+28);ctx.lineTo(0,headY+38);ctx.lineTo(-8,headY+28);ctx.closePath();ctx.fill();}
-    const eyeColor=race==="revenant"?"#8cffbe":race==="voidkin"?"#d88cff":race==="drakeborn"?"#77efff":"#15181b";ctx.fillStyle=eyeColor;ctx.shadowColor=eyeColor;ctx.shadowBlur=(race==="revenant"||race==="voidkin"||race==="drakeborn")?10:0;ctx.beginPath();ctx.arc(-5*wide,headY-1,2,0,Math.PI*2);ctx.arc(5*wide,headY-1,2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    const eyeColor=race==="revenant"?"#8cffbe":race==="voidkin"?"#d88cff":race==="drakeborn"?"#77efff":"#15181b";if(!isBack){ctx.fillStyle=eyeColor;ctx.shadowColor=eyeColor;ctx.shadowBlur=(race==="revenant"||race==="voidkin"||race==="drakeborn")?10:0;ctx.beginPath();if(isSide){ctx.arc(7*wide,headY-1,2.2,0,Math.PI*2);ctx.moveTo(13*wide,headY+3);ctx.lineTo(18*wide,headY+5);ctx.lineTo(13*wide,headY+7);}else{ctx.arc(-5*wide,headY-1,2,0,Math.PI*2);ctx.arc(5*wide,headY-1,2,0,Math.PI*2);}ctx.fill();ctx.shadowBlur=0;}else{ctx.strokeStyle=hair;ctx.lineWidth=5;ctx.beginPath();ctx.arc(0,headY-3,11*wide,Math.PI,Math.PI*2);ctx.stroke();}
     if(race==="voidkin"){ctx.strokeStyle=accent;ctx.globalAlpha=.7;ctx.lineWidth=2;for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(Math.sin(now*.002+i*2.1)*34,headY+Math.cos(now*.002+i)*25,3+i,0,Math.PI*2);ctx.stroke();}ctx.globalAlpha=1;}
-    drawCharacterWeaponModel(ctx,c,g,side,casting,attack,1);
+    drawCharacterWeaponModel(ctx,c,g,isBack?-1:side,casting,attack,1);
     if(role==="tank"){ctx.save();ctx.translate(-side*35,-42);ctx.fillStyle=g.offhand||"#496a7c";ctx.strokeStyle=trim;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,-27);ctx.lineTo(20,-17);ctx.lineTo(17,19);ctx.lineTo(0,30);ctx.lineTo(-17,19);ctx.lineTo(-20,-17);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
     ctx.restore();
   }
   function renderCharacterCanvases(root=UI.main){
-    const d=ensureState();if(!d||!root)return;const stats=playerStats();
-    root.querySelectorAll("[data-dkl-character-preview]").forEach(canvas=>{const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height,preset=presetById(d.appearance.preset);ctx.clearRect(0,0,w,h);const bg=ctx.createRadialGradient(w*.5,h*.42,10,w*.5,h*.42,w*.55);bg.addColorStop(0,`${preset.accent}35`);bg.addColorStop(.55,"#0c1722");bg.addColorStop(1,"#04070b");ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);ctx.strokeStyle=`${preset.accent}55`;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(w*.5,h*.45,w*.36,h*.4,0,0,Math.PI*2);ctx.stroke();ctx.save();ctx.translate(w*.5,h*.76);drawFantasyCharacter(ctx,{appearance:d.appearance,gear:gearVisualFromState(d),classId:d.classId,role:d.role,scale:2.6,portrait:true,now:performance.now()});ctx.restore();ctx.fillStyle="#ffffff";ctx.font="900 22px system-ui";ctx.textAlign="center";ctx.fillText(playerName(),w*.5,h-44);ctx.fillStyle=preset.accent;ctx.font="800 13px system-ui";ctx.fillText(`${preset.name} · ${CLASSES[d.classId].name} · PWR ${formatPower(stats.power)}`,w*.5,h-20);});
+    const d=ensureState();if(!d||!root)return;const preset=presetById(d.appearance.preset);
+    root.querySelectorAll("[data-dkl-character-preview]").forEach(canvas=>{
+      const ctx=canvas.getContext("2d",{alpha:true}),w=canvas.width,h=canvas.height;
+      ctx.clearRect(0,0,w,h);
+      // Nur eine dezente, transparente Aura und Bodenschatten. Kein schwarzes Rechteck.
+      const aura=ctx.createRadialGradient(w*.5,h*.46,8,w*.5,h*.46,w*.38);
+      aura.addColorStop(0,`${preset.accent}24`);aura.addColorStop(.62,`${preset.accent}0b`);aura.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle=aura;ctx.beginPath();ctx.ellipse(w*.5,h*.47,w*.35,h*.39,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="rgba(0,0,0,.28)";ctx.beginPath();ctx.ellipse(w*.5,h*.77,w*.19,h*.035,0,0,Math.PI*2);ctx.fill();
+      ctx.save();ctx.translate(w*.5,h*.77);drawFantasyCharacter(ctx,{appearance:d.appearance,gear:gearVisualFromState(d),classId:d.classId,role:d.role,scale:2.6,portrait:true,facing:UI.previewFacing||"front",now:performance.now()});ctx.restore();
+    });
   }
   function refreshSessionLoadout(){
     const s=UI.session;if(!s)return;
@@ -460,11 +498,11 @@
     UI.overlay.innerHTML = `<section class="dkl-shell"><header class="dkl-head"><div class="dkl-brand"><span>◈</span><div><small>PARTY DUNGEON RPG</small><h2>DUNGEON<span>.KL</span></h2></div></div><div class="dkl-head-stats" data-dkl-head></div><div class="dkl-head-actions"><button data-dkl-home title="Hauptlobby">⌂</button><button data-dkl-close title="Zurück">×</button></div></header><main class="dkl-main" data-dkl-main></main><div class="dkl-toast" data-dkl-toast></div></section>`;
     document.body.appendChild(UI.overlay); document.body.classList.add("dungeon-kl-open");
     UI.main = UI.overlay.querySelector("[data-dkl-main]"); UI.head = UI.overlay.querySelector("[data-dkl-head]");
-    UI.overlay.querySelector("[data-dkl-home]").addEventListener("click", () => UI.session ? showExitDialog() : renderCharacterStudio());
+    UI.overlay.querySelector("[data-dkl-home]").addEventListener("click", () => UI.session ? showExitDialog() : (ensureState()?.appearance?.ready ? renderHome() : renderCharacterStudio()));
     UI.overlay.querySelector("[data-dkl-close]").addEventListener("click", () => UI.session ? showExitDialog() : returnToTopGames());
     window.addEventListener("keydown", onKeyDown); window.addEventListener("keyup", onKeyUp);
-    updateHead(); renderCharacterStudio();
-    const d = ensureState(); if (!d.tutorialDone) setTimeout(showTutorial, 250);
+    updateHead(); const d = ensureState(); d.appearance.ready ? renderHome() : renderCharacterStudio();
+    if (!d.tutorialDone) setTimeout(showTutorial, 250);
   }
   function close(returnPhone = false) {
     stopSession(false); leaveParty(false); UI.onlineUnsubs.splice(0).forEach(fn => { try { fn(); } catch {} }); UI.timers.splice(0).forEach(clearInterval);
@@ -492,18 +530,18 @@
     return CHARACTER_PRESETS.map(p=>`<button class="dkl-race-card ${d.appearance.preset===p.id?"active":""}" data-dkl-preset="${p.id}" style="--preset:${p.accent}"><span>${p.icon}</span><div><b>${p.name}</b><small>${p.description}</small></div></button>`).join("");
   }
   function renderCharacterStudio(){
-    stopSession(false);UI.view="character";const d=ensureState(),stats=playerStats(),preset=presetById(d.appearance.preset);
+    stopSession(false);const d=ensureState();if(d?.appearance?.ready){renderHome();return;}UI.view="character";const stats=playerStats(),preset=presetById(d.appearance.preset);
     UI.main.innerHTML=`<div class="dkl-character-select"><header><div><small>DUNGEON.KL · CHARAKTERAUSWAHL</small><h1>Wähle deinen Helden</h1><p>Dein Charakter, deine Rasse, deine Rolle und deine Ausrüstung werden im Dungeon sichtbar dargestellt.</p></div><button class="dkl-btn" data-dkl-exit-game>← Top Games</button></header>
       <section class="dkl-character-select-grid"><aside class="dkl-race-list"><h3>Fantasy-Rassen</h3>${appearancePresetCards()}</aside>
       <article class="dkl-character-focus" style="--studio-accent:${preset.accent}">${characterPreviewHtml("studio")}<div class="dkl-character-summary"><b>${preset.name}</b><span>${ROLES[d.role].icon} ${ROLES[d.role].name} · ${CLASSES[d.classId].name}</span><small>Level ${d.level} · Power ${NUMBER.format(stats.power)}</small></div></article>
       <aside class="dkl-character-controls"><h3>Erscheinung</h3><label>Geschlecht<div><button data-dkl-studio-gender="male" class="${d.appearance.gender==="male"?"active":""}">Mann</button><button data-dkl-studio-gender="female" class="${d.appearance.gender==="female"?"active":""}">Frau</button></div></label><label>Farbvariante<div>${["light","medium","dark"].map(x=>`<button data-dkl-studio-skin="${x}" class="${d.appearance.skin===x?"active":""}">${x==="light"?"Hell":x==="dark"?"Dunkel":"Mittel"}</button>`).join("")}</div></label><label>Haare/Fell<div>${["dark","brown","blond","silver"].map(x=>`<button data-dkl-studio-hair="${x}" class="${d.appearance.hair===x?"active":""}">${x==="dark"?"Schwarz":x==="brown"?"Braun":x==="blond"?"Blond":"Silber"}</button>`).join("")}</div></label><label>Stil<div>${["short","long","mohawk","braid","hooded"].map(x=>`<button data-dkl-studio-hairstyle="${x}" class="${d.appearance.hairStyle===x?"active":""}">${x==="short"?"Kurz":x==="long"?"Lang":x==="mohawk"?"Iro":x==="braid"?"Zopf":"Kapuze"}</button>`).join("")}</div></label><label>Rüstungsakzent<input type="color" data-dkl-studio-accent value="${esc(d.appearance.accent)}"></label><div class="dkl-character-tools"><button class="dkl-btn" data-dkl-studio-inventory>Ausrüstung</button><button class="dkl-btn gold" data-dkl-skilltree>Skillbaum</button></div></aside></section>
       <section class="dkl-character-class-select"><header><small>ROLLE & KLASSE</small><h2>Bestimme deinen Kampfstil</h2></header>${roleClassCards()}</section>
-      <footer class="dkl-character-confirm"><div><b>${preset.name} ist ausgewählt</b><small>Du kannst den Charakter später jederzeit wieder bearbeiten.</small></div><button class="dkl-btn primary" data-dkl-character-confirm>CHARAKTER ÜBERNEHMEN</button></footer></div>`;
+      <footer class="dkl-character-confirm"><div><b>${preset.name} ist ausgewählt</b><small>Nach der Bestätigung ist Rasse, Optik, Rolle und Klasse dauerhaft festgelegt.</small></div><button class="dkl-btn primary" data-dkl-character-confirm>CHARAKTER ÜBERNEHMEN</button></footer></div>`;
     const redraw=()=>renderCharacterStudio();
     UI.main.querySelector("[data-dkl-exit-game]").addEventListener("click",returnToTopGames);
     UI.main.querySelector("[data-dkl-skilltree]").addEventListener("click",renderSkillTree);
     UI.main.querySelector("[data-dkl-studio-inventory]").addEventListener("click",renderInventory);
-    UI.main.querySelector("[data-dkl-character-confirm]").addEventListener("click",()=>{const data=ensureState();data.appearance.ready=true;safeSave();renderHome();});
+    UI.main.querySelector("[data-dkl-character-confirm]").addEventListener("click",()=>{const data=ensureState();data.appearance.ready=true;data.appearance.lockedAtMs=Date.now();safeSave();renderHome();});
     UI.main.querySelectorAll("[data-dkl-preset]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),p=presetById(btn.dataset.dklPreset);data.appearance.preset=p.id;data.appearance.skin=p.skin;data.appearance.hair=p.hair;data.appearance.accent=p.accent;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-gender]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.gender=btn.dataset.dklStudioGender;safeSave();redraw();}));
     UI.main.querySelectorAll("[data-dkl-studio-skin]").forEach(btn=>btn.addEventListener("click",()=>{ensureState().appearance.skin=btn.dataset.dklStudioSkin;safeSave();redraw();}));
@@ -517,7 +555,7 @@
   function renderSkillTree(){
     UI.view="skills";const d=ensureState(),available=talentPointsAvailable(d),total=talentPointsTotal(d),tree=talentTreeFor(d.role);
     UI.main.innerHTML=`<div class="dkl-skill-page"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>← Charakter</button><div><small>SKILLBAUM</small><h2>${ROLES[d.role].icon} ${CLASSES[d.classId].name}</h2><p>Alle zwei Dungeon-Level erhältst du einen Talentpunkt.</p></div><div class="dkl-skill-points"><b>${available}</b><small>frei · ${total} gesamt</small></div></header><section class="dkl-skill-branches">${tree.map((branch,branchIndex)=>`<article style="--branch:${branchIndex}"><header><span>${branch.icon}</span><div><small>PFAD ${branchIndex+1}</small><h3>${branch.branch}</h3></div></header><div class="dkl-skill-nodes">${branch.nodes.map((node,index)=>{const rank=talentRank(d,node.id);return `<button data-dkl-talent="${node.id}" class="${rank?"active":""} ${rank>=node.max?"maxed":""}" style="--node:${index}"><span>${node.icon}</span><b>${node.name}</b><small>${node.text}</small><em>${rank}/${node.max}</em></button>`}).join("")}</div></article>`).join("")}</section><footer><button class="dkl-btn danger" data-dkl-talents-reset>Talente zurücksetzen</button><button class="dkl-btn primary" data-dkl-skills-inventory>Charakterfenster öffnen</button></footer></div>`;
-    UI.main.querySelector("[data-dkl-back]").addEventListener("click",renderCharacterStudio);
+    UI.main.querySelector("[data-dkl-back]").addEventListener("click",()=>ensureState()?.appearance?.ready?renderHome():renderCharacterStudio());
     UI.main.querySelector("[data-dkl-skills-inventory]").addEventListener("click",renderInventory);
     UI.main.querySelectorAll("[data-dkl-talent]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState(),node=talentTreeFor(data.role).flatMap(b=>b.nodes).find(n=>n.id===btn.dataset.dklTalent);if(!node)return;const rank=talentRank(data,node.id);if(rank>=node.max)return toast("Talent vollständig",node.name);if(talentPointsAvailable(data)<=0)return toast("Keine Talentpunkte","Alle zwei Level erhältst du einen neuen Punkt.");data.talents[node.id]=rank+1;safeSave();renderSkillTree();}));
     UI.main.querySelector("[data-dkl-talents-reset]").addEventListener("click",()=>{if(!confirm("Alle Talentpunkte dieser Rolle zurücksetzen?"))return;const data=ensureState();for(const branch of talentTreeFor(data.role))for(const node of branch.nodes)delete data.talents[node.id];safeSave();renderSkillTree();});
@@ -530,7 +568,7 @@
       <main><header><small>DUNGEON-AUSWAHL</small><h1>${esc(dungeon.name)}</h1><p>Level ${dungeon.level} · ${dungeon.rooms} Räume · 3 Bosskämpfe</p></header><section class="dkl-portal-dungeons">${dungeonCards()}</section><div class="dkl-portal-info"><span>Empfohlen: ${dungeon.level<=d.level?"Bereit":"Level zu niedrig"}</span><span>Bestzeit: ${d.bestDungeon[dungeon.id]?.time?formatTime(d.bestDungeon[dungeon.id].time):"—"}</span><span>Gruppe: 1–4 Spieler</span></div></main>
       <aside><div class="dkl-portal-character" style="--race:${preset.accent}">${characterPreviewHtml("portal")}<h2>${esc(playerName())}</h2><b>${preset.name}</b><span>${ROLES[d.role].name} · ${CLASSES[d.classId].name}</span><div><small>LEVEL ${d.level}</small><small>PWR ${NUMBER.format(stats.power)}</small></div></div><button class="dkl-btn primary dkl-play-button" data-dkl-play>SPIEL STARTEN</button><small>Danach wählst du Solo, Gruppe oder Lobby-Code.</small></aside></div>`;
     UI.main.querySelectorAll("[data-dkl-dungeon]").forEach(el=>el.addEventListener("click",()=>{const x=DUNGEONS.find(d=>d.id===el.dataset.dklDungeon);if(ensureState().level<x.level)return toast("Dungeon gesperrt",`Level ${x.level} erforderlich.`);UI.selectedDungeon=x.id;renderHome();}));
-    UI.main.querySelector("[data-dkl-character]").addEventListener("click",renderCharacterStudio);
+    UI.main.querySelector("[data-dkl-character]").addEventListener("click",renderInventory);
     UI.main.querySelector("[data-dkl-inventory]").addEventListener("click",renderInventory);
     UI.main.querySelector("[data-dkl-skilltree]").addEventListener("click",renderSkillTree);
     UI.main.querySelector("[data-dkl-shop]").addEventListener("click",renderShop);
@@ -548,21 +586,26 @@
     UI.main.innerHTML=`<div class="dkl-mode-select" style="--mode:${dungeon.color}"><header><button class="dkl-btn" data-dkl-mode-back>← Dungeon-Auswahl</button><div><small>SPIELMODUS</small><h1>${esc(dungeon.name)}</h1><p>Wähle, wie du den Dungeon betreten möchtest.</p></div></header><section class="dkl-mode-grid"><button data-dkl-mode-solo><span>1</span><h2>Solo</h2><p>Alleine spielen. Weniger Bonusbeute, aber sofort startklar.</p><b>SOFORT BETRETEN</b></button><button data-dkl-mode-party><span>2–4</span><h2>Gruppe erstellen</h2><p>Erstelle eine Online-Gruppe und lade bis zu drei Mitspieler ein.</p><b>LOBBY ERSTELLEN</b></button><button data-dkl-mode-join><span>#</span><h2>Code beitreten</h2><p>Betritt eine bestehende Gruppe mit einem sechsstelligen Lobby-Code.</p><b>CODE EINGEBEN</b></button></section><footer><span>${presetById(d.appearance.preset).name}</span><span>${CLASSES[d.classId].name}</span><span>PWR ${formatPower(playerStats().power)}</span></footer></div>`;
     UI.main.querySelector("[data-dkl-mode-back]").addEventListener("click",renderHome);UI.main.querySelector("[data-dkl-mode-solo]").addEventListener("click",()=>startDungeon(UI.selectedDungeon,{partySize:1}));UI.main.querySelector("[data-dkl-mode-party]").addEventListener("click",renderPartyHall);UI.main.querySelector("[data-dkl-mode-join]").addEventListener("click",showJoinDialog);updateHead();
   }
-  function changeRole(roleId) { const d = ensureState(); if (!ROLES[roleId]) return; d.role = roleId; d.classId = Object.keys(CLASSES).find(id => CLASSES[id].role === roleId) || "guardian"; d.lastClassChange = Date.now(); safeSave(); toast("Rolle gewählt", ROLES[roleId].name); renderHome(); }
-  function changeClass(classId) { const d = ensureState(); if (!CLASSES[classId] || CLASSES[classId].role !== d.role) return; d.classId = classId; d.lastClassChange = Date.now(); safeSave(); toast("Klasse gewählt", CLASSES[classId].name); renderHome(); }
+  function changeRole(roleId) { const d = ensureState(); if (d?.appearance?.ready || !ROLES[roleId]) return; d.role = roleId; d.classId = Object.keys(CLASSES).find(id => CLASSES[id].role === roleId) || "guardian"; d.lastClassChange = Date.now(); safeSave(); toast("Rolle gewählt", ROLES[roleId].name); renderHome(); }
+  function changeClass(classId) { const d = ensureState(); if (d?.appearance?.ready || !CLASSES[classId] || CLASSES[classId].role !== d.role) return; d.classId = classId; d.lastClassChange = Date.now(); safeSave(); toast("Klasse gewählt", CLASSES[classId].name); renderHome(); }
 
+  function hunterPetPanelHtml(data){
+    const hunter=ensureHunterData(data),active=activeHunterPet(data);return `<section class="dkl-hunter-panel"><header><div><small>JÄGER-BEGLEITER</small><h3>${active?esc(active.name):"Kein Begleiter"}</h3><p>Begleiter haben immer dein Dungeon-Level und steigen automatisch mit dir auf. Geschwächte Wölfe, Hunde und Bestien können mit E gezähmt werden.</p></div><strong>${active?`Level ${data.level}`:""}</strong></header><div>${hunter.pets.map(pet=>`<button data-dkl-pet-select="${esc(pet.id)}" class="${pet.id===hunter.activeId?"active":""}"><span>${pet.species==="wolf"?"🐺":pet.species==="hound"?"🐕":"🐾"}</span><b>${esc(pet.name)}</b><small>Level ${data.level} · Loyalität ${pet.loyalty}/5</small></button>`).join("")}</div></section>`;
+  }
   function renderInventory() {
     UI.view = "inventory"; const d = ensureState(), stats = playerStats(), talents=talentBonuses(d);
     const filtered = d.inventory.filter(item => (UI.inventoryRarity === "all" || item.rarity === UI.inventoryRarity) && (UI.inventorySlot === "all" || item.slot === UI.inventorySlot) && (!UI.inventorySearch || item.name.toLowerCase().includes(UI.inventorySearch.toLowerCase()))).sort((a, b) => rarityIndex(b.rarity) - rarityIndex(a.rarity) || b.level - a.level || b.power - a.power);
     const backLabel = UI.session ? "← Zurück zum Dungeon" : "← Spielmenü";
-    const backHandler = UI.session ? renderDungeonStage : renderHome;
+    const backHandler = UI.session ? renderDungeonStage : (d.appearance.ready ? renderHome : renderCharacterStudio);
     const leftSlots=["helmet","chest","gloves","boots"],rightSlots=["weapon","offhand","ring","amulet","relic"];
-    UI.main.innerHTML = `<div class="dkl-page dkl-character-sheet"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>${backLabel}</button><div><small>CHARAKTERFENSTER</small><h2>${esc(playerName())} · ${CLASSES[d.classId].name}</h2><p>${d.inventory.length}/${MAX_INVENTORY} Items · Power ${NUMBER.format(stats.power)}</p></div><div class="dkl-sheet-head-actions"><button class="dkl-btn" data-dkl-sheet-character>Optik</button><button class="dkl-btn gold" data-dkl-sheet-skills>Skillbaum</button></div></header>
-      <section class="dkl-wow-sheet"><div class="dkl-wow-slots left">${leftSlots.map(slot=>loadoutSlotHtml(slot)).join("")}</div><div class="dkl-wow-model">${characterPreviewHtml("sheet")}<h3>${esc(playerName())}</h3><b>${ROLES[d.role].name} · ${CLASSES[d.classId].name}</b><div class="dkl-wow-power">${NUMBER.format(stats.power)}<small>POWER</small></div><div class="dkl-wow-weapon-modules"><span>Waffe: ${esc(equippedItem("weapon")?.name||"Leer")}</span><span>Modul: ${gearVisualFromState(d).weaponModule.toUpperCase()}</span></div></div><div class="dkl-wow-slots right">${rightSlots.map(slot=>loadoutSlotHtml(slot)).join("")}</div><aside class="dkl-wow-attributes"><h3>Attribute</h3><dl><div><dt>Gesundheit</dt><dd>${NUMBER.format(stats.health)}</dd></div><div><dt>Schaden</dt><dd>${NUMBER.format(stats.damage)}</dd></div><div><dt>Heilung</dt><dd>${NUMBER.format(stats.healing)}</dd></div><div><dt>Rüstung</dt><dd>${Math.round(stats.armor*100)} %</dd></div><div><dt>Krit</dt><dd>${Math.round(stats.crit*100)} %</dd></div><div><dt>Tempo</dt><dd>${Math.round(stats.haste*100)} %</dd></div><div><dt>Abklingzeit</dt><dd>-${Math.round(stats.cooldownReduction*100)} %</dd></div><div><dt>Schildbonus</dt><dd>+${Math.round(stats.shieldBonus*100)} %</dd></div></dl><h3>Verstärkungen</h3><p>${talentPointsSpent(d)} Talentpunkte verteilt · ${talentPointsAvailable(d)} frei</p></aside></section>
+    UI.main.innerHTML = `<div class="dkl-page dkl-character-sheet"><header class="dkl-page-head"><button class="dkl-btn" data-dkl-back>${backLabel}</button><div><small>CHARAKTERFENSTER</small><h2>${esc(playerName())} · ${CLASSES[d.classId].name}</h2><p>${d.inventory.length}/${MAX_INVENTORY} Items · Power ${NUMBER.format(stats.power)}</p></div><div class="dkl-sheet-head-actions">${d.appearance.ready?`<span class="dkl-character-locked">🔒 Charakter festgelegt</span>`:`<button class="dkl-btn" data-dkl-sheet-character>Optik</button>`}<button class="dkl-btn gold" data-dkl-sheet-skills>Skillbaum</button></div></header>
+      <section class="dkl-wow-sheet"><div class="dkl-wow-slots left">${leftSlots.map(slot=>loadoutSlotHtml(slot)).join("")}</div><div class="dkl-wow-model">${characterPreviewHtml("sheet")}<div class="dkl-preview-turn"><button data-dkl-facing="left">◀</button><button data-dkl-facing="front">Vorne</button><button data-dkl-facing="back">Hinten</button><button data-dkl-facing="right">▶</button></div><h3>${esc(playerName())}</h3><b>${ROLES[d.role].name} · ${CLASSES[d.classId].name}</b><div class="dkl-wow-power">${NUMBER.format(stats.power)}<small>POWER</small></div><div class="dkl-wow-weapon-modules"><span>Waffe: ${esc(equippedItem("weapon")?.name||"Leer")}</span><span>Modul: ${gearVisualFromState(d).weaponModule.toUpperCase()}</span></div></div><div class="dkl-wow-slots right">${rightSlots.map(slot=>loadoutSlotHtml(slot)).join("")}</div><aside class="dkl-wow-attributes"><h3>Attribute</h3><dl><div><dt>Gesundheit</dt><dd>${NUMBER.format(stats.health)}</dd></div><div><dt>Schaden</dt><dd>${NUMBER.format(stats.damage)}</dd></div><div><dt>Heilung</dt><dd>${NUMBER.format(stats.healing)}</dd></div><div><dt>Rüstung</dt><dd>${Math.round(stats.armor*100)} %</dd></div><div><dt>Krit</dt><dd>${Math.round(stats.crit*100)} %</dd></div><div><dt>Tempo</dt><dd>${Math.round(stats.haste*100)} %</dd></div><div><dt>Abklingzeit</dt><dd>-${Math.round(stats.cooldownReduction*100)} %</dd></div><div><dt>Schildbonus</dt><dd>+${Math.round(stats.shieldBonus*100)} %</dd></div></dl><h3>Verstärkungen</h3><p>${talentPointsSpent(d)} Talentpunkte verteilt · ${talentPointsAvailable(d)} frei</p></aside></section>${d.classId==="ranger"?hunterPetPanelHtml(d):""}
       <section class="dkl-panel"><div class="dkl-filters"><select data-dkl-inv-rarity><option value="all">Alle Seltenheiten</option>${RARITY_ORDER.map(r => `<option value="${r}" ${UI.inventoryRarity === r ? "selected" : ""}>${RARITIES[r].name}</option>`).join("")}</select><select data-dkl-inv-slot><option value="all">Alle Plätze</option>${SLOT_KEYS.map(s => `<option value="${s}" ${UI.inventorySlot === s ? "selected" : ""}>${SLOT_DEFS[s].name}</option>`).join("")}</select><input data-dkl-inv-search placeholder="Item suchen …" value="${esc(UI.inventorySearch)}"><button class="dkl-btn danger" data-dkl-sell-filtered>Gefilterte verkaufen</button></div><div class="dkl-items">${filtered.length ? filtered.map(itemCardHtml).join("") : `<div class="dkl-empty">Keine passenden Items gefunden.</div>`}</div></section></div>`;
     UI.main.querySelector("[data-dkl-back]").addEventListener("click", backHandler);
-    UI.main.querySelector("[data-dkl-sheet-character]").addEventListener("click",renderCharacterStudio);
+    UI.main.querySelector("[data-dkl-sheet-character]")?.addEventListener("click",renderCharacterStudio);
     UI.main.querySelector("[data-dkl-sheet-skills]").addEventListener("click",renderSkillTree);
+    UI.main.querySelectorAll("[data-dkl-facing]").forEach(btn=>btn.addEventListener("click",()=>{UI.previewFacing=btn.dataset.dklFacing;renderCharacterCanvases();}));
+    UI.main.querySelectorAll("[data-dkl-pet-select]").forEach(btn=>btn.addEventListener("click",()=>{const data=ensureState();ensureHunterData(data).activeId=btn.dataset.dklPetSelect;refreshSessionLoadout();safeSave();renderInventory();}));
     UI.main.querySelector("[data-dkl-inv-rarity]").addEventListener("change", e => { UI.inventoryRarity = e.target.value; renderInventory(); });
     UI.main.querySelector("[data-dkl-inv-slot]").addEventListener("change", e => { UI.inventorySlot = e.target.value; renderInventory(); });
     UI.main.querySelector("[data-dkl-inv-search]").addEventListener("input", e => { UI.inventorySearch = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(renderInventory, 180); });
@@ -652,7 +695,7 @@
     UI.main.querySelector("[data-dkl-party-code]").addEventListener("click", showJoinDialog);
   }
   function showJoinDialog() { const code = prompt("Sechsstelligen Dungeon.KL-Lobby-Code eingeben:", ""); if (code) joinOnlineParty(code.trim().toUpperCase()); }
-  function partyProfile() { const d = ensureState(), s = playerStats(); return { uid: "", name: playerName(), role: d.role, classId: d.classId, level: d.level, power: s.power, maxHp: s.health, damage: s.damage, healing: s.healing, armor: s.armor, appearance:firestoreSafe(currentAppearance()), gearVisual:firestoreSafe(gearVisualFromState(d)), updatedAtMs: Date.now() }; }
+  function partyProfile() { const d = ensureState(), s = playerStats(); return { uid: "", name: playerName(), role: d.role, classId: d.classId, level: d.level, power: s.power, maxHp: s.health, damage: s.damage, healing: s.healing, armor: s.armor, appearance:firestoreSafe(currentAppearance()), gearVisual:firestoreSafe(gearVisualFromState(d)), hunterPet:firestoreSafe(activeHunterPet(d)), updatedAtMs: Date.now() }; }
   function partyCode() { const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join(""); }
   async function createOnlineParty(maxPlayers, dungeonId) {
     try {
@@ -689,7 +732,7 @@
       if (d.level < dungeon.level) return toast("Dungeon gesperrt", `Level ${dungeon.level} benötigt.`);
       stopSession(false);
       const stats = playerStats(), partySize = clamp(Number(options.partySize) || 1, 1, 4);
-      const player = makePlayer({ uid: options.online?.user?.uid || "local", name: playerName(), role: d.role, classId: d.classId, stats, local: true, x: WORLD_W / 2, y: WORLD_H - 150, appearance: currentAppearance(), gearVisual: gearVisualFromState(d) });
+      const player = makePlayer({ uid: options.online?.user?.uid || "local", name: playerName(), role: d.role, classId: d.classId, stats, local: true, x: WORLD_W / 2, y: WORLD_H - 150, appearance: currentAppearance(), gearVisual: gearVisualFromState(d), hunterPet:activeHunterPet(d) });
       const session = UI.session = { dungeon, partySize, online: options.online || null, host: !options.online || options.hostUid === options.online.user.uid, player, players: [player], remotePlayers: new Map(), enemies: [], projectiles: [], effects: [], texts: [], traps: [], chests: [], room: 1, roomState: "combat", roomStartedAt: performance.now(), startedAt: Date.now(), clearAt: 0, exitOpen: false, completed: false, autoAttack: false, noTargetFor: 0, skillCooldowns: [0,0,0,0,0], camera: { x: WORLD_W / 2, y: WORLD_H / 2 }, viewW: CANVAS_W, viewH: CANVAS_H, lastLootSeq: 0, lootSeq: 0, worldSeq: 0, networkLastWrite: 0, networkLastWorld: 0, seed: options.seed || Math.floor(Math.random() * 99999999), profiles: options.profiles || {}, playerUids: options.playerUids || [player.uid], hostUid: options.hostUid || player.uid, boss: null, bossTelegraph: null, message: "", messageUntil: 0, layout: null, roomExitOpen: false, minimap: null, roomTransitionLock: 0, zones: [], selectedTargetUid: player.uid, selectedEnemyId: "", targetPoint: null, cooldownTotals: SKILL_BASE_COOLDOWNS.slice(), reviveCooldown:0, reviveCooldownTotal:REVIVE_COOLDOWN, openedChestIds: new Set(), nearbyChestId: "", combatLog:["Dungeon betreten · Raum 1"], runtimeErrors:0, lastRuntimeErrorAt:0 };
       if (options.online) setupDungeonNetwork(options);
       buildRoom(session, 1);
@@ -716,7 +759,21 @@
       if (UI.overlay) renderHome();
     }
   }
-  function makePlayer({ uid: id, name, role, classId, stats, local, x, y, appearance=null, gearVisual=null }) { const r = ROLES[role] || ROLES.dps, c = CLASSES[classId] || CLASSES.berserker; return { uid: id, name, role, classId, local, x, y, vx: 0, vy: 0, angle: -Math.PI / 2, radius: 20, maxHp: stats.health, hp: stats.health, damage: stats.damage, healing: stats.healing, armor: stats.armor, crit: stats.crit, haste: stats.haste, power: stats.power, cooldownReduction:stats.cooldownReduction||0, shieldBonus:stats.shieldBonus||0, moveBonus:stats.moveBonus||0, range: c.range, attackRate: c.attackRate, projectile: c.projectile, attackCd: 0, skillSeq: 0, skillRequested: 0, reviveSeq:0, reviveRequested:false, dead: false, downedAt: 0, shield: 0, buffs: {}, color: c.color, moving: false, climbing: false, walkPhase: 0, attackAnim: 0, castAnim: 0, skillAnim: 0, netX: x, netY: y, targetUid: "", targetEnemyId: "", targetX: x, targetY: y, appearance:appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human",hairStyle:"short",accent:c.color,ready:true}, gearVisual:gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,offhand:c.color,helmetType:role==="tank"?"helmet":role==="healer"?"hood":"none",weaponModule:"steel"} }; }
+  function makePlayer({ uid: id, name, role, classId, stats, local, x, y, appearance=null, gearVisual=null, hunterPet=null }) { const r = ROLES[role] || ROLES.dps, c = CLASSES[classId] || CLASSES.berserker; return { uid: id, name, role, classId, local, x, y, vx: 0, vy: 0, angle: -Math.PI / 2, radius: 20, maxHp: stats.health, hp: stats.health, damage: stats.damage, healing: stats.healing, armor: stats.armor, crit: stats.crit, haste: stats.haste, power: stats.power, cooldownReduction:stats.cooldownReduction||0, shieldBonus:stats.shieldBonus||0, moveBonus:stats.moveBonus||0, range: c.range, attackRate: c.attackRate, projectile: c.projectile, attackCd: 0, skillSeq: 0, skillRequested: 0, reviveSeq:0, reviveRequested:false, dead: false, downedAt: 0, shield: 0, buffs: {}, color: c.color, moving: false, climbing: false, walkPhase: 0, attackAnim: 0, castAnim: 0, skillAnim: 0, netX: x, netY: y, targetUid: "", targetEnemyId: "", targetX: x, targetY: y, appearance:appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human",hairStyle:"short",accent:c.color,ready:true}, gearVisual:gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,offhand:c.color,helmetType:role==="tank"?"helmet":role==="healer"?"hood":"none",weaponModule:"steel"}, hunterPet:hunterPet&&classId==="ranger"?makeHunterPetRuntime(hunterPet,{x,y,ownerId:id,ownerLevel:Math.max(1,Math.floor((stats.power||80)/80))}):null }; }
+  function makeHunterPetRuntime(profile,{x,y,ownerId,ownerLevel=1}){
+    const level=clamp(Math.floor(Number(ownerLevel)||Number(profile?.level)||1),1,MAX_LEVEL),species=String(profile?.species||"wolf");
+    return {id:String(profile?.id||uid()),ownerId:String(ownerId||""),species,name:String(profile?.name||"Runenwolf"),level,x:x-36,y:y+28,netX:x-36,netY:y+28,
+      radius:15,maxHp:Math.round(95+level*22),hp:Math.round(95+level*22),damage:Math.round(8+level*3.1),attackCd:0,angle:0,moving:false,walkPhase:0,attackAnim:0,dead:false};
+  }
+  function refreshHunterPetRuntime(player){
+    if(!player||player.classId!=="ranger"){if(player)player.hunterPet=null;return;}
+    const profile=player.local?activeHunterPet():player.hunterPet;
+    if(!profile)return;
+    const level=player.local?ensureState().level:Number(profile.level||1),maxHp=Math.round(95+level*22);
+    if(!player.hunterPet?.x)player.hunterPet=makeHunterPetRuntime(profile,{x:player.x,y:player.y,ownerId:player.uid,ownerLevel:level});
+    player.hunterPet.level=level;player.hunterPet.maxHp=maxHp;player.hunterPet.hp=clamp(Number(player.hunterPet.hp)||maxHp,0,maxHp);player.hunterPet.damage=Math.round(Math.max(6,player.damage*.34));
+  }
+
   function renderDungeonLoading(session,done){
     const tips=["Tanks eröffnen den Kampf und binden Gegner.","Kisten enthalten Gold und tragbare Ausrüstung.","Mit I kannst du dein Loadout im Dungeon wechseln.","Heiler können Sühne offensiv oder defensiv einsetzen.","Mauern unterbrechen Sichtlinien und Angriffe."];
     const symbol=session.dungeon.theme==="ice"?"❄":session.dungeon.theme==="forest"?"🌿":session.dungeon.theme==="void"?"◉":session.dungeon.theme==="universe"?"✦":"◆";
@@ -750,7 +807,7 @@
     const s = UI.session, p = s.online, fb = p.fb; if (!p) return;
     s.selfRef = fb.doc(fb.db, PARTY_COLLECTION, p.code, "players", p.user.uid); s.worldRef = fb.doc(fb.db, PARTY_COLLECTION, p.code, "world", "current");
     const profileMap = options.profiles || {};
-    for (const id of options.playerUids || []) { if (id === p.user.uid) continue; const pr = profileMap[id] || {}; const role = ROLES[pr.role] ? pr.role : "dps", classId = CLASSES[pr.classId] ? pr.classId : "berserker", stats = { health: Number(pr.maxHp || 500), damage: Number(pr.damage || 50), healing: Number(pr.healing || 0), armor: Number(pr.armor || 0), crit: .08, haste: .05, power: Number(pr.power || 0) }; const remote = makePlayer({ uid: id, name: pr.name || "Mitspieler", role, classId, stats, local: false, x: WORLD_W / 2 + rand(-100, 100), y: WORLD_H - 150 + rand(-30, 30), appearance:pr.appearance||null, gearVisual:pr.gearVisual||null }); s.players.push(remote); s.remotePlayers.set(id, remote); }
+    for (const id of options.playerUids || []) { if (id === p.user.uid) continue; const pr = profileMap[id] || {}; const role = ROLES[pr.role] ? pr.role : "dps", classId = CLASSES[pr.classId] ? pr.classId : "berserker", stats = { health: Number(pr.maxHp || 500), damage: Number(pr.damage || 50), healing: Number(pr.healing || 0), armor: Number(pr.armor || 0), crit: .08, haste: .05, power: Number(pr.power || 0) }; const remote = makePlayer({ uid: id, name: pr.name || "Mitspieler", role, classId, stats, local: false, x: WORLD_W / 2 + rand(-100, 100), y: WORLD_H - 150 + rand(-30, 30), appearance:pr.appearance||null, gearVisual:pr.gearVisual||null, hunterPet:pr.hunterPet||null }); s.players.push(remote); s.remotePlayers.set(id, remote); }
     UI.onlineUnsubs.push(fb.onSnapshot(s.worldRef, snap => { if (!snap.exists() || s.host) return; applyWorldSnapshot(snap.data()); }));
     if (s.host) {
       for (const id of s.playerUids) { if (id === p.user.uid) continue; const ref = fb.doc(fb.db, PARTY_COLLECTION, p.code, "players", id); UI.onlineUnsubs.push(fb.onSnapshot(ref, snap => { if (!snap.exists()) return; applyRemoteInput(id, snap.data()); })); }
@@ -765,11 +822,10 @@
       <div class="dkl-boss-hud" data-dkl-boss hidden><b></b><div><i></i></div><small></small></div>
       <div class="dkl-combat-log"><header><b>Dungeon-Chat</b><small>Gruppe & Kampf</small></header><div data-dkl-combat-log></div><form data-dkl-chat-form><input data-dkl-chat-input maxlength="120" placeholder="Nachricht an die Gruppe …"><button>↵</button></form></div>
       <button class="dkl-interact-button" data-dkl-interact hidden><span>E</span><b>Kiste öffnen</b><small>Loot aufnehmen</small></button><button class="dkl-loadout-button" data-dkl-loadout><span>I</span><b>Inventar</b><small>Ausrüstung wechseln</small></button>
-      <div class="dkl-combat-actions dkl-mmo-actionbar"><button data-dkl-attack class="attack"><i class="dkl-ready-sweep"></i><span>⚔</span><b>ANGRIFF</b><small>Auto-Kampf aus</small></button>${c.skills.map((skill, i) => `<button data-dkl-skill="${i}" class="ready"><i class="dkl-ready-sweep" data-dkl-fill="${i}"></i><span>${i + 1}</span><b>${esc(skill[0])}</b><small data-dkl-cd="${i}">Bereit</small></button>`).join("")}${s.player.role==="healer"?`<button data-dkl-revive class="revive ready"><i class="dkl-ready-sweep" data-dkl-revive-fill></i><span>R</span><b>WIEDERBELEBUNG</b><small data-dkl-revive-cd>Bereit</small></button>`:""}</div>
+      <div class="dkl-combat-actions dkl-mmo-actionbar target-combat">${c.skills.map((skill, i) => `<button data-dkl-skill="${i}" class="ready"><i class="dkl-ready-sweep" data-dkl-fill="${i}"></i><span>${i + 1}</span><b>${esc(skill[0])}</b><small data-dkl-cd="${i}">Bereit</small></button>`).join("")}${s.player.role==="healer"?`<button data-dkl-revive class="revive ready"><i class="dkl-ready-sweep" data-dkl-revive-fill></i><span>R</span><b>WIEDERBELEBUNG</b><small data-dkl-revive-cd>Bereit</small></button>`:""}</div>
       <div class="dkl-mobile-stick" data-dkl-stick><i></i></div><button class="dkl-exit-button" data-dkl-exit hidden>Dungeon verlassen</button></div>`;
     const canvas = UI.main.querySelector("[data-dkl-canvas]"); s.canvas = canvas; s.ctx = canvas.getContext("2d",{alpha:false}); s.minimap = UI.main.querySelector("[data-dkl-minimap]"); UI.keys=Object.create(null); resizeCanvas(); window.addEventListener("resize", resizeCanvas, { once: true });
     canvas.addEventListener("pointerdown", e=>{canvas.focus({preventScroll:true});pointerDown(e);}); canvas.addEventListener("pointermove", pointerMove); canvas.addEventListener("pointerup", pointerUp); canvas.addEventListener("pointercancel", pointerUp); canvas.addEventListener("contextmenu",e=>e.preventDefault());
-    UI.main.querySelector("[data-dkl-attack]").addEventListener("click", toggleAutoAttack);
     UI.main.querySelectorAll("[data-dkl-skill]").forEach(btn => btn.addEventListener("click", () => useSkill(Number(btn.dataset.dklSkill))));
     UI.main.querySelector("[data-dkl-revive]")?.addEventListener("click",useRevive);
     UI.main.querySelector("[data-dkl-team]")?.addEventListener("click", event => { const card = event.target.closest("[data-dkl-target-player]"); if (!card) return; selectPlayerTarget(card.dataset.dklTargetPlayer); });
@@ -931,7 +987,9 @@
     const wanted=treasureRoom?Math.min(3,points.length):Math.min(room===1?2:1,points.length);
     return points.slice(0,wanted).map((point,index)=>({id:`${s.dungeon.id}:${room}:${index}`,x:point.x,y:point.y,radius:30,bonus:treasureRoom?18:0}));
   }
+  function roomCombatCleared(s){return !!s && !s.enemies.some(e=>!e.dead);}
   function nearestClosedChest(s){
+    if(!roomCombatCleared(s))return null;
     let best=null,bestD=CHEST_INTERACT_RANGE;
     for(const chest of s.chests||[]){
       if(s.openedChestIds?.has(chest.id))continue;
@@ -940,8 +998,19 @@
     }
     return best;
   }
+  function nearestTameableEnemy(s){
+    if(ensureState()?.classId!=="ranger")return null;const enemy=s.enemies.find(e=>e.id===s.selectedEnemyId&&!e.dead&&e.tameable);if(!enemy)return null;
+    if(distance(s.player,enemy)>118||!lineWalkable(s,s.player,enemy,5)||enemy.hp/enemy.maxHp>.42)return null;return enemy;
+  }
+  function tameSelectedEnemy(s,enemy){
+    const d=ensureState(),hunter=ensureHunterData(d),species=enemy.tameSpecies||hunterPetSpecies(enemy.name)||"wolf",base=species==="wolf"?"Wolf":species==="hound"?"Hund":"Bestie";
+    const pet={id:uid(),species,name:`${base} von ${playerName()}`,level:d.level,loyalty:1,acquiredAt:Date.now()};hunter.pets.unshift(pet);hunter.pets=hunter.pets.slice(0,18);hunter.activeId=pet.id;enemy.dead=true;s.selectedEnemyId="";s.autoAttack=false;s.player.hunterPet=makeHunterPetRuntime(pet,{x:s.player.x,y:s.player.y,ownerId:s.player.uid,ownerLevel:d.level});safeSave();
+    s.effects.push({type:"blast",x:enemy.x,y:enemy.y,radius:72,life:.9,color:"#9be866"});showMessage(`${pet.name} wurde gezähmt`,2200);pushCombatLog(s,`Jäger-Begleiter gezähmt: ${pet.name}`);
+  }
   function interactNearby(){
     const s=UI.session;if(!s||s.player.dead)return;
+    const tameable=nearestTameableEnemy(s);if(tameable){tameSelectedEnemy(s,tameable);return;}
+    if(!roomCombatCleared(s)){showMessage("Kisten sind verriegelt · zuerst alle Gegner besiegen",1800);return;}
     const chest=nearestClosedChest(s);
     if(!chest){showMessage("Keine geschlossene Kiste in Reichweite",1100);return;}
     s.openedChestIds.add(chest.id);
@@ -956,7 +1025,7 @@
     s.room = room; s.enemies = []; s.projectiles = []; s.effects = []; s.zones = []; s.traps = []; s.chests = []; s.boss = null; s.selectedEnemyId = ""; s.bossTelegraph = null; s.roomState = "combat"; s.clearAt = 0; s.exitOpen = false; s.roomExitOpen = false; s.roomTransitionLock = performance.now() + 1000;
     s.layout = createRoomLayout(s, room);
     s.chests = createRoomChests(s, room);
-    s.players.forEach((p,index)=>{p.x=s.layout.entry.x+(index%2?42:-42)*(index?1:0);p.y=s.layout.entry.y+Math.floor(index/2)*38;p.path=[];});
+    s.players.forEach((p,index)=>{p.x=s.layout.entry.x+(index%2?42:-42)*(index?1:0);p.y=s.layout.entry.y+Math.floor(index/2)*38;p.path=[];if(p.hunterPet){p.hunterPet.x=p.x-34;p.hunterPet.y=p.y+28;p.hunterPet.netX=p.hunterPet.x;p.hunterPet.netY=p.hunterPet.y;}});
     const bossRoom = room === Math.ceil(s.dungeon.rooms / 3) || room === Math.ceil(s.dungeon.rooms * 2 / 3) || room === s.dungeon.rooms;
     const trapRoom = !bossRoom && room % 4 === 0; const chestRoom = !bossRoom && room % 5 === 0;
     if (trapRoom) { const count=6+Math.floor(room/3); for(let i=0;i<count;i++){const p=s.layout.trapSpawns[i%s.layout.trapSpawns.length]||s.layout.chestPoint;s.traps.push({x:p.x,y:p.y,radius:rand(28,43),armed:true,pulse:rand(0,6)});} }
@@ -978,9 +1047,9 @@
     const scale = enemyScale(s), point=s.layout?.enemySpawns?.[spawnIndex % Math.max(1,s.layout.enemySpawns.length)] || {x:WORLD_W/2+rand(-400,400),y:WORLD_H/2+rand(-250,250)}, x=point.x, y=point.y, ranged = Math.random() < .28;
     const hp = Math.round((85 + scale.level * 24) * scale.hp * (elite ? 2.35 : 1));
     const name = pick(s.dungeon.creatures);
-    s.enemies.push({ id: uid(), name, archetype: monsterArchetype(name), x, y, spawnX:x, spawnY:y, radius: elite ? 28 : 20, maxHp: hp, hp, damage: Math.round((8 + scale.level * 2.05) * scale.damage * (elite ? 1.55 : 1)), armor: elite ? .18 : .04, speed: ranged ? 76 : 102, range: ranged ? 310 : 52, ranged, elite, boss: false, attackCd: rand(0, 1), specialCd: rand(1, 4), dead: false, color: themeMonsterColor(s.dungeon.theme, elite), targetUid: "", angle: 0, moving: false, walkPhase: rand(0,6), attackAnim: 0, path: [], pathTimer: 0, alerted:false });
+    s.enemies.push({ id: uid(), name, archetype: monsterArchetype(name), x, y, spawnX:x, spawnY:y, radius: elite ? 28 : 20, maxHp: hp, hp, damage: Math.round((8 + scale.level * 2.05) * scale.damage * (elite ? 1.55 : 1)), armor: elite ? .18 : .04, speed: ranged ? 76 : 102, range: ranged ? 310 : 52, ranged, elite, boss: false, attackCd: rand(0, 1), specialCd: rand(1, 4), dead: false, color: themeMonsterColor(s.dungeon.theme, elite), targetUid: "", angle: 0, moving: false, walkPhase: rand(0,6), attackAnim: 0, path: [], pathTimer: 0, alerted:false, tameable:!elite&&!!hunterPetSpecies(name), tameSpecies:hunterPetSpecies(name) });
   }
-  function spawnBoss(s, index, finalBoss) { const scale = enemyScale(s), name = s.dungeon.bosses[index], hp = Math.round((1700 + scale.level * 330) * scale.hp * (finalBoss ? 1.7 : 1)); const bossPoint=s.layout?.bossPoint||{x:WORLD_W/2,y:230}; const boss = { id: uid(), name, x: bossPoint.x, y: bossPoint.y, radius: finalBoss ? 58 : 48, maxHp: hp, hp, damage: Math.round((25 + scale.level * 4.4) * scale.damage * (finalBoss ? 1.35 : 1)), armor: finalBoss ? .34 : .24, speed: finalBoss ? 66 : 75, range: 75, ranged: false, elite: false, boss: true, finalBoss, attackCd: 1.5, specialCd: 3.2, dead: false, color: s.dungeon.color, targetUid: "", phase: 1, angle: Math.PI/2, moving: false, walkPhase: 0, attackAnim: 0, path: [], pathTimer: 0 }; s.enemies.push(boss); s.boss = boss; }
+  function spawnBoss(s, index, finalBoss) { const scale = enemyScale(s), name = s.dungeon.bosses[index], soloHp=s.partySize===1?.78:1, soloDamage=s.partySize===1?.82:1, hp = Math.round((1700 + scale.level * 330) * scale.hp * (finalBoss ? 1.7 : 1) * soloHp); const bossPoint=s.layout?.bossPoint||{x:WORLD_W/2,y:230}; const boss = { id: uid(), name, x: bossPoint.x, y: bossPoint.y, radius: finalBoss ? 58 : 48, maxHp: hp, hp, damage: Math.round((25 + scale.level * 4.4) * scale.damage * (finalBoss ? 1.35 : 1) * soloDamage), armor: finalBoss ? .34 : .24, speed: finalBoss ? 66 : 75, range: 75, ranged: false, elite: false, boss: true, finalBoss, attackCd: 1.5, specialCd: 3.2, dead: false, color: s.dungeon.color, targetUid: "", phase: 1, angle: Math.PI/2, moving: false, walkPhase: 0, attackAnim: 0, path: [], pathTimer: 0 }; s.enemies.push(boss); s.boss = boss; }
   function pushCombatLog(s,text){if(!s)return;s.combatLog=Array.isArray(s.combatLog)?s.combatLog:[];s.combatLog.push(String(text||""));if(s.combatLog.length>18)s.combatLog.splice(0,s.combatLog.length-18);}
   function normalizeActor(actor,fallbackX=WORLD_W/2,fallbackY=WORLD_H/2){
     if(!actor)return;actor.x=finite(actor.x,fallbackX);actor.y=finite(actor.y,fallbackY);actor.netX=finite(actor.netX,actor.x);actor.netY=finite(actor.netY,actor.y);actor.hp=Math.max(0,finite(actor.hp,1));actor.maxHp=Math.max(1,finite(actor.maxHp,1));actor.radius=clamp(finite(actor.radius,20),8,80);actor.angle=finite(actor.angle,-Math.PI/2);actor.buffs=actor.buffs&&typeof actor.buffs==="object"?actor.buffs:{};actor.shield=Math.max(0,finite(actor.shield,0));
@@ -1001,8 +1070,8 @@
   }
   function updateSession(s, dt, now) {
     updateLocalInput(s, dt); if (s.online) updateNetwork(s, now);
-    if (s.host) { updatePartyCombat(s, dt, now); updateEnemies(s, dt, now); updateProjectiles(s, dt); updateTraps(s, dt, now); updateZones(s, dt); checkRoomClear(s, now); }
-    else updateGuestVisuals(s, dt);
+    if (s.host) { updatePartyCombat(s, dt, now); updateHunterPets(s,dt,true); updateEnemies(s, dt, now); updateProjectiles(s, dt); updateTraps(s, dt, now); updateZones(s, dt); checkRoomClear(s, now); }
+    else { updateHunterPets(s,dt,false); updateGuestVisuals(s, dt); }
     updateEffects(s, dt); s.reviveCooldown=Math.max(0,finite(s.reviveCooldown,0)-dt); s.camera.x += (s.player.x - s.camera.x) * Math.min(1, dt * 7); s.camera.y += (s.player.y - s.camera.y) * Math.min(1, dt * 7);
   }
   function updateLocalInput(s, dt) {
@@ -1011,14 +1080,38 @@
     const len = Math.hypot(dx, dy); p.moving=!!len; p.climbing=isOnLadder(s.layout,p.x,p.y);
     if (len) { dx /= len; dy /= len; const speed = 205 * (1 + p.haste * .35 + (p.moveBonus||0)) * (p.climbing?.72:1); tryMoveEntity(s,p,dx*speed*dt,dy*speed*dt); p.angle = Math.atan2(dy, dx); p.walkPhase += dt*(p.climbing?10:15); }
     p.attackCd = Math.max(0, p.attackCd - dt); s.skillCooldowns = s.skillCooldowns.map(v => Math.max(0, v - dt));
-    if (s.autoAttack) { const target = nearestEnemy(s, p, p.range + 80); if (target && lineWalkable(s,p,target,8)) { s.noTargetFor = 0; autoAttackPlayer(s, p, target); } else { s.noTargetFor += dt; if (s.noTargetFor >= 5) { s.autoAttack = false; showMessage("Auto-Angriff beendet · keine Gegner sichtbar", 1800); } } }
+    if (s.autoAttack) {
+      const target=s.enemies.find(enemy=>enemy.id===s.selectedEnemyId&&!enemy.dead);
+      if(!target){s.autoAttack=false;s.selectedEnemyId="";}
+      else if(distance(p,target)<=p.range+12&&lineWalkable(s,p,target,8)){s.noTargetFor=0;autoAttackPlayer(s,p,target);}
+      else{s.noTargetFor+=dt;}
+    }
   }
-  function updatePartyCombat(s, dt) { for (const p of s.players) { if (p.local || p.dead) continue; p.attackCd = Math.max(0, p.attackCd - dt); const target = nearestEnemy(s, p, p.range + 80); if (p.wantAttack && target && lineWalkable(s,p,target,8)) autoAttackPlayer(s, p, target); if (p.skillRequested) { executeSkill(s, p, p.skillRequested - 1); p.skillRequested = 0; } if(p.reviveRequested){executeRevive(s,p);p.reviveRequested=false;} } }
+  function updatePartyCombat(s, dt) { for (const p of s.players) { if (p.local || p.dead) continue; p.attackCd = Math.max(0, p.attackCd - dt); const target=s.enemies.find(e=>e.id===p.targetEnemyId&&!e.dead); if (p.wantAttack && target && distance(p,target)<=p.range+12 && lineWalkable(s,p,target,8)) autoAttackPlayer(s, p, target); if (p.skillRequested) { executeSkill(s, p, p.skillRequested - 1); p.skillRequested = 0; } if(p.reviveRequested){executeRevive(s,p);p.reviveRequested=false;} } }
   function autoAttackPlayer(s, p, target) { if (p.attackCd > 0 || target.dead || distance(p,target)>p.range+12 || !lineWalkable(s,p,target,8)) return; p.attackCd = 1 / (p.attackRate * (1 + p.haste)); p.angle = Math.atan2(target.y - p.y, target.x - p.x); p.attackAnim=.24; if (p.projectile) s.projectiles.push({ x: p.x, y: p.y, vx: Math.cos(p.angle) * 620, vy: Math.sin(p.angle) * 620, radius: 5, damage: rollDamage(p.damage, p.crit), ownerUid: p.uid, friendly: true, life: 1.4, color: p.color }); else damageEnemy(s, target, rollDamage(p.damage, p.crit), p); playSound("attack"); }
   function rollDamage(base, crit) { return Math.round(base * rand(.88, 1.12) * (Math.random() < crit ? 1.75 : 1)); }
   function nearestEnemy(s,p,max=Infinity){let best=null,bestD=max;for(const e of s.enemies){if(e.dead||!lineWalkable(s,p,e,7))continue;const d=distance(p,e);if(d<bestD){bestD=d;best=e;}}return best;}
   function damageEnemy(s, enemy, amount, source) { if (!enemy || enemy.dead) return; const dealt = Math.max(1, Math.round(amount * (1 - enemy.armor))); enemy.hp -= dealt; s.texts.push({ x: enemy.x, y: enemy.y - enemy.radius, text: `-${dealt}`, color: source?.role === "healer" ? "#ffe47a" : "#fff", life: .8 }); if (enemy.hp <= 0) killEnemy(s, enemy, source); }
-  function killEnemy(s, enemy) { enemy.dead = true; ensureState().stats.kills++; pushCombatLog(s,`${enemy.name} besiegt${enemy.boss?" · Bossbeute!":""}`); if (enemy.boss) { ensureState().stats.bosses++; rewardBoss(s, enemy); } }
+  function killEnemy(s, enemy) { enemy.dead = true; if(s.selectedEnemyId===enemy.id){s.selectedEnemyId="";s.autoAttack=false;} ensureState().stats.kills++; pushCombatLog(s,`${enemy.name} besiegt${enemy.boss?" · Bossbeute!":""}`); if (enemy.boss) { ensureState().stats.bosses++; rewardBoss(s, enemy); } }
+  function updateHunterPets(s,dt,combat){
+    for(const owner of s.players){
+      if(owner.classId!=="ranger")continue;refreshHunterPetRuntime(owner);const pet=owner.hunterPet;if(!pet)continue;
+      pet.attackCd=Math.max(0,(pet.attackCd||0)-dt);pet.attackAnim=Math.max(0,(pet.attackAnim||0)-dt);
+      const chosen=s.enemies.find(e=>e.id===(owner.local?s.selectedEnemyId:owner.targetEnemyId)&&!e.dead);
+      const target=(owner.local?s.autoAttack:owner.wantAttack)?chosen:null;
+      const follow={x:owner.x-34*Math.cos(owner.angle||0),y:owner.y-34*Math.sin(owner.angle||0)+24};
+      let destination=follow;
+      if(target&&lineWalkable(s,pet,target,5))destination=target;
+      const dx=destination.x-pet.x,dy=destination.y-pet.y,dist=Math.hypot(dx,dy)||1,stop=target?45:26;
+      pet.moving=false;if(dist>stop){pet.angle=Math.atan2(dy,dx);pet.moving=tryMoveEntity(s,pet,dx/dist*175*dt,dy/dist*175*dt);if(pet.moving)pet.walkPhase=(pet.walkPhase||0)+dt*14;}
+      if(combat&&target&&!target.dead&&dist<=55&&pet.attackCd<=0&&lineWalkable(s,pet,target,5)){pet.attackCd=1.15;pet.attackAnim=.28;damageEnemy(s,target,pet.damage,owner);}
+      if(owner.dead){pet.x+=(owner.x-pet.x)*Math.min(1,dt*5);pet.y+=(owner.y-pet.y)*Math.min(1,dt*5);}
+    }
+  }
+  function drawHunterPet(ctx,s,pet,owner,now){
+    if(!pet)return;const x=sx(s,pet.x),y=sy(s,pet.y),phase=pet.moving?Math.sin(pet.walkPhase||now*.01)*3:0,color=pet.species==="hound"?"#9b6d45":pet.species==="beast"?"#72513e":"#65737f";
+    ctx.save();ctx.translate(x,y);ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,9,23,8,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=10;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-12,-4);ctx.lineTo(12,-4);ctx.stroke();ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(-10,0);ctx.lineTo(-15+phase,14);ctx.moveTo(9,0);ctx.lineTo(14-phase,14);ctx.stroke();ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(10,-10);ctx.lineTo(25,-15);ctx.lineTo(22,3);ctx.lineTo(10,4);ctx.closePath();ctx.fill();ctx.fillStyle="#f4d36b";ctx.beginPath();ctx.arc(19,-9,1.8,0,Math.PI*2);ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-14,-7);ctx.quadraticCurveTo(-28,-19,-30,-7);ctx.stroke();if(pet.attackAnim>0){ctx.strokeStyle="#fff";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(25,-7);ctx.lineTo(35,-3);ctx.stroke();}ctx.fillStyle="#fff";ctx.font="800 9px system-ui";ctx.textAlign="center";ctx.fillText(`${pet.name} · L${pet.level}`,0,-25);ctx.restore();
+  }
   function updateEnemies(s, dt, now) {
     for (const e of s.enemies) {
       if (e.dead) continue;
@@ -1059,8 +1152,8 @@
   function awardIndividualLoot(s, boss) {
     const d = ensureState(), bonus = s.partySize === 1 ? -12 : (s.partySize - 1) * 10 + (boss ? 20 : 0), rarity = rarityForLevel(Math.max(d.level, s.dungeon.level + s.room), bonus), level = clamp(Math.max(d.level, s.dungeon.level) + Math.floor(rand(-2, boss ? 6 : 3)), 1, MAX_LEVEL); const item = createItem(level, rarity, pick(SLOT_KEYS), d.classId); addItem(item, true); s.lootSeq++;
   }
-  function selectPlayerTarget(uid){const s=UI.session;if(!s)return;const target=s.players.find(p=>p.uid===uid);if(!target)return;s.selectedTargetUid=target.uid;s.selectedEnemyId="";showMessage(`Ziel: ${target.name}`,900);updateDungeonHud();}
-  function selectEnemyTarget(id){const s=UI.session;if(!s)return;const target=s.enemies.find(e=>e.id===id&&!e.dead);if(!target)return;s.selectedEnemyId=target.id;s.selectedTargetUid="";showMessage(`Ziel: ${target.name}`,900);updateDungeonHud();}
+  function selectPlayerTarget(uid){const s=UI.session;if(!s)return;const target=s.players.find(p=>p.uid===uid);if(!target)return;s.selectedTargetUid=target.uid;s.selectedEnemyId="";s.autoAttack=false;s.noTargetFor=0;showMessage(`Ziel: ${target.name}`,900);pushCombatLog(s,`Verbündetes Ziel: ${target.name}`);updateDungeonHud();}
+  function selectEnemyTarget(id){const s=UI.session;if(!s)return;const target=s.enemies.find(e=>e.id===id&&!e.dead);if(!target)return;s.selectedEnemyId=target.id;s.selectedTargetUid="";s.autoAttack=true;s.noTargetFor=0;showMessage(`Angriffsziel: ${target.name}`,900);pushCombatLog(s,`Angriffsziel gewählt: ${target.name}`);if(distance(s.player,target)<=s.player.range+12&&lineWalkable(s,s.player,target,8))autoAttackPlayer(s,s.player,target);updateDungeonHud();}
   function activePlayerTarget(s,p,allowDead=false){const uid=p.local?s.selectedTargetUid:p.targetUid;const target=s.players.find(x=>x.uid===uid);if(target&&(allowDead||!target.dead))return target;return null;}
   function activeEnemyTarget(s,p,max=760){const id=p.local?s.selectedEnemyId:p.targetEnemyId;const target=s.enemies.find(e=>e.id===id&&!e.dead);if(target&&distance(p,target)<=max&&lineWalkable(s,p,target,7))return target;return null;}
   function useSkill(index) {
@@ -1084,20 +1177,26 @@
   function executeSkill(s, p, index) {
     const role=p.role,classId=p.classId,cooldowns=SKILL_BASE_COOLDOWNS,enemyTarget=activeEnemyTarget(s,p,760)||nearestEnemy(s,p,700);let effectTarget=enemyTarget||p,used=true;
     if(role==="healer"){
-      const selectedAlive=activePlayerTarget(s,p,false);
-      if(index===0){const target=selectedAlive||s.players.filter(x=>!x.dead).sort((a,b)=>a.hp/a.maxHp-b.hp/b.maxHp)[0]||p;healPlayer(s,target,p.healing*2.2);effectTarget=target;pushCombatLog(s,`${p.name} wirkt Lichtwelle auf ${target.name}`);}
-      else if(index===1){const target=selectedAlive||p;target.buffs={...target.buffs};for(const key of ["poison","slow","curse","burn"])delete target.buffs[key];healPlayer(s,target,p.healing*1.45);effectTarget=target;pushCombatLog(s,`${target.name} wurde gereinigt`);}
-      else if(index===2){
-        const hostile=activeEnemyTarget(s,p,760),ally=selectedAlive||p;
-        if(hostile){const base=Math.atan2(hostile.y-p.y,hostile.x-p.x);for(let i=0;i<3;i++){const a=base+(i-1)*.1;s.projectiles.push({x:p.x,y:p.y-10,vx:Math.cos(a)*720,vy:Math.sin(a)*720,radius:6,damage:p.damage*.82,ownerUid:p.uid,friendly:true,life:1.4,color:"#ffe47a",homingId:hostile.id});}effectTarget=hostile;pushCombatLog(s,`${p.name} wirkt Sühne auf ${hostile.name}`);}
-        else{for(let i=0;i<3;i++)healPlayer(s,ally,p.healing*.62);ally.buffs.fortress=Math.max(ally.buffs.fortress||0,3);effectTarget=ally;pushCombatLog(s,`${p.name} wirkt Sühne-Heilung auf ${ally.name}`);}
-      }
-      else if(index===3){const hostile=activeEnemyTarget(s,p,760);const anchor=hostile||selectedAlive||p;const mode=hostile?"damage":"heal";s.zones.push({id:uid(),type:mode,x:anchor.x,y:anchor.y,radius:135,life:7,maxLife:7,tick:0,ownerUid:p.uid,amount:mode==="heal"?Math.max(1,p.healing*.32):Math.max(1,p.damage*.48),color:mode==="heal"?"#66f3a5":"#ffe47a"});effectTarget=anchor;pushCombatLog(s,`${p.name} setzt einen ${mode==="heal"?"Heil":"Sühne"}kreis`);}
-      else{
-        if(activeEnemyTarget(s,p,760)){if(p.local)showMessage("Holy Shield kann nur Verbündete schützen",1700);return false;}
-        const target=selectedAlive||p,amount=Math.round(target.maxHp*(1+(p.shieldBonus||0)));
-        target.shield=Math.max(target.shield||0,amount);target.buffs.holyShield=Math.max(target.buffs.holyShield||0,30);effectTarget=target;
-        s.texts.push({x:target.x,y:target.y-44,text:`SHIELD ${NUMBER.format(amount)}`,color:"#9fe9ff",life:1.2});pushCombatLog(s,`${p.name} schützt ${target.name} mit Holy Shield`);
+      const selectedAlive=activePlayerTarget(s,p,false),selectedEnemyRaw=s.enemies.find(e=>e.id===(p.local?s.selectedEnemyId:p.targetEnemyId)&&!e.dead),hostile=activeEnemyTarget(s,p,760);
+      const enemyChosen=!!selectedEnemyRaw;
+      if(index===0){
+        if(enemyChosen){if(p.local)showMessage("Lichtwelle benötigt ein verbündetes Ziel",1600);return false;}
+        if(!selectedAlive){if(p.local)showMessage("Verbündeten oder dich selbst auswählen",1600);return false;}healPlayer(s,selectedAlive,p.healing*2.2);effectTarget=selectedAlive;
+      }else if(index===1){
+        if(enemyChosen){if(p.local)showMessage("Reinigung benötigt ein verbündetes Ziel",1600);return false;}
+        if(!selectedAlive){if(p.local)showMessage("Verbündeten oder dich selbst auswählen",1600);return false;}selectedAlive.buffs={...selectedAlive.buffs};for(const key of ["poison","slow","curse","burn"])delete selectedAlive.buffs[key];healPlayer(s,selectedAlive,p.healing*1.45);effectTarget=selectedAlive;
+      }else if(index===2){
+        // Sühne: Feindziel = drei Schadensgeschosse. Verbündeter oder kein Ziel = Heilung auf dieses Ziel bzw. den Zaubernden.
+        if(enemyChosen&&!hostile){if(p.local)showMessage("Gegner ist nicht sichtbar oder außer Reichweite",1700);return false;}
+        if(hostile){const base=Math.atan2(hostile.y-p.y,hostile.x-p.x);for(let i=0;i<3;i++){const a=base+(i-1)*.1;s.projectiles.push({x:p.x,y:p.y-10,vx:Math.cos(a)*720,vy:Math.sin(a)*720,radius:6,damage:p.damage*.82,ownerUid:p.uid,friendly:true,life:1.4,color:"#ffe47a",homingId:hostile.id});}effectTarget=hostile;}
+        else{const ally=selectedAlive||p;for(let i=0;i<3;i++)setTimeout(()=>{if(UI.session===s&&!ally.dead)healPlayer(s,ally,p.healing*.58);},i*140);effectTarget=ally;}
+      }else if(index===3){
+        // Heilkreis: ausgewählter Gegner erhält den Schadenskreis; Verbündeter/kein Ziel erhält den Heilkreis.
+        if(enemyChosen&&!hostile){if(p.local)showMessage("Gegner ist nicht sichtbar oder außer Reichweite",1700);return false;}
+        const anchor=hostile||selectedAlive||p,mode=hostile?"damage":"heal";s.zones.push({id:uid(),type:mode,x:anchor.x,y:anchor.y,radius:135,life:7,maxLife:7,tick:0,ownerUid:p.uid,amount:mode==="heal"?Math.max(1,p.healing*.32):Math.max(1,p.damage*.48),color:mode==="heal"?"#66f3a5":"#ffe47a"});effectTarget=anchor;
+      }else{
+        // Holy Shield: Feindziel oder kein Ziel = eigener Schild. Angeclickter Mitspieler = Schild auf den Mitspieler.
+        const shieldTarget=enemyChosen?p:(selectedAlive||p),shieldValue=Math.round(shieldTarget.maxHp*(1+(p.shieldBonus||0)));shieldTarget.shield=Math.max(shieldTarget.shield||0,shieldValue);s.texts.push({x:shieldTarget.x,y:shieldTarget.y-48,text:`SHIELD ${shieldValue}`,color:"#a8eaff",life:1.2});effectTarget=shieldTarget;
       }
     }else if(role==="tank"){
       const target=activeEnemyTarget(s,p,700)||enemyTarget;
@@ -1113,7 +1212,6 @@
   function areaDamage(s,x,y,radius,damage,source){for(const e of s.enemies)if(!e.dead&&Math.hypot(e.x-x,e.y-y)<=radius+e.radius&&lineWalkable(s,{x,y},e,5))damageEnemy(s,e,damage,source);}
   function multiShot(s,p,count,chosen){const target=chosen||activeEnemyTarget(s,p,760)||nearestEnemy(s,p,700);if(!target||!lineWalkable(s,p,target,7))return;const base=Math.atan2(target.y-p.y,target.x-p.x);for(let i=0;i<count;i++){const a=base+(i-(count-1)/2)*.13;s.projectiles.push({x:p.x,y:p.y,vx:Math.cos(a)*680,vy:Math.sin(a)*680,radius:5,damage:p.damage*1.15,ownerUid:p.uid,friendly:true,life:1.5,color:p.color});}}
   function updateZones(s,dt){for(const z of s.zones||[]){z.life-=dt;z.tick-=dt;if(z.tick<=0){z.tick=.72;const owner=s.players.find(p=>p.uid===z.ownerUid)||s.player;if(z.type==="heal"){for(const p of s.players)if(!p.dead&&Math.hypot(p.x-z.x,p.y-z.y)<=z.radius+p.radius){const percent=p.maxHp*.025;healPlayer(s,p,percent+z.amount);}}else{for(const e of s.enemies)if(!e.dead&&Math.hypot(e.x-z.x,e.y-z.y)<=z.radius+e.radius&&lineWalkable(s,z,e,4))damageEnemy(s,e,z.amount,owner);}}}s.zones=(s.zones||[]).filter(z=>z.life>0);}
-  function toggleAutoAttack() { unlockAudio(); const s = UI.session; if (!s) return; s.autoAttack = !s.autoAttack; s.noTargetFor = 0; updateDungeonHud(); }
   function showMessage(text, duration = 1800) { const s = UI.session; if (!s) return; s.message = text; s.messageUntil = performance.now() + duration; }
 
   function updateNetwork(s, now) {
@@ -1126,7 +1224,7 @@
         hp: Math.max(0, finite(s.player.hp, 0)), maxHp: Math.max(1, finite(s.player.maxHp, 1)), dead: !!s.player.dead, shield:Math.max(0,Math.round(finite(s.player.shield,0))),
         wantAttack: !!s.autoAttack, moving: !!s.player.moving, attackAnim: Math.max(0, finite(s.player.attackAnim, 0)), castAnim: Math.max(0, finite(s.player.castAnim, 0)), skillAnim: Math.max(0, Math.floor(finite(s.player.skillAnim, 0))), skillSeq: Math.max(0, Math.floor(finite(s.player.skillSeq, 0))), reviveSeq:Math.max(0,Math.floor(finite(s.player.reviveSeq,0))),
         skillRequested: Math.max(0, Math.floor(finite(s.player.skillRequested, 0))), targetUid: String(s.selectedTargetUid || ""), targetEnemyId: String(s.selectedEnemyId || ""), role: String(s.player.role || "dps"),
-        classId: String(s.player.classId || "berserker"), power: Math.max(0, Math.round(finite(s.player.power, 0))),
+        classId: String(s.player.classId || "berserker"), power: Math.max(0, Math.round(finite(s.player.power, 0))), hunterPet:s.player.hunterPet?{id:String(s.player.hunterPet.id||""),species:String(s.player.hunterPet.species||"wolf"),name:String(s.player.hunterPet.name||"Begleiter"),level:Math.max(1,Math.floor(finite(s.player.hunterPet.level,1))),x:finite(s.player.hunterPet.x,s.player.x),y:finite(s.player.hunterPet.y,s.player.y),hp:Math.max(0,finite(s.player.hunterPet.hp,1)),maxHp:Math.max(1,finite(s.player.hunterPet.maxHp,1)),angle:finite(s.player.hunterPet.angle,0),moving:!!s.player.hunterPet.moving,attackAnim:Math.max(0,finite(s.player.hunterPet.attackAnim,0))}:null,
         updatedAtMs: Date.now()
       }, { merge: true }, "Spielerstatus konnte nicht geschrieben werden");
       s.player.skillRequested = 0;
@@ -1137,7 +1235,7 @@
       safeSetDoc(fb, s.worldRef, worldSnapshot(s), { merge: false }, "Weltstatus konnte nicht geschrieben werden");
     }
   }
-  function applyRemoteInput(id,data){const s=UI.session,p=s?.remotePlayers.get(id);if(!p)return;const tx=Number(data.x??p.x),ty=Number(data.y??p.y);p.netX=tx;p.netY=ty;const dx=tx-p.x,dy=ty-p.y;tryMoveEntity(s,p,dx*.72,0);tryMoveEntity(s,p,0,dy*.72);p.moving=!!data.moving||Math.hypot(dx,dy)>.8;if(p.moving)p.walkPhase=(p.walkPhase||0)+.22;p.angle=Number(data.angle??p.angle);p.wantAttack=!!data.wantAttack;p.targetUid=String(data.targetUid||"");p.targetEnemyId=String(data.targetEnemyId||"");p.attackAnim=Math.max(p.attackAnim||0,Number(data.attackAnim||0));p.castAnim=Math.max(p.castAnim||0,Number(data.castAnim||0));p.skillAnim=Number(data.skillAnim||p.skillAnim||0);p.shield=Math.max(p.shield||0,Number(data.shield||0));if(Number(data.skillSeq||0)>Number(p.lastSkillSeq||0)){p.lastSkillSeq=Number(data.skillSeq);p.skillRequested=Number(data.skillRequested||0);}if(Number(data.reviveSeq||0)>Number(p.lastReviveSeq||0)){p.lastReviveSeq=Number(data.reviveSeq);p.reviveRequested=true;}}
+  function applyRemoteInput(id,data){const s=UI.session,p=s?.remotePlayers.get(id);if(!p)return;const tx=Number(data.x??p.x),ty=Number(data.y??p.y);p.netX=tx;p.netY=ty;const dx=tx-p.x,dy=ty-p.y;tryMoveEntity(s,p,dx*.72,0);tryMoveEntity(s,p,0,dy*.72);p.moving=!!data.moving||Math.hypot(dx,dy)>.8;if(p.moving)p.walkPhase=(p.walkPhase||0)+.22;p.angle=Number(data.angle??p.angle);p.wantAttack=!!data.wantAttack;p.targetUid=String(data.targetUid||"");p.targetEnemyId=String(data.targetEnemyId||"");p.attackAnim=Math.max(p.attackAnim||0,Number(data.attackAnim||0));p.castAnim=Math.max(p.castAnim||0,Number(data.castAnim||0));p.skillAnim=Number(data.skillAnim||p.skillAnim||0);p.shield=Math.max(p.shield||0,Number(data.shield||0));if(data.hunterPet){if(!p.hunterPet||p.hunterPet.id!==data.hunterPet.id)p.hunterPet=makeHunterPetRuntime(data.hunterPet,{x:data.hunterPet.x??p.x,y:data.hunterPet.y??p.y,ownerId:p.uid,ownerLevel:data.hunterPet.level});p.hunterPet.netX=Number(data.hunterPet.x??p.hunterPet.x);p.hunterPet.netY=Number(data.hunterPet.y??p.hunterPet.y);p.hunterPet.x+=(p.hunterPet.netX-p.hunterPet.x)*.5;p.hunterPet.y+=(p.hunterPet.netY-p.hunterPet.y)*.5;p.hunterPet.level=Number(data.hunterPet.level||p.hunterPet.level);p.hunterPet.species=String(data.hunterPet.species||p.hunterPet.species);p.hunterPet.name=String(data.hunterPet.name||p.hunterPet.name);}if(Number(data.skillSeq||0)>Number(p.lastSkillSeq||0)){p.lastSkillSeq=Number(data.skillSeq);p.skillRequested=Number(data.skillRequested||0);}if(Number(data.reviveSeq||0)>Number(p.lastReviveSeq||0)){p.lastReviveSeq=Number(data.reviveSeq);p.reviveRequested=true;}}
   function worldSnapshot(s) {
     return firestoreSafe({
       seq: ++s.worldSeq,
@@ -1161,7 +1259,7 @@
         maxHp: Math.max(1, Math.round(finite(player.maxHp, 1))), dead: !!player.dead, shield:Math.max(0,Math.round(finite(player.shield,0))),
         angle: finite(player.angle, 0), moving: !!player.moving, attackAnim: Math.max(0, finite(player.attackAnim, 0)), castAnim: Math.max(0, finite(player.castAnim, 0)), skillAnim: Math.max(0, Math.floor(finite(player.skillAnim, 0))), role: String(player.role || "dps"),
         classId: String(player.classId || "berserker"), name: String(player.name || "Spieler"),
-        power: Math.max(0, Math.round(finite(player.power, 0)))
+        power: Math.max(0, Math.round(finite(player.power, 0))), hunterPet:player.hunterPet?{id:String(player.hunterPet.id||""),species:String(player.hunterPet.species||"wolf"),name:String(player.hunterPet.name||"Begleiter"),level:Math.max(1,Math.floor(finite(player.hunterPet.level,1))),x:finite(player.hunterPet.x,player.x),y:finite(player.hunterPet.y,player.y),hp:Math.max(0,finite(player.hunterPet.hp,1)),maxHp:Math.max(1,finite(player.hunterPet.maxHp,1)),angle:finite(player.hunterPet.angle,0),moving:!!player.hunterPet.moving,attackAnim:Math.max(0,finite(player.hunterPet.attackAnim,0))}:null
       })),
       zones: (s.zones||[]).slice(-8).map(z=>({id:String(z.id||uid()),type:String(z.type||"heal"),x:finite(z.x,0),y:finite(z.y,0),radius:finite(z.radius,120),life:finite(z.life,0),maxLife:finite(z.maxLife,7),color:String(z.color||"#66f3a5")})),
       projectiles: s.projectiles.slice(-80).filter(Boolean).map(projectile => ({
@@ -1174,7 +1272,7 @@
       updatedAtMs: Date.now(), version: VERSION
     });
   }
-  function applyWorldSnapshot(data){const s=UI.session;if(!s||Number(data.seq||0)<=Number(s.lastWorldSeq||0))return;s.lastWorldSeq=Number(data.seq);if(Number(data.room||1)!==s.room){s.room=Number(data.room);s.roomState=data.roomState;s.layout=createRoomLayout(s,s.room);s.chests=createRoomChests(s,s.room);s.roomExitOpen=s.roomState==="door-open";s.player.x=s.layout.entry.x;s.player.y=s.layout.entry.y;s.player.path=[];}else{s.roomState=data.roomState||s.roomState;s.roomExitOpen=s.roomState==="door-open";}s.completed=!!data.completed;s.exitOpen=!!data.exitOpen;const previous=new Map((s.enemies||[]).map(e=>[e.id,e]));s.enemies=(data.enemies||[]).map(raw=>{const e=previous.get(raw.id)||{...raw,x:raw.x,y:raw.y,walkPhase:0};e.netX=Number(raw.x??e.x);e.netY=Number(raw.y??e.y);e.hp=raw.hp;e.maxHp=raw.maxHp;e.radius=raw.radius;e.boss=!!raw.boss;e.elite=!!raw.elite;e.finalBoss=!!raw.finalBoss;e.color=raw.color;e.name=raw.name;e.angle=Number(raw.angle||0);e.moving=!!raw.moving;e.attackAnim=Math.max(e.attackAnim||0,Number(raw.attackAnim||0));e.dead=false;return e;});s.projectiles=(data.projectiles||[]).map(b=>({...b,life:.42}));s.zones=(data.zones||[]).map(z=>({...z}));for(const raw of data.players||[]){const p=raw.uid===s.player.uid?s.player:s.remotePlayers.get(raw.uid);if(!p)continue;if(p.local){p.hp=raw.hp;p.dead=raw.dead;p.shield=Math.max(0,Number(raw.shield||0));}else{p.netX=Number(raw.x??p.x);p.netY=Number(raw.y??p.y);p.hp=raw.hp;p.maxHp=raw.maxHp;p.dead=raw.dead;p.shield=Math.max(0,Number(raw.shield||0));p.angle=Number(raw.angle??p.angle);p.moving=!!raw.moving;p.attackAnim=Math.max(p.attackAnim||0,Number(raw.attackAnim||0));p.castAnim=Math.max(p.castAnim||0,Number(raw.castAnim||0));p.skillAnim=Number(raw.skillAnim||p.skillAnim||0);}}if(Number(data.lootSeq||0)>s.lastLootSeq){const count=Number(data.lootSeq)-s.lastLootSeq;s.lastLootSeq=Number(data.lootSeq);for(let i=0;i<count;i++)awardGuestLoot(s);}if(s.exitOpen)UI.main?.querySelector("[data-dkl-exit]")?.removeAttribute("hidden");}
+  function applyWorldSnapshot(data){const s=UI.session;if(!s||Number(data.seq||0)<=Number(s.lastWorldSeq||0))return;s.lastWorldSeq=Number(data.seq);if(Number(data.room||1)!==s.room){s.room=Number(data.room);s.roomState=data.roomState;s.layout=createRoomLayout(s,s.room);s.chests=createRoomChests(s,s.room);s.roomExitOpen=s.roomState==="door-open";s.player.x=s.layout.entry.x;s.player.y=s.layout.entry.y;s.player.path=[];}else{s.roomState=data.roomState||s.roomState;s.roomExitOpen=s.roomState==="door-open";}s.completed=!!data.completed;s.exitOpen=!!data.exitOpen;const previous=new Map((s.enemies||[]).map(e=>[e.id,e]));s.enemies=(data.enemies||[]).map(raw=>{const e=previous.get(raw.id)||{...raw,x:raw.x,y:raw.y,walkPhase:0};e.netX=Number(raw.x??e.x);e.netY=Number(raw.y??e.y);e.hp=raw.hp;e.maxHp=raw.maxHp;e.radius=raw.radius;e.boss=!!raw.boss;e.elite=!!raw.elite;e.finalBoss=!!raw.finalBoss;e.color=raw.color;e.name=raw.name;e.angle=Number(raw.angle||0);e.moving=!!raw.moving;e.attackAnim=Math.max(e.attackAnim||0,Number(raw.attackAnim||0));e.dead=false;return e;});s.projectiles=(data.projectiles||[]).map(b=>({...b,life:.42}));s.zones=(data.zones||[]).map(z=>({...z}));for(const raw of data.players||[]){const p=raw.uid===s.player.uid?s.player:s.remotePlayers.get(raw.uid);if(!p)continue;if(p.local){p.hp=raw.hp;p.dead=raw.dead;p.shield=Math.max(0,Number(raw.shield||0));}else{p.netX=Number(raw.x??p.x);p.netY=Number(raw.y??p.y);p.hp=raw.hp;p.maxHp=raw.maxHp;p.dead=raw.dead;p.shield=Math.max(0,Number(raw.shield||0));p.angle=Number(raw.angle??p.angle);p.moving=!!raw.moving;p.attackAnim=Math.max(p.attackAnim||0,Number(raw.attackAnim||0));p.castAnim=Math.max(p.castAnim||0,Number(raw.castAnim||0));p.skillAnim=Number(raw.skillAnim||p.skillAnim||0);}if(raw.hunterPet){if(!p.hunterPet)p.hunterPet=makeHunterPetRuntime(raw.hunterPet,{x:raw.hunterPet.x,y:raw.hunterPet.y,ownerId:p.uid,ownerLevel:raw.hunterPet.level});p.hunterPet.netX=Number(raw.hunterPet.x??p.hunterPet.x);p.hunterPet.netY=Number(raw.hunterPet.y??p.hunterPet.y);p.hunterPet.x+=(p.hunterPet.netX-p.hunterPet.x)*.45;p.hunterPet.y+=(p.hunterPet.netY-p.hunterPet.y)*.45;p.hunterPet.hp=Number(raw.hunterPet.hp||p.hunterPet.hp);p.hunterPet.maxHp=Number(raw.hunterPet.maxHp||p.hunterPet.maxHp);p.hunterPet.angle=Number(raw.hunterPet.angle||0);p.hunterPet.moving=!!raw.hunterPet.moving;p.hunterPet.attackAnim=Math.max(p.hunterPet.attackAnim||0,Number(raw.hunterPet.attackAnim||0));}}if(Number(data.lootSeq||0)>s.lastLootSeq){const count=Number(data.lootSeq)-s.lastLootSeq;s.lastLootSeq=Number(data.lootSeq);for(let i=0;i<count;i++)awardGuestLoot(s);}if(s.exitOpen)UI.main?.querySelector("[data-dkl-exit]")?.removeAttribute("hidden");}
   function awardGuestLoot(s) { const d = ensureState(), rarity = rarityForLevel(Math.max(d.level, s.dungeon.level + s.room), (s.partySize - 1) * 10 + 10); addItem(createItem(Math.max(d.level, s.dungeon.level), rarity, pick(SLOT_KEYS), d.classId), true); }
   function updateGuestVisuals(s, dt) { for(const p of s.players){if(p.local)continue;const ox=p.x,oy=p.y;p.x+=(Number(p.netX??p.x)-p.x)*Math.min(1,dt*13);p.y+=(Number(p.netY??p.y)-p.y)*Math.min(1,dt*13);if(p.moving||Math.hypot(p.x-ox,p.y-oy)>.15)p.walkPhase=(p.walkPhase||0)+dt*15;}for(const e of s.enemies){const ox=e.x,oy=e.y;e.x+=(Number(e.netX??e.x)-e.x)*Math.min(1,dt*12);e.y+=(Number(e.netY??e.y)-e.y)*Math.min(1,dt*12);if(e.moving||Math.hypot(e.x-ox,e.y-oy)>.15)e.walkPhase=(e.walkPhase||0)+dt*11;e.attackAnim=Math.max(0,(e.attackAnim||0)-dt);} for (const b of s.projectiles) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; } s.projectiles = s.projectiles.filter(b => b.life > 0); }
 
@@ -1234,8 +1332,8 @@
     for(const z of s.zones||[])safeDrawLayer(s,"Zauberzone",()=>drawZone(ctx,s,z,now));
     for(const e of s.effects||[])safeDrawLayer(s,"Kampfeffekt",()=>drawEffect(ctx,s,e));
     for(const b of s.projectiles||[])safeDrawLayer(s,"Projektil",()=>drawProjectile(ctx,s,b,now));
-    const actors=[...s.enemies.filter(e=>!e.dead).map(e=>({y:e.y,kind:"enemy",value:e})),...s.players.filter(Boolean).map(p=>({y:p.y,kind:"player",value:p}))].sort((a,b)=>a.y-b.y);
-    for(const actor of actors)safeDrawActor(ctx,s,actor.value,actor.kind,now);
+    const actors=[...s.enemies.filter(e=>!e.dead).map(e=>({y:e.y,kind:"enemy",value:e})),...s.players.filter(Boolean).map(p=>({y:p.y,kind:"player",value:p})),...s.players.filter(p=>p?.hunterPet).map(p=>({y:p.hunterPet.y,kind:"pet",value:p.hunterPet,owner:p}))].sort((a,b)=>a.y-b.y);
+    for(const actor of actors){if(actor.kind==="pet")safeDrawLayer(s,"Jäger-Begleiter",()=>drawHunterPet(ctx,s,actor.value,actor.owner,now));else safeDrawActor(ctx,s,actor.value,actor.kind,now);}
     safeDrawLayer(s,"Vordergrund-Objekte",()=>drawDungeonProps(ctx,s,now,"front"));
     for(const entry of s.texts||[])safeDrawLayer(s,"Kampftext",()=>drawText(ctx,s,entry));
     if(s.messageUntil>now)safeDrawLayer(s,"Raum-Nachricht",()=>drawCenterMessage(ctx,s.message));
@@ -1276,12 +1374,13 @@
   function drawDungeonDoor(ctx,s,now){if(!s.layout)return;const e=s.layout.exit,x=sx(s,e.x),y=sy(s,e.y),open=s.roomExitOpen||s.completed;ctx.save();ctx.translate(x,y);ctx.fillStyle="#15131a";ctx.strokeStyle=s.layout.palette.wallTop;ctx.lineWidth=6;ctx.beginPath();ctx.roundRect(-42,-48,84,72,20);ctx.fill();ctx.stroke();if(open){ctx.shadowColor=s.layout.palette.accent;ctx.shadowBlur=22;ctx.fillStyle=s.layout.palette.accent+"66";ctx.fillRect(-29,-36,58,53);ctx.fillStyle="#f4ffff";ctx.font="900 10px system-ui";ctx.textAlign="center";ctx.fillText(s.completed?"AUSGANG":"NÄCHSTER RAUM",0,40);}else{ctx.fillStyle="#754b2f";ctx.fillRect(-29,-36,58,53);ctx.strokeStyle="#c18b57";ctx.lineWidth=3;for(let i=-20;i<=20;i+=10){ctx.beginPath();ctx.moveTo(i,-34);ctx.lineTo(i,15);ctx.stroke();}}ctx.restore();}
   function drawMiniMap(s){const c=s.minimap;if(!c||!s.layout)return;const ctx=c.getContext("2d"),scale=Math.min(c.width/WORLD_W,c.height/WORLD_H);ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#020509dd";ctx.fillRect(0,0,c.width,c.height);ctx.save();ctx.scale(scale,scale);ctx.fillStyle=s.layout.palette.floor;for(const z of s.layout.walkable)ctx.fillRect(z.x,z.y,z.w,z.h);ctx.fillStyle=s.layout.palette.void;for(const z of s.layout.blocked)ctx.fillRect(z.x,z.y,z.w,z.h);ctx.fillStyle=s.roomExitOpen||s.completed?"#6fffd0":"#9a6b43";ctx.fillRect(s.layout.exit.x-18,s.layout.exit.y-18,36,36);for(const p of s.players){ctx.fillStyle=p.local?"#ffffff":ROLES[p.role]?.color||"#7ff";ctx.beginPath();ctx.arc(p.x,p.y,14,0,Math.PI*2);ctx.fill();}ctx.fillStyle="#ff6479";for(const e of s.enemies)if(!e.dead){ctx.beginPath();ctx.arc(e.x,e.y,e.boss?18:8,0,Math.PI*2);ctx.fill();}ctx.restore();ctx.strokeStyle="#58737c";ctx.strokeRect(.5,.5,c.width-1,c.height-1);}
 
+  function facingFromAngle(angle){const a=Math.atan2(Math.sin(Number(angle)||0),Math.cos(Number(angle)||0));if(a>-Math.PI/4&&a<=Math.PI/4)return "right";if(a>Math.PI/4&&a<=Math.PI*3/4)return "front";if(a<=-Math.PI/4&&a>-Math.PI*3/4)return "back";return "left";}
   function drawPlayer(ctx,s,p,now){
-    const selected=s.selectedTargetUid===p.uid,x=sx(s,p.x),y=sy(s,p.y),c=CLASSES[p.classId]||CLASSES.berserker,r=ROLES[p.role]||ROLES.dps,a=p.appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human"},g=p.gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,helmetType:p.role==="tank"?"helmet":p.role==="healer"?"hood":"none"},phase=p.moving?(p.walkPhase||now*.012):0,side=Math.cos(p.angle)>=0?1:-1;
+    const selected=s.selectedTargetUid===p.uid,x=sx(s,p.x),y=sy(s,p.y),c=CLASSES[p.classId]||CLASSES.berserker,r=ROLES[p.role]||ROLES.dps,a=p.appearance||{gender:"male",skin:"medium",hair:"dark",preset:"human"},g=p.gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,helmetType:p.role==="tank"?"helmet":p.role==="healer"?"hood":"none"},phase=p.moving?(p.walkPhase||now*.012):0,facing=facingFromAngle(p.angle),side=facing==="left"?-1:1;
     ctx.save();ctx.translate(x,y);ctx.globalAlpha=p.dead?.35:1;
     if(selected){ctx.strokeStyle="#66f3a5";ctx.shadowColor="#66f3a5";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,8,38,15,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;}
     if((p.shield||0)>0){const pulse=.82+.1*Math.sin(now*.009);ctx.strokeStyle="#9fe9ff";ctx.fillStyle="#7bdcff18";ctx.shadowColor="#9fe9ff";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,-37,36*pulse,58*pulse,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;}
-    drawFantasyCharacter(ctx,{appearance:a,gear:g,classId:p.classId,role:p.role,scale:.82,walk:phase,attack:(p.attackAnim||0)>.01,casting:(p.castAnim||0)>0,side,now});
+    drawFantasyCharacter(ctx,{appearance:a,gear:g,classId:p.classId,role:p.role,scale:.82,walk:phase,attack:(p.attackAnim||0)>.01,casting:(p.castAnim||0)>0,side,facing,now});
     const preset=presetById(a.preset);ctx.fillStyle="#fff";ctx.font="900 11px system-ui";ctx.textAlign="center";ctx.shadowColor="#000";ctx.shadowBlur=5;ctx.fillText(p.name,0,-91*(preset.height||1));ctx.fillStyle=r.color;ctx.font="800 10px system-ui";ctx.fillText(`${r.icon} ${Math.round(p.hp/Math.max(1,p.maxHp)*100)}%`,0,-79*(preset.height||1));ctx.restore();}
   function drawPlayerWeapon(ctx,p,c,torsoY,side,attack,casting){const gv=p.gearVisual||{},weaponColor=gv.weapon||c.color,module=gv.weaponModule||"steel";ctx.save();ctx.translate(side*(casting?9:19),torsoY+(casting?-18:4));const swing=attack?(side>0?-.7:.7):0;ctx.shadowColor=weaponColor;ctx.shadowBlur=module==="steel"?4:module==="holy"?18:14;if(p.role==="tank"){ctx.fillStyle="#496a7c";ctx.strokeStyle="#8fe8ff";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(-side*34,3,14,20,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.rotate(swing);ctx.strokeStyle=weaponColor;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,-24);ctx.lineTo(side*11,24);ctx.stroke();ctx.strokeStyle="#9a6b3f";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-side*3,9);ctx.lineTo(side*7,13);ctx.stroke();}
     else if(c.weaponType==="bow"){ctx.strokeStyle="#c2ef7e";ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,20,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.beginPath();ctx.moveTo(0,-20);ctx.lineTo(0,20);ctx.stroke();ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(24,0);ctx.stroke();}
@@ -1290,7 +1389,7 @@
     if(module!=="steel"){ctx.globalAlpha=.75;ctx.fillStyle=weaponColor;for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(Math.sin(i*2.1)*9,-28-i*7,2+i*.6,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}ctx.restore();}
 
   function drawEnemy(ctx,s,e,now){const selected=(s.selectedEnemyId===e.id);const x=sx(s,e.x),y=sy(s,e.y),pulse=.5+.5*Math.sin(now*.006),scale=e.boss?1.35:e.elite?1.12:1,phase=e.moving?Math.sin(e.walkPhase||now*.01)*5:0,kind=e.archetype||monsterArchetype(e.name);ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);if(selected){ctx.strokeStyle="#ffe47a";ctx.shadowColor="#ffe47a";ctx.shadowBlur=18;ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(0,10,e.radius+12,e.radius*.45,0,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;}ctx.fillStyle="#0009";ctx.beginPath();ctx.ellipse(0,8,e.radius*.95,e.radius*.3,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#17191e";ctx.lineWidth=8;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-6,-1);ctx.lineTo(-8+phase*.5,16);ctx.moveTo(6,-1);ctx.lineTo(8-phase*.5,16);ctx.stroke();ctx.shadowColor=e.color;ctx.shadowBlur=e.boss?22:10;ctx.fillStyle=e.color;ctx.strokeStyle=e.boss?"#fff":e.elite?"#ffd85d":"#20242a";ctx.lineWidth=e.boss?3:2;ctx.beginPath();if(kind==="beast"){ctx.moveTo(-e.radius*.78,-18);ctx.quadraticCurveTo(-e.radius,-4,-e.radius*.72,12);ctx.lineTo(-10,22);ctx.quadraticCurveTo(0,28,10,22);ctx.lineTo(e.radius*.72,12);ctx.quadraticCurveTo(e.radius,-4,e.radius*.78,-18);ctx.quadraticCurveTo(0,-44,-e.radius*.78,-18);ctx.closePath();}else if(kind==="skeleton"){ctx.rect(-e.radius*.6,-26,e.radius*1.2,38);}else if(kind==="cultist"){ctx.moveTo(-e.radius*.7,-24);ctx.quadraticCurveTo(0,-42,e.radius*.7,-24);ctx.lineTo(e.radius*.88,10);ctx.lineTo(-e.radius*.88,10);ctx.closePath();}else{ctx.moveTo(-e.radius*.7,-24);ctx.quadraticCurveTo(-e.radius,-4,-e.radius*.6,10);ctx.lineTo(e.radius*.6,10);ctx.quadraticCurveTo(e.radius,-4,e.radius*.7,-24);ctx.quadraticCurveTo(0,-40,-e.radius*.7,-24);ctx.closePath();}ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle="#a77463";ctx.beginPath();ctx.arc(0,-34,11+(e.boss?4:0),0,Math.PI*2);ctx.fill();ctx.fillStyle="#17141a";ctx.beginPath();if(kind==="beast"){ctx.arc(-4,-38,2.2,0,Math.PI*2);ctx.arc(4,-38,2.2,0,Math.PI*2);ctx.fill();ctx.strokeStyle=e.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-46);ctx.lineTo(-15,-60);ctx.moveTo(7,-46);ctx.lineTo(15,-60);ctx.stroke();ctx.fillStyle="#fff0a0";ctx.fillRect(-4,-28,2,8);ctx.fillRect(2,-28,2,8);}else{ctx.arc(-4,-34,1.9,0,Math.PI*2);ctx.arc(4,-34,1.9,0,Math.PI*2);ctx.fill();}ctx.fillStyle="#ffdf6a";ctx.beginPath();ctx.arc(-4,-34,1.5,0,Math.PI*2);ctx.arc(4,-34,1.5,0,Math.PI*2);ctx.fill();if(kind==="skeleton"){ctx.strokeStyle="#e7edf1";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(8,-8);ctx.moveTo(0,-26);ctx.lineTo(0,10);ctx.moveTo(-8,-17);ctx.lineTo(8,1);ctx.moveTo(8,-17);ctx.lineTo(-8,1);ctx.stroke();}if(e.boss){ctx.strokeStyle=e.color;ctx.globalAlpha=.45+pulse*.35;ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,-15,e.radius+10+pulse*5,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;}if(e.ranged){ctx.strokeStyle="#d9e2e8";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(17,-25);ctx.lineTo(25,6);ctx.stroke();ctx.fillStyle=e.color;ctx.beginPath();ctx.arc(17,-28,5,0,Math.PI*2);ctx.fill();}else{ctx.strokeStyle="#e7edf1";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(17,-24);ctx.lineTo(28,8+(e.attackAnim?8:0));ctx.stroke();}ctx.scale(1/scale,1/scale);const w=Math.max(50,e.radius*2.4);ctx.fillStyle="#19080b";ctx.fillRect(-w/2,-e.radius*scale-42,w,6);ctx.fillStyle=e.boss?"#ff526f":"#7ce98d";ctx.fillRect(-w/2,-e.radius*scale-42,w*clamp(e.hp/e.maxHp,0,1),6);ctx.fillStyle="#fff";ctx.font="800 10px system-ui";ctx.textAlign="center";ctx.fillText(e.name,0,-e.radius*scale-49);ctx.restore();}
-  function drawChests(ctx,s){for(const c of s.chests||[]){const opened=s.openedChestIds?.has(c.id),x=sx(s,c.x),y=sy(s,c.y),near=!opened&&Math.hypot(s.player.x-c.x,s.player.y-c.y)<=CHEST_INTERACT_RANGE;ctx.save();ctx.translate(x,y);ctx.shadowColor=opened?"transparent":"#ffd96a";ctx.shadowBlur=near?22:9;ctx.fillStyle=opened?"#332b24":"#9b622c";ctx.strokeStyle=opened?"#6f6254":"#ffd77a";ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(-28,-22,56,42,6);ctx.fill();ctx.stroke();ctx.fillStyle=opened?"#4c4034":"#cf8b39";ctx.fillRect(-28,-24,56,14);ctx.strokeRect(-28,-24,56,14);ctx.fillStyle=opened?"#6f6254":"#fff0a0";ctx.fillRect(-5,-23,10,43);if(near){ctx.fillStyle="#fff";ctx.font="900 13px system-ui";ctx.textAlign="center";ctx.fillText("E",0,-35);}ctx.restore();}}
+  function drawChests(ctx,s){const cleared=roomCombatCleared(s);for(const c of s.chests||[]){const opened=s.openedChestIds?.has(c.id),x=sx(s,c.x),y=sy(s,c.y),near=cleared&&!opened&&Math.hypot(s.player.x-c.x,s.player.y-c.y)<=CHEST_INTERACT_RANGE;ctx.save();ctx.translate(x,y);ctx.shadowColor=opened?"transparent":cleared?"#ffd96a":"#ff5f6d";ctx.shadowBlur=near?22:cleared?9:5;ctx.fillStyle=opened?"#332b24":cleared?"#9b622c":"#4b3433";ctx.strokeStyle=opened?"#6f6254":cleared?"#ffd77a":"#a75d62";ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(-28,-22,56,42,6);ctx.fill();ctx.stroke();ctx.fillStyle=opened?"#4c4034":cleared?"#cf8b39":"#694347";ctx.fillRect(-28,-24,56,14);ctx.strokeRect(-28,-24,56,14);ctx.fillStyle=opened?"#6f6254":cleared?"#fff0a0":"#cf7c82";ctx.fillRect(-5,-23,10,43);if(!opened&&!cleared){ctx.fillStyle="#fff";ctx.font="900 15px system-ui";ctx.textAlign="center";ctx.fillText("🔒",0,-33);}else if(near){ctx.fillStyle="#fff";ctx.font="900 13px system-ui";ctx.textAlign="center";ctx.fillText("E",0,-35);}ctx.restore();}}
   function drawProjectile(ctx,s,b,now=performance.now()){
     const x=sx(s,finite(b?.x,0)),y=sy(s,finite(b?.y,0));
     if(x<-60||y<-60||x>CANVAS_W+60||y>CANVAS_H+60)return;
@@ -1319,13 +1418,12 @@
     const hpt=UI.main.querySelector("[data-dkl-hp-text]");if(hpt)hpt.textContent=`${Math.round(hpPct)} % · ${NUMBER.format(Math.max(0,s.player.hp))}/${NUMBER.format(s.player.maxHp)}`;
     const shield=UI.main.querySelector("[data-dkl-shield]");if(shield)shield.style.width=`${clamp((s.player.shield||0)/Math.max(1,s.player.maxHp)*100,0,100)}%`;
     const room=UI.main.querySelector("[data-dkl-room]");if(room)room.textContent=`${s.layout?.roomTitle||"Raum"} · ${s.room}/${s.dungeon.rooms}`;
-    const objective=UI.main.querySelector("[data-dkl-objective]");if(objective)objective.textContent=s.completed?"Dungeon abgeschlossen · Ausgang offen":s.roomExitOpen?"Tor offen · zum Ausgang laufen":s.enemies.some(e=>!e.dead)?`${s.enemies.filter(e=>!e.dead).length} Gegner verbleiben`:"Raum gesäubert";
-    const attack=UI.main.querySelector("[data-dkl-attack]");if(attack){attack.classList.toggle("active",s.autoAttack);attack.querySelector("small").textContent=s.autoAttack?"Auto-Kampf aktiv":"Auto-Kampf aus";}
+    const objective=UI.main.querySelector("[data-dkl-objective]");if(objective)objective.textContent=s.completed?"Dungeon abgeschlossen · Ausgang offen":s.roomExitOpen?"Raum gesäubert · Kisten offen · zum Tor laufen":s.enemies.some(e=>!e.dead)?`${s.enemies.filter(e=>!e.dead).length} Gegner verbleiben`:"Raum gesäubert · Kisten werden geöffnet";
     for(let i=0;i<5;i++){const remain=s.skillCooldowns[i]||0,total=Math.max(.01,s.cooldownTotals?.[i]||SKILL_BASE_COOLDOWNS[i]),progress=clamp(1-remain/total,0,1),button=UI.main.querySelector(`[data-dkl-skill="${i}"]`),cd=UI.main.querySelector(`[data-dkl-cd="${i}"]`),fill=UI.main.querySelector(`[data-dkl-fill="${i}"]`);if(cd)cd.textContent=remain>0?`${remain.toFixed(1)} s`:"Bereit";if(button)button.classList.toggle("ready",remain<=0);if(fill)fill.style.transform=`scaleX(${progress})`;}
     const revive=UI.main.querySelector("[data-dkl-revive]"),reviveCd=UI.main.querySelector("[data-dkl-revive-cd]"),reviveFill=UI.main.querySelector("[data-dkl-revive-fill]");if(revive){const remain=s.reviveCooldown||0,total=Math.max(.01,s.reviveCooldownTotal||REVIVE_COOLDOWN),progress=clamp(1-remain/total,0,1);revive.classList.toggle("ready",remain<=0);if(reviveCd)reviveCd.textContent=remain>0?`${remain.toFixed(1)} s`:"Bereit";if(reviveFill)reviveFill.style.transform=`scaleX(${progress})`;}
     const team=UI.main.querySelector("[data-dkl-team]");if(team)team.innerHTML=s.players.filter(p=>!p.local).map(p=>`<div role="button" tabindex="0" data-dkl-target-player="${esc(p.uid)}" class="role-${p.role} ${s.selectedTargetUid===p.uid?"selected":""}"><span>${CLASSES[p.classId]?.icon||"◆"}</span><b>${esc(p.name)}</b><small>PWR ${formatPower(p.power)} · Schild ${formatPower(p.shield||0)}</small><em>${p.dead?"K.O.":`${Math.round(p.hp/Math.max(1,p.maxHp)*100)} %`}</em></div>`).join("");
     const enemy=s.enemies.find(e=>e.id===s.selectedEnemyId&&!e.dead),ally=s.players.find(p=>p.uid===s.selectedTargetUid),target=enemy||ally||s.player,targetFrame=UI.main.querySelector("[data-dkl-target-frame]");if(targetFrame){targetFrame.classList.toggle("enemy",!!enemy);const name=targetFrame.querySelector("[data-dkl-target-name]"),type=targetFrame.querySelector("[data-dkl-target-type]"),icon=targetFrame.querySelector("[data-dkl-target-icon]"),bar=targetFrame.querySelector("[data-dkl-target-health]"),text=targetFrame.querySelector("[data-dkl-target-health-text]");const pct=clamp((target.hp||0)/Math.max(1,target.maxHp||1)*100,0,100);if(name)name.textContent=target.name||"Ziel";if(type)type.textContent=enemy?(enemy.boss?"Boss":"Gegner"):`${ROLES[target.role]?.name||"Verbündeter"} · Schild ${NUMBER.format(target.shield||0)}`;if(icon)icon.textContent=enemy?"☠":(CLASSES[target.classId]?.icon||"◎");if(bar)bar.style.width=`${pct}%`;if(text)text.textContent=target.dead?"K.O.":`${Math.round(pct)} %`;}
-    const nearbyChest=nearestClosedChest(s),interact=UI.main.querySelector("[data-dkl-interact]");s.nearbyChestId=nearbyChest?.id||"";if(interact)interact.hidden=!nearbyChest;
+    const tameable=nearestTameableEnemy(s),nearbyChest=nearestClosedChest(s),interact=UI.main.querySelector("[data-dkl-interact]");s.nearbyChestId=nearbyChest?.id||"";if(interact){interact.hidden=!(tameable||nearbyChest);const b=interact.querySelector("b"),small=interact.querySelector("small");if(b)b.textContent=tameable?"Tier zähmen":"Kiste öffnen";if(small)small.textContent=tameable?"Geschwächtes Tier übernehmen":"Loot aufnehmen";}
     const bossHud=UI.main.querySelector("[data-dkl-boss]"),boss=s.enemies.find(e=>e.boss&&!e.dead);if(bossHud){bossHud.hidden=!boss;if(boss){bossHud.querySelector("b").textContent=boss.name;bossHud.querySelector("i").style.width=`${clamp(boss.hp/boss.maxHp*100,0,100)}%`;bossHud.querySelector("small").textContent=`${NUMBER.format(Math.max(0,Math.round(boss.hp)))} / ${NUMBER.format(boss.maxHp)}`;}}
     const log=UI.main.querySelector("[data-dkl-combat-log]");if(log){const lines=(s.combatLog||[]).slice(-7);log.innerHTML=lines.map(line=>`<p>${esc(line)}</p>`).join("");log.scrollTop=log.scrollHeight;}
   }
@@ -1348,7 +1446,7 @@
     if(render&&UI.overlay)renderHome();
   }
   function showExitDialog(){if(confirm("Dungeon wirklich verlassen? Der aktuelle Fortschritt geht verloren.")){stopSession(false);leaveParty(false);renderHome();}}
-  function showTutorial(){const d=ensureState();const html=`<div class="dkl-tutorial"><div><button data-dkl-tutorial-close>×</button><small>WILLKOMMEN IN DUNGEON.KL</small><h2>Deine erste Expedition</h2><p>Wähle Tank, DD oder Heiler. Mit <b>WASD</b> bewegst du dich. Drücke <b>Angriff</b>, um den automatischen Kampf zu starten. Nach fünf Sekunden ohne sichtbaren Gegner stoppt er automatisch. Gegner erkennen euch nur mit freier Sicht. Mit <b>E</b> öffnest du Kisten in deiner Nähe.</p><div><span><b>1–5</b><small>Fähigkeiten selbst auslösen</small></span><span><b>2–4 Spieler</b><small>Bessere Beute und mehr XP</small></span><span><b>3 Bosse</b><small>Pro Dungeon inklusive Endboss</small></span></div><button class="dkl-btn primary" data-dkl-tutorial-ok>Verstanden</button></div></div>`;UI.overlay.insertAdjacentHTML("beforeend",html);const close=()=>{UI.overlay.querySelector(".dkl-tutorial")?.remove();d.tutorialDone=true;safeSave();};UI.overlay.querySelector("[data-dkl-tutorial-close]").addEventListener("click",close);UI.overlay.querySelector("[data-dkl-tutorial-ok]").addEventListener("click",close);}
+  function showTutorial(){const d=ensureState();const html=`<div class="dkl-tutorial"><div><button data-dkl-tutorial-close>×</button><small>WILLKOMMEN IN DUNGEON.KL</small><h2>Deine erste Expedition</h2><p>Wähle Tank, DD oder Heiler. Mit <b>WASD</b> bewegst du dich. Klicke oder tippe einen Gegner an. Sobald er sichtbar und in Reichweite ist, greift dein Charakter ihn automatisch an. Gegner erkennen euch nur mit freier Sicht. Mit <b>E</b> öffnest du Kisten. Als Jäger zähmst du damit geschwächte Wölfe, Hunde und Bestien.</p><div><span><b>1–5</b><small>Fähigkeiten selbst auslösen</small></span><span><b>2–4 Spieler</b><small>Bessere Beute und mehr XP</small></span><span><b>3 Bosse</b><small>Pro Dungeon inklusive Endboss</small></span></div><button class="dkl-btn primary" data-dkl-tutorial-ok>Verstanden</button></div></div>`;UI.overlay.insertAdjacentHTML("beforeend",html);const close=()=>{UI.overlay.querySelector(".dkl-tutorial")?.remove();d.tutorialDone=true;safeSave();};UI.overlay.querySelector("[data-dkl-tutorial-close]").addEventListener("click",close);UI.overlay.querySelector("[data-dkl-tutorial-ok]").addEventListener("click",close);}
   function unlockAudio(){
     if(UI.audio&&UI.audio.state!=="closed")return UI.audio;
     const AudioCtor=window.AudioContext||window.webkitAudioContext;
@@ -1364,9 +1462,9 @@
     }
   }
   function playSound(type){const d=ensureState();if(!d.settings.sound||!UI.audio)return;try{const o=UI.audio.createOscillator(),g=UI.audio.createGain();o.connect(g);g.connect(UI.audio.destination);o.type=type==="skill"?"sine":"square";o.frequency.value=type==="skill"?420:180;g.gain.setValueAtTime(.035,UI.audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,UI.audio.currentTime+.12);o.start();o.stop(UI.audio.currentTime+.12);}catch{}}
-  function onKeyDown(e){if(!UI.overlay)return;const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"");if(typing){if(e.code==="Escape")document.activeElement.blur();return;}UI.keys[e.code]=true;if(UI.session){if(["Digit1","Digit2","Digit3","Digit4","Digit5"].includes(e.code)){e.preventDefault();useSkill(Number(e.code.slice(-1))-1);}if(e.code==="KeyR"){e.preventDefault();useRevive();}if(e.code==="Space"){e.preventDefault();toggleAutoAttack();}if(e.code==="KeyE"){e.preventDefault();interactNearby();}if(e.code==="KeyI"){e.preventDefault();renderInventory();}if(e.code==="Escape"){e.preventDefault();showExitDialog();}}else if(e.code==="Escape"){e.preventDefault();returnToTopGames();}}
+  function onKeyDown(e){if(!UI.overlay)return;const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"");if(typing){if(e.code==="Escape")document.activeElement.blur();return;}UI.keys[e.code]=true;if(UI.session){if(["Digit1","Digit2","Digit3","Digit4","Digit5"].includes(e.code)){e.preventDefault();useSkill(Number(e.code.slice(-1))-1);}if(e.code==="KeyR"){e.preventDefault();useRevive();}if(e.code==="KeyE"){e.preventDefault();interactNearby();}if(e.code==="KeyI"){e.preventDefault();renderInventory();}if(e.code==="Escape"){e.preventDefault();showExitDialog();}}else if(e.code==="Escape"){e.preventDefault();returnToTopGames();}}
   function onKeyUp(e){UI.keys[e.code]=false;}
-  function pointerDown(e){const s=UI.session;if(!s)return;const rect=s.canvas.getBoundingClientRect(),px=e.clientX-rect.left,py=e.clientY-rect.top;UI.pointer.down=true;UI.pointer.x=px;UI.pointer.y=py;const useStick=e.pointerType!=="mouse"&&px<rect.width*.42&&py>rect.height*.55;if(useStick){s.mobileOrigin={x:px,y:py};s.mobileMove={x:0,y:0};return;}const worldX=px/rect.width*CANVAS_W+s.camera.x-CANVAS_W/2,worldY=py/rect.height*CANVAS_H+s.camera.y-CANVAS_H/2;let bestPlayer=null,bestPlayerD=52;for(const p of s.players){const d=Math.hypot(p.x-worldX,p.y-worldY);if(d<bestPlayerD){bestPlayer=p;bestPlayerD=d;}}if(bestPlayer){selectPlayerTarget(bestPlayer.uid);return;}let bestEnemy=null,bestEnemyD=62;for(const enemy of s.enemies){if(enemy.dead)continue;const d=Math.hypot(enemy.x-worldX,enemy.y-worldY);if(d<bestEnemyD+enemy.radius){bestEnemy=enemy;bestEnemyD=d;}}if(bestEnemy)selectEnemyTarget(bestEnemy.id);}
+  function pointerDown(e){const s=UI.session;if(!s)return;const rect=s.canvas.getBoundingClientRect(),px=e.clientX-rect.left,py=e.clientY-rect.top;UI.pointer.down=true;UI.pointer.x=px;UI.pointer.y=py;const useStick=e.pointerType!=="mouse"&&px<rect.width*.42&&py>rect.height*.55;if(useStick){s.mobileOrigin={x:px,y:py};s.mobileMove={x:0,y:0};return;}const worldX=px/rect.width*CANVAS_W+s.camera.x-CANVAS_W/2,worldY=py/rect.height*CANVAS_H+s.camera.y-CANVAS_H/2;let bestPlayer=null,bestPlayerD=58;for(const player of s.players){const d=Math.hypot(player.x-worldX,player.y-worldY);if(d<bestPlayerD){bestPlayer=player;bestPlayerD=d;}}let bestEnemy=null,bestEnemyD=72;for(const enemy of s.enemies){if(enemy.dead)continue;const d=Math.hypot(enemy.x-worldX,enemy.y-worldY);if(d<bestEnemyD+enemy.radius){bestEnemy=enemy;bestEnemyD=d;}}if(bestEnemy&&(!bestPlayer||bestEnemyD<=bestPlayerD+4)){selectEnemyTarget(bestEnemy.id);return;}if(bestPlayer)selectPlayerTarget(bestPlayer.uid);}
   function pointerMove(e){const s=UI.session;if(!s||!UI.pointer.down||!s.mobileOrigin)return;const rect=s.canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top,dx=x-s.mobileOrigin.x,dy=y-s.mobileOrigin.y,len=Math.hypot(dx,dy)||1;s.mobileMove={x:clamp(dx/55,-1,1),y:clamp(dy/55,-1,1)};const knob=UI.main.querySelector("[data-dkl-stick] i");if(knob)knob.style.transform=`translate(${clamp(dx,-38,38)}px,${clamp(dy,-38,38)}px)`;}
   function pointerUp(){const s=UI.session;UI.pointer.down=false;if(s){s.mobileOrigin=null;s.mobileMove=null;}const knob=UI.main?.querySelector("[data-dkl-stick] i");if(knob)knob.style.transform="translate(0,0)";}
 
