@@ -63,3 +63,121 @@ body.dungeon-kl-open{overflow:hidden}.dkl-modal{position:fixed;inset:0;z-index:2
 .dkl-character-canvas{background:transparent!important;filter:drop-shadow(0 18px 26px rgba(0,0,0,.45))}
 .dkl-portal-character .dkl-character-canvas,.dkl-wow-model .dkl-character-canvas,.dkl-character-focus .dkl-character-canvas{mix-blend-mode:normal}
 .dkl-character-locked{display:inline-flex;align-items:center;min-height:42px;padding:0 13px;border:1px solid #4a6470;border-radius:12px;background:#0c1a20;color:#a9bec7;font-size:11px;font-weight:850}
+
+/* V167 – drei unabhängige Charakterplätze */
+.dkl-character-roster{min-height:100%;padding:clamp(14px,2.2vw,30px);display:grid;grid-template-rows:auto 1fr auto;gap:22px;background:radial-gradient(circle at 50% 10%,rgba(105,74,171,.22),transparent 38%),linear-gradient(155deg,#071116,#03070a)}
+.dkl-character-roster>header{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;padding:20px 22px;border:1px solid #304a54;border-radius:22px;background:linear-gradient(145deg,#10242b,#071419)}
+.dkl-character-roster>header small{color:#70efc4;font-size:10px;font-weight:950;letter-spacing:.15em}
+.dkl-character-roster>header h1{margin:4px 0 7px;font-size:clamp(28px,4vw,52px);line-height:1}
+.dkl-character-roster>header p{max-width:780px;margin:0;color:#a9bdc3;line-height:1.45}
+.dkl-character-roster>section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.dkl-character-slot{position:relative;min-height:560px;display:grid;grid-template-rows:minmax(300px,1fr) auto auto;overflow:hidden;border:1px solid #36505a;border-radius:24px;background:radial-gradient(circle at 50% 27%,color-mix(in srgb,var(--slot,#65edc3) 24%,transparent),transparent 34%),linear-gradient(155deg,#102028,#050b10);box-shadow:inset 0 1px rgba(255,255,255,.05),0 20px 48px #0007}
+.dkl-character-slot.active{border-color:var(--slot,#65edc3);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--slot,#65edc3) 55%,transparent),0 0 30px color-mix(in srgb,var(--slot,#65edc3) 22%,transparent),0 20px 48px #0008}
+.dkl-character-slot canvas{display:block;width:100%;height:330px;object-fit:contain;background:transparent;filter:drop-shadow(0 18px 25px #0009)}
+.dkl-character-slot>div{padding:0 18px 15px;text-align:center}
+.dkl-character-slot>div small,.dkl-character-slot>div b,.dkl-character-slot>div span,.dkl-character-slot>div em{display:block}
+.dkl-character-slot>div small{color:var(--slot,#65edc3);font-size:9px;font-weight:950;letter-spacing:.14em}
+.dkl-character-slot>div h2{margin:5px 0 4px;font-size:25px}
+.dkl-character-slot>div b{font-size:12px;color:#dcecf0}
+.dkl-character-slot>div span{margin-top:2px;color:#91a9b0;font-size:11px}
+.dkl-character-slot>div em{margin-top:9px;color:#fff;font-size:11px;font-style:normal;font-weight:900}
+.dkl-character-slot>footer{display:flex;gap:8px;padding:0 15px 15px}
+.dkl-character-slot>footer .dkl-btn:first-child{flex:1}
+.dkl-character-slot.empty{display:flex;min-height:560px;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-style:dashed;color:#dbe9ec;cursor:pointer}
+.dkl-character-slot.empty>span{display:grid;place-items:center;width:82px;height:82px;border:2px solid #5d7882;border-radius:50%;font-size:45px;color:#6af0c5;background:#0c1c22}
+.dkl-character-slot.empty>b{font-size:18px}
+.dkl-character-slot.empty>small{color:#80989f}
+.dkl-character-roster>footer{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 17px;border:1px solid #293f48;border-radius:16px;background:#081419;color:#9db1b7}
+
+/* V167 – Skillbaum und frei belegbare Aktionsleiste */
+.dkl-action-editor{margin-bottom:16px;padding:18px;border:1px solid #3c5360;border-radius:22px;background:radial-gradient(circle at 50% 0,rgba(105,90,200,.18),transparent 42%),#08151b}
+.dkl-action-editor>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.dkl-action-editor>header small{color:#7cf0cb;font-size:9px;font-weight:950;letter-spacing:.14em}
+.dkl-action-editor h3{margin:3px 0 4px}
+.dkl-action-editor p{margin:0;max-width:760px;color:#91a8af;font-size:11px}
+.dkl-action-editor-slots{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:15px}
+.dkl-action-editor-slots>button{position:relative;min-height:128px;padding:28px 7px 8px;border:1px solid #435866;border-radius:14px;background:linear-gradient(#111d27,#070c12);color:#fff;overflow:hidden}
+.dkl-action-editor-slots>button.selected{border-color:#71f0c5;box-shadow:0 0 0 2px #71f0c533,0 0 22px #57e8b633}
+.dkl-action-editor-slots>button>span{position:absolute;left:8px;top:7px;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:#20313a;color:#fff;font-size:11px;font-weight:950}
+.dkl-action-editor-slots b,.dkl-action-editor-slots small{display:block}
+.dkl-action-editor-slots b{margin-top:3px;font-size:10px}
+.dkl-action-editor-slots small{color:#829aa2;font-size:8px}
+.dkl-action-library{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dkl-action-library>button{display:grid;grid-template-columns:62px 1fr;gap:10px;align-items:center;min-height:86px;padding:10px;border:1px solid #344c56;border-radius:14px;background:#0b1a20;color:#fff;text-align:left}
+.dkl-action-library>button.unlocked:hover{border-color:#6bedc3;background:#10272b}
+.dkl-action-library>button.equipped{box-shadow:inset 4px 0 #66efc1}
+.dkl-action-library>button.locked{opacity:.42}
+.dkl-action-library b,.dkl-action-library small,.dkl-action-library em{display:block}
+.dkl-action-library b{font-size:12px}
+.dkl-action-library small{color:#92a7ad;font-size:9px;line-height:1.3}
+.dkl-action-library em{margin-top:4px;color:#71ebc3;font-size:8px;font-style:normal;font-weight:900}
+
+/* Ability icons are original CSS artwork, not external images. */
+.dkl-ability-art{position:relative;display:grid;place-items:center;width:52px;height:52px;margin:4px auto;border:1px solid #70808b;border-radius:11px;background:radial-gradient(circle at 35% 30%,#ffffff33,transparent 24%),linear-gradient(145deg,#20313d,#080d14);box-shadow:inset 0 0 18px #0009,0 4px 12px #0008;overflow:hidden}
+.dkl-ability-art:before,.dkl-ability-art:after{content:"";position:absolute;pointer-events:none}
+.dkl-ability-art>em{position:relative;z-index:2;color:#fff;font-size:25px;font-style:normal;text-shadow:0 0 9px currentColor}
+.dkl-ability-art.lightwave{background:radial-gradient(circle,#fff8bb,#d7ae34 35%,#432b05 74%)}
+.dkl-ability-art.lightwave:before{width:38px;height:20px;border-top:4px solid #fff;border-radius:50%;transform:rotate(-18deg)}
+.dkl-ability-art.cleanse{background:radial-gradient(circle,#baffc8,#27894e 48%,#092d1b)}
+.dkl-ability-art.cleanse:before{width:30px;height:30px;border:4px dotted #ecffe8;border-radius:50%}
+.dkl-ability-art.penance,.dkl-ability-art.holyspear{background:linear-gradient(135deg,#fff6bd,#dca82e 50%,#40270b)}
+.dkl-ability-art.penance:before,.dkl-ability-art.holyspear:before{width:42px;height:7px;border-radius:99px;background:#fff;box-shadow:0 -12px #ffe679,0 12px #ffd64d;transform:rotate(-28deg)}
+.dkl-ability-art.healcircle,.dkl-ability-art.radiance{background:radial-gradient(circle,#eaffd9 0 12%,#62e89a 15% 35%,#123f2a 38% 72%)}
+.dkl-ability-art.holyshield,.dkl-ability-art.revive{background:radial-gradient(circle,#e8fbff,#4fb7da 42%,#122c51 75%)}
+.dkl-ability-art.holyshield:before{width:27px;height:34px;border:4px solid #fff;border-radius:45% 45% 55% 55%;clip-path:polygon(0 0,100% 0,88% 70%,50% 100%,12% 70%)}
+.dkl-ability-art.revive:before{width:9px;height:36px;background:#fff;border-radius:5px;box-shadow:0 0 12px #fff}
+.dkl-ability-art.revive:after{width:36px;height:9px;background:#fff;border-radius:5px;box-shadow:0 0 12px #fff}
+.dkl-ability-art.classskill,.dkl-ability-art.charge,.dkl-ability-art.bloodstorm,.dkl-ability-art.beastcall,.dkl-ability-art.frostlance,.dkl-ability-art.soulburst{background:radial-gradient(circle at 35% 30%,#ffffff66,transparent 22%),linear-gradient(145deg,#733fbc,#182c5b 54%,#07101a)}
+
+/* V167 – six-slot MMO bar: number top-left, title at top, art in center. */
+.dkl-mmo-actionbar.target-combat{grid-template-columns:repeat(6,minmax(78px,104px));gap:6px;align-items:end}
+.dkl-mmo-actionbar.target-combat button{position:relative;width:104px;min-height:94px;padding:24px 5px 5px;border-radius:12px;background:linear-gradient(180deg,#17222eea,#060a0eea)}
+.dkl-mmo-actionbar.target-combat button>b{position:absolute;z-index:3;top:7px;left:30px;right:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:9px}
+.dkl-mmo-actionbar.target-combat .dkl-action-number{position:absolute;z-index:4;left:6px;top:6px;display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#263640;color:#fff;font-size:10px;font-weight:950}
+.dkl-mmo-actionbar.target-combat .dkl-ability-art{width:48px;height:48px;margin:3px auto 2px}
+.dkl-mmo-actionbar.target-combat .dkl-ability-art>em{font-size:21px}
+.dkl-mmo-actionbar.target-combat button>small{position:relative;z-index:3;font-size:7px}
+.dkl-mmo-actionbar.target-combat button.empty{opacity:.58}
+
+/* V167 – room banner is a short overlay only. */
+.dkl-mmo-room[hidden]{display:none!important}
+.dkl-mmo-room{animation:dklRoomEnter .25s ease-out both}
+@keyframes dklRoomEnter{from{opacity:0;transform:translate(-50%,-14px) scale(.96)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+
+/* Enemy/ally target frame stays on the far right on desktop. */
+.dkl-mmo-target-frame{left:auto;right:14px;top:12px;transform:none}
+.dkl-mmo-party{top:86px}
+
+@media(max-width:1100px){
+  .dkl-character-roster>section{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dkl-character-slot.empty{min-height:500px}
+  .dkl-action-editor-slots{grid-template-columns:repeat(3,1fr)}
+  .dkl-action-library{grid-template-columns:repeat(2,1fr)}
+  .dkl-mmo-actionbar.target-combat{grid-template-columns:repeat(3,88px)}
+  .dkl-mmo-actionbar.target-combat button{width:88px;min-height:82px}
+  .dkl-mmo-actionbar.target-combat .dkl-ability-art{width:40px;height:40px}
+}
+@media(max-width:760px){
+  .dkl-character-roster{padding:8px}
+  .dkl-character-roster>header{padding:14px;flex-direction:column}
+  .dkl-character-roster>section{grid-template-columns:1fr}
+  .dkl-character-slot{min-height:480px;grid-template-rows:270px auto auto}
+  .dkl-character-slot canvas{height:270px}
+  .dkl-character-roster>footer{align-items:stretch;flex-direction:column}
+  .dkl-action-editor{padding:10px}
+  .dkl-action-editor>header{flex-direction:column}
+  .dkl-action-editor-slots{grid-template-columns:repeat(3,1fr)}
+  .dkl-action-library{grid-template-columns:1fr}
+  .dkl-mmo-target-frame{right:5px;top:5px}
+  .dkl-mmo-party{top:78px}
+}
+@media(max-width:560px){
+  .dkl-action-editor-slots>button{min-height:105px;padding-top:25px}
+  .dkl-action-library>button{grid-template-columns:52px 1fr}
+  .dkl-mmo-actionbar.target-combat{grid-template-columns:repeat(3,64px)}
+  .dkl-mmo-actionbar.target-combat button{width:64px;min-height:69px;padding-top:20px}
+  .dkl-mmo-actionbar.target-combat button>b{left:25px;top:5px;font-size:7px}
+  .dkl-mmo-actionbar.target-combat .dkl-action-number{left:4px;top:4px;width:17px;height:17px;font-size:8px}
+  .dkl-mmo-actionbar.target-combat .dkl-ability-art{width:34px;height:34px;border-radius:8px}
+  .dkl-mmo-actionbar.target-combat .dkl-ability-art>em{font-size:16px}
+}
