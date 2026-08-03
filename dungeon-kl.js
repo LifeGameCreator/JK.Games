@@ -1,8 +1,9 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-dungeon-kl-v168-leg-animation-expanded-skilltrees-cooldowns";
+  const VERSION = "20260804-dungeon-kl-v170-xp-plus-10-percent";
   const MAX_LEVEL = 100;
+  const XP_REWARD_MULTIPLIER = 1.10;
   const MAX_CHARACTERS = 3;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
@@ -487,7 +488,8 @@
     return { health, damage, healing, armor, crit, haste, power, cooldownReduction:clamp(talents.cooldown,0,.35), shieldBonus:talents.shield, moveBonus:talents.move };
   }
   function addXp(amount) {
-    const d = ensureState(); d.xp += Math.max(0, Math.round(amount)); d.totalXp += Math.max(0, Math.round(amount));
+    const d = ensureState(), rewardedXp = Math.max(0, Math.round((Number(amount) || 0) * XP_REWARD_MULTIPLIER));
+    d.xp += rewardedXp; d.totalXp += rewardedXp;
     while (d.level < MAX_LEVEL && d.xp >= levelNeed(d.level)) { d.xp -= levelNeed(d.level); d.level++; toast("Levelaufstieg", `Dungeon-Level ${d.level} erreicht.`); }
     safeSave(); updateHead();
   }
@@ -523,9 +525,9 @@
   function characterPreviewHtml(extra=""){
     return `<canvas class="dkl-character-canvas ${extra}" width="420" height="520" data-dkl-character-preview></canvas>`;
   }
-  function drawCharacterWeaponModel(ctx,c,g,side=1,casting=false,attack=false,scale=1){
-    const color=g.weapon||c.color,module=g.weaponModule||"steel",swing=attack*(side>0?-.38:.38);
-    ctx.save();ctx.translate(side*31*scale,-45*scale);ctx.rotate(swing);ctx.shadowColor=color;ctx.shadowBlur=module==="steel"?5:18;
+  function drawCharacterWeaponModel(ctx,c,g,side=1,casting=false,attack=false,scale=1,anchor=null){
+    const color=g.weapon||c.color,module=g.weaponModule||"steel",swing=attack*(side>0?-.38:.38),ax=anchor&&Number.isFinite(anchor.x)?anchor.x:side*31*scale,ay=anchor&&Number.isFinite(anchor.y)?anchor.y:-45*scale;
+    ctx.save();ctx.translate(ax,ay);ctx.rotate(swing);ctx.shadowColor=color;ctx.shadowBlur=module==="steel"?5:18;
     if(c.weaponType==="bow"){
       ctx.strokeStyle=color;ctx.lineWidth=4*scale;ctx.beginPath();ctx.arc(0,0,25*scale,-Math.PI/2,Math.PI/2);ctx.stroke();ctx.strokeStyle="#eaf5f6";ctx.lineWidth=1.5*scale;ctx.beginPath();ctx.moveTo(0,-25*scale);ctx.lineTo(0,25*scale);ctx.stroke();
     }else if(c.weaponType==="tome"){
@@ -555,7 +557,10 @@
     if(g.helmetType==="hood"){ctx.fillStyle=g.helmet||armor;ctx.beginPath();ctx.arc(-2,headY-2,19*wide,Math.PI,Math.PI*2);ctx.lineTo(12,headY+12);ctx.lineTo(-14,headY+12);ctx.closePath();ctx.fill();}else if(g.helmetType==="helmet"){ctx.fillStyle=g.helmet||armor;ctx.beginPath();ctx.arc(-2,headY-2,17*wide,Math.PI,Math.PI*2);ctx.lineTo(12,headY+3);ctx.lineTo(-13,headY+3);ctx.closePath();ctx.fill();ctx.stroke();}
     const eyeColor=race==="revenant"?"#8cffbe":race==="voidkin"?"#d88cff":race==="drakeborn"?"#77efff":"#15181b";ctx.fillStyle=eyeColor;ctx.shadowColor=eyeColor;ctx.shadowBlur=(race==="revenant"||race==="voidkin"||race==="drakeborn")?10:0;ctx.beginPath();ctx.arc(7*wide,headY-2,2.2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=skin;ctx.beginPath();ctx.moveTo(10*wide,headY+1);ctx.lineTo(18*wide,headY+5);ctx.lineTo(10*wide,headY+7);ctx.fill();
     if(role==="tank"){ctx.save();ctx.translate(-24,-43);ctx.fillStyle=g.offhand||"#496a7c";ctx.strokeStyle=trim;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,0,11,23,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();}
-    ctx.save();ctx.translate(4,0);drawCharacterWeaponModel(ctx,c,g,1,casting,attack,1);ctx.restore();
+    const sideHandX=(c.weaponType==="bow"?12:10)*bodyScale;
+    const sideHandY=(c.projectile||c.weaponType==="tome"?-22:-18)*bodyScale;
+    const sideWeaponAnchor={x:sideHandX,y:sideHandY};
+    ctx.save();drawCharacterWeaponModel(ctx,c,g,1,casting,attack,1,sideWeaponAnchor);ctx.restore();
   }
 
   function drawFantasyCharacter(ctx,opts={}){
