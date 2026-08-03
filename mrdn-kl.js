@@ -2,7 +2,7 @@
   "use strict";
 
   const AM_APP_ID = "aergermensch-kl";
-  const AM_VERSION = "2026-07-25-mrdn-performance-classic-v15";
+  const AM_VERSION = "20260803-mrdn-v161-null-state-focus-fix";
   const AM_DATABASE_ID = "gamekl";
   const AM_COLLECTION = "angerMenschGames";
   const AM_MAX_LOG = 18;
@@ -85,10 +85,20 @@
     ? escapeHtml(value)
     : String(value ?? "").replace(/[&<>\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[char]));
 
+  function amStateRoot() {
+    try {
+      if (typeof state !== "undefined" && state && typeof state === "object") return state;
+    } catch {}
+    return null;
+  }
+
   function amRootSave() {
-    state.angerMensch ||= {};
-    state.angerMensch.version = AM_VERSION;
-    if (typeof save === "function") save();
+    const root = amStateRoot();
+    if (!root) return false;
+    root.angerMensch ||= {};
+    root.angerMensch.version = AM_VERSION;
+    try { if (typeof save === "function") save(); } catch (error) { console.warn("MRDN.KL Speichern", error); }
+    return true;
   }
 
   function amNormalizeLocalGame(game) {
@@ -125,21 +135,26 @@
   }
 
   function amLocalGame() {
-    state.angerMensch ||= {};
-    const normalized = amNormalizeLocalGame(state.angerMensch.localGame);
-    if (!normalized && state.angerMensch.localGame) {
-      delete state.angerMensch.localGame;
+    const root = amStateRoot();
+    if (!root) return null;
+    root.angerMensch ||= {};
+    const normalized = amNormalizeLocalGame(root.angerMensch.localGame);
+    if (!normalized && root.angerMensch.localGame) {
+      delete root.angerMensch.localGame;
       amRootSave();
     } else if (normalized) {
-      state.angerMensch.localGame = normalized;
+      root.angerMensch.localGame = normalized;
     }
     return normalized;
   }
 
   function amSetLocalGame(game) {
-    state.angerMensch ||= {};
-    state.angerMensch.localGame = game;
+    const root = amStateRoot();
+    if (!root) return false;
+    root.angerMensch ||= {};
+    root.angerMensch.localGame = game;
     amRootSave();
+    return true;
   }
 
   function amCurrentGame() {

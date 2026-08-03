@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-dungeon-kl-v160-hero-loading-dungeon-world-rework";
+  const VERSION = "20260803-dungeon-kl-v161-loading-freeze-runtime-fix";
   const MAX_LEVEL = 100;
   const MAX_INVENTORY = 900;
   const CANVAS_W = 1280;
@@ -92,7 +92,7 @@
   const UI = {
     overlay: null, main: null, head: null, toastTimer: 0, phoneItem: "", view: "home", selectedDungeon: "crypt", selectedPartySize: 1,
     inventoryRarity: "all", inventorySlot: "all", inventorySearch: "", shopRole: "all", auctionLoading: false, auctionItems: [], party: null,
-    session: null, raf: 0, last: 0, keys: Object.create(null), pointer: { x: 0, y: 0, down: false }, audio: null, onlineUnsubs: [], timers: []
+    session: null, raf: 0, last: 0, keys: Object.create(null), pointer: { x: 0, y: 0, down: false }, audio: null, onlineUnsubs: [], timers: [], loadingToken: 0
   };
 
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
@@ -467,20 +467,68 @@
   async function leaveParty(render = true) { const p = UI.party; UI.party = null; UI.onlineUnsubs.splice(0).forEach(fn => { try { fn(); } catch {} }); if (p?.data?.status === "lobby") { try { if (p.host) await p.fb.deleteDoc(p.ref); else { const uids = p.data.playerUids.filter(x => x !== p.user.uid), profiles = { ...p.data.profiles }; delete profiles[p.user.uid]; await p.fb.updateDoc(p.ref, { playerUids: uids, profiles, updatedAtMs: Date.now() }); } } catch {} } if (render && UI.overlay) renderHome(); }
 
   function startDungeon(dungeonId, options = {}) {
-    const dungeon = DUNGEONS.find(x => x.id === dungeonId) || DUNGEONS[0], d = ensureState(); if (d.level < dungeon.level) return toast("Dungeon gesperrt", `Level ${dungeon.level} benötigt.`);
-    stopSession(false); unlockAudio(); const stats = playerStats(), partySize = clamp(Number(options.partySize) || 1, 1, 4);
-    const player = makePlayer({ uid: options.online?.user?.uid || "local", name: playerName(), role: d.role, classId: d.classId, stats, local: true, x: WORLD_W / 2, y: WORLD_H - 150, appearance: currentAppearance(), gearVisual: gearVisualFromState(d) });
-    const session = UI.session = { dungeon, partySize, online: options.online || null, host: !options.online || options.hostUid === options.online.user.uid, player, players: [player], remotePlayers: new Map(), enemies: [], projectiles: [], effects: [], texts: [], traps: [], chests: [], room: 1, roomState: "combat", roomStartedAt: performance.now(), startedAt: Date.now(), clearAt: 0, exitOpen: false, completed: false, autoAttack: false, noTargetFor: 0, skillCooldowns: [0,0,0,0,0], camera: { x: WORLD_W / 2, y: WORLD_H / 2 }, viewW: CANVAS_W, viewH: CANVAS_H, lastLootSeq: 0, lootSeq: 0, worldSeq: 0, networkLastWrite: 0, networkLastWorld: 0, seed: options.seed || Math.floor(Math.random() * 99999999), profiles: options.profiles || {}, playerUids: options.playerUids || [player.uid], hostUid: options.hostUid || player.uid, boss: null, bossTelegraph: null, message: "", messageUntil: 0, layout: null, roomExitOpen: false, minimap: null, roomTransitionLock: 0, zones: [], selectedTargetUid: player.uid, selectedEnemyId: "", targetPoint: null, cooldownTotals: SKILL_BASE_COOLDOWNS.slice(), openedChestIds: new Set(), nearbyChestId: "" };
-    if (options.online) setupDungeonNetwork(options);
-    buildRoom(session, 1); d.stats.runs++; safeSave(); renderDungeonLoading(session,()=>{if(UI.session!==session)return;renderDungeonStage();loop(performance.now());});
+    try {
+      const dungeon = DUNGEONS.find(x => x.id === dungeonId) || DUNGEONS[0], d = ensureState();
+      if (!d) throw new Error("Spielstand ist noch nicht bereit.");
+      if (d.level < dungeon.level) return toast("Dungeon gesperrt", `Level ${dungeon.level} benötigt.`);
+      stopSession(false);
+      const stats = playerStats(), partySize = clamp(Number(options.partySize) || 1, 1, 4);
+      const player = makePlayer({ uid: options.online?.user?.uid || "local", name: playerName(), role: d.role, classId: d.classId, stats, local: true, x: WORLD_W / 2, y: WORLD_H - 150, appearance: currentAppearance(), gearVisual: gearVisualFromState(d) });
+      const session = UI.session = { dungeon, partySize, online: options.online || null, host: !options.online || options.hostUid === options.online.user.uid, player, players: [player], remotePlayers: new Map(), enemies: [], projectiles: [], effects: [], texts: [], traps: [], chests: [], room: 1, roomState: "combat", roomStartedAt: performance.now(), startedAt: Date.now(), clearAt: 0, exitOpen: false, completed: false, autoAttack: false, noTargetFor: 0, skillCooldowns: [0,0,0,0,0], camera: { x: WORLD_W / 2, y: WORLD_H / 2 }, viewW: CANVAS_W, viewH: CANVAS_H, lastLootSeq: 0, lootSeq: 0, worldSeq: 0, networkLastWrite: 0, networkLastWorld: 0, seed: options.seed || Math.floor(Math.random() * 99999999), profiles: options.profiles || {}, playerUids: options.playerUids || [player.uid], hostUid: options.hostUid || player.uid, boss: null, bossTelegraph: null, message: "", messageUntil: 0, layout: null, roomExitOpen: false, minimap: null, roomTransitionLock: 0, zones: [], selectedTargetUid: player.uid, selectedEnemyId: "", targetPoint: null, cooldownTotals: SKILL_BASE_COOLDOWNS.slice(), openedChestIds: new Set(), nearbyChestId: "" };
+      if (options.online) setupDungeonNetwork(options);
+      buildRoom(session, 1);
+      d.stats.runs++;
+      safeSave();
+      renderDungeonLoading(session, () => {
+        if (UI.session !== session || !UI.overlay || !UI.main) return;
+        try {
+          renderDungeonStage();
+          UI.last = performance.now();
+          if (UI.raf) cancelAnimationFrame(UI.raf);
+          UI.raf = requestAnimationFrame(loop);
+        } catch (error) {
+          console.error("Dungeon.KL Stage-Start", error);
+          stopSession(false);
+          toast("Dungeon konnte nicht gestartet werden", error?.message || "Unbekannter Ladefehler");
+          renderHome();
+        }
+      });
+    } catch (error) {
+      console.error("Dungeon.KL Start", error);
+      stopSession(false);
+      toast("Dungeon-Start fehlgeschlagen", error?.message || "Unbekannter Fehler");
+      if (UI.overlay) renderHome();
+    }
   }
   function makePlayer({ uid: id, name, role, classId, stats, local, x, y, appearance=null, gearVisual=null }) { const r = ROLES[role] || ROLES.dps, c = CLASSES[classId] || CLASSES.berserker; return { uid: id, name, role, classId, local, x, y, vx: 0, vy: 0, angle: -Math.PI / 2, radius: 20, maxHp: stats.health, hp: stats.health, damage: stats.damage, healing: stats.healing, armor: stats.armor, crit: stats.crit, haste: stats.haste, power: stats.power, range: c.range, attackRate: c.attackRate, projectile: c.projectile, attackCd: 0, skillSeq: 0, skillRequested: 0, dead: false, downedAt: 0, shield: 0, buffs: {}, color: c.color, moving: false, climbing: false, walkPhase: 0, attackAnim: 0, castAnim: 0, skillAnim: 0, netX: x, netY: y, targetUid: "", targetEnemyId: "", targetX: x, targetY: y, appearance:appearance||{gender:"male",skin:"medium",hair:"dark"}, gearVisual:gearVisual||{armor:c.color,trim:c.color,helmet:c.color,gloves:c.color,boots:c.color,weapon:c.color,offhand:c.color,helmetType:role==="tank"?"helmet":role==="healer"?"hood":"none"} }; }
   function renderDungeonLoading(session,done){
     const tips=["Tanks eröffnen den Kampf und binden Gegner.","Kisten enthalten Gold und tragbare Ausrüstung.","Mit I kannst du dein Loadout im Dungeon wechseln.","Heiler können Sühne offensiv oder defensiv einsetzen.","Mauern unterbrechen Sichtlinien und Angriffe."];
     const symbol=session.dungeon.theme==="ice"?"❄":session.dungeon.theme==="forest"?"🌿":session.dungeon.theme==="void"?"◉":session.dungeon.theme==="universe"?"✦":"◆";
-    UI.view="loading";UI.main.innerHTML=`<div class="dkl-dungeon-loading" style="--load-color:${session.dungeon.color}"><div class="dkl-load-runes"><i></i><i></i><i></i></div><span class="dkl-load-symbol">${symbol}</span><small>GRUPPEN-DUNGEON WIRD VORBEREITET</small><h2>${esc(session.dungeon.name)}</h2><p>${esc(tips[(session.seed+session.partySize)%tips.length])}</p><div class="dkl-load-party">${session.players.map(p=>`<b>${ROLES[p.role]?.icon||"◆"} ${esc(p.name)}</b>`).join("")}</div><div class="dkl-load-progress"><i></i></div><em data-dkl-load-text>Dungeon-Grundriss wird aufgebaut …</em></div>`;
-    const bar=UI.main.querySelector(".dkl-load-progress i"),label=UI.main.querySelector("[data-dkl-load-text]");let progress=0;const phases=["Dungeon-Grundriss wird aufgebaut …","Monster und Bosse werden platziert …","Ausrüstung und Fähigkeiten werden geladen …","Die Gruppe betritt den Dungeon …"];
-    const timer=setInterval(()=>{if(UI.session!==session){clearInterval(timer);return;}progress=Math.min(100,progress+8+Math.random()*12);if(bar)bar.style.width=`${progress}%`;if(label)label.textContent=phases[Math.min(phases.length-1,Math.floor(progress/26))];if(progress>=100){clearInterval(timer);setTimeout(done,260);}},105);
+    const token=++UI.loadingToken;
+    UI.view="loading";
+    UI.main.innerHTML=`<div class="dkl-dungeon-loading" style="--load-color:${session.dungeon.color}"><div class="dkl-load-runes"><i></i><i></i><i></i></div><span class="dkl-load-symbol">${symbol}</span><small>GRUPPEN-DUNGEON WIRD VORBEREITET</small><h2>${esc(session.dungeon.name)}</h2><p>${esc(tips[Math.abs((Number(session.seed)||0)+session.partySize)%tips.length])}</p><div class="dkl-load-party">${session.players.map(p=>`<b>${ROLES[p.role]?.icon||"◆"} ${esc(p.name)}</b>`).join("")}</div><div class="dkl-load-progress"><i></i></div><em data-dkl-load-text>Dungeon-Grundriss wird aufgebaut …</em></div>`;
+    const bar=UI.main.querySelector(".dkl-load-progress i"),label=UI.main.querySelector("[data-dkl-load-text]");
+    const phases=["Dungeon-Grundriss wird aufgebaut …","Monster und Bosse werden platziert …","Ausrüstung und Fähigkeiten werden geladen …","Die Gruppe betritt den Dungeon …"];
+    let progress=0,finished=false;
+    const finish=()=>{
+      if(finished)return;
+      finished=true;
+      clearInterval(interval);
+      clearTimeout(fallback);
+      if(UI.loadingToken!==token||UI.session!==session)return;
+      if(bar)bar.style.width="100%";
+      if(label)label.textContent=phases[3];
+      window.setTimeout(()=>{if(UI.loadingToken===token&&UI.session===session)done();},120);
+    };
+    const interval=window.setInterval(()=>{
+      if(UI.loadingToken!==token||UI.session!==session){clearInterval(interval);return;}
+      progress=Math.min(100,progress+14);
+      if(bar)bar.style.width=`${progress}%`;
+      if(label)label.textContent=phases[Math.min(phases.length-1,Math.floor(progress/26))];
+      if(progress>=100)finish();
+    },90);
+    const fallback=window.setTimeout(finish,1800);
+    UI.timers.push(interval,fallback);
   }
   function setupDungeonNetwork(options) {
     const s = UI.session, p = s.online, fb = p.fb; if (!p) return;
@@ -772,7 +820,7 @@
   function selectEnemyTarget(id){const s=UI.session;if(!s)return;const target=s.enemies.find(e=>e.id===id&&!e.dead);if(!target)return;s.selectedEnemyId=target.id;s.selectedTargetUid="";showMessage(`Ziel: ${target.name}`,900);updateDungeonHud();}
   function activePlayerTarget(s,p,allowDead=false){const uid=p.local?s.selectedTargetUid:p.targetUid;const target=s.players.find(x=>x.uid===uid);if(target&&(allowDead||!target.dead))return target;return null;}
   function activeEnemyTarget(s,p,max=760){const id=p.local?s.selectedEnemyId:p.targetEnemyId;const target=s.enemies.find(e=>e.id===id&&!e.dead);if(target&&distance(p,target)<=max&&lineWalkable(s,p,target,7))return target;return null;}
-  function useSkill(index) { const s = UI.session; if (!s || s.player.dead || s.skillCooldowns[index] > 0) return; const used=executeSkill(s, s.player, index); if(!used)return; if (s.online && !s.host) { s.player.skillSeq++; s.player.skillRequested = index + 1; } }
+  function useSkill(index) { unlockAudio(); const s = UI.session; if (!s || s.player.dead || s.skillCooldowns[index] > 0) return; const used=executeSkill(s, s.player, index); if(!used)return; if (s.online && !s.host) { s.player.skillSeq++; s.player.skillRequested = index + 1; } }
   function executeSkill(s, p, index) {
     const role=p.role,classId=p.classId,cooldowns=SKILL_BASE_COOLDOWNS,enemyTarget=activeEnemyTarget(s,p,760)||nearestEnemy(s,p,700);let effectTarget=enemyTarget||p,used=true;
     if(role==="healer"){
@@ -811,7 +859,7 @@
   function areaDamage(s,x,y,radius,damage,source){for(const e of s.enemies)if(!e.dead&&Math.hypot(e.x-x,e.y-y)<=radius+e.radius&&lineWalkable(s,{x,y},e,5))damageEnemy(s,e,damage,source);}
   function multiShot(s,p,count,chosen){const target=chosen||activeEnemyTarget(s,p,760)||nearestEnemy(s,p,700);if(!target||!lineWalkable(s,p,target,7))return;const base=Math.atan2(target.y-p.y,target.x-p.x);for(let i=0;i<count;i++){const a=base+(i-(count-1)/2)*.13;s.projectiles.push({x:p.x,y:p.y,vx:Math.cos(a)*680,vy:Math.sin(a)*680,radius:5,damage:p.damage*1.15,ownerUid:p.uid,friendly:true,life:1.5,color:p.color});}}
   function updateZones(s,dt){for(const z of s.zones||[]){z.life-=dt;z.tick-=dt;if(z.tick<=0){z.tick=.72;const owner=s.players.find(p=>p.uid===z.ownerUid)||s.player;if(z.type==="heal"){for(const p of s.players)if(!p.dead&&Math.hypot(p.x-z.x,p.y-z.y)<=z.radius+p.radius){const percent=p.maxHp*.025;healPlayer(s,p,percent+z.amount);}}else{for(const e of s.enemies)if(!e.dead&&Math.hypot(e.x-z.x,e.y-z.y)<=z.radius+e.radius&&lineWalkable(s,z,e,4))damageEnemy(s,e,z.amount,owner);}}}s.zones=(s.zones||[]).filter(z=>z.life>0);}
-  function toggleAutoAttack() { const s = UI.session; if (!s) return; s.autoAttack = !s.autoAttack; s.noTargetFor = 0; updateDungeonHud(); }
+  function toggleAutoAttack() { unlockAudio(); const s = UI.session; if (!s) return; s.autoAttack = !s.autoAttack; s.noTargetFor = 0; updateDungeonHud(); }
   function showMessage(text, duration = 1800) { const s = UI.session; if (!s) return; s.message = text; s.messageUntil = performance.now() + duration; }
 
   function updateNetwork(s, now) {
@@ -957,10 +1005,30 @@
     if(party.host){try{await party.fb.updateDoc(party.ref,{status:"lobby",updatedAtMs:Date.now()});}catch(error){toast("Gruppenlobby nicht erreichbar",error.message||String(error));}}
     renderPartyLobby();
   }
-  function stopSession(render=false){if(UI.raf)cancelAnimationFrame(UI.raf);UI.raf=0;UI.last=0;UI.session=null;if(render&&UI.overlay)renderHome();}
+  function stopSession(render=false){
+    UI.loadingToken++;
+    if(UI.raf)cancelAnimationFrame(UI.raf);
+    UI.raf=0;UI.last=0;
+    UI.timers.splice(0).forEach(id=>{clearInterval(id);clearTimeout(id);});
+    UI.session=null;
+    if(render&&UI.overlay)renderHome();
+  }
   function showExitDialog(){if(confirm("Dungeon wirklich verlassen? Der aktuelle Fortschritt geht verloren.")){stopSession(false);leaveParty(false);renderHome();}}
   function showTutorial(){const d=ensureState();const html=`<div class="dkl-tutorial"><div><button data-dkl-tutorial-close>×</button><small>WILLKOMMEN IN DUNGEON.KL</small><h2>Deine erste Expedition</h2><p>Wähle Tank, DD oder Heiler. Mit <b>WASD</b> bewegst du dich. Drücke <b>Angriff</b>, um den automatischen Kampf zu starten. Nach fünf Sekunden ohne sichtbaren Gegner stoppt er automatisch. Gegner erkennen euch nur mit freier Sicht. Mit <b>E</b> öffnest du Kisten in deiner Nähe.</p><div><span><b>1–5</b><small>Fähigkeiten selbst auslösen</small></span><span><b>2–4 Spieler</b><small>Bessere Beute und mehr XP</small></span><span><b>3 Bosse</b><small>Pro Dungeon inklusive Endboss</small></span></div><button class="dkl-btn primary" data-dkl-tutorial-ok>Verstanden</button></div></div>`;UI.overlay.insertAdjacentHTML("beforeend",html);const close=()=>{UI.overlay.querySelector(".dkl-tutorial")?.remove();d.tutorialDone=true;safeSave();};UI.overlay.querySelector("[data-dkl-tutorial-close]").addEventListener("click",close);UI.overlay.querySelector("[data-dkl-tutorial-ok]").addEventListener("click",close);}
-  function unlockAudio(){if(UI.audio)return;try{UI.audio=new (window.AudioContext||window.webkitAudioContext)();}catch{}}
+  function unlockAudio(){
+    if(UI.audio&&UI.audio.state!=="closed")return UI.audio;
+    const AudioCtor=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtor)return null;
+    try{
+      const audio=new AudioCtor({latencyHint:"interactive"});
+      UI.audio=audio;
+      if(audio.state==="suspended")audio.resume().catch(()=>{});
+      return audio;
+    }catch(error){
+      UI.audio=null;
+      return null;
+    }
+  }
   function playSound(type){const d=ensureState();if(!d.settings.sound||!UI.audio)return;try{const o=UI.audio.createOscillator(),g=UI.audio.createGain();o.connect(g);g.connect(UI.audio.destination);o.type=type==="skill"?"sine":"square";o.frequency.value=type==="skill"?420:180;g.gain.setValueAtTime(.035,UI.audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,UI.audio.currentTime+.12);o.start();o.stop(UI.audio.currentTime+.12);}catch{}}
   function onKeyDown(e){if(!UI.overlay)return;UI.keys[e.code]=true;if(UI.session){if(["Digit1","Digit2","Digit3","Digit4","Digit5"].includes(e.code)){e.preventDefault();useSkill(Number(e.code.slice(-1))-1);}if(e.code==="Space"){e.preventDefault();toggleAutoAttack();}if(e.code==="KeyE"){e.preventDefault();interactNearby();}if(e.code==="KeyI"){e.preventDefault();renderInventory();}if(e.code==="Escape"){e.preventDefault();showExitDialog();}}else if(e.code==="Escape"){e.preventDefault();returnToTopGames();}}
   function onKeyUp(e){UI.keys[e.code]=false;}
