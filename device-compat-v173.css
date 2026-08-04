@@ -1,0 +1,76 @@
+/* JK.Games V173 – stabile Hauptinventar-Scrollfläche auf PC, Android und iPhone. */
+#detailDialog.inventory-dialog[open]{
+  display:flex!important;
+  flex-direction:column!important;
+  width:min(1180px,calc(100vw - 18px))!important;
+  max-width:calc(100vw - 18px)!important;
+  height:min(920px,calc(var(--jkg-viewport-height,100dvh) - 20px))!important;
+  max-height:calc(var(--jkg-viewport-height,100dvh) - 20px)!important;
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+}
+#detailDialog.inventory-dialog[open]>#dialogTitle{flex:0 0 auto!important}
+#detailDialog.inventory-dialog[open]>.character-hub{
+  display:flex!important;
+  flex:1 1 auto!important;
+  flex-direction:column!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+}
+#detailDialog.inventory-dialog[open] .character-hub-nav{flex:0 0 auto!important}
+#detailDialog.inventory-dialog[open] .character-hub-content{
+  display:block!important;
+  flex:1 1 auto!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+  height:auto!important;
+  max-height:none!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  padding:2px 5px max(28px,var(--jkg-safe-bottom,env(safe-area-inset-bottom,0px))) 0!important;
+  touch-action:pan-y!important;
+  overscroll-behavior-y:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+  scrollbar-gutter:stable;
+}
+#detailDialog.inventory-dialog[open] .inventory-game-layout{
+  height:auto!important;
+  min-height:min-content!important;
+  grid-template-rows:auto!important;
+  align-items:start!important;
+}
+#detailDialog.inventory-dialog[open] .inventory-character-column,
+#detailDialog.inventory-dialog[open] .inventory-storage-column{
+  height:auto!important;
+  min-height:0!important;
+}
+#detailDialog.inventory-dialog[open] .inventory-storage-column{
+  overflow:visible!important;
+}
+#detailDialog.inventory-dialog[open] .inventory-slot-grid{
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+}
+#detailDialog.inventory-dialog[open] .inventory-slot{
+  content-visibility:visible!important;
+  contain:none!important;
+}
+@media(max-width:700px){
+  #detailDialog.inventory-dialog[open]{
+    position:fixed!important;
+    inset:max(7px,var(--jkg-safe-top,env(safe-area-inset-top,0px))) 6px max(7px,var(--jkg-safe-bottom,env(safe-area-inset-bottom,0px))) 6px!important;
+    width:auto!important;
+    max-width:none!important;
+    height:auto!important;
+    max-height:none!important;
+    margin:0!important;
+  }
+}
+/* Dungeon-Namensfeld */
+.dkl-name-hint{display:block;margin:-5px 0 8px;color:#8fa9ae;font-size:10px;line-height:1.35}
+.dkl-mod-page input[data-dkl-mod-name],.dkl-character-name{width:100%;min-height:44px}
