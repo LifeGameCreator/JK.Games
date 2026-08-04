@@ -294,11 +294,19 @@ const shopMarketCatalog = {
     { name: "Currywurst mit Brötchen", price: 8, cash: true, effect: { hunger: 38 }, text: "Deftige Mahlzeit für großen Hunger." }
   ],
   groceries: [
-    { name: "Wocheneinkauf Budget", price: 49, effect: { hunger: 48, thirst: 18 }, text: "Billiger Einkauf mit Basisprodukten." },
-    { name: "Wocheneinkauf Standard", price: 68, effect: { hunger: 65, thirst: 30 }, text: "Ausgewogener Einkauf für mehrere Tage." },
-    { name: "Wocheneinkauf Gesund", price: 84, effect: { hunger: 72, thirst: 35, energy: 8 }, text: "Mehr frische Produkte und bessere Werte." },
-    { name: "Wocheneinkauf Vorrat", price: 119, effect: { hunger: 92, thirst: 45 }, text: "Großer Einkauf, braucht genug Inventarplatz." },
-    { name: "Meal-Prep Paket", price: 96, effect: { hunger: 80, thirst: 24, energy: 10 }, text: "Teurer, aber sehr effektiv für mehrere Tage." }
+    { name: "Reis 1 kg", price: 4, repeatable: true, effect: { hunger: 30 }, text: "Grundnahrungsmittel für mehrere Portionen." },
+    { name: "Nudeln 500 g", price: 3, repeatable: true, effect: { hunger: 27 }, text: "Günstige, sättigende Mahlzeit." },
+    { name: "Brot", price: 3, repeatable: true, effect: { hunger: 21 }, text: "Einfaches Essen für den Alltag." },
+    { name: "Kartoffeln 2 kg", price: 5, repeatable: true, effect: { hunger: 36 }, text: "Großer Vorrat mit guter Sättigung." },
+    { name: "Gemüsekorb", price: 8, repeatable: true, effect: { hunger: 28, health: 4 }, text: "Frische Lebensmittel mit Gesundheitsbonus." },
+    { name: "Eier 10er-Pack", price: 4, repeatable: true, effect: { hunger: 24, energy: 3 }, text: "Preiswertes Essen mit etwas Energie." },
+    { name: "Tiefkühlpizza", price: 4, repeatable: true, effect: { hunger: 33 }, text: "Schnelle Mahlzeit für größeren Hunger." },
+    { name: "Hähnchen mit Reis", price: 11, repeatable: true, effect: { hunger: 48, energy: 6, health: 2 }, text: "Kräftige, ausgewogene Mahlzeit." },
+    { name: "Wocheneinkauf Budget", price: 49, repeatable: true, effect: { hunger: 48, thirst: 18 }, text: "Billiger Einkauf mit Basisprodukten." },
+    { name: "Wocheneinkauf Standard", price: 68, repeatable: true, effect: { hunger: 65, thirst: 30 }, text: "Ausgewogener Einkauf für mehrere Tage." },
+    { name: "Wocheneinkauf Gesund", price: 84, repeatable: true, effect: { hunger: 72, thirst: 35, energy: 8 }, text: "Mehr frische Produkte und bessere Werte." },
+    { name: "Wocheneinkauf Vorrat", price: 119, repeatable: true, effect: { hunger: 92, thirst: 45 }, text: "Großer Einkauf, braucht genug Inventarplatz." },
+    { name: "Meal-Prep Paket", price: 96, repeatable: true, effect: { hunger: 80, thirst: 24, energy: 10 }, text: "Teurer, aber sehr effektiv für mehrere Tage." }
   ],
   pharmacy: [
     { name: "Vitamine", price: 12, effect: { energy: 12, health: 8 }, text: "Kleiner Energie- und Gesundheitsboost." },
@@ -534,7 +542,7 @@ function createShopItems() {
   return [
     { category: "Kaufhalle", name: "Getränke", market: "beverages", text: "Wasser, Cola, Sprite, Säfte, Eistee und Energy Drinks öffnen." },
     { category: "Kaufhalle", name: "Snacks", market: "snacks", text: "Chips, Süßigkeiten, Sandwiches und stärkere Snacks öffnen." },
-    { category: "Kaufhalle", name: "Wocheneinkauf", market: "groceries", text: "Wähle deinen Einkauf selbst: Budget, Standard, Gesund oder Vorrat." },
+    { category: "Kaufhalle", name: "Essen kaufen", market: "groceries", text: "Kaufe Reis, Nudeln, Brot, Kartoffeln, Gemüse, fertige Mahlzeiten oder komplette Wocheneinkäufe." },
     { category: "Kaufhalle", name: "Vitamine & Arzneimittel", market: "pharmacy", text: "Vitamine, Magnesium, Schmerztabletten und Erkältungsmedizin öffnen." },
     { category: "Online-Markt KL", name: "Einsteiger-Smartphone", price: 189, item: "Smartphone", text: "Schaltet Online-Shops, Bank-App, Börse und spätere Trading-Funktionen komfortabel frei." },
     { category: "Online-Markt KL", name: "Laptop gebraucht", price: 420, item: "Laptop gebraucht", text: "Gut für Online-Business, Bewerbungen und digitale Jobs." },
@@ -4073,6 +4081,61 @@ function awardGameXp(amount, reason = "Game", options = {}) {
   return addXp(earned, feed ? reason : "", { toast, toastReason: reason });
 }
 
+
+// V185: Gemeinsame Hauptcharakter-EP für die fünf Top-Games.
+// Eigene Spiellevel bleiben vollständig getrennt; diese kleine Zusatzbelohnung
+// stärkt nur den übergeordneten JK.Games-Charakter. Ein Tageslimit verhindert
+// Endlos-Farming durch sehr kurze Wiederholungen.
+function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = {}) {
+  if (!state) return 0;
+  const cleanGameId = String(gameId || "topgames").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "topgames";
+  const base = Math.max(0, Math.min(250, Math.floor(Number(baseAmount) || 0)));
+  if (!base) return 0;
+  const day = Math.max(1, Number(state.day || 1));
+  const characterLevel = Math.max(0, Math.min(100, Number(state.level || 0)));
+  const levelMultiplier = 1 + Math.min(0.4, characterLevel * 0.005);
+  const wanted = Math.max(1, Math.round(base * levelMultiplier));
+  const dailyCap = Math.min(1100, 350 + characterLevel * 8);
+  const ledger = state.topGamesMainXp && typeof state.topGamesMainXp === "object" ? state.topGamesMainXp : {};
+  if (Number(ledger.day || 0) !== day) {
+    ledger.day = day;
+    ledger.total = 0;
+    ledger.byGame = {};
+    ledger.recentKeys = [];
+    ledger.capNoticeShown = false;
+  }
+  ledger.byGame ||= {};
+  ledger.recentKeys = Array.isArray(ledger.recentKeys) ? ledger.recentKeys.slice(-80) : [];
+  const eventKey = String(options.eventKey || "").slice(0, 140);
+  if (eventKey && ledger.recentKeys.includes(eventKey)) return 0;
+  const remaining = Math.max(0, dailyCap - Math.max(0, Number(ledger.total || 0)));
+  const earned = Math.min(wanted, remaining);
+  if (!earned) {
+    if (options.showCapNotice !== false && !ledger.capNoticeShown) {
+      ledger.capNoticeShown = true;
+      addFeed(`Top-Games-EP: Das Tageslimit von ${dailyCap} EP ist für heute erreicht.`);
+    }
+    state.topGamesMainXp = ledger;
+    save();
+    return 0;
+  }
+  ledger.total = Math.max(0, Number(ledger.total || 0)) + earned;
+  ledger.byGame[cleanGameId] = Math.max(0, Number(ledger.byGame[cleanGameId] || 0)) + earned;
+  if (eventKey) ledger.recentKeys.push(eventKey);
+  state.topGamesMainXp = ledger;
+  const result = awardGameXp(earned, `${reason} · Hauptcharakter`, { toast: options.toast !== false, feed: options.feed === true });
+  save();
+  return result;
+}
+
+window.JKGamesAwardMainGameXp = awardTopGameMainXp;
+window.JKGamesTopGameXpStatus = () => {
+  const level = Math.max(0, Math.min(100, Number(state?.level || 0)));
+  const cap = Math.min(1100, 350 + level * 8);
+  const ledger = state?.topGamesMainXp || {};
+  return { day: Number(state?.day || 1), earned: Math.max(0, Number(ledger.total || 0)), cap, level };
+};
+
 function awardGameWinMoney(amount, reason = "Game") {
   const prize = Math.max(0, Math.round(Number(amount) || 0));
   if (!prize) return 0;
@@ -4409,6 +4472,8 @@ function render() {
   document.dispatchEvent(new CustomEvent("lifebuilder:rendered", { detail: { tab: renderedTab } }));
   if (!state.introDone && !els.dialog.open && !els.setup.classList.contains("settings-overlay")) {
     setTimeout(() => showIntroStep(0), 80);
+  } else if (state.introDone && beginnerPhoneTutorialActive()) {
+    scheduleBeginnerPhoneTutorial(120);
   }
   restorePagePosition();
 }
@@ -5141,6 +5206,323 @@ function completeWorldTravelIfReady() {
   save();
 }
 
+
+const BEGINNER_PHONE_TUTORIAL_VERSION = 1;
+const BEGINNER_PHONE_TUTORIAL_STEPS = ["buy-basic", "buy-sim", "buy-credit", "use-sim", "use-credit", "open-phone", "open-shop", "buy-upgrade"];
+let beginnerPhoneTutorialTimer = null;
+let beginnerPhoneTutorialLastStep = "";
+let beginnerPhoneTutorialLastOpenAt = 0;
+let beginnerPhoneTutorialHighlighted = null;
+
+function beginnerPhoneTutorialState() {
+  if (!state) return null;
+  const data = state.beginnerPhoneTutorial;
+  if (!data || typeof data !== "object") return null;
+  return data;
+}
+
+function beginnerPhoneTutorialActive() {
+  const data = beginnerPhoneTutorialState();
+  return !!data && data.version === BEGINNER_PHONE_TUTORIAL_VERSION && data.status === "active";
+}
+
+function beginBeginnerPhoneTutorial() {
+  if (!state) return;
+  state.beginnerPhoneTutorial = {
+    version: BEGINNER_PHONE_TUTORIAL_VERSION,
+    status: "active",
+    step: "buy-basic",
+    startedAtMs: Date.now(),
+    updatedAtMs: Date.now()
+  };
+  save();
+  scheduleBeginnerPhoneTutorial(80);
+}
+
+function skipBeginnerPhoneTutorial() {
+  if (!state) return;
+  state.beginnerPhoneTutorial = {
+    version: BEGINNER_PHONE_TUTORIAL_VERSION,
+    status: "skipped",
+    step: "done",
+    updatedAtMs: Date.now()
+  };
+  clearBeginnerPhoneTutorialUi();
+  save();
+}
+
+function completeBeginnerPhoneTutorial() {
+  if (!state) return;
+  state.beginnerPhoneTutorial = {
+    version: BEGINNER_PHONE_TUTORIAL_VERSION,
+    status: "completed",
+    step: "done",
+    completedAtMs: Date.now(),
+    updatedAtMs: Date.now()
+  };
+  clearBeginnerPhoneTutorialUi();
+  save();
+  addFeed("Smartphone-Einrichtung abgeschlossen: Handy, SIM, Guthaben und Online-Shop sind bereit.");
+  renderFeed(true);
+  queuePurchaseConfirmation({ kind: "use", title: "Tutorial abgeschlossen", name: "Smartphone eingerichtet", icon: "📱" });
+}
+
+function setBeginnerPhoneTutorialStep(step) {
+  const data = beginnerPhoneTutorialState();
+  if (!data || data.status !== "active" || data.step === step) return;
+  data.step = step;
+  data.updatedAtMs = Date.now();
+  beginnerPhoneTutorialLastStep = "";
+  beginnerPhoneTutorialLastOpenAt = 0;
+  save();
+}
+
+function beginnerOwnsPhoneAtLeast(tier = 0) {
+  const phone = ownedPhoneItem();
+  return !!phone && deviceTier(phone) >= tier;
+}
+
+function beginnerHasUninstalledSim() {
+  return (state.items || []).some((name) => isSimTariffName(name));
+}
+
+function beginnerHasCreditCard() {
+  return (state.items || []).some((name) => !!phoneCreditCardByName(name));
+}
+
+function normalizeBeginnerPhoneTutorialProgress() {
+  const data = beginnerPhoneTutorialState();
+  if (!data || data.status !== "active") return;
+  const beforeStep = data.step;
+  let guard = 0;
+  while (guard++ < 12) {
+    const step = data.step;
+    if (step === "buy-basic" && beginnerOwnsPhoneAtLeast(0)) { data.step = "buy-sim"; continue; }
+    if (step === "buy-sim" && (beginnerHasUninstalledSim() || hasPhoneSim())) { data.step = "buy-credit"; continue; }
+    if (step === "buy-credit" && (beginnerHasCreditCard() || phoneCreditAmount() > 0)) { data.step = "use-sim"; continue; }
+    if (step === "use-sim" && hasPhoneSim()) { data.step = "use-credit"; continue; }
+    if (step === "use-credit" && phoneCreditAmount() > 0) { data.step = "open-phone"; continue; }
+    if (step === "open-phone" && document.querySelector("#detailDialog[open] .device-shell")) { data.step = "open-shop"; continue; }
+    if (step === "open-shop" && document.querySelector('#detailDialog[open] .phone-market-app-v68[data-phone-market-mode="shop"]')) { data.step = "buy-upgrade"; continue; }
+    if (step === "buy-upgrade" && beginnerOwnsPhoneAtLeast(1)) {
+      completeBeginnerPhoneTutorial();
+      return;
+    }
+    break;
+  }
+  if (data.step !== beforeStep) {
+    data.updatedAtMs = Date.now();
+    beginnerPhoneTutorialLastStep = "";
+    beginnerPhoneTutorialLastOpenAt = 0;
+    save();
+  }
+}
+
+function ensureBeginnerPhoneTutorialCoach() {
+  const host = els.dialog?.open ? els.dialog : document.body;
+  let coach = document.querySelector("[data-beginner-phone-tutorial]");
+  if (coach) {
+    if (coach.parentElement !== host) host.appendChild(coach);
+    return coach;
+  }
+  coach = document.createElement("aside");
+  coach.className = "beginner-phone-tutorial";
+  coach.dataset.beginnerPhoneTutorial = "1";
+  coach.innerHTML = `<div class="beginner-phone-tutorial-progress"><span data-beginner-progress></span><button type="button" data-beginner-skip>Überspringen</button></div><small data-beginner-kicker>ERSTE SCHRITTE</small><h3 data-beginner-title></h3><p data-beginner-text></p>`;
+  coach.querySelector("[data-beginner-skip]")?.addEventListener("click", () => {
+    if (!confirm("Möchtest du die geführte Smartphone-Einrichtung wirklich überspringen? Du kannst die einzelnen Schritte danach selbst erledigen.")) return;
+    skipBeginnerPhoneTutorial();
+  });
+  host.appendChild(coach);
+  return coach;
+}
+
+function clearBeginnerPhoneTutorialHighlight() {
+  if (beginnerPhoneTutorialHighlighted) beginnerPhoneTutorialHighlighted.classList.remove("jk-beginner-highlight");
+  beginnerPhoneTutorialHighlighted = null;
+  document.querySelectorAll(".jk-beginner-highlight").forEach((node) => node.classList.remove("jk-beginner-highlight"));
+}
+
+function clearBeginnerPhoneTutorialUi() {
+  clearTimeout(beginnerPhoneTutorialTimer);
+  beginnerPhoneTutorialTimer = null;
+  beginnerPhoneTutorialLastStep = "";
+  beginnerPhoneTutorialLastOpenAt = 0;
+  clearBeginnerPhoneTutorialHighlight();
+  document.querySelector("[data-beginner-phone-tutorial]")?.remove();
+}
+
+function beginnerFindCardByTitle(root, matcher) {
+  if (!root) return null;
+  const test = typeof matcher === "function" ? matcher : (value) => String(value || "").trim() === String(matcher || "").trim();
+  return [...root.querySelectorAll("article.item-card")].find((card) => test(card.querySelector("h3")?.textContent || "", card)) || null;
+}
+
+function beginnerShowCoach({ title, text, stepIndex, target = null, kicker = "SMARTPHONE-START" }) {
+  const coach = ensureBeginnerPhoneTutorialCoach();
+  coach.querySelector("[data-beginner-kicker]").textContent = kicker;
+  coach.querySelector("[data-beginner-title]").textContent = title;
+  coach.querySelector("[data-beginner-text]").textContent = text;
+  coach.querySelector("[data-beginner-progress]").textContent = `Schritt ${Math.max(1, stepIndex + 1)} von ${BEGINNER_PHONE_TUTORIAL_STEPS.length}`;
+  clearBeginnerPhoneTutorialHighlight();
+  if (target) {
+    beginnerPhoneTutorialHighlighted = target;
+    target.classList.add("jk-beginner-highlight");
+    target.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "center" });
+  }
+}
+
+function beginnerEnsureLocalMarket(step) {
+  const title = String(els.dialogTitle?.textContent || "");
+  if (els.dialog?.open && /^Supermarkt\b/i.test(title) && els.dialog.querySelector(".market-list")) return;
+  const now = Date.now();
+  if (beginnerPhoneTutorialLastStep === step && now - beginnerPhoneTutorialLastOpenAt < 1200) return;
+  beginnerPhoneTutorialLastStep = step;
+  beginnerPhoneTutorialLastOpenAt = now;
+  openLocalMarketDialog();
+}
+
+function beginnerEnsureInventory(step) {
+  if (els.dialog?.open && els.dialog.classList.contains("inventory-dialog")) return;
+  const now = Date.now();
+  if (beginnerPhoneTutorialLastStep === step && now - beginnerPhoneTutorialLastOpenAt < 1200) return;
+  beginnerPhoneTutorialLastStep = step;
+  beginnerPhoneTutorialLastOpenAt = now;
+  openCharacterHub("inventory");
+}
+
+function runBeginnerPhoneTutorial() {
+  beginnerPhoneTutorialTimer = null;
+  if (!state || !state.introDone || !beginnerPhoneTutorialActive()) {
+    clearBeginnerPhoneTutorialUi();
+    return;
+  }
+  normalizeBeginnerPhoneTutorialProgress();
+  if (!beginnerPhoneTutorialActive()) return;
+  const data = beginnerPhoneTutorialState();
+  const step = data.step;
+  const stepIndex = Math.max(0, BEGINNER_PHONE_TUTORIAL_STEPS.indexOf(step));
+
+  if (step === "buy-basic") {
+    beginnerEnsureLocalMarket(step);
+    const card = beginnerFindCardByTitle(els.dialog, (title) => /basic phone kl-1/i.test(title));
+    const target = card?.querySelector("button:not(:disabled)") || card;
+    beginnerShowCoach({ title: "Hol dir dein erstes Handy", text: "Scrolle im Supermarkt ganz nach unten und kaufe das leuchtende Basic Phone KL-1.", stepIndex, target });
+  } else if (step === "buy-sim") {
+    beginnerEnsureLocalMarket(step);
+    const card = beginnerFindCardByTitle(els.dialog, (title) => /sim\.kl free tarif/i.test(title)) || beginnerFindCardByTitle(els.dialog, (title) => /sim\.kl.*tarif/i.test(title));
+    beginnerShowCoach({ title: "Kaufe eine SIM-Karte", text: "Nimm zunächst den günstigen Sim.KL Free Tarif. Später kannst du jederzeit einen besseren Tarif einsetzen.", stepIndex, target: card?.querySelector("button:not(:disabled)") || card });
+  } else if (step === "buy-credit") {
+    beginnerEnsureLocalMarket(step);
+    const card = beginnerFindCardByTitle(els.dialog, (title) => /guthabenkarte 50/i.test(title)) || beginnerFindCardByTitle(els.dialog, (title) => /guthabenkarte/i.test(title));
+    beginnerShowCoach({ title: "Kaufe Handy-Guthaben", text: "Kaufe eine Sim.KL-Guthabenkarte. Die 50-Euro-Karte reicht für den Einstieg.", stepIndex, target: card?.querySelector("button:not(:disabled)") || card });
+  } else if (step === "use-sim") {
+    beginnerEnsureInventory(step);
+    const slot = [...els.dialog.querySelectorAll("[data-inventory-entry]")].find((node) => /sim\.kl.*tarif/i.test(node.getAttribute("title") || node.textContent || ""));
+    const selectedTitle = els.dialog.querySelector(".inventory-selected-card h3")?.textContent || "";
+    const useButton = /sim\.kl.*tarif/i.test(selectedTitle) ? els.dialog.querySelector("[data-inventory-detail-use]") : null;
+    beginnerShowCoach({ title: "Lege die SIM-Karte ein", text: "Tippe die SIM-Karte im Inventar an und wähle anschließend „Benutzen“.", stepIndex, target: useButton || slot });
+  } else if (step === "use-credit") {
+    beginnerEnsureInventory(step);
+    const slot = [...els.dialog.querySelectorAll("[data-inventory-entry]")].find((node) => /guthabenkarte/i.test(node.getAttribute("title") || node.textContent || ""));
+    const selectedTitle = els.dialog.querySelector(".inventory-selected-card h3")?.textContent || "";
+    const useButton = /guthabenkarte/i.test(selectedTitle) ? els.dialog.querySelector("[data-inventory-detail-use]") : null;
+    beginnerShowCoach({ title: "Löse das Guthaben ein", text: "Tippe die Guthabenkarte an und benutze sie. Danach ist dein Handy für kostenpflichtige Aktionen vorbereitet.", stepIndex, target: useButton || slot });
+  } else if (step === "open-phone") {
+    if (els.dialog?.open && !els.dialog.querySelector(".device-shell")) els.dialog.close();
+    if (beginnerPhoneTutorialLastStep !== step) {
+      beginnerPhoneTutorialLastStep = step;
+      render();
+    }
+    const shortcut = document.querySelector("[data-phone-shortcut]:not(:disabled)");
+    beginnerShowCoach({ title: "Öffne dein Handy", text: "Tippe jetzt auf den leuchtenden Handy-Button auf dem Hauptbildschirm.", stepIndex, target: shortcut });
+  } else if (step === "open-shop") {
+    const phone = ownedPhoneItem();
+    const shell = document.querySelector("#detailDialog[open] .device-shell");
+    if (!shell && phone) {
+      const now = Date.now();
+      if (beginnerPhoneTutorialLastStep !== step || now - beginnerPhoneTutorialLastOpenAt > 1200) {
+        beginnerPhoneTutorialLastStep = step;
+        beginnerPhoneTutorialLastOpenAt = now;
+        openDeviceInterface(phone, "home", false);
+      }
+    }
+    const target = document.querySelector('#detailDialog[open] [data-device-app="shop"]');
+    beginnerShowCoach({ title: "Öffne die Shop-App", text: "Tippe im Handy auf Shop. Dort kaufst du jetzt ein richtiges Einsteiger-Smartphone.", stepIndex, target });
+  } else if (step === "buy-upgrade") {
+    const phone = ownedPhoneItem();
+    const nativeShop = document.querySelector('#detailDialog[open] .phone-market-app-v68[data-phone-market-mode="shop"]');
+    const paymentPanel = nativeShop?.querySelector(".phone-market-inline-purchase-v184");
+    if (paymentPanel) {
+      const itemName = paymentPanel.querySelector("h3")?.textContent || "";
+      const target = /smartphone/i.test(itemName)
+        ? paymentPanel.querySelector('[data-phone-market-pay="cash"]:not(:disabled), [data-phone-market-pay="card"]:not(:disabled)')
+        : null;
+      beginnerShowCoach({ title: "Bezahle das neue Smartphone", text: "Wähle Bar oder Konto. Nach dem Kauf ist die Smartphone-Einrichtung vollständig abgeschlossen.", stepIndex, target: target || paymentPanel });
+    } else if (nativeShop) {
+      let card = [...nativeShop.querySelectorAll(".phone-market-card-v68")].find((entry) => /^(einsteiger-)?smartphone$/i.test((entry.querySelector("h3")?.textContent || "").trim()));
+      if (!card && phone) {
+        const now = Date.now();
+        if (beginnerPhoneTutorialLastStep !== "buy-upgrade-market-reset" || now - beginnerPhoneTutorialLastOpenAt > 1200) {
+          beginnerPhoneTutorialLastStep = "buy-upgrade-market-reset";
+          beginnerPhoneTutorialLastOpenAt = now;
+          state.phoneShopUiV68 = { query: "", category: "Alle" };
+          openDeviceInterface(phone, "shop", false);
+        }
+        card = [...document.querySelectorAll('#detailDialog[open] .phone-market-app-v68[data-phone-market-mode="shop"] .phone-market-card-v68')]
+          .find((entry) => /^(einsteiger-)?smartphone$/i.test((entry.querySelector("h3")?.textContent || "").trim()));
+      }
+      beginnerShowCoach({ title: "Kaufe das Einsteiger-Smartphone", text: "Tippe beim Einsteiger-Smartphone auf „Kaufen“ und bezahle anschließend bar oder über dein Konto.", stepIndex, target: card?.querySelector("[data-phone-market-buy]:not(:disabled)") || card || nativeShop });
+    } else {
+      const now = Date.now();
+      if (phone && (beginnerPhoneTutorialLastStep !== step || now - beginnerPhoneTutorialLastOpenAt > 1200)) {
+        beginnerPhoneTutorialLastStep = step;
+        beginnerPhoneTutorialLastOpenAt = now;
+        openDeviceInterface(phone, "shop", false);
+      }
+      const target = document.querySelector('#detailDialog[open] [data-device-app="shop"]');
+      beginnerShowCoach({ title: "Öffne die Shop-App", text: "Öffne im Handy die Shop-App. Dort findest du das Einsteiger-Smartphone.", stepIndex, target });
+    }
+  }
+  scheduleBeginnerPhoneTutorial(320);
+}
+
+function scheduleBeginnerPhoneTutorial(delay = 250) {
+  clearTimeout(beginnerPhoneTutorialTimer);
+  if (!beginnerPhoneTutorialActive()) return;
+  beginnerPhoneTutorialTimer = setTimeout(runBeginnerPhoneTutorial, delay);
+}
+
+function finishIntroAndStartBeginnerPhoneTutorial() {
+  if (!state) return;
+  state.introDone = true;
+  save();
+  els.dialog.close();
+  beginBeginnerPhoneTutorial();
+}
+
+function showIntroSkipConfirmation(index) {
+  clearDialogDynamic();
+  els.dialog.classList.add("intro-dialog");
+  els.dialogTitle.textContent = "Tutorial wirklich überspringen?";
+  els.dialogText.textContent = "Das Starttutorial führt dich Schritt für Schritt zum ersten Handy, zur SIM-Karte, zum Guthaben, ins Inventar und anschließend zum Online-Shop. Möchtest du es wirklich komplett überspringen?";
+  const continueButton = document.createElement("button");
+  continueButton.className = "primary-button";
+  continueButton.textContent = "Tutorial fortsetzen";
+  continueButton.onclick = () => showIntroStep(index);
+  const skipButton = document.createElement("button");
+  skipButton.className = "mini-button danger";
+  skipButton.textContent = "Wirklich überspringen";
+  skipButton.onclick = () => {
+    state.introDone = true;
+    skipBeginnerPhoneTutorial();
+    save();
+    els.dialog.close();
+  };
+  els.dialog.append(continueButton, skipButton);
+  if (!els.dialog.open) els.dialog.showModal();
+}
+
 function showIntroStep(index) {
   if (!state || state.introDone) return;
   clearDialogDynamic();
@@ -5159,9 +5541,7 @@ function showIntroStep(index) {
   ok.textContent = index >= introSteps.length - 1 ? "Loslegen" : "OK";
   ok.onclick = () => {
     if (index >= introSteps.length - 1) {
-      state.introDone = true;
-      save();
-      els.dialog.close();
+      finishIntroAndStartBeginnerPhoneTutorial();
       return;
     }
     showIntroStep(index + 1);
@@ -5169,11 +5549,7 @@ function showIntroStep(index) {
   const skip = document.createElement("button");
   skip.className = "mini-button";
   skip.textContent = "Überspringen";
-  skip.onclick = () => {
-    state.introDone = true;
-    save();
-    els.dialog.close();
-  };
+  skip.onclick = () => showIntroSkipConfirmation(index);
   els.dialog.append(ok, skip);
   if (!els.dialog.open) els.dialog.showModal();
 }
@@ -9308,25 +9684,108 @@ function renderShop() {
   const visibleShopItemsV68 = shopItems
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => !isVehicleShopItem(item) && !["usedCars", "newCars"].includes(item.market));
-  const grouped = [...new Set(visibleShopItemsV68.map(({ item }) => item.category || "Shop"))].map((category) => {
+  const categories = [...new Set(visibleShopItemsV68.map(({ item }) => item.category || "Shop"))];
+  const categorySlug = (value, index) => `shop-category-${index}-${String(value || "shop").toLowerCase().replace(/[^a-z0-9äöüß]+/gi, "-").replace(/^-+|-+$/g, "")}`;
+  const nav = `
+    <div class="shop-category-nav-shell" data-shop-category-shell>
+      <button type="button" class="shop-category-arrow left" data-shop-category-scroll="-1" aria-label="Shop-Kategorien nach links">‹</button>
+      <div class="shop-category-nav" data-shop-category-nav tabindex="0" aria-label="Shop-Kategorien horizontal verschieben">
+        ${categories.map((category, index) => `<button type="button" data-shop-category-target="${categorySlug(category, index)}" class="${index === 0 ? "active" : ""}">${escapeHtml(category)}</button>`).join("")}
+      </div>
+      <button type="button" class="shop-category-arrow right" data-shop-category-scroll="1" aria-label="Shop-Kategorien nach rechts">›</button>
+    </div>`;
+  const grouped = categories.map((category, categoryIndex) => {
     const items = visibleShopItemsV68
       .filter((entry) => (entry.item.category || "Shop") === category)
       .map(({ item, index }) => {
-    if (item.market) return card(item.name, item.text, "Markt öffnen", index, false, "shop-market");
-    const missingNeed = item.needItem && !(isWorkshopTuningItem(item) ? vehicleCount() > 0 : state.items.includes(item.needItem));
-    const missingProperty = item.needProperty && !hasProperty(item.needProperty);
-    const owned = (item.item && !item.wear && (stateHasItemNamed(item.item) || (item.backpackSlots && (state.backpackSlots || 0) >= item.backpackSlots))) || (item.property && hasProperty(item.property.id));
-    const noVehicleSlot = isVehicleShopItem(item) && vehicleCount() >= vehicleCapacity() && !owned;
-    const locked = missingNeed || missingProperty || owned || noVehicleSlot;
-    const label = owned ? "Besitzt du" : missingNeed || missingProperty ? "Fehlt" : noVehicleSlot ? "Garage fehlt" : "Kaufen";
-    const garageInfo = isVehicleShopItem(item) ? ` Fahrzeugplätze: ${vehicleCount()}/${vehicleCapacity()}. Kraftstoff: ${vehicleFuelLabel(item.item)}.` : "";
-    return card(item.name, `${item.text} Preis: ${euro.format(item.price)}.${garageInfo}`, label, index, locked);
+        if (item.market) return card(item.name, item.text, "Markt öffnen", index, false, "shop-market");
+        const missingNeed = item.needItem && !(isWorkshopTuningItem(item) ? vehicleCount() > 0 : state.items.includes(item.needItem));
+        const missingProperty = item.needProperty && !hasProperty(item.needProperty);
+        const owned = (item.item && !item.wear && (stateHasItemNamed(item.item) || (item.backpackSlots && (state.backpackSlots || 0) >= item.backpackSlots))) || (item.property && hasProperty(item.property.id));
+        const noVehicleSlot = isVehicleShopItem(item) && vehicleCount() >= vehicleCapacity() && !owned;
+        const locked = missingNeed || missingProperty || owned || noVehicleSlot;
+        const label = owned ? "Besitzt du" : missingNeed || missingProperty ? "Fehlt" : noVehicleSlot ? "Garage fehlt" : "Kaufen";
+        const garageInfo = isVehicleShopItem(item) ? ` Fahrzeugplätze: ${vehicleCount()}/${vehicleCapacity()}. Kraftstoff: ${vehicleFuelLabel(item.item)}.` : "";
+        return card(item.name, `${item.text} Preis: ${euro.format(item.price)}.${garageInfo}`, label, index, locked);
       }).join("");
-    return `<div class="shop-section"><h3>${category}</h3>${items}</div>`;
+    return `<div class="shop-section" id="${categorySlug(category, categoryIndex)}" data-shop-category-section="${categoryIndex}"><h3>${escapeHtml(category)}</h3>${items}</div>`;
   }).join("");
-  els.shopList.innerHTML = grouped;
+  els.shopList.innerHTML = nav + grouped;
+
+  const categoryNav = els.shopList.querySelector("[data-shop-category-nav]");
+  const navButtons = [...els.shopList.querySelectorAll("[data-shop-category-target]")];
+  const setActiveCategory = (targetId) => navButtons.forEach((button) => button.classList.toggle("active", button.dataset.shopCategoryTarget === targetId));
+  navButtons.forEach((button) => button.addEventListener("click", () => {
+    const target = document.getElementById(button.dataset.shopCategoryTarget || "");
+    if (!target) return;
+    setActiveCategory(target.id);
+    target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    button.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }));
+  els.shopList.querySelectorAll("[data-shop-category-scroll]").forEach((button) => button.addEventListener("click", () => {
+    if (!categoryNav) return;
+    const direction = Number(button.dataset.shopCategoryScroll || 1);
+    categoryNav.scrollBy({ left: direction * Math.max(180, categoryNav.clientWidth * 0.72), behavior: "smooth" });
+  }));
+  if (categoryNav) {
+    categoryNav.addEventListener("wheel", (event) => {
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || categoryNav.scrollWidth <= categoryNav.clientWidth) return;
+      event.preventDefault();
+      categoryNav.scrollLeft += event.deltaY;
+    }, { passive: false });
+    // Auf Touch-Geräten funktioniert natives Wischen; mit Maus oder Stift kann
+    // die Leiste zusätzlich direkt gegriffen und nach links/rechts gezogen werden.
+    let dragPointerId = null;
+    let dragStartX = 0;
+    let dragStartScroll = 0;
+    let dragged = false;
+    categoryNav.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch" || event.button !== 0) return;
+      dragPointerId = event.pointerId;
+      dragStartX = event.clientX;
+      dragStartScroll = categoryNav.scrollLeft;
+      dragged = false;
+      categoryNav.setPointerCapture?.(event.pointerId);
+      categoryNav.classList.add("dragging");
+    });
+    categoryNav.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== dragPointerId) return;
+      const distance = event.clientX - dragStartX;
+      if (Math.abs(distance) > 4) dragged = true;
+      categoryNav.scrollLeft = dragStartScroll - distance;
+    });
+    const finishDrag = (event) => {
+      if (event.pointerId !== dragPointerId) return;
+      categoryNav.releasePointerCapture?.(event.pointerId);
+      dragPointerId = null;
+      categoryNav.classList.remove("dragging");
+      if (dragged) requestAnimationFrame(() => { dragged = false; });
+    };
+    categoryNav.addEventListener("pointerup", finishDrag);
+    categoryNav.addEventListener("pointercancel", finishDrag);
+    categoryNav.addEventListener("click", (event) => {
+      if (!dragged) return;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+  }
+  const sections = [...els.shopList.querySelectorAll("[data-shop-category-section]")];
+  window.__jkShopCategoryObserver?.disconnect?.();
+  window.__jkShopCategoryObserver = null;
+  if (typeof IntersectionObserver !== "undefined" && sections.length) {
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      setActiveCategory(visible.target.id);
+      const active = navButtons.find((button) => button.dataset.shopCategoryTarget === visible.target.id);
+      active?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }, { root: null, rootMargin: "-150px 0px -58% 0px", threshold: [0.05, 0.3, 0.65] });
+    sections.forEach((section) => observer.observe(section));
+    window.__jkShopCategoryObserver = observer;
+  }
+
   els.shopList.querySelectorAll('button[data-kind="shop-market"]').forEach((button) => button.addEventListener("click", () => openShopMarket(shopItems[Number(button.dataset.index)])));
-  els.shopList.querySelectorAll("button:not(:disabled):not([data-kind])").forEach((button) => button.addEventListener("click", () => buy(shopItems[Number(button.dataset.index)])));
+  els.shopList.querySelectorAll("button:not(:disabled):not([data-kind]):not([data-shop-category-target]):not([data-shop-category-scroll])").forEach((button) => button.addEventListener("click", () => buy(shopItems[Number(button.dataset.index)])));
 }
 
 function openShopMarket(marketItem) {
@@ -9639,8 +10098,12 @@ function completeShopPurchase(item, method, quantity = 1, purchaseMarketKey = ac
   if (item.needProperty && !hasProperty(item.needProperty)) return showPurchaseFailure("Dafür brauchst du zuerst das passende Grundstück.");
   const oldBackpackItems = isBackpack ? ownedPurchaseChainItems("backpacks", item.item || item.name) : [];
   const replacementSlots = oldDeviceItems.length + oldBackpackItems.length;
-  if ((item.effect || isStorableShopItem(item)) && inventoryUsed() + count - replacementSlots > inventoryCapacity()) {
-    return showPurchaseFailure(`Inventar voll: ${inventoryUsed()}/${inventoryCapacity()}. Kaufe zuerst einen größeren Rucksack oder verkaufe einen Gegenstand.`);
+  const existingConsumableStack = !!(item.effect && Number(state.consumables?.[item.name]?.count || 0) > 0);
+  const requiredInventorySlots = item.effect
+    ? (existingConsumableStack ? 0 : 1)
+    : (isStorableShopItem(item) ? Math.max(1, count) : 0);
+  if (requiredInventorySlots > 0 && inventoryUsed() + requiredInventorySlots - replacementSlots > inventoryCapacity()) {
+    return showPurchaseFailure(`Inventar voll: ${inventoryUsed()}/${inventoryCapacity()}. Bereits vorhandene Lebensmittel können weiter auf denselben Stapel gekauft werden; für neue Sorten brauchst du einen freien Platz oder einen größeren Rucksack.`);
   }
   if (!pay(total, false, { method, taxRate: shopTaxRate(item, marketKey) })) {
     const balance = method === "cash" ? state.cash : state.bank;
@@ -9690,6 +10153,9 @@ function completeShopPurchase(item, method, quantity = 1, purchaseMarketKey = ac
     openDeviceReplacementDialog(item, oldDeviceItems, returnContext);
   } else if (returnContext?.marketKey) {
     reopenShopContext(returnContext);
+  } else if (window.JKGamesPhonePurchaseContextV68) {
+    // Der native Handy-Shop bleibt während eines Kaufs geöffnet. Die Handy-
+    // Oberfläche aktualisiert sich direkt und muss nicht erst schließen/neu laden.
   } else {
     els.dialog.close();
   }
@@ -9792,7 +10258,9 @@ function isStorableShopItem(item) {
 }
 
 function inventoryUsed() {
-  const consumables = Object.values(state.consumables || {}).reduce((sum, entry) => sum + (entry?.count || 0), 0);
+  // Verbrauchsartikel werden im Inventar als Stapel dargestellt. Deshalb belegt
+  // jede Sorte genau einen Platz – unabhängig davon, ob 1x oder 20x vorhanden ist.
+  const consumables = Object.values(state.consumables || {}).filter((entry) => Number(entry?.count || 0) > 0).length;
   const wearable = new Set((shopMarketCatalog.clothing || []).map((item) => item.item || item.name));
   const backpackNames = new Set((shopMarketCatalog.backpacks || []).map((item) => item.item || item.name));
   const deviceNames = new Set([...phoneItems(), ...computerItems()]);
@@ -34188,19 +34656,57 @@ function stabilizeMobileCharacterScroll(section = "") {
       && now - bankTransferCreatedV58(entry) <= 30 * 60 * 1000
       && ["pending", "processing", "delivered"].includes(String(entry.status || "pending"))
     );
-    if (!reverse && !transfer.deviceSwitchDetected) return null;
     const reverseAmount = reverse ? bankTransferAmountV58(reverse) : 0;
     const currentAmount = Math.max(0, Number(transfer.amountCents || 0) / 100);
     const similarAmounts = reverseAmount > 0 && Math.min(reverseAmount, currentAmount) / Math.max(reverseAmount, currentAmount) >= 0.65;
-    if (!transfer.deviceSwitchDetected && !similarAmounts) return null;
-    const pair = [transfer.senderUid, transfer.recipientUid].sort().join("__").replace(/[^a-zA-Z0-9_-]/g, "_");
+    // V185: Auch Weiterleitungen über ein Zwischenkonto erkennen. Beispiel:
+    // Zweitaccount → Freund/Zwischenkonto → Erstaccount. Die Prüfung blockiert
+    // nichts automatisch, sondern legt eine nachvollziehbare Owner-Prüfung an.
+    const findChainTransfer = (entries) => (Array.isArray(entries) ? entries : [])
+      .filter((entry) => entry.recipientUid === transfer.senderUid
+        && entry.senderUid !== transfer.recipientUid
+        && now - bankTransferCreatedV58(entry) <= 90 * 60 * 1000
+        && ["pending", "processing", "delivered"].includes(String(entry.status || "pending")))
+      .sort((a, b) => bankTransferCreatedV58(b) - bankTransferCreatedV58(a))
+      .find((entry) => {
+        const incomingAmount = bankTransferAmountV58(entry);
+        if (incomingAmount < 50 || currentAmount < 50) return false;
+        const ratio = Math.min(incomingAmount, currentAmount) / Math.max(incomingAmount, currentAmount);
+        return ratio >= 0.7;
+      });
+    let chainTransfer = findChainTransfer(bankTransfersV58);
+    // Falls der lokale Listener gerade noch nicht vollständig geladen ist, wird
+    // die Eingangshistorie des Zwischenkontos zusätzlich direkt geprüft.
+    if (!chainTransfer && typeof fb.getDocs === "function") {
+      try {
+        const incomingSnapshot = await fb.getDocs(fb.query(
+          fb.collection(fb.db, "bankTransfers"),
+          fb.where("recipientUid", "==", transfer.senderUid),
+          fb.limit(100)
+        ));
+        const incomingRows = [];
+        incomingSnapshot.forEach((docSnap) => incomingRows.push({ id: docSnap.id, ...docSnap.data() }));
+        chainTransfer = findChainTransfer(incomingRows);
+      } catch (error) {
+        console.warn("Transferkette konnte nicht zusätzlich geprüft werden", error);
+      }
+    }
+    const chainAmount = chainTransfer ? bankTransferAmountV58(chainTransfer) : 0;
+    const chainSameAccount = !!chainTransfer && !!chainTransfer.senderAccountUid && !!transfer.recipientAccountUid
+      && String(chainTransfer.senderAccountUid) === String(transfer.recipientAccountUid);
+    if (!transfer.deviceSwitchDetected && !similarAmounts && !chainTransfer) return null;
+    const pair = [transfer.senderUid, transfer.recipientUid, chainTransfer?.senderUid || ""].sort().join("__").replace(/[^a-zA-Z0-9_-]/g, "_");
     const alertId = `${pair}__${Math.floor(now / (30 * 60 * 1000))}`;
     const ref = fb.doc(fb.db, "moneyFraudAlerts", alertId);
-    const reason = transfer.deviceSwitchDetected && reverse
-      ? "Schneller Accountwechsel und Gegenüberweisung erkannt"
-      : transfer.deviceSwitchDetected
-        ? "Schneller Accountwechsel auf demselben Gerät vor einer Überweisung erkannt"
-        : "Ähnliche Gegenüberweisung innerhalb von 30 Minuten erkannt";
+    const reason = chainTransfer
+      ? (chainSameAccount
+        ? "Geld über ein Zwischenkonto zwischen zwei Charakteren desselben Accounts weitergeleitet"
+        : "Ähnliche Geldsumme kurz nach Eingang über ein Zwischenkonto weitergeleitet")
+      : transfer.deviceSwitchDetected && reverse
+        ? "Schneller Accountwechsel und Gegenüberweisung erkannt"
+        : transfer.deviceSwitchDetected
+          ? "Schneller Accountwechsel auf demselben Gerät vor einer Überweisung erkannt"
+          : "Ähnliche Gegenüberweisung innerhalb von 30 Minuten erkannt";
     await fb.setDoc(ref, {
       alertId,
       status: "open",
@@ -34215,13 +34721,19 @@ function stabilizeMobileCharacterScroll(section = "") {
       amountCents: Number(transfer.amountCents || 0),
       reverseTransferId: reverse?.id || "",
       reverseAmountCents: reverse ? Math.round(reverseAmount * 100) : 0,
+      chainTransferId: chainTransfer?.id || "",
+      chainOriginUid: chainTransfer?.senderUid || "",
+      chainOriginAccountUid: chainTransfer?.senderAccountUid || chainTransfer?.senderUid || "",
+      chainAmountCents: chainTransfer ? Math.round(chainAmount * 100) : 0,
+      chainDetected: !!chainTransfer,
+      chainSameAccount,
       deviceSessionId: transfer.deviceSessionId || "",
       previousDeviceUid: transfer.previousDeviceUid || "",
       deviceSwitchDetected: !!transfer.deviceSwitchDetected,
       reason,
       createdAtMs: now,
       updatedAtMs: now,
-      evidenceTransferIds: [transfer.transferId || transfer.id, reverse?.id].filter(Boolean)
+      evidenceTransferIds: [transfer.transferId || transfer.id, reverse?.id, chainTransfer?.id].filter(Boolean)
     }, { merge: true }).catch((error) => console.warn("Geldbetrugsprüfung konnte nicht gespeichert werden", error));
     return alertId;
   }

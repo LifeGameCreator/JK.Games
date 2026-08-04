@@ -1784,50 +1784,116 @@
     }
   }
 
-  function showPhonePaymentSheetV68(item, mode, entry) {
-    const view = els.dialog?.querySelector?.(".device-native-market-window-v68");
-    if (!view) return;
-    const existing = view.querySelector(".phone-market-sheet-v68");
-    if (existing) existing.remove();
+  function showPhoneMarketNoticeV184(mode, text, kind = "success") {
+    const root = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"]`);
+    if (!root) return;
+    root.querySelector(".phone-market-notice-v184")?.remove();
+    const notice = document.createElement("div");
+    notice.className = `phone-market-notice-v184 ${kind}`;
+    notice.innerHTML = `<span>${kind === "success" ? "✓" : "!"}</span><b>${escapeHtml(text)}</b>`;
+    root.appendChild(notice);
+    window.setTimeout(() => notice.classList.add("show"), 0);
+    window.setTimeout(() => {
+      notice.classList.remove("show");
+      window.setTimeout(() => notice.remove(), 220);
+    }, 2800);
+  }
+
+  function phoneMarketInventoryNeedV184(offer) {
+    if (!offer?.effect) return isStorableShopItem(offer) ? 1 : 0;
+    return Number(state.consumables?.[offer.name]?.count || 0) > 0 ? 0 : 1;
+  }
+
+  function showPhonePaymentSheetV68(item, mode, entry, triggerButton = null) {
+    const root = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"]`);
+    const list = root?.querySelector?.(".phone-market-list-v68");
+    if (!root || !list) return;
+    list.querySelector(".phone-market-inline-purchase-v184")?.remove();
     const offer = entry.offer;
     const bulk = !!offer.effect || !!offer.repeatable;
-    const sheet = document.createElement("div");
-    sheet.className = "phone-market-sheet-v68";
-    sheet.innerHTML = `<div class="phone-market-sheet-card-v68">
-      <span class="phone-market-sheet-handle-v68"></span>
-      <small>${escapeHtml(entry.section)}</small><h3>${escapeHtml(offer.name)}</h3><p>${escapeHtml(offer.text || "")}</p>
-      ${bulk ? `<label>Anzahl<input type="number" min="1" max="99" value="1" inputmode="numeric" data-phone-market-quantity></label>` : ""}
-      <div class="phone-market-sheet-price-v68"><span>Gesamt</span><b data-phone-market-total>${euro.format(offer.price)}</b></div>
+    const card = triggerButton?.closest?.(".phone-market-card-v68");
+    if (!card) return;
+    card.classList.add("purchase-open-v184");
+    const panel = document.createElement("section");
+    panel.className = "phone-market-inline-purchase-v184";
+    panel.innerHTML = `<div class="phone-market-inline-head-v184">
+      <div><small>${escapeHtml(entry.section)}</small><h3>${escapeHtml(offer.name)}</h3></div>
+      <button type="button" data-phone-market-sheet-close aria-label="Zahlung schließen">×</button>
+    </div>
+    <p>${escapeHtml(offer.text || "")}</p>
+    ${bulk ? `<label class="phone-market-inline-quantity-v184"><span>Anzahl</span><input type="number" min="1" max="99" value="1" inputmode="numeric" data-phone-market-quantity></label>` : ""}
+    <div class="phone-market-inline-balances-v184">
+      <span><small>BARGELD</small><b>${euro.format(state.cash)}</b></span>
+      <span><small>KONTO</small><b>${euro.format(state.bank)}</b></span>
+      <span><small>INVENTAR</small><b>${inventoryUsed()}/${inventoryCapacity()}</b></span>
+    </div>
+    <div class="phone-market-sheet-price-v68"><span>Gesamt</span><b data-phone-market-total>${euro.format(offer.price)}</b></div>
+    <p class="phone-market-inline-status-v184" data-phone-market-status></p>
+    <div class="phone-market-inline-actions-v184">
       <button type="button" class="cash" data-phone-market-pay="cash">Bar bezahlen</button>
       <button type="button" class="card" data-phone-market-pay="card">Mit Konto bezahlen</button>
-      <button type="button" class="cancel" data-phone-market-sheet-close>Abbrechen</button>
     </div>`;
-    view.appendChild(sheet);
-    const quantity = sheet.querySelector("[data-phone-market-quantity]");
+    card.insertAdjacentElement("afterend", panel);
+
+    const quantity = panel.querySelector("[data-phone-market-quantity]");
+    const status = panel.querySelector("[data-phone-market-status]");
     const update = () => {
       const count = bulk ? Math.max(1, Math.min(99, Math.floor(Number(quantity?.value || 1)))) : 1;
+      if (quantity) quantity.value = String(count);
       const total = Number(offer.price || 0) * count;
-      sheet.querySelector("[data-phone-market-total]").textContent = euro.format(total);
-      const cash = sheet.querySelector('[data-phone-market-pay="cash"]');
-      const card = sheet.querySelector('[data-phone-market-pay="card"]');
-      cash.disabled = Number(state.cash || 0) < total;
-      card.disabled = !canAffordWithMethod(total, "card");
+      const requiredSlots = phoneMarketInventoryNeedV184(offer);
+      const hasSpace = inventoryUsed() + requiredSlots <= inventoryCapacity();
+      const cash = panel.querySelector('[data-phone-market-pay="cash"]');
+      const cardButton = panel.querySelector('[data-phone-market-pay="card"]');
+      panel.querySelector("[data-phone-market-total]").textContent = euro.format(total);
+      cash.disabled = Number(state.cash || 0) < total || !hasSpace;
+      cardButton.disabled = !canAffordWithMethod(total, "card") || !hasSpace;
       cash.textContent = `Bar ${euro.format(total)}`;
-      card.textContent = `Konto ${euro.format(total)}`;
-      return { count, total };
+      cardButton.textContent = `Konto ${euro.format(total)}`;
+      if (!hasSpace) {
+        status.textContent = `Inventar voll (${inventoryUsed()}/${inventoryCapacity()}). Bereits vorhandene Lebensmittel lassen sich weiter stapeln; für eine neue Sorte brauchst du einen freien Platz.`;
+        status.classList.add("error");
+      } else {
+        status.textContent = requiredSlots === 0
+          ? "Dieser Artikel wird auf dem vorhandenen Stapel gespeichert."
+          : `Der Kauf benötigt 1 freien Inventarplatz. Danach: ${inventoryUsed() + requiredSlots}/${inventoryCapacity()}.`;
+        status.classList.remove("error");
+      }
+      return { count, total, hasSpace };
     };
+
     quantity?.addEventListener("input", update);
-    sheet.querySelector("[data-phone-market-sheet-close]")?.addEventListener("click", () => sheet.remove());
-    sheet.addEventListener("click", (event) => { if (event.target === sheet) sheet.remove(); });
-    sheet.querySelectorAll("[data-phone-market-pay]").forEach((button) => button.addEventListener("click", () => {
-      const { count } = update();
+    panel.querySelector("[data-phone-market-sheet-close]")?.addEventListener("click", () => {
+      card.classList.remove("purchase-open-v184");
+      panel.remove();
+    });
+    panel.querySelectorAll("[data-phone-market-pay]").forEach((button) => button.addEventListener("click", () => {
+      const current = update();
+      if (!current.hasSpace) return;
+      const method = button.dataset.phoneMarketPay;
+      const listScroll = Number(list.scrollTop || 0);
       activePurchaseReturnContext = null;
       activeShopMarketKey = entry.marketKey || "";
-      window.JKGamesPhonePurchaseContextV68 = { appId: mode, item };
-      window.JKGamesBankLedgerContextV68 = button.dataset.phoneMarketPay === "card" ? (mode === "fobile" ? "Fobile.de" : "Online-Shop") : "";
-      completeShopPurchase(offer, button.dataset.phoneMarketPay, count, entry.marketKey || "");
+      window.JKGamesPhonePurchaseContextV68 = {
+        appId: mode,
+        item,
+        offerName: offer.name,
+        quantity: current.count,
+        total: current.total,
+        method,
+        listScroll,
+        onResult(result) {
+          if (result?.paid) return;
+          update();
+          status.textContent = result?.message || "Der Kauf konnte nicht abgeschlossen werden. Prüfe Geld und Inventarplatz.";
+          status.classList.add("error");
+        }
+      };
+      window.JKGamesBankLedgerContextV68 = method === "card" ? (mode === "fobile" ? "Fobile.de" : "Online-Shop") : "";
+      completeShopPurchase(offer, method, current.count, entry.marketKey || "");
     }));
     update();
+    window.requestAnimationFrame?.(() => panel.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
 
   function bindMarketWindowV68(shell, item, mode) {
@@ -1848,7 +1914,7 @@
     }));
     root.querySelectorAll("[data-phone-market-buy]").forEach((button) => button.addEventListener("click", () => {
       const entry = entries[Number(button.dataset.phoneMarketBuy)];
-      if (entry) showPhonePaymentSheetV68(item, mode, entry);
+      if (entry) showPhonePaymentSheetV68(item, mode, entry, button);
     }));
   }
 
@@ -1856,14 +1922,24 @@
     const context = window.JKGamesPhonePurchaseContextV68;
     const beforeBank = Number(state.bank || 0);
     const beforeCash = Number(state.cash || 0);
+    const beforeCount = Number(state.consumables?.[item?.name]?.count || 0);
     const result = baseCompleteShopPurchaseV68(item, method, quantity, purchaseMarketKey);
-    const paid = Number(state.bank || 0) !== beforeBank || Number(state.cash || 0) !== beforeCash;
+    const afterCount = Number(state.consumables?.[item?.name]?.count || 0);
+    const paid = Number(state.bank || 0) !== beforeBank || Number(state.cash || 0) !== beforeCash || afterCount > beforeCount;
     window.JKGamesPhonePurchaseContextV68 = null;
     if (!paid) window.JKGamesBankLedgerContextV68 = "";
+    context?.onResult?.({ paid, message: paid ? "" : "Kauf nicht ausgeführt. Prüfe Guthaben, Freischaltung und Inventarplatz." });
     if (context && paid) {
+      const marketItem = context.item || ownedPhoneItem();
       window.setTimeout(() => {
-        if (!els.dialog?.open) openDeviceInterface(context.item || ownedPhoneItem(), context.appId, false);
-      }, 30);
+        if (!els.dialog?.open) openDeviceInterface(marketItem, context.appId, false);
+        else rerenderMarketAppV68(marketItem, context.appId, false);
+        window.requestAnimationFrame?.(() => {
+          const marketList = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${context.appId}"] .phone-market-list-v68`);
+          if (marketList) marketList.scrollTop = Number(context.listScroll || 0);
+          showPhoneMarketNoticeV184(context.appId, `${context.offerName}${context.quantity > 1 ? ` (${context.quantity}x)` : ""} gekauft · ${context.method === "cash" ? "bar" : "Konto"}`);
+        });
+      }, 0);
     }
     return result;
   };

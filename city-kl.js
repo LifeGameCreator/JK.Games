@@ -1390,11 +1390,17 @@
   function showWinner(winner) {
     C.game.phase = 'finished';
     updateAll();
+    const human = C.game.players.find((player) => player.id === 'human');
+    const mainXpBase = winner.id === 'human' ? 65 : Math.max(10, Math.min(28, 10 + Math.floor((human?.properties?.length || 0) * 2)));
+    const mainXp = typeof window.JKGamesAwardMainGameXp === 'function'
+      ? window.JKGamesAwardMainGameXp('city', mainXpBase, winner.id === 'human' ? 'City.KL Sieg' : 'City.KL Runde', { eventKey: `city:${C.game.createdAt || C.game.startedAt || Date.now()}:${winner.id}` })
+      : 0;
     showModal(`
       <div class="city-kl-winner">🏆</div>
       <small class="city-kl-kicker">SPIEL BEENDET</small>
       <h2>${winner.id === 'human' ? 'Du hast gewonnen!' : `${escapeHtml(winner.name)} gewinnt`}</h2>
       <p>${winner.id === 'human' ? 'Du hast alle Bots in den Bankrott getrieben und kontrollierst Cottbus.' : 'Dein Unternehmen ist ausgeschieden. Starte eine neue Runde und hole dir Cottbus zurück.'}</p>
+      <p><b>Hauptcharakter: +${mainXp} EP</b></p>
       <div class="city-kl-modal-actions">
         <button type="button" class="primary" data-new-after-win>Neues Spiel</button>
         <button type="button" class="secondary" data-exit-after-win>Top Games</button>

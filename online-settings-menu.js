@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-04-settings-menu-moderator-level-money-lock-v183";
+  const VERSION = "2026-08-04-settings-menu-role-visibility-v186";
   const DB_ID = "gamekl";
   const REGION = "europe-west3";
   const SESSION_KEY = "lifebuilder-2026-online-mod-session";
@@ -72,6 +72,8 @@
 
   let players = [];
   let playerAccounts = [];
+  let staffRoleVisibilityMap = new Map();
+  let staffRoleVisibilityCollectionLoaded = false;
   const expandedAccounts = new Set();
   let selectedPlayer = null;
   let selectedPlayerUid = "";
@@ -240,6 +242,113 @@
 
   function roleRank(role = roleData?.role) {
     return ROLE_ORDER.indexOf(String(role || ""));
+  }
+  function normalizeStaffRole(value = "") {
+    const raw = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const aliases = {
+      testmember: "test_member", test_member: "test_member", testmitglied: "test_member",
+      testsupporter: "test_supporter", test_supporter: "test_supporter",
+      supporter: "supporter",
+      testmoderator: "test_moderator", test_moderator: "test_moderator",
+      moderator: "moderator", admin: "admin", owner: "owner"
+    };
+    return aliases[raw] || (ROLE_ORDER.includes(raw) ? raw : "");
+  }
+  function embeddedStaffRole(...sources) {
+    for (const source of sources) {
+      if (!source || typeof source !== "object") continue;
+      const role = normalizeStaffRole(source.staffRole || source.teamRole || source.roleKey || source.role || source.roleData?.role);
+      if (role && source.active !== false && source.roleActive !== false && source.staffActive !== false) return role;
+    }
+    return "";
+  }
+  function targetStaffRole(uid, ...sources) {
+    const key = String(uid || "");
+    return normalizeStaffRole(staffRoleVisibilityMap.get(key)) || embeddedStaffRole(...sources);
+  }
+  function canSeeTargetRole(targetRole, targetUid) {
+    const viewerRole = normalizeStaffRole(roleData?.role);
+    const role = normalizeStaffRole(targetRole);
+    const uid = String(targetUid || "");
+    if (!role) return true; // Normale Player sind für jede Teamrolle sichtbar.
+    if (role === "owner") return viewerRole === "owner" && uid === String(currentUser?.uid || "");
+    if (viewerRole === "owner") return true;
+    const viewerRank = roleRank(viewerRole);
+    const targetRank = roleRank(role);
+    return viewerRank >= 0 && targetRank >= 0 && targetRank <= viewerRank;
+  }
+  function applyRoleVisibility(accounts = []) {
+    const result = [];
+    safeArray(accounts).forEach((account) => {
+      const accountRole = targetStaffRole(account.uid, account);
+      if (!canSeeTargetRole(accountRole, account.uid)) return;
+      const characters = safeArray(account.characters).filter((character) => {
+        const role = targetStaffRole(character.uid || account.uid, character, account) || accountRole;
+        return canSeeTargetRole(role, character.uid || account.uid);
+      }).map((character) => ({
+        ...character,
+        staffRole: targetStaffRole(character.uid || account.uid, character, account) || accountRole
+      }));
+      if (!characters.length) return;
+      result.push({ ...account, staffRole: accountRole, characters });
+    });
+    return result;
+  }
+  async function loadStaffRoleVisibilityMap() {
+    const map = new Map();
+    staffRoleVisibilityCollectionLoaded = false;
+    if (currentUser?.uid && roleData?.active) map.set(String(currentUser.uid), normalizeStaffRole(roleData.role));
+    try {
+      const fb = await runtime();
+      const query = fb.query(fb.collection(fb.db, "staffRoles"), fb.limit(500));
+      const snapshot = await withModTimeout(
+        typeof fb.getDocsFromServer === "function" ? fb.getDocsFromServer(query) : fb.getDocs(query),
+        10000,
+        "Teamrollen für Playerliste"
+      );
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data() || {};
+        const role = data.active === false ? "" : normalizeStaffRole(data.role);
+        if (role) map.set(String(doc.id), role);
+      });
+      staffRoleVisibilityCollectionLoaded = true;
+    } catch (error) {
+      console.warn("Teamrollen konnten nicht als Liste geladen werden; Einzelprüfung wird verwendet", error?.message || error);
+    }
+    staffRoleVisibilityMap = map;
+    return map;
+  }
+
+  async function loadMissingStaffRolesForAccounts(accounts = []) {
+    // Falls Firestore die Listenabfrage der Teamrollen nicht erlaubt, werden die
+    // Rollen-Dokumente der sichtbaren Account-Kandidaten einzeln geprüft. Damit
+    // kann insbesondere ein Owner niemals versehentlich als normaler Player in
+    // einer niedrigeren Team-Sitzung erscheinen.
+    if (staffRoleVisibilityCollectionLoaded) return staffRoleVisibilityMap;
+    const candidates = [...new Set(safeArray(accounts).map((account) => String(account?.uid || "")).filter(Boolean))]
+      .filter((uid) => !staffRoleVisibilityMap.has(uid))
+      .slice(0, 300);
+    if (!candidates.length) return staffRoleVisibilityMap;
+    try {
+      const fb = await runtime();
+      for (let index = 0; index < candidates.length; index += 20) {
+        const chunk = candidates.slice(index, index + 20);
+        const results = await Promise.allSettled(chunk.map((uid) => {
+          const ref = fb.doc(fb.db, "staffRoles", uid);
+          const read = typeof fb.getDocFromServer === "function" ? fb.getDocFromServer(ref) : fb.getDoc(ref);
+          return withModTimeout(read, 8000, `Teamrolle ${uid}`);
+        }));
+        results.forEach((result, offset) => {
+          if (result.status !== "fulfilled" || !result.value?.exists?.()) return;
+          const data = result.value.data() || {};
+          const role = data.active === false ? "" : normalizeStaffRole(data.role);
+          if (role) staffRoleVisibilityMap.set(chunk[offset], role);
+        });
+      }
+    } catch (error) {
+      console.warn("Einzelne Teamrollen konnten nicht geprüft werden", error?.message || error);
+    }
+    return staffRoleVisibilityMap;
   }
   function isOwnerRole() {
     return roleData?.role === "owner";
@@ -694,6 +803,7 @@
       <section class="online-mod-player-workspace">
         <aside class="online-mod-player-browser">
           <div class="online-mod-browser-head"><b>Spielerliste</b><span data-player-count>0</span></div>
+          <p class="online-mod-role-visibility-note">${isOwnerRole() ? "Sichtbar: alle Player und Teamrollen. Andere Owner bleiben verborgen; dein eigener Owner-Account ist sichtbar." : `Sichtbar: normale Player und Teamrollen bis ${esc(roleLabel())}. Höhere Rollen und der Owner bleiben verborgen.`}</p>
           <label class="online-mod-search-box"><span>⌕</span><input data-player-search value="${esc(playerSearch)}" placeholder="Name, UID, Stadt oder Job"></label>
           <div class="online-mod-segmented" data-player-filter>
             <button type="button" data-player-filter-value="all" class="${playerFilter === "all" ? "active" : ""}">Alle</button>
@@ -709,9 +819,10 @@
     players = [];
     renderPlayerList();
     try {
-      const [functionResult, directResult] = await Promise.allSettled([
+      const [functionResult, directResult, roleVisibilityResult] = await Promise.allSettled([
         callFunction("listPlayers", {}),
-        loadDirectPlayerAccounts()
+        loadDirectPlayerAccounts(),
+        loadStaffRoleVisibilityMap()
       ]);
       const functionAccounts = functionResult.status === "fulfilled"
         ? normalizePlayerAccounts(functionResult.value.accounts)
@@ -719,7 +830,17 @@
       const directAccounts = directResult.status === "fulfilled"
         ? normalizePlayerAccounts(directResult.value)
         : [];
-      playerAccounts = mergePlayerAccountSources(functionAccounts, directAccounts);
+      // Niedrigere Rollen sehen ausschließlich normale Player sowie Teamrollen bis
+      // zur eigenen Stufe. Der Owner ist für alle verborgen und sieht sich nur
+      // in seiner eigenen Owner-Sitzung selbst.
+      const mergedAccounts = mergePlayerAccountSources(functionAccounts, directAccounts);
+      await loadMissingStaffRolesForAccounts(mergedAccounts);
+      playerAccounts = applyRoleVisibility(mergedAccounts);
+      if (selectedPlayerUid && !playerAccounts.some((account) => account.uid === selectedPlayerUid)) {
+        selectedPlayer = null;
+        selectedPlayerUid = "";
+        selectedPlayerSlotIndex = 0;
+      }
       if (!playerAccounts.length) {
         const reasons = [functionResult, directResult]
           .filter((entry) => entry.status === "rejected")
@@ -732,6 +853,7 @@
         uid: character.uid || account.uid,
         email: account.email,
         accountName: account.accountName,
+        staffRole: character.staffRole || account.staffRole || "",
         online: character.online ?? account.online,
         lastSeenAtMs: character.lastSeenAtMs ?? account.lastSeenAtMs,
         key: `${character.uid || account.uid}:${character.slot}`
@@ -774,7 +896,7 @@
       const expanded = mobile || expandedAccounts.has(account.uid) || (selectedPlayerUid === account.uid);
       return `<section class="online-mod-account-group ${expanded ? "expanded" : ""}">
         <button type="button" class="online-mod-account-row" data-toggle-account="${esc(account.uid)}"><span class="online-dot ${account.online ? "online" : ""}"></span><span><b>${esc(account.email || "E-Mail unbekannt")}</b><small>${chars.length} getrennte Charakter${chars.length === 1 ? "-Akte" : "-Akten"} · ${account.online ? "LIVE" : relativeTime(account.lastSeenAtMs)}</small></span><em>${expanded ? "▾" : "▸"}</em></button>
-        <div class="online-mod-character-list">${chars.map((player) => `<button type="button" class="online-mod-player-row ${selectedPlayerUid === player.uid && selectedPlayerSlot() === num(player.slot) ? "active" : ""}" data-select-player="${esc(player.uid)}" data-select-slot="${num(player.slot)}"><span class="online-mod-avatar mini">${esc(String(player.displayName || "C").slice(0,1).toUpperCase())}</span><span class="online-mod-player-row-main"><b>${esc(player.displayName || `Charakter ${num(player.slot)+1}`)}</b><small>Slot ${num(player.slot)+1} · Level ${num(player.level)} · ${esc(player.city || "Kein Ort")}</small><small>${esc(player.job || "Kein Job")} · eigene Mod/Hack-Akte</small></span><span class="online-mod-player-row-meta">${characterStatus(player) === "hack" ? `<i class="risk">HACK</i>` : characterStatus(player) === "mod" ? `<i class="mod">MOD</i>` : ""}</span></button>`).join("")}</div>
+        <div class="online-mod-character-list">${chars.map((player) => `<button type="button" class="online-mod-player-row ${selectedPlayerUid === player.uid && selectedPlayerSlot() === num(player.slot) ? "active" : ""}" data-select-player="${esc(player.uid)}" data-select-slot="${num(player.slot)}"><span class="online-mod-avatar mini">${esc(String(player.displayName || "C").slice(0,1).toUpperCase())}</span><span class="online-mod-player-row-main"><b>${esc(player.displayName || `Charakter ${num(player.slot)+1}`)}</b><small>Slot ${num(player.slot)+1} · Level ${num(player.level)} · ${esc(player.city || "Kein Ort")}</small><small>${esc(player.job || "Kein Job")} · eigene Mod/Hack-Akte</small></span><span class="online-mod-player-row-meta">${player.staffRole ? `<i class="staff-role">${esc(ROLE_LABELS[player.staffRole] || player.staffRole)}</i>` : ""}${characterStatus(player) === "hack" ? `<i class="risk">HACK</i>` : characterStatus(player) === "mod" ? `<i class="mod">MOD</i>` : ""}</span></button>`).join("")}</div>
       </section>`;
     }).join("") : `<div class="online-mod-empty-state compact"><span>⌕</span><p>Keine passenden Accounts oder Charaktere gefunden.</p></div>`;
   }
@@ -811,6 +933,11 @@
   }
 
   async function selectPlayer(uid, slot = 0, silent = false) {
+    const summary = clickedCharacterSummary(uid, slot);
+    if (!summary || !canSeeTargetRole(summary.staffRole, uid)) {
+      if (!silent) toast("Dieser Account ist für deine Rolle nicht sichtbar.", "error");
+      return;
+    }
     const requestId = ++playerSelectionRequestId;
     const detail = content().querySelector("[data-player-detail]");
     const normalizedSlot = Math.max(0, Math.min(3, Math.floor(num(slot))));
@@ -1385,7 +1512,7 @@
       const command = safeObject(entry.command);
       return `<article class="online-mod-governance-row ${esc(entry.status || "pending")}"><header><div><small>${dateTime(entry.createdAtMs)}</small><h3>${esc(entry.requesterName || "Admin")} → ${esc(entry.targetName || "eigener Charakter")}</h3></div><span>${esc(entry.status || "pending")}</span></header><p>${esc(command.kind || "addMoney")} · ${esc(command.target || "bank")} · <b>${euro(command.value)}</b></p><p>${esc(entry.reason || "Ohne Grund")}</p><footer><b>${approvals}/${num(entry.threshold,1)} Zustimmungen</b><span>${rejections} Ablehnungen · ${num(entry.eligibleCount)} Stimmberechtigte</span>${entry.status === "pending" && roleData?.role === "owner" && eligible && !voted ? `<div><button data-money-approval-vote="approve" data-request-id="${esc(entry.id)}">Bestätigen</button><button class="danger" data-money-approval-vote="reject" data-request-id="${esc(entry.id)}">Ablehnen</button></div>` : ""}</footer></article>`;
     }).join("") : `<div class="online-mod-empty-state compact"><span>✓</span><p>Keine Geldfreigaben vorhanden.</p></div>`;
-    const fraudHtml = moneyFraudAlerts.length ? moneyFraudAlerts.map((entry) => `<article class="online-mod-governance-row fraud ${esc(entry.status || "open")}"><header><div><small>${dateTime(entry.updatedAtMs || entry.createdAtMs)}</small><h3>${esc(entry.senderName || entry.senderUid || "Account")} ↔ ${esc(entry.recipientName || entry.recipientUid || "Account")}</h3></div><span>${esc(entry.status || "open")}</span></header><p><b>${euro(num(entry.amountCents)/100)}</b> · ${esc(entry.reason || "Schnelle Gegenüberweisung erkannt")}</p><p>${entry.deviceSwitchDetected ? "Schneller Accountwechsel auf demselben Gerät erkannt." : "Gegenläufige Überweisungen innerhalb des Prüfzeitraums erkannt."}</p>${["open","pending"].includes(String(entry.status || "open")) ? `<footer><div><button data-fraud-resolution="cleared" data-alert-id="${esc(entry.id)}">Unauffällig</button><button class="danger" data-fraud-resolution="confirmed" data-alert-id="${esc(entry.id)}">Verdacht bestätigen</button></div></footer>` : ""}</article>`).join("") : `<div class="online-mod-empty-state compact"><span>◎</span><p>Keine auffälligen Geldkreisläufe gefunden.</p></div>`;
+    const fraudHtml = moneyFraudAlerts.length ? moneyFraudAlerts.map((entry) => `<article class="online-mod-governance-row fraud ${esc(entry.status || "open")}"><header><div><small>${dateTime(entry.updatedAtMs || entry.createdAtMs)}</small><h3>${esc(entry.senderName || entry.senderUid || "Account")} ↔ ${esc(entry.recipientName || entry.recipientUid || "Account")}</h3></div><span>${esc(entry.status || "open")}</span></header><p><b>${euro(num(entry.amountCents)/100)}</b> · ${esc(entry.reason || "Schnelle Gegenüberweisung erkannt")}</p><p>${entry.chainDetected ? `Weiterleitung über ein Zwischenkonto erkannt${entry.chainSameAccount ? " · Ursprung und Ziel gehören zum selben Account" : ""}.` : entry.deviceSwitchDetected ? "Schneller Accountwechsel auf demselben Gerät erkannt." : "Gegenläufige Überweisungen innerhalb des Prüfzeitraums erkannt."}</p>${["open","pending"].includes(String(entry.status || "open")) ? `<footer><div><button data-fraud-resolution="cleared" data-alert-id="${esc(entry.id)}">Unauffällig</button><button class="danger" data-fraud-resolution="confirmed" data-alert-id="${esc(entry.id)}">Verdacht bestätigen</button></div></footer>` : ""}</article>`).join("") : `<div class="online-mod-empty-state compact"><span>◎</span><p>Keine auffälligen Geldkreisläufe gefunden.</p></div>`;
     content().innerHTML = `
       ${pageHead("WIRTSCHAFTS-SICHERHEIT", "Geldfreigaben & Betrugsprüfung", "Admins dürfen Geld nur beantragen; ein Owner bestätigt oder lehnt ab. Rücküberweisungen und schnelle Accountwechsel werden zur manuellen Prüfung vorgemerkt.", `<button type="button" data-governance-refresh>↻ Aktualisieren</button>`)}
       <section class="online-mod-section-grid two"><article class="online-mod-card"><div class="online-mod-card-title"><span>✓</span><div><small>MEHRHEITSFREIGABEN</small><h3>Admin-Geldanträge</h3></div></div><div class="online-mod-governance-list">${approvalsHtml}</div></article><article class="online-mod-card"><div class="online-mod-card-title"><span>◎</span><div><small>TRANSFER-AUDIT</small><h3>Eventueller Geldbetrug</h3></div></div><div class="online-mod-governance-list">${fraudHtml}</div></article></section>`;
@@ -1558,7 +1685,7 @@
     content().innerHTML = `${pageHead("TEAM", "Teamverwaltung", "Rollen ansehen, verändern oder deaktivieren.", `<button type="button" data-refresh-staff>↻ Aktualisieren</button>`)}<section class="online-mod-card"><div data-staff-list><div class="online-mod-loading"><i></i><p>Lade Team …</p></div></div></section>`;
     try {
       const response = await callFunction("listStaffMembers", {});
-      const members = response.members || [];
+      const members = safeArray(response.members).filter((member) => canSeeTargetRole(member.role, member.uid));
       content().querySelector("[data-staff-list]").innerHTML = members.length ? members.map((member) => `<form data-staff-member="${esc(member.uid)}" class="online-mod-staff-row"><div class="online-mod-avatar small">${esc((member.roleLabel || member.role || "T").slice(0, 1))}</div><div><b>${esc(member.roleLabel || member.role)}</b><small>${esc(member.uid)}</small></div><select name="role" ${member.isOwner ? "disabled" : ""}>${member.isOwner ? `<option value="owner" selected>Owner</option>` : ROLE_ORDER.filter((role) => role !== "owner").map((role) => `<option value="${role}" ${member.role === role ? "selected" : ""}>${ROLE_LABELS[role]}</option>`).join("")}</select><label class="check"><input type="checkbox" name="active" ${member.active ? "checked" : ""} ${member.isOwner ? "disabled" : ""}> Aktiv</label><div class="online-mod-staff-actions"><button type="submit" ${member.isOwner ? "disabled" : ""}>Speichern</button>${member.isOwner ? "" : `<button type="button" data-reset-staff-pin="${esc(member.uid)}">KL-Code neu</button>`}</div><div class="online-mod-secret online-mod-staff-pin-result" data-staff-pin-result="${esc(member.uid)}" hidden></div></form>`).join("") : `<div class="online-mod-empty-state"><p>Noch keine Teammitglieder.</p></div>`;
     } catch (error) {
       content().querySelector("[data-staff-list]").innerHTML = `<p class="online-mod-message error">${esc(error.message)}</p>`;

@@ -618,3 +618,21 @@ html.online-mod-open, html.online-mod-open body { overflow: hidden !important; o
 .online-mod-approval-note{margin:0 0 14px;padding:11px 13px;border:1px solid rgba(255,196,76,.38);border-radius:12px;background:rgba(255,196,76,.08);font-size:.78rem;line-height:1.45;color:#ffe6a8}
 .online-mod-governance-list{display:grid;gap:10px;max-height:620px;overflow:auto;overscroll-behavior:contain;padding-right:3px}.online-mod-governance-row{display:grid;gap:8px;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(5,12,19,.52)}.online-mod-governance-row header,.online-mod-governance-row footer{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.online-mod-governance-row header small{display:block;color:#8695a4;font-size:.67rem}.online-mod-governance-row header h3{margin:2px 0 0;font-size:.88rem}.online-mod-governance-row header>span{padding:4px 7px;border-radius:999px;background:rgba(255,255,255,.08);font-size:.64rem;text-transform:uppercase}.online-mod-governance-row p{margin:0;font-size:.75rem;line-height:1.4;color:#cbd5df}.online-mod-governance-row footer{align-items:center;flex-wrap:wrap}.online-mod-governance-row footer>b,.online-mod-governance-row footer>span{font-size:.69rem}.online-mod-governance-row footer div{display:flex;gap:7px;margin-left:auto}.online-mod-governance-row button{min-height:36px;padding:7px 10px}.online-mod-governance-row.approved{border-color:rgba(75,226,147,.35)}.online-mod-governance-row.rejected,.online-mod-governance-row.confirmed{border-color:rgba(255,93,106,.38)}.online-mod-governance-row.fraud{background:rgba(43,17,20,.34)}.online-mod-risk.review{background:rgba(255,189,69,.14);border-color:rgba(255,189,69,.38);color:#ffd77f}
 @media(max-width:760px){.online-mod-governance-list{max-height:none;overflow:visible}.online-mod-governance-row header,.online-mod-governance-row footer{align-items:stretch;flex-direction:column}.online-mod-governance-row footer div{margin-left:0;width:100%}.online-mod-governance-row footer button{flex:1}.online-mod-rights-list article{padding:9px 10px}}
+
+/* V186 · Rollenbasierte Sichtbarkeit der Playerliste */
+.online-mod-role-visibility-note {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(80, 185, 255, .22);
+  border-radius: 11px;
+  background: rgba(80, 185, 255, .07);
+  color: var(--online-mod-muted, #9eabb9);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.online-mod-player-row-meta i.staff-role {
+  background: rgba(87, 183, 255, .14);
+  border: 1px solid rgba(87, 183, 255, .32);
+  color: #9ed9ff;
+  white-space: nowrap;
+}

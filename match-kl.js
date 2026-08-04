@@ -1124,6 +1124,7 @@
     const stars = calculateStars();
     const oldStars = Number(M.save.stars[M.level.number] || 0);
     M.save.stars[M.level.number] = Math.max(oldStars, stars);
+    const firstClear = oldStars <= 0;
     M.save.scores[M.level.number] = Math.max(Number(M.save.scores[M.level.number] || 0), M.score);
     M.save.unlockedLevel = Math.min(MAX_LEVEL, Math.max(M.save.unlockedLevel, M.level.number + 1));
     M.save.lastLevel = Math.min(MAX_LEVEL, M.level.number + 1);
@@ -1134,8 +1135,14 @@
     updateDailyProgress('levels', 1);
     if (M.level.number % 5 === 0) M.save.boosters.hammer += 1;
     save();
+    const mainXpBase = firstClear
+      ? Math.min(22, 5 + stars * 2 + Math.floor(M.level.number / 12))
+      : Math.min(9, 2 + stars + Math.floor(M.level.number / 30));
+    const mainXp = typeof window.JKGamesAwardMainGameXp === 'function'
+      ? window.JKGamesAwardMainGameXp('match', mainXpBase, `Match.KL Level ${M.level.number}`, { eventKey: `match:${M.level.number}:${M.save.total.levels}:${M.score}` })
+      : 0;
     playWinSound(); flashBoard(); await delay(500);
-    showModal(`<div class="mkl-result-stars">${[1,2,3].map(star => `<span class="${star <= stars ? 'on' : ''}">★</span>`).join('')}</div><small class="mkl-kicker">LEVEL ${M.level.number} GESCHAFFT</small><h2>Starke Runde!</h2><div class="mkl-result-score">${M.score.toLocaleString('de-DE')} Punkte</div><div class="mkl-stats-grid"><div class="mkl-stat"><small>Belohnung</small><b>🪙 ${reward}</b></div><div class="mkl-stat"><small>Restzüge</small><b>${M.moves}</b></div><div class="mkl-stat"><small>Beste Kombo</small><b>×${M.stats.largestCombo || 1}</b></div></div><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-next-level>${M.level.number < MAX_LEVEL ? `Level ${M.level.number + 1}` : 'Levelkarte'}</button><button type="button" class="mkl-secondary" data-mkl-map-after>Levelkarte</button><button type="button" class="mkl-secondary" data-mkl-home-after>Hauptmenü</button></div>`, true);
+    showModal(`<div class="mkl-result-stars">${[1,2,3].map(star => `<span class="${star <= stars ? 'on' : ''}">★</span>`).join('')}</div><small class="mkl-kicker">LEVEL ${M.level.number} GESCHAFFT</small><h2>Starke Runde!</h2><div class="mkl-result-score">${M.score.toLocaleString('de-DE')} Punkte</div><div class="mkl-stats-grid"><div class="mkl-stat"><small>Belohnung</small><b>🪙 ${reward}</b></div><div class="mkl-stat"><small>Haupt-EP</small><b>+${mainXp}</b></div><div class="mkl-stat"><small>Restzüge</small><b>${M.moves}</b></div><div class="mkl-stat"><small>Beste Kombo</small><b>×${M.stats.largestCombo || 1}</b></div></div><div class="mkl-modal-actions"><button type="button" class="mkl-primary" data-mkl-next-level>${M.level.number < MAX_LEVEL ? `Level ${M.level.number + 1}` : 'Levelkarte'}</button><button type="button" class="mkl-secondary" data-mkl-map-after>Levelkarte</button><button type="button" class="mkl-secondary" data-mkl-home-after>Hauptmenü</button></div>`, true);
     M.modal.querySelector('[data-mkl-next-level]')?.addEventListener('click', () => { closeModal(); M.level.number < MAX_LEVEL ? renderPreLevel(M.level.number + 1) : renderMap(); });
     M.modal.querySelector('[data-mkl-map-after]')?.addEventListener('click', () => { closeModal(); renderMap(); });
     M.modal.querySelector('[data-mkl-home-after]')?.addEventListener('click', () => { closeModal(); renderHome(); });

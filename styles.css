@@ -20282,3 +20282,122 @@ body.phone-v65-open {
 .jk-reset-prebeta-banner{margin:14px auto 22px;max-width:980px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;padding:18px;border:1px solid rgba(255,190,67,.42);border-radius:20px;background:linear-gradient(135deg,rgba(63,35,8,.94),rgba(15,20,29,.96));box-shadow:0 16px 40px rgba(0,0,0,.28)}
 .jk-reset-prebeta-banner>span{padding:8px 10px;border-radius:10px;background:#ffbd43;color:#221400;font-weight:900;letter-spacing:.12em;font-size:.72rem}.jk-reset-prebeta-banner small{color:#ffca63;font-weight:800;letter-spacing:.12em}.jk-reset-prebeta-banner h2{margin:3px 0 6px}.jk-reset-prebeta-banner p{margin:0;color:#d7dee8}.jk-reset-prebeta-banner ul{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}.jk-reset-prebeta-banner li{padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.82rem}.setup-bank-hint{margin:-3px 0 8px;padding:10px 12px;border-left:3px solid #ffbd43;border-radius:8px;background:rgba(255,189,67,.08);color:#d8e0ea;font-size:.86rem;line-height:1.45}
 @media(max-width:620px){.jk-reset-prebeta-banner{grid-template-columns:1fr;margin:10px 8px 18px;padding:14px}.jk-reset-prebeta-banner>span{justify-self:start}.jk-reset-prebeta-banner ul{display:grid;grid-template-columns:1fr}.jk-reset-prebeta-banner li{border-radius:10px}}
+
+
+/* V185 · Shop-Kategorien auf Handy und PC vollständig erreichbar */
+#shopList { min-width: 0; }
+.shop-category-nav-shell {
+  position: sticky;
+  top: 128px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 7px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 13px;
+  background: rgba(11, 20, 17, .96);
+  box-shadow: 0 10px 26px rgba(0,0,0,.3);
+  backdrop-filter: blur(12px);
+}
+.shop-category-nav {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  cursor: grab;
+}
+.shop-category-nav:active,
+.shop-category-nav.dragging { cursor: grabbing; user-select: none; }
+.shop-category-nav button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  max-width: 210px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 900;
+  white-space: nowrap;
+  scroll-snap-align: center;
+}
+.shop-category-nav button.active {
+  color: #08110d;
+  border-color: rgba(230,255,241,.42);
+  background: linear-gradient(180deg, #80e3b4, var(--accent));
+}
+.shop-category-arrow {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,.065);
+  color: #fff;
+  font-size: 1.45rem;
+  line-height: 1;
+  touch-action: manipulation;
+}
+.shop-section { scroll-margin-top: 188px; }
+@media (max-width: 700px) {
+  .shop-category-nav-shell { top: 116px; grid-template-columns: 32px minmax(0,1fr) 32px; margin-inline: -2px; }
+  .shop-category-arrow { width: 32px; }
+  .shop-category-nav button { min-height: 34px; font-size: .66rem; }
+  .shop-section { scroll-margin-top: 174px; }
+}
+
+/* V186 · Geführter Smartphone-Start */
+.beginner-phone-tutorial {
+  position: fixed;
+  z-index: 2147483000;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(520px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  padding: 16px 18px 17px;
+  border: 1px solid rgba(255, 213, 89, .72);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(14, 20, 28, .98), rgba(25, 31, 41, .97));
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .42), 0 0 0 3px rgba(255, 207, 63, .12);
+  color: #fff;
+  pointer-events: none;
+  text-align: left;
+}
+.beginner-phone-tutorial-progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.beginner-phone-tutorial-progress span { font-size: 12px; font-weight: 900; letter-spacing: .08em; color: #ffd75d; }
+.beginner-phone-tutorial-progress button { border: 0; background: rgba(255,255,255,.09); color: #e9edf2; border-radius: 999px; padding: 7px 11px; font-weight: 800; cursor: pointer; pointer-events: auto; }
+.beginner-phone-tutorial > small { display: block; color: #8fdcff; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+.beginner-phone-tutorial h3 { margin: 4px 0 5px; color: #fff; font-size: clamp(18px, 3.6vw, 24px); }
+.beginner-phone-tutorial p { margin: 0; color: #d9e1e9; line-height: 1.45; font-size: 14px; }
+.jk-beginner-highlight {
+  position: relative;
+  z-index: 2147482000 !important;
+  outline: 4px solid #ffd23f !important;
+  outline-offset: 5px !important;
+  box-shadow: 0 0 0 8px rgba(255, 210, 63, .20), 0 0 28px rgba(255, 210, 63, .82) !important;
+  animation: jkBeginnerPulse 1.05s ease-in-out infinite alternate !important;
+  scroll-margin: 150px 24px 80px;
+}
+@keyframes jkBeginnerPulse {
+  from { filter: brightness(1); transform: scale(1); }
+  to { filter: brightness(1.16); transform: scale(1.025); }
+}
+@media (max-width: 600px) {
+  .beginner-phone-tutorial { top: max(8px, env(safe-area-inset-top)); width: calc(100vw - 16px); padding: 13px 14px 14px; border-radius: 15px; }
+  .beginner-phone-tutorial p { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jk-beginner-highlight { animation: none !important; }
+}

@@ -1493,3 +1493,72 @@
   -webkit-user-select: none !important;
   user-select: none !important;
 }
+
+/* ========================================================================== 
+   JK.Games V184 · Handy-Shop: Zahlung direkt am ausgewählten Artikel
+   ========================================================================== */
+.phone-market-card-v68.purchase-open-v184 {
+  border-color:rgba(84,163,255,.62);
+  box-shadow:0 0 0 2px rgba(45,126,233,.14),0 10px 24px rgba(0,0,0,.24);
+}
+.phone-market-inline-purchase-v184 {
+  display:grid;
+  gap:8px;
+  padding:12px;
+  margin:-1px 0 3px;
+  border:1px solid rgba(91,165,255,.42);
+  border-radius:16px;
+  background:linear-gradient(155deg,rgba(18,39,54,.99),rgba(6,18,18,.99));
+  box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+}
+.phone-market-inline-head-v184 {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 30px;
+  align-items:start;
+  gap:8px;
+}
+.phone-market-inline-head-v184 > div {display:grid;gap:2px;min-width:0}
+.phone-market-inline-head-v184 small {color:#75afff;font-size:.4rem;font-weight:950;text-transform:uppercase;letter-spacing:.08em}
+.phone-market-inline-head-v184 h3 {margin:0;font-size:.72rem;line-height:1.2}
+.phone-market-inline-head-v184 > button {
+  width:30px;height:30px;padding:0;border:0;border-radius:9px;color:#fff;background:rgba(255,255,255,.08);font-size:1rem;
+}
+.phone-market-inline-purchase-v184 > p {margin:0;color:rgba(255,255,255,.58);font-size:.47rem;line-height:1.45}
+.phone-market-inline-quantity-v184 {
+  display:grid;grid-template-columns:minmax(0,1fr) 76px;align-items:center;gap:8px;
+  color:rgba(255,255,255,.72);font-size:.5rem;font-weight:800;
+}
+.phone-market-inline-quantity-v184 input {
+  width:100%;min-width:0;padding:7px 8px;border:1px solid rgba(255,255,255,.14);border-radius:10px;
+  color:#fff;background:rgba(255,255,255,.07);font-size:.55rem;text-align:center;
+}
+.phone-market-inline-balances-v184 {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.phone-market-inline-balances-v184 > span {
+  display:grid;gap:2px;min-width:0;padding:7px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.035);
+}
+.phone-market-inline-balances-v184 small {color:rgba(255,255,255,.42);font-size:.34rem;font-weight:950;letter-spacing:.06em}
+.phone-market-inline-balances-v184 b {overflow:hidden;color:#fff;font-size:.5rem;text-overflow:ellipsis;white-space:nowrap}
+.phone-market-inline-status-v184 {min-height:1.35em!important;color:#76d8ac!important;font-size:.42rem!important}
+.phone-market-inline-status-v184.error {color:#ff9d9d!important}
+.phone-market-inline-actions-v184 {display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.phone-market-inline-actions-v184 button {
+  min-height:36px;padding:7px;border:0;border-radius:11px;color:#fff;font-size:.48rem;font-weight:950;
+}
+.phone-market-inline-actions-v184 button.cash {background:#147d5d}
+.phone-market-inline-actions-v184 button.card {background:#1768d4}
+.phone-market-inline-actions-v184 button:disabled {opacity:.34}
+.phone-market-notice-v184 {
+  position:absolute;left:14px;right:14px;top:58px;z-index:360;
+  display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:7px;
+  padding:9px 10px;border:1px solid rgba(104,232,172,.38);border-radius:13px;
+  color:#fff;background:rgba(10,70,50,.96);box-shadow:0 12px 34px rgba(0,0,0,.38);
+  opacity:0;transform:translateY(-8px);transition:opacity .18s ease,transform .18s ease;pointer-events:none;
+}
+.phone-market-notice-v184.show {opacity:1;transform:translateY(0)}
+.phone-market-notice-v184 > span {display:grid;place-items:center;width:24px;height:24px;border-radius:8px;background:rgba(255,255,255,.13);font-weight:950}
+.phone-market-notice-v184 b {min-width:0;font-size:.47rem;line-height:1.3}
+@media (max-width:360px) {
+  .phone-market-inline-actions-v184 {grid-template-columns:1fr}
+  .phone-market-inline-balances-v184 {grid-template-columns:1fr 1fr}
+  .phone-market-inline-balances-v184 > span:last-child {grid-column:1/-1}
+}
