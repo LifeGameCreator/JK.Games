@@ -1765,9 +1765,23 @@
     view.querySelectorAll("[data-native-market-close-v68]").forEach((button) => button.addEventListener("click", () => openDeviceInterface(item, "home", false), { once: true }));
   }
 
-  function rerenderMarketAppV68(item, mode, preserveScroll = true) {
+  function rerenderMarketAppV68(item, mode, preserveScroll = true, restoreSearchFocus = false, requestedCaret = null) {
+    const currentSearch = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"] [data-phone-market-search]`);
+    const caret = Number.isFinite(Number(requestedCaret))
+      ? Number(requestedCaret)
+      : (currentSearch && Number.isFinite(Number(currentSearch.selectionStart)) ? Number(currentSearch.selectionStart) : null);
     if (preserveScroll) pendingDeviceScrollTop = els.dialog?.querySelector?.(".phone-market-list-v68")?.scrollTop ?? null;
     openDeviceInterface(item, mode, false);
+    if (restoreSearchFocus) {
+      const restore = () => {
+        const search = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"] [data-phone-market-search]`);
+        if (!search) return;
+        try { search.focus({ preventScroll: true }); } catch { search.focus(); }
+        const position = Math.max(0, Math.min(search.value.length, caret == null ? search.value.length : caret));
+        try { search.setSelectionRange(position, position); } catch {}
+      };
+      window.requestAnimationFrame ? window.requestAnimationFrame(restore) : window.setTimeout(restore, 0);
+    }
   }
 
   function showPhonePaymentSheetV68(item, mode, entry) {
@@ -1822,9 +1836,11 @@
     const ui = phoneMarketStateV68(mode);
     const entries = phoneMarketEntriesV68(mode);
     root.querySelector("[data-phone-market-search]")?.addEventListener("input", (event) => {
-      ui.query = event.currentTarget.value;
-      window.clearTimeout(event.currentTarget.__jkSearchTimerV68);
-      event.currentTarget.__jkSearchTimerV68 = window.setTimeout(() => rerenderMarketAppV68(item, mode, false), 180);
+      const search = event.currentTarget;
+      ui.query = search.value;
+      const caret = Number.isFinite(Number(search.selectionStart)) ? Number(search.selectionStart) : search.value.length;
+      window.clearTimeout(search.__jkSearchTimerV68);
+      search.__jkSearchTimerV68 = window.setTimeout(() => rerenderMarketAppV68(item, mode, false, true, caret), 180);
     });
     root.querySelectorAll("[data-phone-market-category]").forEach((button) => button.addEventListener("click", () => {
       ui.category = button.dataset.phoneMarketCategory || "Alle";

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-04-settings-menu-economy-governance-v179";
+  const VERSION = "2026-08-04-settings-menu-moderator-level-money-lock-v183";
   const DB_ID = "gamekl";
   const REGION = "europe-west3";
   const SESSION_KEY = "lifebuilder-2026-online-mod-session";
@@ -23,7 +23,7 @@
     supporter: ["players.read", "character.read", "audit.read", "tickets.work", "tickets.all", "tickets.delete", "smartphone.write", "world.write", "work.write", "games.write", "shop.write", "moderation.kick", "moderation.timeout"],
     test_moderator: ["players.read", "character.read", "character.write", "player.write", "audit.read", "tickets.work", "tickets.all", "tickets.delete", "smartphone.write", "world.write", "work.write", "games.write", "shop.write", "items.write", "ids.read", "moderation.kick", "moderation.timeout", "moderation.ban.week"],
     moderator: ["players.read", "character.read", "character.write", "player.write", "audit.read", "tickets.work", "tickets.all", "tickets.delete", "smartphone.write", "world.write", "work.write", "games.write", "shop.write", "items.write", "ids.read", "properties.write", "trust.read", "moderation.kick", "moderation.timeout", "moderation.ban.year", "player.reset", "staff.timeout"],
-    admin: ["players.read", "character.read", "character.write", "player.write", "audit.read", "tickets.work", "tickets.all", "tickets.delete", "smartphone.write", "world.write", "work.write", "games.write", "shop.write", "items.write", "ids.read", "money.write", "properties.write", "trust.write", "moderation.kick", "moderation.timeout", "moderation.ban.year", "player.reset", "staff.timeout", "staff.manage", "events.write", "session.unlimited"],
+    admin: ["players.read", "character.read", "character.write", "player.write", "audit.read", "tickets.work", "tickets.all", "tickets.delete", "smartphone.write", "world.write", "work.write", "games.write", "shop.write", "items.write", "ids.read", "money.request", "properties.write", "trust.write", "moderation.kick", "moderation.timeout", "moderation.ban.year", "player.reset", "staff.timeout", "staff.manage", "events.write", "session.unlimited"],
     owner: ["*"]
   };
 
@@ -35,7 +35,7 @@
     { id: "ids", label: "Item-IDs", short: "IDs", icon: "#", permission: "ids.read" },
     { id: "governance", label: "Geld & Prüfungen", short: "Freigaben", icon: "✓", minRole: "admin" },
     { id: "staff", label: "Teamverwaltung", short: "Team", icon: "🛡", permission: "staff.manage" },
-    { id: "weed", label: "Weed Business", short: "Weed", icon: "🌿", minRole: "moderator" },
+    { id: "weed", label: "Weed Business", short: "Weed", icon: "🌿", ownerOnly: true },
     { id: "mrdn", label: "MRDN.KL", short: "Spiel", icon: "🎲", ownerOnly: true },
     { id: "owner", label: "Owner-Codes", short: "Owner", icon: "◆", ownerOnly: true }
   ];
@@ -44,7 +44,7 @@
     { id: "overview", label: "Übersicht", icon: "⌂" },
     { id: "character", label: "Charakter", icon: "👤", permission: "player.write" },
     { id: "needs", label: "Status", icon: "♥", permission: "player.write" },
-    { id: "money", label: "Geld", icon: "€", permission: "money.write" },
+    { id: "money", label: "Geld", icon: "€", any: ["money.write", "money.request"] },
     { id: "inventory", label: "Inventar", icon: "📦", permission: "items.write" },
     { id: "phone", label: "Handy", icon: "📱", permission: "smartphone.write" },
     { id: "workshop", label: "Arbeit & Shop", icon: "🧰", any: ["work.write", "shop.write"] },
@@ -207,21 +207,22 @@
     const role = String(roleData?.role || "");
     const source = Array.isArray(roleData?.permissions) ? roleData.permissions : (ROLE_PERMISSIONS[role] || []);
     const list = [...new Set(source.map(String))];
-    // Moderator- und Testränge dürfen unabhängig von alten Firebase-Rollendokumenten
-    // niemals Geldwerte verändern. So kann eine veraltete permission-Liste die neue
-    // V179-Regel nicht umgehen.
-    if (["test_member", "test_supporter", "supporter", "test_moderator", "moderator"].includes(role)) {
-      return list.filter((permission) => permission !== "money.write");
+    // In V180 besitzt ausschließlich der Owner direkte Geldrechte. Alte
+    // Firebase-Rollendokumente dürfen money.write für keine andere Rolle reaktivieren.
+    if (role !== "owner") {
+      const filtered = list.filter((permission) => permission !== "money.write");
+      if (role === "admin" && !filtered.includes("money.request")) filtered.push("money.request");
+      return filtered;
     }
-    return list;
+    return list.includes("*") ? list : [...list, "*"];
   }
   const ROLE_RIGHTS_SUMMARY = {
     test_supporter: "Spieler lesen, Charakterdaten ansehen, Audit lesen, Tickets bearbeiten sowie Handy und Welt unterstützen.",
     supporter: "Zusätzlich alle Tickets, Arbeit, Games, Shop, Kick und Timeout. Kein Geld und keine Item-Vergabe.",
     test_moderator: "Charaktere und Items bearbeiten, IDs lesen, bis zu einer Woche bannen. Kein Geld.",
     moderator: "Charaktere, Items, Immobilien, Spiele und Moderation bis zu einem Jahr. Kein Geld und keine Geldfreigaben.",
-    admin: "Vollständige Administration. Eigene Geldgutschriften benötigen eine Mehrheitsfreigabe von Admins/Ownern.",
-    owner: "Alle Rechte. Eigene Geldgutschriften sind ohne Freigabe möglich."
+    admin: "Vollständige Administration ohne direkte Geldänderungen. Jede Geldkorrektur wird als Antrag an den Owner gesendet.",
+    owner: "Alle Rechte. Direkte Geldänderungen sind möglich und werden revisionssicher protokolliert."
   };
   function has(permission) {
     const list = permissions();
@@ -881,6 +882,13 @@
     return selectedPlayer?.profile?.displayName || selectedPlayer?.account?.displayName || selectedPlayer?.account?.email || "Spieler";
   }
 
+  function canEditPlayerLevel() {
+    return ["admin", "owner"].includes(String(roleData?.role || ""));
+  }
+  function isModeratorRole() {
+    return ["test_moderator", "moderator"].includes(String(roleData?.role || ""));
+  }
+
   function renderPlayerDetail() {
     const detail = content().querySelector("[data-player-detail]");
     if (!detail || !selectedPlayer) return;
@@ -963,8 +971,9 @@
         <section class="online-mod-section-grid two">
           <article class="online-mod-card"><div class="online-mod-card-title"><span>👤</span><div><small>CHARAKTER</small><h3>Grunddaten bearbeiten</h3></div></div>
             <form data-command-form="setCharacter" class="online-mod-form-grid">
-              <label>Level<input name="level" type="number" min="0" value="${num(privateData.level ?? profile.level)}"></label>
-              <label>EP<input name="xp" type="number" min="0" value="${num(privateData.xp)}"></label>
+              <label>Level<input name="level" type="number" min="0" value="${num(privateData.level ?? profile.level)}" ${canEditPlayerLevel() ? "" : "readonly disabled"}></label>
+              <label>EP<input name="xp" type="number" min="0" value="${num(privateData.xp)}" ${canEditPlayerLevel() ? "" : "readonly disabled"}></label>
+              ${canEditPlayerLevel() ? "" : `<p class="online-mod-approval-note wide">Moderatoren dürfen Level und EP nur ansehen, aber niemals vergeben oder verändern.</p>`}
               <label>Alter<input name="age" type="number" min="16" max="120" value="${num(stats.age || save.age || 18)}"></label>
               <label>Job<input name="job" value="${esc(profile.job || stats.job || save.job || "Kein Job")}"></label>
               <button class="online-mod-primary wide" type="submit">Charakter speichern</button>
@@ -997,12 +1006,12 @@
           ${statCard("HANDYGUTHABEN", euro(privateData.phoneCredit), compactNumber(privateData.phoneCredit))}
           ${statCard("SCHWARZGELD", euro(privateData.dirtyMoney), compactNumber(privateData.dirtyMoney))}
         </section>
-        <article class="online-mod-card"><div class="online-mod-card-title"><span>€</span><div><small>GELDWERKZEUG</small><h3>Geld geben, nehmen oder setzen</h3></div></div>${roleData?.role === "admin" && selectedPlayer?.uid === currentUser?.uid ? `<p class="online-mod-approval-note">Eigene Gutschriften werden nicht sofort ausgeführt. Alle anderen aktiven Admins und Owner erhalten eine Anfrage; mehr als 50 % müssen zustimmen.</p>` : ""}
+        <article class="online-mod-card"><div class="online-mod-card-title"><span>€</span><div><small>${roleData?.role === "owner" ? "OWNER-GELDWERKZEUG" : "OWNER-FREIGABE"}</small><h3>${roleData?.role === "owner" ? "Geld geben, nehmen oder setzen" : "Geldkorrektur beim Owner beantragen"}</h3></div></div>${roleData?.role === "admin" ? `<p class="online-mod-approval-note">Admins können Geld nicht direkt verändern. Jede Gutschrift, Rückgabe, Abnahme oder Korrektur wird erst nach Bestätigung durch einen aktiven Owner ausgeführt.</p>` : `<p class="online-mod-approval-note">Owner-Änderungen werden direkt ausgeführt und bleiben im internen Audit nachvollziehbar.</p>`}
           <form data-money-command class="online-mod-form-grid">
             <label>Ziel<select name="target"><option value="bank">Bankkonto</option><option value="cash">Bargeld</option><option value="phoneCredit">Handyguthaben</option><option value="dirtyMoney">Schwarzgeld</option></select></label>
             <label>Betrag<input name="value" type="number" min="0" value="1000"></label>
             <div class="online-mod-quick-values wide"><button type="button" data-set-money-value="1000">1.000</button><button type="button" data-set-money-value="10000">10.000</button><button type="button" data-set-money-value="100000">100.000</button><button type="button" data-set-money-value="1000000">1 Mio.</button></div>
-            <button type="submit" name="kind" value="addMoney">Geben</button><button type="submit" name="kind" value="removeMoney">Nehmen</button><button class="online-mod-primary" type="submit" name="kind" value="setMoney">Genau setzen</button>
+            <button type="submit" name="kind" value="addMoney">${roleData?.role === "owner" ? "Geben" : "Gutschrift beantragen"}</button><button type="submit" name="kind" value="removeMoney">${roleData?.role === "owner" ? "Nehmen" : "Abnahme beantragen"}</button><button class="online-mod-primary" type="submit" name="kind" value="setMoney">${roleData?.role === "owner" ? "Genau setzen" : "Korrektur beantragen"}</button>
           </form>
         </article>`;
     }
@@ -1229,19 +1238,19 @@
     const fb = await runtime();
     const snapshot = await withModTimeout(fb.getDocs(fb.query(fb.collection(fb.db, "staffRoles"), fb.limit(250))), 12000, "Admin-/Owner-Liste");
     return snapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() }))
-      .filter((entry) => entry.active !== false && ["admin", "owner"].includes(String(entry.role || "")))
+      .filter((entry) => entry.active !== false && String(entry.role || "") === "owner")
       .map((entry) => String(entry.uid || ""))
       .filter(Boolean);
   }
 
   async function createMoneyApprovalRequest(command, reason) {
-    if (roleData?.role !== "admin") throw new Error("Nur Admin-Gutschriften benötigen diesen Freigabeweg.");
+    if (roleData?.role !== "admin") throw new Error("Nur Admin-Geldkorrekturen verwenden den Owner-Freigabeweg.");
     if (!currentUser?.uid || !selectedPlayer?.uid) throw new Error("Admin- oder Zielaccount fehlt.");
     const fb = await runtime();
     const allApprovers = await eligibleMoneyApprovers();
     const eligible = [...new Set(allApprovers.filter((uid) => uid !== currentUser.uid))];
-    if (!eligible.length) throw new Error("Es ist kein weiterer Admin oder Owner für die Freigabe registriert. Ein Owner kann die Gutschrift direkt ausführen.");
-    const threshold = Math.floor(eligible.length / 2) + 1;
+    if (!eligible.length) throw new Error("Es ist kein aktiver Owner für die Freigabe registriert.");
+    const threshold = 1;
     const requestRef = fb.doc(fb.collection(fb.db, MONEY_APPROVAL_COLLECTION));
     const now = Date.now();
     const payload = {
@@ -1254,7 +1263,7 @@
       targetName: playerName(),
       slot: selectedPlayerSlot(),
       command: { ...command },
-      reason: String(reason || "Admin-Eigengutschrift").slice(0, 240),
+      reason: String(reason || "Admin-Geldkorrektur").slice(0, 240),
       eligibleApproverUids: eligible,
       eligibleCount: eligible.length,
       threshold,
@@ -1271,20 +1280,21 @@
       batch.set(notificationRef, {
         type: "money-approval",
         requestId: requestRef.id,
-        title: "Admin-Geldfreigabe",
-        text: `${payload.requesterName} beantragt ${euro(command.value)} für den eigenen Charakter.`,
+        title: "Owner-Freigabe für Geldkorrektur",
+        text: `${payload.requesterName} beantragt ${euro(command.value)} für ${payload.targetName}.`,
         createdAtMs: now,
         read: false
       }, { merge: true });
     });
     await withModTimeout(batch.commit(), 12000, "Geldfreigabe erstellen");
-    toast(`Freigabe erstellt: ${threshold} von ${eligible.length} Stimmen werden benötigt.`);
+    toast("Antrag erstellt. Ein Owner muss die Geldkorrektur bestätigen.");
     await loadGovernanceQueues();
     pendingMoneyApprovalCount = moneyApprovalRequests.filter((entry) => entry.status === "pending" && safeArray(entry.eligibleApproverUids).includes(currentUser.uid)).length;
     updateSettingsEntry();
   }
 
   async function executeApprovedMoneyRequest(requestId) {
+    if (roleData?.role !== "owner") throw new Error("Nur ein Owner darf eine Geldkorrektur ausführen.");
     const fb = await runtime();
     const ref = fb.doc(fb.db, MONEY_APPROVAL_COLLECTION, requestId);
     let request = null;
@@ -1316,7 +1326,7 @@
   }
 
   async function voteMoneyApproval(requestId, approve) {
-    if (!["admin", "owner"].includes(String(roleData?.role || ""))) return;
+    if (roleData?.role !== "owner") return;
     const fb = await runtime();
     const ref = fb.doc(fb.db, MONEY_APPROVAL_COLLECTION, requestId);
     let after = null;
@@ -1364,7 +1374,7 @@
 
   async function renderGovernancePanel() {
     if (!["admin", "owner"].includes(String(roleData?.role || ""))) { activePanel = "home"; return renderHomePanel(); }
-    content().innerHTML = `${pageHead("WIRTSCHAFTS-SICHERHEIT", "Geldfreigaben & Betrugsprüfung", "Admin-Eigengutschriften benötigen eine Mehrheit. Rücküberweisungen und schnelle Accountwechsel werden zur manuellen Prüfung vorgemerkt.", `<button type="button" data-governance-refresh>↻ Aktualisieren</button>`)}<div class="online-mod-loading"><i></i><p>Lade Freigaben und Prüfungen …</p></div>`;
+    content().innerHTML = `${pageHead("WIRTSCHAFTS-SICHERHEIT", "Geldfreigaben & Betrugsprüfung", "Admins dürfen Geld nur beantragen; ein Owner bestätigt oder lehnt ab. Rücküberweisungen und schnelle Accountwechsel werden zur manuellen Prüfung vorgemerkt.", `<button type="button" data-governance-refresh>↻ Aktualisieren</button>`)}<div class="online-mod-loading"><i></i><p>Lade Freigaben und Prüfungen …</p></div>`;
     try { await loadGovernanceQueues(); }
     catch (error) { content().innerHTML += `<p class="online-mod-message error">${esc(error.message)}</p>`; return; }
     const approvalsHtml = moneyApprovalRequests.length ? moneyApprovalRequests.map((entry) => {
@@ -1373,11 +1383,11 @@
       const eligible = safeArray(entry.eligibleApproverUids).includes(currentUser.uid);
       const voted = !!entry.approvals?.[currentUser.uid] || !!entry.rejections?.[currentUser.uid];
       const command = safeObject(entry.command);
-      return `<article class="online-mod-governance-row ${esc(entry.status || "pending")}"><header><div><small>${dateTime(entry.createdAtMs)}</small><h3>${esc(entry.requesterName || "Admin")} → ${esc(entry.targetName || "eigener Charakter")}</h3></div><span>${esc(entry.status || "pending")}</span></header><p>${esc(command.kind || "addMoney")} · ${esc(command.target || "bank")} · <b>${euro(command.value)}</b></p><p>${esc(entry.reason || "Ohne Grund")}</p><footer><b>${approvals}/${num(entry.threshold,1)} Zustimmungen</b><span>${rejections} Ablehnungen · ${num(entry.eligibleCount)} Stimmberechtigte</span>${entry.status === "pending" && eligible && !voted ? `<div><button data-money-approval-vote="approve" data-request-id="${esc(entry.id)}">Zustimmen</button><button class="danger" data-money-approval-vote="reject" data-request-id="${esc(entry.id)}">Ablehnen</button></div>` : ""}</footer></article>`;
+      return `<article class="online-mod-governance-row ${esc(entry.status || "pending")}"><header><div><small>${dateTime(entry.createdAtMs)}</small><h3>${esc(entry.requesterName || "Admin")} → ${esc(entry.targetName || "eigener Charakter")}</h3></div><span>${esc(entry.status || "pending")}</span></header><p>${esc(command.kind || "addMoney")} · ${esc(command.target || "bank")} · <b>${euro(command.value)}</b></p><p>${esc(entry.reason || "Ohne Grund")}</p><footer><b>${approvals}/${num(entry.threshold,1)} Zustimmungen</b><span>${rejections} Ablehnungen · ${num(entry.eligibleCount)} Stimmberechtigte</span>${entry.status === "pending" && roleData?.role === "owner" && eligible && !voted ? `<div><button data-money-approval-vote="approve" data-request-id="${esc(entry.id)}">Bestätigen</button><button class="danger" data-money-approval-vote="reject" data-request-id="${esc(entry.id)}">Ablehnen</button></div>` : ""}</footer></article>`;
     }).join("") : `<div class="online-mod-empty-state compact"><span>✓</span><p>Keine Geldfreigaben vorhanden.</p></div>`;
     const fraudHtml = moneyFraudAlerts.length ? moneyFraudAlerts.map((entry) => `<article class="online-mod-governance-row fraud ${esc(entry.status || "open")}"><header><div><small>${dateTime(entry.updatedAtMs || entry.createdAtMs)}</small><h3>${esc(entry.senderName || entry.senderUid || "Account")} ↔ ${esc(entry.recipientName || entry.recipientUid || "Account")}</h3></div><span>${esc(entry.status || "open")}</span></header><p><b>${euro(num(entry.amountCents)/100)}</b> · ${esc(entry.reason || "Schnelle Gegenüberweisung erkannt")}</p><p>${entry.deviceSwitchDetected ? "Schneller Accountwechsel auf demselben Gerät erkannt." : "Gegenläufige Überweisungen innerhalb des Prüfzeitraums erkannt."}</p>${["open","pending"].includes(String(entry.status || "open")) ? `<footer><div><button data-fraud-resolution="cleared" data-alert-id="${esc(entry.id)}">Unauffällig</button><button class="danger" data-fraud-resolution="confirmed" data-alert-id="${esc(entry.id)}">Verdacht bestätigen</button></div></footer>` : ""}</article>`).join("") : `<div class="online-mod-empty-state compact"><span>◎</span><p>Keine auffälligen Geldkreisläufe gefunden.</p></div>`;
     content().innerHTML = `
-      ${pageHead("WIRTSCHAFTS-SICHERHEIT", "Geldfreigaben & Betrugsprüfung", "Admin-Eigengutschriften benötigen eine Mehrheit. Rücküberweisungen und schnelle Accountwechsel werden zur manuellen Prüfung vorgemerkt.", `<button type="button" data-governance-refresh>↻ Aktualisieren</button>`)}
+      ${pageHead("WIRTSCHAFTS-SICHERHEIT", "Geldfreigaben & Betrugsprüfung", "Admins dürfen Geld nur beantragen; ein Owner bestätigt oder lehnt ab. Rücküberweisungen und schnelle Accountwechsel werden zur manuellen Prüfung vorgemerkt.", `<button type="button" data-governance-refresh>↻ Aktualisieren</button>`)}
       <section class="online-mod-section-grid two"><article class="online-mod-card"><div class="online-mod-card-title"><span>✓</span><div><small>MEHRHEITSFREIGABEN</small><h3>Admin-Geldanträge</h3></div></div><div class="online-mod-governance-list">${approvalsHtml}</div></article><article class="online-mod-card"><div class="online-mod-card-title"><span>◎</span><div><small>TRANSFER-AUDIT</small><h3>Eventueller Geldbetrug</h3></div></div><div class="online-mod-governance-list">${fraudHtml}</div></article></section>`;
   }
 
@@ -1389,7 +1399,7 @@
 
   async function startMoneyApprovalListener() {
     stopMoneyApprovalListener();
-    if (!currentUser?.uid || !["admin", "owner"].includes(String(roleData?.role || ""))) { updateSettingsEntry(); return; }
+    if (!currentUser?.uid || roleData?.role !== "owner") { updateSettingsEntry(); return; }
     const fb = await runtime();
     const query = fb.query(fb.collection(fb.db, MONEY_APPROVAL_COLLECTION), fb.where("eligibleApproverUids", "array-contains", currentUser.uid), fb.limit(100));
     moneyApprovalUnsubscribe = fb.onSnapshot(query, (snapshot) => {
@@ -1674,7 +1684,7 @@
       ${pageHead("OWNER", "Rollencodes", "Einmalige Codes erstellen und letzte Einladungen kontrollieren.")}
       <section class="online-mod-section-grid two"><article class="online-mod-card"><div class="online-mod-card-title"><span>🔑</span><div><small>NEUER CODE</small><h3>Rolle freischalten</h3></div></div><form data-create-invite class="online-mod-form-grid"><label>Rolle<select name="role">${ROLE_ORDER.filter((role) => role !== "owner").map((role) => `<option value="${role}">${ROLE_LABELS[role]}</option>`).join("")}</select></label><label>Gültig in Stunden<input name="validHours" type="number" min="1" max="720" value="168"></label><label class="wide">Notiz<input name="note" maxlength="160"></label><button class="online-mod-primary wide" type="submit">Code erstellen</button><p class="online-mod-message wide" data-invite-message></p><div class="online-mod-secret wide" data-created-code hidden></div></form></article><article class="online-mod-card"><div class="online-mod-card-title"><span>☷</span><div><small>VERLAUF</small><h3>Letzte Codes</h3></div></div><div data-invite-list><div class="online-mod-loading"><i></i><p>Lade Codes …</p></div></div></article></section>
       <section class="online-mod-card"><div class="online-mod-card-title"><span>🛡</span><div><small>OWNER-SITZUNG</small><h3>Eigenen KL-Sitzungscode erneuern</h3></div></div><p>Hier kannst du einen neuen persönlichen Sitzungscode erzeugen. Der bisherige Code wird dadurch sofort ungültig.</p><div class="online-mod-actions"><button type="button" class="online-mod-primary" data-owner-reset-session-pin>Neuen KL-Sitzungscode erstellen</button></div><p class="online-mod-message" data-owner-session-message></p><div class="online-mod-secret" data-owner-session-result hidden></div></section>
-      <section class="online-mod-card"><div class="online-mod-card-title"><span>↺</span><div><small>RESET VORBEREITET · NICHT AKTIV</small><h3>Neustart-Generation V179</h3></div></div><p>Der Reset wird in dieser Version ausdrücklich nicht ausgelöst. Die Anmeldung per E-Mail bleibt erhalten. Bei einer späteren serverseitigen Aktivierung werden Spielstände neu begonnen: vier Charakterplätze, Level 1, 10.000 € Konto und 1.000 € Bargeld.</p><div class="online-mod-data-list"><span><small>Globale Bank / Steuerkonto</small><b>1 Billion € Startbestand</b></span><span><small>Casino-Konto</small><b>100 Milliarden € Startbestand</b></span><span><small>Resetstatus</small><b>${window.JKGamesResetV179?.config?.active ? "AKTIV" : "Nicht aktiv"}</b></span><span><small>Ausführung</small><b>Nur nach späterer Owner-Aktivierung</b></span></div><div class="online-mod-actions"><button type="button" data-owner-reset-readiness>Vorbereitung überprüfen</button></div><p class="online-mod-message" data-owner-reset-readiness-message></p></section>`;
+      <section class="online-mod-card"><div class="online-mod-card-title"><span>↺</span><div><small>ACCOUNT RESET · AKTIV</small><h3>Neustart-Generation V180</h3></div></div><p>Der Pre-Beta-Reset ist aktiv. Die Anmeldung per E-Mail bleibt erhalten. Spielstände beginnen neu: vier Charakterplätze, Level 1 und 1.000 € Bargeld. Das Konto startet nicht verfügbar; die 10.000 € werden erst nach Smartphone und Kontoeröffnung gutgeschrieben.</p><div class="online-mod-data-list"><span><small>Globale Bank / Steuerkonto</small><b>1 Billion € Startbestand</b></span><span><small>Casino-Konto</small><b>100 Milliarden € Startbestand</b></span><span><small>Resetstatus</small><b>${window.JKGamesResetV180?.config?.active ? "AKTIV" : "Nicht aktiv"}</b></span><span><small>Ausführung</small><b>Automatisch beim nächsten Login</b></span></div><div class="online-mod-actions"><button type="button" data-owner-reset-readiness>Vorbereitung überprüfen</button></div><p class="online-mod-message" data-owner-reset-readiness-message></p></section>`;
     await loadInvites();
   }
 
@@ -1784,7 +1794,7 @@
 
     const resetReadinessButton = event.target.closest("[data-owner-reset-readiness]");
     if (resetReadinessButton) {
-      const result = window.JKGamesResetV179?.preview?.() || { ready: false, message: "Reset-Vorbereitung ist noch nicht geladen." };
+      const result = window.JKGamesResetV180?.preview?.() || { ready: false, message: "Reset-Vorbereitung ist noch nicht geladen." };
       const message = content().querySelector("[data-owner-reset-readiness-message]");
       if (message) { message.textContent = result.message || (result.ready ? "Vorbereitung vollständig. Reset bleibt deaktiviert." : "Vorbereitung unvollständig."); message.classList.toggle("error", !result.ready); }
       toast(result.message || "Reset-Vorbereitung geprüft.", result.ready ? "ok" : "error");
@@ -1955,6 +1965,23 @@
     return command;
   }
 
+  async function recordOwnerMoneyAudit(command, reason, response = {}) {
+    if (roleData?.role !== "owner" || !currentUser?.uid || !selectedPlayer?.uid) return;
+    const fb = await runtime();
+    const ref = fb.doc(fb.collection(fb.db, "ownerMoneyAudit"));
+    await fb.setDoc(ref, {
+      ownerUid: currentUser.uid,
+      ownerName: currentUser.displayName || currentUser.email || "Owner",
+      targetUid: selectedPlayer.uid,
+      targetName: playerName(),
+      slot: selectedPlayerSlot(),
+      command: { kind: String(command?.kind || ""), target: String(command?.target || ""), value: Math.max(0, Math.round(num(command?.value))) },
+      reason: String(reason || "Owner-Geldkorrektur").slice(0, 240),
+      appliedToCloud: response?.appliedToCloud === true,
+      createdAtMs: Date.now()
+    });
+  }
+
   async function runCommand(command) {
     const message = content().querySelector("[data-player-action-message]");
     try {
@@ -1980,9 +2007,11 @@
           }
         }, response.appliedToCloud ? 650 : 1200);
       }
+      return response;
     } catch (error) {
       if (message) { message.textContent = error.message; message.classList.add("error"); }
       toast(error.message, "error");
+      return null;
     }
   }
 
@@ -2045,6 +2074,7 @@
     }
     if (form.matches("[data-command-form]")) {
       const command = convertCommandValues({ kind: form.dataset.commandForm, ...formDataObject(form) });
+      if (command.kind === "setCharacter" && !canEditPlayerLevel()) { delete command.level; delete command.xp; }
       return runCommand(command);
     }
     if (form.matches("[data-item-command]")) {
@@ -2062,19 +2092,24 @@
       });
     }
     if (form.matches("[data-money-command]")) {
+      if (isModeratorRole()) return toast("Moderatoren dürfen kein Geld geben, nehmen, setzen oder beantragen.", "error");
       const data = formDataObject(form);
       const command = { kind: submitter?.value || "addMoney", target: data.target, value: Math.max(0, Math.round(num(data.value))) };
-      if (!has("money.write")) return toast("Deine Rolle darf keine Geldwerte verändern.", "error");
-      const selfCredit = roleData?.role === "admin" && selectedPlayer?.uid === currentUser?.uid && ["addMoney", "setMoney"].includes(command.kind);
-      if (selfCredit) {
+      if (roleData?.role === "owner" && has("money.write")) {
         const reasonInput = content().querySelector("[data-player-change-reason]");
         playerActionReason = String(reasonInput?.value || playerActionReason || "").trim();
-        if (playerActionReason.length < 4) return toast("Bitte zuerst einen Grund für die Eigengutschrift eintragen.", "error");
-        try { await createMoneyApprovalRequest(command, playerActionReason); if (activePanel === "players") renderPlayerDetail(); }
-        catch (error) { toast(error.message, "error"); }
+        if (playerActionReason.length < 4) return toast("Bitte zuerst einen nachvollziehbaren Grund für die Owner-Geldkorrektur eintragen.", "error");
+        const response = await runCommand(command);
+        if (response) await recordOwnerMoneyAudit(command, playerActionReason, response).catch((error) => console.warn("Owner-Geldaudit", error));
         return;
       }
-      return runCommand(command);
+      if (roleData?.role !== "admin" || !has("money.request")) return toast("Deine Rolle darf keine Geldwerte verändern oder beantragen.", "error");
+      const reasonInput = content().querySelector("[data-player-change-reason]");
+      playerActionReason = String(reasonInput?.value || playerActionReason || "").trim();
+      if (playerActionReason.length < 4) return toast("Bitte zuerst einen nachvollziehbaren Grund für die Geldkorrektur eintragen.", "error");
+      try { await createMoneyApprovalRequest(command, playerActionReason); if (activePanel === "players") renderPlayerDetail(); }
+      catch (error) { toast(error.message, "error"); }
+      return;
     }
     if (form.matches("[data-character-status-form]")) {
       const data = formDataObject(form);

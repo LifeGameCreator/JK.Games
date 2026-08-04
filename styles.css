@@ -20276,3 +20276,9 @@ body.phone-v65-open {
     transform: translateY(-6px) !important;
   }
 }
+
+
+/* JK.Games V180 · Account Reset / Pre-Beta */
+.jk-reset-prebeta-banner{margin:14px auto 22px;max-width:980px;display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;padding:18px;border:1px solid rgba(255,190,67,.42);border-radius:20px;background:linear-gradient(135deg,rgba(63,35,8,.94),rgba(15,20,29,.96));box-shadow:0 16px 40px rgba(0,0,0,.28)}
+.jk-reset-prebeta-banner>span{padding:8px 10px;border-radius:10px;background:#ffbd43;color:#221400;font-weight:900;letter-spacing:.12em;font-size:.72rem}.jk-reset-prebeta-banner small{color:#ffca63;font-weight:800;letter-spacing:.12em}.jk-reset-prebeta-banner h2{margin:3px 0 6px}.jk-reset-prebeta-banner p{margin:0;color:#d7dee8}.jk-reset-prebeta-banner ul{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0;list-style:none}.jk-reset-prebeta-banner li{padding:7px 10px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.82rem}.setup-bank-hint{margin:-3px 0 8px;padding:10px 12px;border-left:3px solid #ffbd43;border-radius:8px;background:rgba(255,189,67,.08);color:#d8e0ea;font-size:.86rem;line-height:1.45}
+@media(max-width:620px){.jk-reset-prebeta-banner{grid-template-columns:1fr;margin:10px 8px 18px;padding:14px}.jk-reset-prebeta-banner>span{justify-self:start}.jk-reset-prebeta-banner ul{display:grid;grid-template-columns:1fr}.jk-reset-prebeta-banner li{border-radius:10px}}

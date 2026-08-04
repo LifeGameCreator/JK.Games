@@ -1,5 +1,5 @@
 (() => {
-  const ONLINE_VERSION = "2026-08-04-network-economy-governance-reset-prep-v179";
+  const ONLINE_VERSION = "2026-08-04-network-account-reset-active-v180";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
@@ -13,11 +13,13 @@
   const ACCOUNT_UID_KEY = "lifebuilder-2026-account-uid";
   const ACCOUNT_SLOTS_PREFIX = "lifebuilder-2026-account-slots:";
   const ACCOUNT_ACTIVE_PREFIX = "lifebuilder-2026-account-active-slot:";
-  const RESET_CONTROL_PATH_V179 = ["global", "resetControlV179"];
-  const RESET_TARGET_VERSION_V179 = 179;
-  // V179 enthält nur die vollständige Vorbereitung. Eine tatsächliche Löschung
-  // ist in dieser Build hart deaktiviert und benötigt später eine neue Release.
-  const RESET_RUNTIME_ENABLED_V179 = false;
+  const RESET_CONTROL_PATH_V180 = ["global", "resetControlV180"];
+  const RESET_TARGET_VERSION_V180 = 180;
+  // V180 aktiviert den angekündigten Pre-Beta-Reset. Firebase-Auth und E-Mail
+  // bleiben bestehen; Spielstände und spielbezogene Profile werden neu begonnen.
+  const RESET_RUNTIME_ENABLED_V180 = true;
+  const RESET_TARGET_GENERATION_V180 = 180;
+  const LOCAL_RESET_GENERATION_KEY_V180 = "lifebuilder-2026-reset-generation-v180";
   const hostedOnlineMode = /^https?:$/.test(window.location.protocol)
     && !["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(String(window.location.hostname || "").toLowerCase());
 
@@ -1173,29 +1175,48 @@
     });
   }
 
-  async function preparedResetControlV179(fb) {
+  async function preparedResetControlV180(fb) {
+    const builtIn = {
+      active: true,
+      version: RESET_TARGET_VERSION_V180,
+      generation: RESET_TARGET_GENERATION_V180,
+      startBank: 0,
+      bankOpeningCredit: 10000,
+      startCash: 1000,
+      characterSlots: 4,
+      systemBankStart: 1000000000000,
+      casinoBankStart: 100000000000,
+      note: "Account Reset · Pre-Beta"
+    };
     try {
-      const snapshot = await withDatabaseTimeout(fb.getDoc(fb.doc(fb.db, ...RESET_CONTROL_PATH_V179)), DATABASE_VERIFY_TIMEOUT_MS);
-      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+      const snapshot = await withDatabaseTimeout(fb.getDoc(fb.doc(fb.db, ...RESET_CONTROL_PATH_V180)), DATABASE_VERIFY_TIMEOUT_MS);
+      if (!snapshot.exists()) return builtIn;
+      const remote = { id: snapshot.id, ...snapshot.data() };
+      return Number(remote.version || 0) >= RESET_TARGET_VERSION_V180 ? { ...builtIn, ...remote, active: true } : builtIn;
     } catch (error) {
-      console.warn("Reset-V179-Steuerung konnte nicht gelesen werden", error);
-      return null;
+      console.warn("Reset-V180-Steuerung konnte nicht gelesen werden; aktive Build-Konfiguration wird verwendet", error);
+      return builtIn;
     }
   }
 
-  async function applyPreparedResetV179IfActivated(user) {
-    if (!RESET_RUNTIME_ENABLED_V179 || !user?.uid) return false;
+  async function applyAccountResetV180IfNeeded(user) {
+    if (!RESET_RUNTIME_ENABLED_V180 || !user?.uid) return false;
     const fb = await loadOnlineFirebase();
-    const control = await preparedResetControlV179(fb);
-    if (!control?.active || Number(control.version || 0) < RESET_TARGET_VERSION_V179) return false;
-    const targetGeneration = Math.max(1, Number(control.generation || 1));
+    const control = await preparedResetControlV180(fb);
+    if (!control?.active || Number(control.version || 0) < RESET_TARGET_VERSION_V180) return false;
+    const targetGeneration = Math.max(RESET_TARGET_GENERATION_V180, Number(control.generation || RESET_TARGET_GENERATION_V180));
     const accountRef = fb.doc(fb.db, "accounts", user.uid);
     const accountSnapshot = await withDatabaseTimeout(fb.getDoc(accountRef), DATABASE_VERIFY_TIMEOUT_MS).catch(() => null);
     const appliedGeneration = Math.max(0, Number(accountSnapshot?.data?.()?.resetGeneration || 0));
-    if (appliedGeneration >= targetGeneration) return false;
+    let localAppliedGeneration = 0;
+    try { localAppliedGeneration = Math.max(0, Number(localStorage.getItem(LOCAL_RESET_GENERATION_KEY_V180) || 0)); } catch {}
+    const needsServerReset = appliedGeneration < targetGeneration;
+    const needsLocalReset = localAppliedGeneration < targetGeneration;
+    if (!needsServerReset && !needsLocalReset) return false;
 
     // Die Firebase-Authentifizierung und E-Mail bleiben erhalten. Gelöscht werden
     // nur Spielstände und spielbezogene Profildaten des angemeldeten Accounts.
+    if (needsServerReset) {
     const batch = fb.writeBatch(fb.db);
     for (let slotIndex = 0; slotIndex < 4; slotIndex += 1) batch.delete(cloudSlotRef(fb, user.uid, slotIndex));
     batch.delete(fb.doc(fb.db, "playerProfiles", user.uid));
@@ -1203,11 +1224,12 @@
     batch.set(accountRef, {
       resetGeneration: targetGeneration,
       resetAppliedAtMs: Date.now(),
-      resetVersion: Number(control.version || RESET_TARGET_VERSION_V179),
+      resetVersion: Number(control.version || RESET_TARGET_VERSION_V180),
       resetPreservedAuth: true,
       updatedAtMs: Date.now()
     }, { merge: true });
     await withDatabaseTimeout(batch.commit(), CLOUD_UPLOAD_TIMEOUT_MS);
+    }
 
     saveSlots = [null, null, null, null];
     state = null;
@@ -1221,11 +1243,12 @@
       localStorage.setItem(ACTIVE_SLOT_KEY, "0");
       localStorage.removeItem(`${ACCOUNT_SLOTS_PREFIX}${user.uid}`);
       localStorage.removeItem(`${ACCOUNT_ACTIVE_PREFIX}${user.uid}`);
+      localStorage.setItem(LOCAL_RESET_GENERATION_KEY_V180, String(targetGeneration));
     } catch {}
     if (typeof renderSaveSlots === "function") renderSaveSlots();
     if (typeof setSetupView === "function") setSetupView("slots");
-    window.dispatchEvent(new CustomEvent("lifebuilder-prepared-reset-applied", { detail: { uid: user.uid, generation: targetGeneration } }));
-    alert("Der angekündigte JK.Games-Reset wurde für deinen Account durchgeführt. Deine E-Mail-Anmeldung bleibt erhalten; du kannst jetzt bis zu vier neue Charaktere erstellen.");
+    window.dispatchEvent(new CustomEvent("lifebuilder-account-reset-v180-applied", { detail: { uid: user.uid, generation: targetGeneration } }));
+    alert("ACCOUNT RESET abgeschlossen. Deine E-Mail-Anmeldung bleibt erhalten. Die Pre-Beta startet neu: vier Charakterplätze, Level 1, 1.000 € Bargeld und 10.000 € erst nach Smartphone plus Kontoeröffnung.");
     return true;
   }
 
@@ -1249,7 +1272,7 @@
     };
     cloudHydrationPromise = (async () => {
       assertCurrentAccount();
-      const resetApplied = await applyPreparedResetV179IfActivated(user);
+      const resetApplied = await applyAccountResetV180IfNeeded(user);
       assertCurrentAccount();
       if (resetApplied) {
         cloudSaveReadyUid = user.uid;
@@ -2126,7 +2149,8 @@
     saveSlot: writeCloudSlot,
     deleteSlot: deleteCloudSlot,
     hydrateSlots: hydrateCloudSlots,
-    checkPreparedResetV179: () => onlineUser ? applyPreparedResetV179IfActivated(onlineUser) : Promise.resolve(false),
+    checkAccountResetV180: () => onlineUser ? applyAccountResetV180IfNeeded(onlineUser) : Promise.resolve(false),
+    checkPreparedResetV179: () => onlineUser ? applyAccountResetV180IfNeeded(onlineUser) : Promise.resolve(false),
     getCloudStatus: () => ({
       uid: onlineUser?.uid || "",
       ready: cloudSaveReadyUid === onlineUser?.uid && window.__lifeBuilderCloudReady === true,

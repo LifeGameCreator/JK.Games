@@ -485,3 +485,44 @@ body.fight-kl-open{overflow:hidden!important}
   .fkl-coop-player-chip .hp{grid-column:2;grid-row:1/3;min-width:27px;font-size:8px}
   .fkl-stage-coop-v150 .fkl-friend-combat-hud{top:calc(30px + var(--fkl-coop-rows,2) * 33px)}
 }
+
+
+/* V181: Einheitliche Vierer-Werte für Arsenal, Inventar und Itemdetails */
+.fkl-four-values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:12px 0 10px;width:100%}
+.fkl-four-values>span{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"icon label" "icon value";column-gap:6px;align-items:center;min-width:0;padding:8px 7px;border:1px solid color-mix(in srgb,var(--rarity,#65f1c1) 28%,rgba(255,255,255,.08));border-radius:10px;background:rgba(4,11,14,.62)}
+.fkl-four-values i{grid-area:icon;font-style:normal;font-size:15px;filter:drop-shadow(0 0 7px var(--rarity-glow,#65f1c155))}
+.fkl-four-values small{grid-area:label;display:block;overflow:hidden;text-overflow:ellipsis;color:#91a6ac;font-size:8px;font-weight:800;letter-spacing:.055em;text-transform:uppercase;white-space:nowrap}
+.fkl-four-values b{grid-area:value;color:#f3fbfc;font-size:12px;line-height:1.1;white-space:nowrap}
+.fkl-four-values.compact{gap:4px;margin:7px 0}
+.fkl-four-values.compact>span{display:flex;justify-content:center;gap:3px;padding:5px 3px;border-radius:7px}
+.fkl-four-values.compact small{display:none}
+.fkl-four-values.compact i{font-size:11px}
+.fkl-four-values.compact b{font-size:9px}
+.fkl-shop-card .fkl-four-values{margin-top:auto}
+@media(max-width:760px){.fkl-four-values{grid-template-columns:repeat(2,minmax(0,1fr))}.fkl-four-values.compact{grid-template-columns:repeat(4,minmax(0,1fr))}.fkl-four-values.compact>span{padding:4px 2px}.fkl-four-values.compact b{font-size:8px}}
+
+
+/* V182: Klare Kennzeichnung, welche Waffen ein aufladbares Power-Up besitzen */
+.fkl-power-up{width:100%;margin:10px 0;padding:10px 11px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(3,10,13,.72);text-align:left}
+.fkl-power-up.yes{border-color:color-mix(in srgb,var(--rarity,#66f1c0) 54%,rgba(255,255,255,.12));box-shadow:inset 0 0 18px var(--rarity-glow,#66f1c022)}
+.fkl-power-up.no{border-color:rgba(142,157,163,.24);background:rgba(8,13,15,.58);opacity:.88}
+.fkl-power-up header{display:flex;align-items:center;gap:9px}
+.fkl-power-up header>i{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.075);font-style:normal;font-size:20px}
+.fkl-power-up.yes header>i{filter:drop-shadow(0 0 8px var(--rarity,#66f1c0))}
+.fkl-power-up header div{display:grid;gap:2px;min-width:0}
+.fkl-power-up header small{color:#8ea5ab;font-size:8px;font-weight:900;letter-spacing:.08em}
+.fkl-power-up header b{color:#f4fbfc;font-size:12px}
+.fkl-power-up.yes header b{color:var(--rarity,#72f5cb)}
+.fkl-power-up p{margin:8px 0 0;color:#aec0c5;font-size:10px;line-height:1.42}
+.fkl-power-up.compact{display:flex;align-items:center;justify-content:center;gap:5px;margin:6px 0;padding:5px 6px;border-radius:8px;text-align:center}
+.fkl-power-up.compact i{font-style:normal;font-size:11px}
+.fkl-power-up.compact b{font-size:8px;letter-spacing:.035em;white-space:nowrap}
+.fkl-power-up.compact span{max-width:92px;overflow:hidden;text-overflow:ellipsis;color:#b9cbd0;font-size:8px;white-space:nowrap}
+.fkl-power-up.compact.yes b{color:var(--rarity,#72f5cb)}
+.fkl-power-up.compact.no b{color:#91a2a7}
+.fkl-shop-card .fkl-power-up{margin-top:2px}
+@media(max-width:760px){.fkl-power-up{padding:9px}.fkl-power-up p{font-size:9px}.fkl-power-up.compact span{display:none}}
+
+
+/* V183 · KOOP-Performance, Run-Belohnungen und Stern-Aufwertung */
+.fkl-run-reward-pill{min-width:112px}.fkl-run-reward-pill em{display:block;color:#9fb4b9;font-size:9px;font-style:normal;font-weight:800;margin-top:2px}.fkl-star-upgrade-help,.fkl-star-upgrade-action{display:grid;gap:7px;margin-top:14px;padding:13px;border:1px solid rgba(255,216,77,.34);border-radius:14px;background:linear-gradient(135deg,rgba(255,216,77,.12),rgba(113,87,255,.13))}.fkl-star-upgrade-help b,.fkl-star-upgrade-action small{color:#ffe27b;font-weight:900}.fkl-star-upgrade-help span,.fkl-star-upgrade-help small,.fkl-star-upgrade-action em{color:var(--fkl-muted);font-style:normal}.fkl-star-upgrade-action .fkl-btn{width:100%}@media(max-width:760px){.fkl-run-reward-pill{min-width:88px}.fkl-run-reward-pill em{font-size:8px}}

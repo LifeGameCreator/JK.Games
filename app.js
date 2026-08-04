@@ -3,18 +3,21 @@ const SAVE_SLOTS_KEY = "lifebuilder-2026-slots";
 const ACTIVE_SLOT_KEY = "lifebuilder-2026-active-slot";
 const SETTINGS_KEY = "lifebuilder-2026-settings";
 const INSTALLED_PHONE_APPS_STORAGE_PREFIX = "lifebuilder-2026-installed-phone-apps-v2";
-const JK_RESET_V179 = Object.freeze({
-  version: 179,
-  generation: "v179-prepared-2026-08-04",
-  active: false,
+const JK_RESET_V180 = Object.freeze({
+  version: 180,
+  generation: 180,
+  release: "v180-account-reset-pre-beta-2026-08-04",
+  active: true,
   preserveFirebaseAuth: true,
   characterSlots: 4,
   startLevel: 1,
-  startBank: 10000,
+  startBank: 0,
+  bankOpeningCredit: 10000,
   startCash: 1000,
   systemBankStart: 1000000000000,
   casinoBankStart: 100000000000,
-  unifiedTaxAndBank: true
+  unifiedTaxAndBank: true,
+  phase: "pre-beta"
 });
 const WAR_UNIT_LIMIT = 40;
 const WAR_TANK_LIMIT = 30;
@@ -1709,8 +1712,11 @@ const loadingInfos = [
 ];
 
 const introSteps = [
+  ["ACCOUNT RESET · PRE-BETA", "Alle bisherigen Spielstände wurden zurückgesetzt. Deine E-Mail-Anmeldung bleibt bestehen. Du kannst jetzt bis zu vier neue Charaktere erstellen und sämtliche Bereiche der Pre-Beta neu testen."],
+  ["Startkapital", "Jeder neue Charakter startet mit 1.000 € Bargeld. Das Bankkonto ist am Anfang noch nicht verfügbar und zeigt deshalb keinen Kontostand."],
+  ["10.000 € Bankstart", "Wähle beim Charakter deine Bank. Kaufe anschließend ein Smartphone und beantrage Online-Banking in der Bankfiliale. Erst dann wird das Konto eröffnet und einmalig mit 10.000 € Startguthaben versehen."],
   ["Dein Profil", "Tippe auf deinen Charakter, um Inventar, Skills, Erfolge, Aussehen, Weltinfo, Dokumente und dein ausgewähltes Haustier zu öffnen."],
-  ["Status & Geld", "Hunger, Durst und Energie führen zum Inventar. Bargeld bleibt mindestens 0 €. Dein Bankkonto darf bis zur angezeigten Dispo-Grenze ins Minus gehen."],
+  ["Status & Geld", "Hunger, Durst und Energie führen zum Inventar. Bargeld bleibt mindestens 0 €. Nach der Kontoeröffnung darf dein Bankkonto bis zur angezeigten Dispo-Grenze ins Minus gehen."],
   ["Zuhause & Stadt", "Jeder neue Charakter erhält eine zugängliche Startwohnung. Über Zuhause oder Ausgang erreichst du deine Räume und anschließend die Stadtkarte – auch ohne Handy."],
   ["Arbeit", "Automatische und manuelle Arbeit sind sofort verfügbar. In der Mine bewegt sich das Ziel nach jedem Treffer; Auto-Clicker-Muster werden erkannt und nicht vergütet."],
   ["Smartphone & Online", "Apps können SIM, Guthaben, Online-Banking oder ein bestimmtes Level benötigen. Finder.KL und Finster.KL verbinden dich mit echten Online-Spielern."],
@@ -1914,21 +1920,25 @@ function createState(formData) {
     homeCity: formData.get("homeCity"),
     startCity: formData.get("homeCity"),
     location: "home",
-    cash: JK_RESET_V179.startCash,
-    bank: JK_RESET_V179.startBank,
+    cash: JK_RESET_V180.startCash,
+    bank: JK_RESET_V180.startBank,
+    bankAvailable: false,
+    bankOpeningCreditPending: true,
+    bankOpeningCreditGranted: false,
+    bankOpenedAtMs: 0,
     debt: 0,
     pendingBankLoan: null,
-    level: JK_RESET_V179.startLevel,
+    level: JK_RESET_V180.startLevel,
     xp: 0,
-    publicTreasury: JK_RESET_V179.systemBankStart,
-    taxAccount: JK_RESET_V179.systemBankStart,
+    publicTreasury: JK_RESET_V180.systemBankStart,
+    taxAccount: JK_RESET_V180.systemBankStart,
     taxPaidBaseline: 0,
     taxLiability: 0,
-    casinoAccount: JK_RESET_V179.casinoBankStart,
+    casinoAccount: JK_RESET_V180.casinoBankStart,
     casinoAccountBoosted: true,
-    systemEconomyVersion: JK_RESET_V179.version,
-    taxAccountMirrorV179: JK_RESET_V179.systemBankStart,
-    resetGeneration: 0,
+    systemEconomyVersion: JK_RESET_V180.version,
+    taxAccountMirrorV179: JK_RESET_V180.systemBankStart,
+    resetGeneration: JK_RESET_V180.generation,
     casinoDailyProfit: 0,
     hunger: 78,
     thirst: 76,
@@ -2083,7 +2093,10 @@ function createState(formData) {
     businessOfferCooldownUntil: 0,
     businessLastResult: "",
     skills: defaultSkillValues(formData.get("path")),
-    feed: [`Du bist ${startAge}, hast dein erstes Konto eröffnet und startest mit 800 Euro.`]
+    feed: [
+      `Account Reset: Alle bisherigen Spielstände wurden für die Pre-Beta zurückgesetzt. Du startest neu mit ${euro.format(JK_RESET_V180.startCash)} Bargeld.`,
+      `Dein gewähltes Konto bei ${formData.get("bank")} ist noch nicht eröffnet. Kaufe zuerst ein Smartphone und beantrage danach Online-Banking in der Bankfiliale. Dann werden einmalig ${euro.format(JK_RESET_V180.bankOpeningCredit)} Startguthaben gutgeschrieben.`
+    ]
   };
 }
 
@@ -2431,6 +2444,10 @@ function migrateState(save) {
   save.starterHome.dailyRent = Math.max(0, Number(save.starterHome.dailyRent ?? 65) || 65);
   save.starterHome.lastPaidDay = Math.max(1, Number(save.starterHome.lastPaidDay || save.day || 1));
   save.onlineBanking ||= false;
+  save.bankAvailable = save.onlineBanking === true || save.bankAvailable === true;
+  save.bankOpeningCreditGranted = save.bankOpeningCreditGranted === true || (save.onlineBanking === true && Number(save.bank || 0) >= JK_RESET_V180.bankOpeningCredit);
+  save.bankOpeningCreditPending = !save.bankOpeningCreditGranted;
+  save.bankOpenedAtMs = Math.max(0, Number(save.bankOpenedAtMs || 0));
   save.exchangeEnabled ||= false;
   save.tradingEnabled ||= false;
   if (save.tradingEnabled) save.exchangeEnabled = true;
@@ -2456,12 +2473,12 @@ function migrateState(save) {
   save.level ??= 0;
   save.xp ??= 0;
   save.backpackSlots ||= 0;
-  save.publicTreasury ??= JK_RESET_V179.systemBankStart;
+  save.publicTreasury ??= JK_RESET_V180.systemBankStart;
   save.taxAccount ??= save.publicTreasury;
-  if (Number(save.systemEconomyVersion || 0) < JK_RESET_V179.version) {
-    save.publicTreasury = Math.max(Number(save.publicTreasury || 0), JK_RESET_V179.systemBankStart);
-    save.casinoAccount = Math.max(Number(save.casinoAccount || 0), JK_RESET_V179.casinoBankStart);
-    save.systemEconomyVersion = JK_RESET_V179.version;
+  if (Number(save.systemEconomyVersion || 0) < JK_RESET_V180.version) {
+    save.publicTreasury = Math.max(Number(save.publicTreasury || 0), JK_RESET_V180.systemBankStart);
+    save.casinoAccount = Math.max(Number(save.casinoAccount || 0), JK_RESET_V180.casinoBankStart);
+    save.systemEconomyVersion = JK_RESET_V180.version;
     save.taxAccount = save.publicTreasury;
     save.taxAccountMirrorV179 = save.publicTreasury;
   }
@@ -2474,9 +2491,9 @@ function migrateState(save) {
   save.moodGameXpBuffer = Math.max(0, Number(save.moodGameXpBuffer || 0));
   save.health ??= 100;
   save.illness ||= "healthy";
-  save.casinoAccount ??= JK_RESET_V179.casinoBankStart;
+  save.casinoAccount ??= JK_RESET_V180.casinoBankStart;
   save.casinoAccountBoosted = true;
-  save.resetGeneration = Math.max(0, Number(save.resetGeneration || 0));
+  save.resetGeneration = Math.max(JK_RESET_V180.generation, Number(save.resetGeneration || 0));
   save.casinoDailyProfit ??= 0;
   save.onlineCasinoView ||= "slots";
   save.onlineCasinoStakeCents ||= 100;
@@ -2604,7 +2621,7 @@ function normalizeMoneyBalances(target = state) {
   target.publicTreasury = Math.round((bankSystem + taxDelta) * 100) / 100;
   target.taxAccount = target.publicTreasury;
   target.taxAccountMirrorV179 = target.publicTreasury;
-  target.systemEconomyVersion = JK_RESET_V179.version;
+  target.systemEconomyVersion = JK_RESET_V180.version;
   const bank = Number(target.bank || 0);
   const floor = bankOverdraftFloor(target);
   target.bank = Number.isFinite(bank) ? Math.max(floor, Math.round(bank * 100) / 100) : 0;
@@ -2705,22 +2722,23 @@ window.LifeBuilderSaveControl = Object.freeze({
   }
 });
 
-window.JKGamesResetV179 = Object.freeze({
-  config: JK_RESET_V179,
+window.JKGamesResetV180 = Object.freeze({
+  config: JK_RESET_V180,
   preview() {
-    const ready = JK_RESET_V179.active === false
-      && JK_RESET_V179.characterSlots === 4
-      && JK_RESET_V179.startBank === 10000
-      && JK_RESET_V179.startCash === 1000
-      && JK_RESET_V179.systemBankStart === 1000000000000
-      && JK_RESET_V179.casinoBankStart === 100000000000;
+    const ready = JK_RESET_V180.active === true
+      && JK_RESET_V180.characterSlots === 4
+      && JK_RESET_V180.startBank === 0
+      && JK_RESET_V180.bankOpeningCredit === 10000
+      && JK_RESET_V180.startCash === 1000
+      && JK_RESET_V180.systemBankStart === 1000000000000
+      && JK_RESET_V180.casinoBankStart === 100000000000;
     return {
       ready,
-      active: false,
+      active: JK_RESET_V180.active,
       message: ready
-        ? "Reset-Vorbereitung vollständig. Es wurden keine Spieler- oder Accountdaten gelöscht."
-        : "Reset-Vorbereitung ist unvollständig.",
-      starts: { level: 1, bank: 10000, cash: 1000, slots: 4 },
+        ? "Account-Reset V180 ist aktiv. E-Mail-Anmeldungen bleiben bestehen; Spielstände beginnen neu."
+        : "Reset-Konfiguration ist unvollständig.",
+      starts: { level: 1, bankBeforeOpening: 0, bankOpeningCredit: 10000, cash: 1000, slots: 4 },
       systemAccounts: { bankAndTax: 1000000000000, casino: 100000000000 }
     };
   },
@@ -2728,6 +2746,7 @@ window.JKGamesResetV179 = Object.freeze({
     return createState(formData);
   }
 });
+window.JKGamesResetV179 = window.JKGamesResetV180;
 
 // Kleine, bewusst begrenzte Brücke für die begehbare Cottbus-3D-Karte.
 // Der Owner-Skin wird nicht über den Spielstand freigeschaltet, sondern ausschließlich
@@ -4414,6 +4433,14 @@ function compactDashboardMoney(value) {
   return `${scaled.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: digits })}${suffix} €`;
 }
 
+function bankAccountIsAvailable(target = state) {
+  return !!target && target.onlineBanking === true && target.bankAvailable !== false;
+}
+
+function bankAccountDashboardText(target = state) {
+  return bankAccountIsAvailable(target) ? compactDashboardMoney(target.bank) : "Nicht verfügbar";
+}
+
 function updateHeaderStatusUi(force = false) {
   if (!state) return;
   setTextIfChanged(els.playerName, `${state.firstName} ${state.lastName}`);
@@ -4426,9 +4453,11 @@ function updateHeaderStatusUi(force = false) {
     els.ageBadge = document.getElementById("ageBadge");
   }
   setTextIfChanged(els.cash, compactDashboardMoney(state.cash));
-  setTextIfChanged(els.bank, compactDashboardMoney(state.bank));
+  setTextIfChanged(els.bank, bankAccountDashboardText(state));
   if (els.cash) els.cash.title = `Bargeld: ${euro.format(state.cash)}`;
-  if (els.bank) els.bank.title = `Kontostand: ${euro.format(state.bank)}`;
+  if (els.bank) els.bank.title = bankAccountIsAvailable(state)
+    ? `Kontostand: ${euro.format(state.bank)}`
+    : `Konto noch nicht eröffnet · Smartphone kaufen und Online-Banking bei ${state.bankName || "deiner Bank"} beantragen`;
   setTextIfChanged(els.debt, euro.format(state.debt));
   setTextIfChanged(els.job, state.job);
   setValueIfChanged(els.hunger, state.hunger);
@@ -10898,7 +10927,7 @@ function localPlaceActionsHtml() {
     ],
     bank: [
       card("Bankfiliale betreten", `Bonität ${Math.round(state.credit || 0)}% (${creditRatingLabel()}). Ungefähr sofort verfügbar: ${euro.format(branchCreditAvailable())}; gesamter freier Rahmen: ${euro.format(freeCreditLimit())}.`, "Betreten", "branch-loan", false, "local-action"),
-      card("Online-Banking beantragen", state.onlineBanking ? "Online-Banking ist bereits aktiv. Deine Bank-App kann genutzt werden." : "Schaltet die Bank-App auf dem Smartphone frei.", state.onlineBanking ? "Aktiv" : "Beantragen", "online-banking-apply", state.onlineBanking, "local-action"),
+      card("Konto & Online-Banking eröffnen", state.onlineBanking ? `Konto aktiv · Startguthaben ${euro.format(JK_RESET_V180.bankOpeningCredit)} wurde gutgeschrieben.` : `Benötigt ein Smartphone. Bei der Eröffnung werden einmalig ${euro.format(JK_RESET_V180.bankOpeningCredit)} Startguthaben gutgeschrieben.`, state.onlineBanking ? "Aktiv" : "Eröffnen", "online-banking-apply", state.onlineBanking, "local-action"),
       card("Bank-App Beratung", "Börse und Trading aktivierst du danach in der Bank-App. Beide Freischaltungen kosten jeweils 10.000 €.", "Info", "trading-apply", false, "local-action")
     ],
     jobcenter: [
@@ -11316,9 +11345,26 @@ function buyFuel(fuelId, vehicle = primaryVehicle()) {
 }
 
 function applyOnlineBankingAtBranch() {
-  if (state.onlineBanking) return addFeed("Online-Banking ist schon aktiv.");
+  if (state.onlineBanking && state.bankOpeningCreditGranted) return addFeed("Online-Banking ist schon aktiv und dein Startguthaben wurde bereits gutgeschrieben.");
+  const phone = ownedPhoneItem();
+  if (!phone || deviceTier(phone) < 1) {
+    addFeed("Für die Kontoeröffnung brauchst du zuerst ein Smartphone. Ein Basic Phone reicht für Online-Banking nicht aus.");
+    render();
+    return;
+  }
   state.onlineBanking = true;
-  addFeed("Online-Banking beantragt und freigeschaltet. Die Bank-App funktioniert jetzt auf deinem Smartphone.");
+  state.bankAvailable = true;
+  state.bankOpenedAtMs = state.bankOpenedAtMs || Date.now();
+  let openingCredit = 0;
+  if (!state.bankOpeningCreditGranted) {
+    openingCredit = JK_RESET_V180.bankOpeningCredit;
+    state.bank = Math.round((Number(state.bank || 0) + openingCredit) * 100) / 100;
+    state.bankOpeningCreditGranted = true;
+    state.bankOpeningCreditPending = false;
+  }
+  addFeed(openingCredit
+    ? `Konto bei ${state.bankName || "deiner Bank"} eröffnet. ${euro.format(openingCredit)} Startguthaben wurden einmalig gutgeschrieben.`
+    : "Online-Banking beantragt und freigeschaltet. Die Bank-App funktioniert jetzt auf deinem Smartphone.");
   save();
   render();
 }
@@ -13132,7 +13178,7 @@ function sharedSystemAccountsPayload() {
     publicTreasury: Math.round((state?.publicTreasury || 0) * 100) / 100,
     taxAccount: Math.round((state?.publicTreasury || 0) * 100) / 100,
     casinoAccount: Math.round((state?.casinoAccount || 0) * 100) / 100,
-    economyVersion: JK_RESET_V179.version,
+    economyVersion: JK_RESET_V180.version,
     unifiedTaxAndBank: true
   };
 }
@@ -13142,11 +13188,11 @@ function applySharedSystemAccounts(data) {
   let changed = false;
   systemAccountsRemoteApplying = true;
   const remoteVersion = Math.max(0, Number(data.economyVersion || 0));
-  const bankValue = remoteVersion < JK_RESET_V179.version
-    ? Math.max(Number(data.publicTreasury || data.taxAccount || 0), JK_RESET_V179.systemBankStart)
+  const bankValue = remoteVersion < JK_RESET_V180.version
+    ? Math.max(Number(data.publicTreasury || data.taxAccount || 0), JK_RESET_V180.systemBankStart)
     : Number(data.publicTreasury ?? data.taxAccount);
-  const casinoValue = remoteVersion < JK_RESET_V179.version
-    ? Math.max(Number(data.casinoAccount || 0), JK_RESET_V179.casinoBankStart)
+  const casinoValue = remoteVersion < JK_RESET_V180.version
+    ? Math.max(Number(data.casinoAccount || 0), JK_RESET_V180.casinoBankStart)
     : Number(data.casinoAccount);
   const normalized = { publicTreasury: bankValue, taxAccount: bankValue, casinoAccount: casinoValue };
   systemAccountKeys.forEach((key) => {
@@ -13159,7 +13205,7 @@ function applySharedSystemAccounts(data) {
     }
   });
   state.taxAccountMirrorV179 = state.publicTreasury;
-  state.systemEconomyVersion = JK_RESET_V179.version;
+  state.systemEconomyVersion = JK_RESET_V180.version;
   if (changed) {
     saveSlots[selectedSlot] = state;
     saveRemoteRealtimeState();
@@ -13204,7 +13250,7 @@ async function initSharedSystemAccountsSync() {
         const data = snapshot.data() || {};
         applySharedSystemAccounts(data);
         lastSystemAccountsPayload = JSON.stringify(sharedSystemAccountsPayload());
-        if (Number(data.economyVersion || 0) < JK_RESET_V179.version) await pushSharedSystemAccounts();
+        if (Number(data.economyVersion || 0) < JK_RESET_V180.version) await pushSharedSystemAccounts();
         return;
       }
       await pushSharedSystemAccounts();
@@ -30089,10 +30135,14 @@ document.querySelectorAll("[data-open-bank]").forEach((button) => {
     if (!state) return;
     const openPhoneBank = () => {
       const phone = ownedPhoneItem();
-      if (!phone) {
-        addFeed("Für die Bank-App brauchst du zuerst ein Smartphone.");
+      if (!phone || deviceTier(phone) < 1) {
+        addFeed("Dein Konto ist noch nicht verfügbar. Kaufe zuerst ein Smartphone und gehe anschließend zur Bankfiliale.");
         render();
         return;
+      }
+      if (!state.onlineBanking) {
+        addFeed(`Dein Konto bei ${state.bankName || "der Bank"} ist noch nicht eröffnet. Beantrage Online-Banking in der Bankfiliale; danach erhältst du einmalig ${euro.format(JK_RESET_V180.bankOpeningCredit)}.`);
+        render();
       }
       openDeviceInterface(phone, "bank");
     };
@@ -34156,6 +34206,8 @@ function stabilizeMobileCharacterScroll(section = "") {
       status: "open",
       senderUid: transfer.senderUid,
       recipientUid: transfer.recipientUid,
+      senderAccountUid: transfer.senderAccountUid || transfer.senderUid,
+      recipientAccountUid: transfer.recipientAccountUid || transfer.recipientUid,
       senderName: transfer.senderName || "Spieler",
       recipientName: transfer.recipientName || "Spieler",
       senderSlot: Number(transfer.senderSlot || 0),
