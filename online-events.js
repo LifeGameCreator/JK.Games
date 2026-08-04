@@ -1,5 +1,5 @@
 (() => {
-  const ONLINE_VERSION = "2026-07-26-network-v41";
+  const ONLINE_VERSION = "2026-08-04-network-economy-governance-reset-prep-v179";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
@@ -13,6 +13,11 @@
   const ACCOUNT_UID_KEY = "lifebuilder-2026-account-uid";
   const ACCOUNT_SLOTS_PREFIX = "lifebuilder-2026-account-slots:";
   const ACCOUNT_ACTIVE_PREFIX = "lifebuilder-2026-account-active-slot:";
+  const RESET_CONTROL_PATH_V179 = ["global", "resetControlV179"];
+  const RESET_TARGET_VERSION_V179 = 179;
+  // V179 enthält nur die vollständige Vorbereitung. Eine tatsächliche Löschung
+  // ist in dieser Build hart deaktiviert und benötigt später eine neue Release.
+  const RESET_RUNTIME_ENABLED_V179 = false;
   const hostedOnlineMode = /^https?:$/.test(window.location.protocol)
     && !["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(String(window.location.hostname || "").toLowerCase());
 
@@ -1168,6 +1173,62 @@
     });
   }
 
+  async function preparedResetControlV179(fb) {
+    try {
+      const snapshot = await withDatabaseTimeout(fb.getDoc(fb.doc(fb.db, ...RESET_CONTROL_PATH_V179)), DATABASE_VERIFY_TIMEOUT_MS);
+      return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+    } catch (error) {
+      console.warn("Reset-V179-Steuerung konnte nicht gelesen werden", error);
+      return null;
+    }
+  }
+
+  async function applyPreparedResetV179IfActivated(user) {
+    if (!RESET_RUNTIME_ENABLED_V179 || !user?.uid) return false;
+    const fb = await loadOnlineFirebase();
+    const control = await preparedResetControlV179(fb);
+    if (!control?.active || Number(control.version || 0) < RESET_TARGET_VERSION_V179) return false;
+    const targetGeneration = Math.max(1, Number(control.generation || 1));
+    const accountRef = fb.doc(fb.db, "accounts", user.uid);
+    const accountSnapshot = await withDatabaseTimeout(fb.getDoc(accountRef), DATABASE_VERIFY_TIMEOUT_MS).catch(() => null);
+    const appliedGeneration = Math.max(0, Number(accountSnapshot?.data?.()?.resetGeneration || 0));
+    if (appliedGeneration >= targetGeneration) return false;
+
+    // Die Firebase-Authentifizierung und E-Mail bleiben erhalten. Gelöscht werden
+    // nur Spielstände und spielbezogene Profildaten des angemeldeten Accounts.
+    const batch = fb.writeBatch(fb.db);
+    for (let slotIndex = 0; slotIndex < 4; slotIndex += 1) batch.delete(cloudSlotRef(fb, user.uid, slotIndex));
+    batch.delete(fb.doc(fb.db, "playerProfiles", user.uid));
+    batch.delete(fb.doc(fb.db, "playerPrivate", user.uid));
+    batch.set(accountRef, {
+      resetGeneration: targetGeneration,
+      resetAppliedAtMs: Date.now(),
+      resetVersion: Number(control.version || RESET_TARGET_VERSION_V179),
+      resetPreservedAuth: true,
+      updatedAtMs: Date.now()
+    }, { merge: true });
+    await withDatabaseTimeout(batch.commit(), CLOUD_UPLOAD_TIMEOUT_MS);
+
+    saveSlots = [null, null, null, null];
+    state = null;
+    activeSlot = 0;
+    selectedSlot = 0;
+    cloudSlotRevisions = [0, 0, 0, 0];
+    cloudSlotLoaded = [true, true, true, true];
+    try {
+      localStorage.removeItem(SAVE_SLOTS_KEY);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(ACTIVE_SLOT_KEY, "0");
+      localStorage.removeItem(`${ACCOUNT_SLOTS_PREFIX}${user.uid}`);
+      localStorage.removeItem(`${ACCOUNT_ACTIVE_PREFIX}${user.uid}`);
+    } catch {}
+    if (typeof renderSaveSlots === "function") renderSaveSlots();
+    if (typeof setSetupView === "function") setSetupView("slots");
+    window.dispatchEvent(new CustomEvent("lifebuilder-prepared-reset-applied", { detail: { uid: user.uid, generation: targetGeneration } }));
+    alert("Der angekündigte JK.Games-Reset wurde für deinen Account durchgeführt. Deine E-Mail-Anmeldung bleibt erhalten; du kannst jetzt bis zu vier neue Charaktere erstellen.");
+    return true;
+  }
+
   async function hydrateCloudSlots(user = onlineUser) {
     if (!user) return;
     switchLocalAccount(user);
@@ -1188,6 +1249,13 @@
     };
     cloudHydrationPromise = (async () => {
       assertCurrentAccount();
+      const resetApplied = await applyPreparedResetV179IfActivated(user);
+      assertCurrentAccount();
+      if (resetApplied) {
+        cloudSaveReadyUid = user.uid;
+        window.__lifeBuilderCloudReady = true;
+        return;
+      }
       window.__lifeBuilderCloudHydrating = true;
       window.__lifeBuilderCloudReady = false;
       cloudSlotLoaded = [false, false, false, false];
@@ -1295,14 +1363,17 @@
     const reasons = [];
     let riskScore = 0;
     const elapsed = previous ? Math.max(1, current.at - Number(previous.at || 0)) : 0;
-    const adminGrace = Date.now() - Number(state?.onlineLastAdminCommandAt || 0) < 15000;
+    const adminGrace = Date.now() - Number(state?.onlineLastAdminCommandAt || 0) < 120000;
     if (!adminGrace && previous && elapsed < 120000) {
       const moneyGain = current.money - Number(previous.money || 0);
       const levelGain = current.level - Number(previous.level || 0);
       const itemGain = current.itemCount - Number(previous.itemCount || 0);
       if (moneyGain > 5000000) { reasons.push(`Ungewöhnlicher Geldanstieg: +${moneyGain.toLocaleString("de-DE")} € in ${Math.ceil(elapsed / 1000)} s`); riskScore += 60; }
       if (levelGain > 5) { reasons.push(`Ungewöhnlicher Levelanstieg: +${levelGain}`); riskScore += 35; }
-      if (itemGain > 100) { reasons.push(`Ungewöhnlicher Inventaranstieg: +${itemGain} Items`); riskScore += 30; }
+      // Viele reguläre Käufe dürfen keinen Hack-/Mod-Status erzeugen. Ein reiner
+      // Inventaranstieg wird nur noch als Prüfhinweis gewertet, wenn gleichzeitig
+      // unerklärlich Geld hinzugekommen ist. Der Status selbst bleibt immer manuell.
+      if (itemGain > 500 && moneyGain > 0) { reasons.push(`Inventar- und Geldanstieg gleichzeitig: +${itemGain} Items`); riskScore += 15; }
     }
     if (current.bank < 0 || current.cash < 0 || current.level < 0 || current.xp < 0) {
       reasons.push("Ungültige negative Spielwerte erkannt.");
@@ -2055,6 +2126,7 @@
     saveSlot: writeCloudSlot,
     deleteSlot: deleteCloudSlot,
     hydrateSlots: hydrateCloudSlots,
+    checkPreparedResetV179: () => onlineUser ? applyPreparedResetV179IfActivated(onlineUser) : Promise.resolve(false),
     getCloudStatus: () => ({
       uid: onlineUser?.uid || "",
       ready: cloudSaveReadyUid === onlineUser?.uid && window.__lifeBuilderCloudReady === true,

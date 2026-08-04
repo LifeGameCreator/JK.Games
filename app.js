@@ -3,6 +3,19 @@ const SAVE_SLOTS_KEY = "lifebuilder-2026-slots";
 const ACTIVE_SLOT_KEY = "lifebuilder-2026-active-slot";
 const SETTINGS_KEY = "lifebuilder-2026-settings";
 const INSTALLED_PHONE_APPS_STORAGE_PREFIX = "lifebuilder-2026-installed-phone-apps-v2";
+const JK_RESET_V179 = Object.freeze({
+  version: 179,
+  generation: "v179-prepared-2026-08-04",
+  active: false,
+  preserveFirebaseAuth: true,
+  characterSlots: 4,
+  startLevel: 1,
+  startBank: 10000,
+  startCash: 1000,
+  systemBankStart: 1000000000000,
+  casinoBankStart: 100000000000,
+  unifiedTaxAndBank: true
+});
 const WAR_UNIT_LIMIT = 40;
 const WAR_TANK_LIMIT = 30;
 
@@ -1901,18 +1914,21 @@ function createState(formData) {
     homeCity: formData.get("homeCity"),
     startCity: formData.get("homeCity"),
     location: "home",
-    cash: 120,
-    bank: 680,
+    cash: JK_RESET_V179.startCash,
+    bank: JK_RESET_V179.startBank,
     debt: 0,
     pendingBankLoan: null,
-    level: 0,
+    level: JK_RESET_V179.startLevel,
     xp: 0,
-    publicTreasury: 1000000000,
-    taxAccount: 0,
+    publicTreasury: JK_RESET_V179.systemBankStart,
+    taxAccount: JK_RESET_V179.systemBankStart,
     taxPaidBaseline: 0,
     taxLiability: 0,
-    casinoAccount: 1000000,
-    casinoAccountBoosted: false,
+    casinoAccount: JK_RESET_V179.casinoBankStart,
+    casinoAccountBoosted: true,
+    systemEconomyVersion: JK_RESET_V179.version,
+    taxAccountMirrorV179: JK_RESET_V179.systemBankStart,
+    resetGeneration: 0,
     casinoDailyProfit: 0,
     hunger: 78,
     thirst: 76,
@@ -2440,8 +2456,15 @@ function migrateState(save) {
   save.level ??= 0;
   save.xp ??= 0;
   save.backpackSlots ||= 0;
-  save.publicTreasury ??= 1000000000;
-  save.taxAccount ??= 0;
+  save.publicTreasury ??= JK_RESET_V179.systemBankStart;
+  save.taxAccount ??= save.publicTreasury;
+  if (Number(save.systemEconomyVersion || 0) < JK_RESET_V179.version) {
+    save.publicTreasury = Math.max(Number(save.publicTreasury || 0), JK_RESET_V179.systemBankStart);
+    save.casinoAccount = Math.max(Number(save.casinoAccount || 0), JK_RESET_V179.casinoBankStart);
+    save.systemEconomyVersion = JK_RESET_V179.version;
+    save.taxAccount = save.publicTreasury;
+    save.taxAccountMirrorV179 = save.publicTreasury;
+  }
   save.taxPaidBaseline ??= 0;
   save.taxLiability ??= 0;
   save.mood = clamp(Number(save.mood ?? 78));
@@ -2451,11 +2474,9 @@ function migrateState(save) {
   save.moodGameXpBuffer = Math.max(0, Number(save.moodGameXpBuffer || 0));
   save.health ??= 100;
   save.illness ||= "healthy";
-  save.casinoAccount ??= 1000000;
-  if (!save.casinoAccountBoosted) {
-    save.casinoAccount = (save.casinoAccount || 0) + 500000000;
-    save.casinoAccountBoosted = true;
-  }
+  save.casinoAccount ??= JK_RESET_V179.casinoBankStart;
+  save.casinoAccountBoosted = true;
+  save.resetGeneration = Math.max(0, Number(save.resetGeneration || 0));
   save.casinoDailyProfit ??= 0;
   save.onlineCasinoView ||= "slots";
   save.onlineCasinoStakeCents ||= 100;
@@ -2568,11 +2589,22 @@ function availablePlayerFunds(target = state) {
 
 function normalizeMoneyBalances(target = state) {
   if (!target || typeof target !== "object") return target;
-  const nonNegative = ["cash", "phoneCredit", "dirtyMoney", "taxAccount", "publicTreasury", "casinoAccount", "casinoDailyProfit", "paidFines", "unpaidFines"];
+  const nonNegative = ["cash", "phoneCredit", "dirtyMoney", "publicTreasury", "casinoAccount", "casinoDailyProfit", "paidFines", "unpaidFines"];
   nonNegative.forEach((key) => {
     const value = Number(target[key] || 0);
     target[key] = Number.isFinite(value) ? Math.max(0, Math.round(value * 100) / 100) : 0;
   });
+  // Ab V179 sind Steuerkonto und globale Bank dasselbe Konto. Alte Stellen im
+  // Spiel dürfen weiterhin taxAccount erhöhen; die Differenz wird hier sicher
+  // in die Bank übernommen und anschließend wieder gespiegelt.
+  const bankSystem = Number.isFinite(Number(target.publicTreasury)) ? Math.max(0, Number(target.publicTreasury)) : 0;
+  const previousMirror = Number.isFinite(Number(target.taxAccountMirrorV179)) ? Number(target.taxAccountMirrorV179) : bankSystem;
+  const rawTax = Number.isFinite(Number(target.taxAccount)) ? Number(target.taxAccount) : previousMirror;
+  const taxDelta = Math.max(0, rawTax - previousMirror);
+  target.publicTreasury = Math.round((bankSystem + taxDelta) * 100) / 100;
+  target.taxAccount = target.publicTreasury;
+  target.taxAccountMirrorV179 = target.publicTreasury;
+  target.systemEconomyVersion = JK_RESET_V179.version;
   const bank = Number(target.bank || 0);
   const floor = bankOverdraftFloor(target);
   target.bank = Number.isFinite(bank) ? Math.max(floor, Math.round(bank * 100) / 100) : 0;
@@ -2670,6 +2702,30 @@ window.LifeBuilderSaveControl = Object.freeze({
     window.__lifeBuilderRemoteApplying = true;
     try { return callback?.(); }
     finally { window.__lifeBuilderRemoteApplying = false; }
+  }
+});
+
+window.JKGamesResetV179 = Object.freeze({
+  config: JK_RESET_V179,
+  preview() {
+    const ready = JK_RESET_V179.active === false
+      && JK_RESET_V179.characterSlots === 4
+      && JK_RESET_V179.startBank === 10000
+      && JK_RESET_V179.startCash === 1000
+      && JK_RESET_V179.systemBankStart === 1000000000000
+      && JK_RESET_V179.casinoBankStart === 100000000000;
+    return {
+      ready,
+      active: false,
+      message: ready
+        ? "Reset-Vorbereitung vollständig. Es wurden keine Spieler- oder Accountdaten gelöscht."
+        : "Reset-Vorbereitung ist unvollständig.",
+      starts: { level: 1, bank: 10000, cash: 1000, slots: 4 },
+      systemAccounts: { bankAndTax: 1000000000000, casino: 100000000000 }
+    };
+  },
+  buildFreshCharacter(formData) {
+    return createState(formData);
   }
 });
 
@@ -13071,10 +13127,13 @@ async function callFirebasePhoneFunction(name, data = {}) {
 }
 
 function sharedSystemAccountsPayload() {
+  normalizeMoneyBalances(state);
   return {
     publicTreasury: Math.round((state?.publicTreasury || 0) * 100) / 100,
-    taxAccount: Math.round((state?.taxAccount || 0) * 100) / 100,
-    casinoAccount: Math.round((state?.casinoAccount || 0) * 100) / 100
+    taxAccount: Math.round((state?.publicTreasury || 0) * 100) / 100,
+    casinoAccount: Math.round((state?.casinoAccount || 0) * 100) / 100,
+    economyVersion: JK_RESET_V179.version,
+    unifiedTaxAndBank: true
   };
 }
 
@@ -13082,8 +13141,16 @@ function applySharedSystemAccounts(data) {
   if (!state || !data) return;
   let changed = false;
   systemAccountsRemoteApplying = true;
+  const remoteVersion = Math.max(0, Number(data.economyVersion || 0));
+  const bankValue = remoteVersion < JK_RESET_V179.version
+    ? Math.max(Number(data.publicTreasury || data.taxAccount || 0), JK_RESET_V179.systemBankStart)
+    : Number(data.publicTreasury ?? data.taxAccount);
+  const casinoValue = remoteVersion < JK_RESET_V179.version
+    ? Math.max(Number(data.casinoAccount || 0), JK_RESET_V179.casinoBankStart)
+    : Number(data.casinoAccount);
+  const normalized = { publicTreasury: bankValue, taxAccount: bankValue, casinoAccount: casinoValue };
   systemAccountKeys.forEach((key) => {
-    const next = Number(data[key]);
+    const next = Number(normalized[key]);
     if (!Number.isFinite(next)) return;
     const rounded = Math.max(0, Math.round(next * 100) / 100);
     if (state[key] !== rounded) {
@@ -13091,6 +13158,8 @@ function applySharedSystemAccounts(data) {
       changed = true;
     }
   });
+  state.taxAccountMirrorV179 = state.publicTreasury;
+  state.systemEconomyVersion = JK_RESET_V179.version;
   if (changed) {
     saveSlots[selectedSlot] = state;
     saveRemoteRealtimeState();
@@ -13132,8 +13201,10 @@ async function initSharedSystemAccountsSync() {
     systemAccountsUnsubscribe?.();
     systemAccountsUnsubscribe = fb.onSnapshot(docRef, async (snapshot) => {
       if (snapshot.exists()) {
-        applySharedSystemAccounts(snapshot.data());
+        const data = snapshot.data() || {};
+        applySharedSystemAccounts(data);
         lastSystemAccountsPayload = JSON.stringify(sharedSystemAccountsPayload());
+        if (Number(data.economyVersion || 0) < JK_RESET_V179.version) await pushSharedSystemAccounts();
         return;
       }
       await pushSharedSystemAccounts();
@@ -33443,6 +33514,8 @@ function stabilizeMobileCharacterScroll(section = "") {
     if (!iban) return null;
     return {
       uid: String(profile.uid),
+      accountUid: String(profile.accountUid || profile.ownerUid || profile.uid),
+      slot: Math.max(0, Math.min(3, Math.round(Number(profile.slot || 0)))),
       displayName: String(profile.displayName || "JK.Games-Spieler").slice(0, 80),
       city: String(profile.city || "JK.Games").slice(0, 80),
       iban,
@@ -33889,7 +33962,7 @@ function stabilizeMobileCharacterScroll(section = "") {
         const registry = await window.LifeBuilderFirebaseCore.withTimeout(fb.getDoc(fb.doc(fb.db, "bankIbans", compactIban)), 8000, "Empfängersuche");
         if (registry.exists()) {
           const data = registry.data();
-          results = [{ uid: data.ownerUid, displayName: data.displayName, city: data.city, iban: data.iban, online: false }];
+          results = [{ uid: data.ownerUid, accountUid: data.ownerUid, slot: Math.max(0, Number(data.slot || 0)), displayName: data.displayName, city: data.city, iban: data.iban, online: false }];
         }
       } else {
         const normalizedName = queryText.toLocaleLowerCase("de-DE");
@@ -33980,6 +34053,7 @@ function stabilizeMobileCharacterScroll(section = "") {
       queuePurchaseConfirmation?.({ kind: "income", title: "Geldeingang", name: `+${euro.format(amount)} · ${transfer.senderName || "Online-Spieler"}`, icon: "€" });
       save();
       await fb.updateDoc(fb.doc(fb.db, "bankTransfers", transfer.id), { status: "delivered", deliveredAt: fb.serverTimestamp(), updatedAtMs: Date.now() });
+      await recordPotentialMoneyFraudV179(fb, { ...transfer, transferId: transfer.id }).catch(() => {});
       if (els.dialog?.open && els.dialog.querySelector(".device-active-bank")) rerenderBankV58(ownedPhoneItem(), state.bankAppViewV58, { save: false });
     } finally {
       bankTransfersProcessingV58.delete(transfer.id);
@@ -34036,6 +34110,70 @@ function stabilizeMobileCharacterScroll(section = "") {
     return bankTransferStartPromiseV58;
   }
 
+  function bankDeviceRiskContextV179(uid) {
+    const key = "jkgames-v179-device-account";
+    const now = Date.now();
+    let previous = null;
+    try { previous = JSON.parse(localStorage.getItem(key) || "null"); } catch { previous = null; }
+    const deviceSessionId = previous?.deviceSessionId || (crypto?.randomUUID?.() || `device-${now}-${Math.random().toString(36).slice(2)}`);
+    const switched = !!previous?.uid && previous.uid !== uid;
+    const switchedAtMs = switched ? now : Number(previous?.switchedAtMs || 0);
+    const context = {
+      uid,
+      previousUid: switched ? String(previous.uid) : String(previous?.previousUid || ""),
+      switchedAtMs,
+      deviceSessionId,
+      updatedAtMs: now
+    };
+    try { localStorage.setItem(key, JSON.stringify(context)); } catch {}
+    return { deviceSessionId, previousUid: context.previousUid, switchedAtMs, switchedRecently: switchedAtMs > 0 && now - switchedAtMs < 20 * 60 * 1000 };
+  }
+
+  async function recordPotentialMoneyFraudV179(fb, transfer) {
+    if (!fb || !transfer?.senderUid || !transfer?.recipientUid) return null;
+    const now = Date.now();
+    const reverse = bankTransfersV58.find((entry) =>
+      entry.senderUid === transfer.recipientUid
+      && entry.recipientUid === transfer.senderUid
+      && now - bankTransferCreatedV58(entry) <= 30 * 60 * 1000
+      && ["pending", "processing", "delivered"].includes(String(entry.status || "pending"))
+    );
+    if (!reverse && !transfer.deviceSwitchDetected) return null;
+    const reverseAmount = reverse ? bankTransferAmountV58(reverse) : 0;
+    const currentAmount = Math.max(0, Number(transfer.amountCents || 0) / 100);
+    const similarAmounts = reverseAmount > 0 && Math.min(reverseAmount, currentAmount) / Math.max(reverseAmount, currentAmount) >= 0.65;
+    if (!transfer.deviceSwitchDetected && !similarAmounts) return null;
+    const pair = [transfer.senderUid, transfer.recipientUid].sort().join("__").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const alertId = `${pair}__${Math.floor(now / (30 * 60 * 1000))}`;
+    const ref = fb.doc(fb.db, "moneyFraudAlerts", alertId);
+    const reason = transfer.deviceSwitchDetected && reverse
+      ? "Schneller Accountwechsel und Gegenüberweisung erkannt"
+      : transfer.deviceSwitchDetected
+        ? "Schneller Accountwechsel auf demselben Gerät vor einer Überweisung erkannt"
+        : "Ähnliche Gegenüberweisung innerhalb von 30 Minuten erkannt";
+    await fb.setDoc(ref, {
+      alertId,
+      status: "open",
+      senderUid: transfer.senderUid,
+      recipientUid: transfer.recipientUid,
+      senderName: transfer.senderName || "Spieler",
+      recipientName: transfer.recipientName || "Spieler",
+      senderSlot: Number(transfer.senderSlot || 0),
+      recipientSlot: Number(transfer.recipientSlot || 0),
+      amountCents: Number(transfer.amountCents || 0),
+      reverseTransferId: reverse?.id || "",
+      reverseAmountCents: reverse ? Math.round(reverseAmount * 100) : 0,
+      deviceSessionId: transfer.deviceSessionId || "",
+      previousDeviceUid: transfer.previousDeviceUid || "",
+      deviceSwitchDetected: !!transfer.deviceSwitchDetected,
+      reason,
+      createdAtMs: now,
+      updatedAtMs: now,
+      evidenceTransferIds: [transfer.transferId || transfer.id, reverse?.id].filter(Boolean)
+    }, { merge: true }).catch((error) => console.warn("Geldbetrugsprüfung konnte nicht gespeichert werden", error));
+    return alertId;
+  }
+
   async function sendOnlineBankTransferV58(form, item) {
     const recipientUid = String(form.querySelector("[data-jk-bank-recipient]")?.value || "");
     const profile = bankContactByUidV59(recipientUid);
@@ -34050,7 +34188,8 @@ function stabilizeMobileCharacterScroll(section = "") {
     const totalDebit = bankRoundV58(amount + instantFee);
     if (!canAffordWithMethod(totalDebit, "card")) throw new Error(transferType === "instant" ? "Betrag und Blitzgebühr würden deinen Kreditrahmen überschreiten." : "Die Überweisung würde deinen Kreditrahmen überschreiten.");
     const { fb, user } = await bankFirebaseV58();
-    if (user.uid === recipientUid) throw new Error("Du kannst nicht an dich selbst überweisen.");
+    if (user.uid === recipientUid || String(profile.accountUid || profile.uid) === user.uid) throw new Error("Überweisungen zwischen deinen eigenen Charakteren sind gesperrt.");
+    const deviceRisk = bankDeviceRiskContextV179(user.uid);
     const ref = fb.doc(fb.collection(fb.db, "bankTransfers"));
     const createdAtMs = Date.now();
     const availableAtMs = createdAtMs + (transferType === "normal" ? NORMAL_TRANSFER_DELAY_MS : 0);
@@ -34060,9 +34199,18 @@ function stabilizeMobileCharacterScroll(section = "") {
       participantUids: [user.uid, recipientUid],
       senderUid: user.uid,
       recipientUid,
+      senderAccountUid: user.uid,
+      recipientAccountUid: String(profile.accountUid || profile.uid),
+      senderSlot: Math.max(0, Number(typeof selectedSlot !== "undefined" ? selectedSlot : 0)),
+      recipientSlot: Math.max(0, Number(profile.slot || 0)),
       senderName: senderName.slice(0, 80),
       recipientName: String(profile.displayName || "Online-Spieler").slice(0, 80),
       senderIban: String(state.bankIbanV58 || "").slice(0, 40),
+      recipientIban: String(profile.iban || "").slice(0, 40),
+      deviceSessionId: deviceRisk.deviceSessionId,
+      previousDeviceUid: deviceRisk.previousUid,
+      deviceSwitchDetected: deviceRisk.switchedRecently,
+      governanceVersion: 179,
       amountCents,
       purpose,
       transferType,
@@ -34078,6 +34226,7 @@ function stabilizeMobileCharacterScroll(section = "") {
     save();
     try {
       await window.LifeBuilderFirebaseCore.withTimeout(fb.setDoc(ref, payload), 9000, "Überweisung");
+      await recordPotentialMoneyFraudV179(fb, payload).catch(() => {});
     } catch (error) {
       bankSetLedgerContextV58("Stornierte Überweisung");
       state.bank = bankRoundV58(Number(state.bank || 0) + totalDebit);
