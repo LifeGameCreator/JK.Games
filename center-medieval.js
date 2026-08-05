@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-05-jkgames-v188-center-owner-world-animation';
+const CENTER_VERSION = '2026-08-05-jkgames-v190-center-world-sky-weather-owner-model';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -147,6 +147,7 @@ function defaultSaveState() {
     time: 8.25,
     weather: 'clear',
     weatherUntil: 14,
+    weatherRemaining: 5.75,
     needs: { health: 100, hunger: 92, thirst: 90, stamina: 100, warmth: 88 },
     inventory: { wood: 8, logs: 0, stone: 5, berries: 4, meat: 0, cookedMeat: 0, water: 2, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 120 },
     tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
@@ -195,6 +196,7 @@ function normalizeSaveState(raw) {
   state.season = Math.floor(clamp(state.season, 0, 3));
   state.time = ((Number(state.time) || 8) % 24 + 24) % 24;
   state.weather = WEATHER[state.weather] ? state.weather : 'clear';
+  state.weatherRemaining = Number.isFinite(Number(state.weatherRemaining)) ? clamp(state.weatherRemaining, .5, 12) : 4 + Math.random() * 4;
   for (const key of Object.keys(base.needs)) state.needs[key] = clamp(state.needs[key], 0, 100);
   for (const key of Object.keys(base.inventory)) state.inventory[key] = Math.max(0, Math.floor(Number(state.inventory[key]) || 0));
   for (const key of Object.keys(base.tools)) state.tools[key] = clamp(state.tools[key], 0, 100);
@@ -467,7 +469,6 @@ class CenterDynastyGame {
       </aside>
       <button class="c3d-interact mdc-interact" type="button" data-c3d-interact><kbd>E</kbd><span data-c3d-interact-label>Untersuchen</span></button>
       <div class="mdc-build-actions" data-mdc-build-actions hidden><button type="button" data-mdc-build-rotate>↻ Drehen</button><button type="button" data-mdc-build-place>✓ Bauen</button><button type="button" data-mdc-build-cancel>× Abbrechen</button></div>
-      <div class="c3d-location mdc-location"><strong data-c3d-location>Siedlungsplatz</strong><span data-c3d-view-label>Außenperspektive · V wechseln</span></div>
       <div class="mdc-hotbar" data-mdc-hotbar></div>
       <div class="c3d-controls-hint mdc-controls-hint" aria-hidden="true"><span><kbd>WASD</kbd> Laufen</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>E</kbd> Interagieren</span><span><kbd>M</kbd> Verwaltung</span><span><kbd>B</kbd> Bauen</span><span><kbd>V</kbd> Ansicht</span></div>
       <div class="c3d-mobile-controls mdc-mobile-controls">
@@ -656,7 +657,7 @@ class CenterDynastyGame {
 
   applyLookDelta(dx, dy, sensitivity) {
     this.yaw -= dx * sensitivity;
-    this.pitch = clamp(this.pitch - dy * sensitivity, -1.05, .62);
+    this.pitch = clamp(this.pitch + dy * sensitivity, -1.05, .62);
   }
 
   async open() {
@@ -776,6 +777,13 @@ class CenterDynastyGame {
     this.scene.add(this.sun);
     this.moon = new THREE.DirectionalLight(0x9fb9e8, 0);
     this.scene.add(this.moon);
+    const sunMat=new THREE.MeshBasicMaterial({color:0xffe19a,fog:false,transparent:true,opacity:.95,depthWrite:false});
+    this.sunDisc=new THREE.Mesh(new THREE.SphereGeometry(8,20,12),sunMat);this.sunDisc.renderOrder=-1;this.scene.add(this.sunDisc);
+    this.moonMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,uniforms:{phase:{value:.5},glow:{value:new THREE.Color(0xdce8ff)}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'uniform float phase;uniform vec3 glow;varying vec2 vUv;void main(){vec2 p=vUv*2.0-1.0;float r=dot(p,p);if(r>1.0)discard;float edge=smoothstep(1.0,.82,r);float shift=(phase-.5)*1.7;float lit=smoothstep(-.08,.08,p.x+shift);if(phase>.5)lit=1.0-lit;float full=1.0-abs(phase-.5)*2.0;float mask=max(full,lit*(1.0-full));gl_FragColor=vec4(glow,edge*mask*.96);}' });
+    this.moonDisc=new THREE.Mesh(new THREE.PlaneGeometry(15,15),this.moonMaterial);this.moonDisc.renderOrder=3;this.scene.add(this.moonDisc);
+    this.cloudGroup=new THREE.Group();this.scene.add(this.cloudGroup);const cloudMat=new THREE.MeshBasicMaterial({color:0xe7edf2,transparent:true,opacity:.38,depthWrite:false,fog:false});
+    for(let i=0;i<18;i+=1){const cloud=new THREE.Group();for(let j=0;j<5;j+=1){const puff=new THREE.Mesh(new THREE.SphereGeometry(5+((i+j)%3)*1.8,10,7),cloudMat.clone());puff.position.set(j*5-10,(j%2)*2,Math.sin(j)*2);cloud.add(puff);}cloud.position.set((i%6-2.5)*95,70+(i%4)*13,(Math.floor(i/6)-1)*130);cloud.scale.setScalar(.8+(i%5)*.12);this.cloudGroup.add(cloud);}
+    const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array(750*3);for(let i=0;i<750;i+=1){const a=Math.random()*Math.PI*2,b=Math.acos(Math.random()*.82+.18),r=700;starPos[i*3]=Math.sin(b)*Math.cos(a)*r;starPos[i*3+1]=Math.cos(b)*r;starPos[i*3+2]=Math.sin(b)*Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));this.starMaterial=new THREE.PointsMaterial({color:0xffffff,size:1.15,transparent:true,opacity:0,depthWrite:false,fog:false});this.stars=new THREE.Points(starGeo,this.starMaterial);this.scene.add(this.stars);
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
   }
 
@@ -843,6 +851,7 @@ class CenterDynastyGame {
     this.buildChunkPaths(chunk);
     this.buildChunkForest(chunk);
     this.buildChunkRocksAndBushes(chunk);
+    this.buildChunkGrass(chunk);
     this.scene.add(group);
     this.chunks.set(key, chunk);
     return chunk;
@@ -879,7 +888,7 @@ class CenterDynastyGame {
         const road = new THREE.Mesh(new THREE.PlaneGeometry(width, Math.hypot(current.x - previous.x, current.z - previous.z) + .55), material);
         road.rotation.x = -Math.PI / 2;
         road.rotation.z = -Math.atan2(current.x - previous.x, current.z - previous.z);
-        road.position.set(mx, terrainHeightAt((worldA.x + worldB.x) / 2, (worldA.z + worldB.z) / 2) + .085, mz);
+        road.position.set(mx, terrainHeightAt((worldA.x + worldB.x) / 2, (worldA.z + worldB.z) / 2) + .018, mz);
         chunk.group.add(road);
         chunk.roadSegments.push({ ax: worldA.x, az: worldA.z, bx: worldB.x, bz: worldB.z, width });
         previous = current;
@@ -892,7 +901,7 @@ class CenterDynastyGame {
     }
     const junction = new THREE.Mesh(new THREE.CircleGeometry(7.2, 22), material);
     junction.rotation.x = -Math.PI / 2;
-    junction.position.set(hub.x, terrainHeightAt(chunk.originX + hub.x, chunk.originZ + hub.z) + .088, hub.z);
+    junction.position.set(hub.x, terrainHeightAt(chunk.originX + hub.x, chunk.originZ + hub.z) + .02, hub.z);
     chunk.group.add(junction);
   }
 
@@ -916,9 +925,12 @@ class CenterDynastyGame {
       const lx = 5 + random() * (CHUNK_SIZE - 10), lz = 5 + random() * (CHUNK_SIZE - 10);
       const x = chunk.originX + lx, z = chunk.originZ + lz, y = terrainHeightAt(x, z);
       if (y > 62 || Math.abs(x - riverCenter(z)) < 25 || this.pointNearChunkRoad(chunk, x, z, 2.8) || chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<50)) continue;
+      if(nodes.some((other)=>Math.hypot(x-other.x,z-other.z)<Math.max(5.8,3.5+other.scale*2.6)))continue;
       const roll = random();
-      const archetype = roll < .065 ? 'fallen' : roll < .12 ? 'broken' : roll < .18 ? 'dead' : roll < .28 ? 'giant' : roll < .55 ? 'broadleaf' : 'pine';
-      const scale = archetype === 'giant' ? 1.45 + random() * .95 : archetype === 'fallen' ? .8 + random() * 1.15 : .52 + random() * 1.05;
+      const localBiome=hash2(Math.floor(x/360),Math.floor(z/360),WORLD_SEED+911);
+      const livingType=localBiome<.46?'pine':'broadleaf';
+      const archetype = roll < .055 ? 'fallen' : roll < .105 ? 'broken' : roll < .15 ? 'dead' : roll < .24 ? 'giant' : livingType;
+      const scale = archetype === 'giant' ? 1.65 + random() * 1.15 : archetype === 'fallen' ? .9 + random() * 1.25 : .58 + random() * 1.18;
       nodes.push({ id: `tree-${chunk.key}-${i}`, type: 'tree', archetype, x, z, y, scale, yaw: random() * Math.PI * 2, active: true, chunkKey: chunk.key, instanceEntries: [] });
     }
     if (!nodes.length) return;
@@ -975,7 +987,8 @@ class CenterDynastyGame {
       for(let i=0;i<count;i+=1){
         const lx=6+random()*(CHUNK_SIZE-12),lz=6+random()*(CHUNK_SIZE-12),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
         if(y>72||Math.abs(x-riverCenter(z))<18||this.pointNearChunkRoad(chunk,x,z,type==='bush'?1.1:2.1)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<42))continue;
-        nodes.push({id:`${type}-${chunk.key}-${i}`,type,x,z,y,scale:.42+random()*(type==='rock'?1.25:.82),yaw:random()*Math.PI*2,active:true,chunkKey:chunk.key,instanceEntries:[]});
+        const dense=type==='bush' ? random()<.46 : true;
+        nodes.push({id:`${type}-${chunk.key}-${i}`,type,x,z,y,scale:.42+random()*(type==='rock'?1.25:.82),yaw:random()*Math.PI*2,active:true,dense,chunkKey:chunk.key,instanceEntries:[]});
       }
       if(!nodes.length)return;
       const isRock=type==='rock';
@@ -988,13 +1001,22 @@ class CenterDynastyGame {
         const yoff=isRock?.65*node.scale:.75*node.scale;
         matrix.compose(new THREE.Vector3(node.x-chunk.originX,node.y+yoff,node.z-chunk.originZ),q,scale);mesh.setMatrixAt(index,matrix);
         node.instanceEntries.push({mesh,index,matrix:matrix.clone()});
-        node.collider=this.registerCollider(node.x,node.z,(isRock?.86:.62)*node.scale,'resource',chunk.key,node);chunk.colliders.push(node.collider);
+        if(isRock||node.dense){node.collider=this.registerCollider(node.x,node.z,(isRock?.86:.66)*node.scale,'resource',chunk.key,node);chunk.colliders.push(node.collider);}
       });
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);chunk.group.add(mesh);
       const interactive=nodes.filter((_,i)=>i%Math.max(5,Math.floor(nodes.length/7))===0).slice(0,10);chunk.resources.push(...interactive);this.resourceNodes.push(...interactive);for(const node of interactive){const until=Number(this.state.harvested[node.id]||0);if(until>Date.now())this.setResourceVisible(node,false);}
     };
     create('rock',Math.floor((15+random()*16)*density));
     create('bush',Math.floor((16+random()*20)*density));
+  }
+
+  buildChunkGrass(chunk) {
+    const random=seededRandom((Math.imul(chunk.cx+7001,1103515245)^Math.imul(chunk.cz+9001,12345)^(WORLD_SEED+333))>>>0);
+    const density=densityMultiplier(this.state.world?.density);const count=Math.floor((this.isMobile?110:220)*density);
+    const mat=new THREE.MeshStandardMaterial({color:this.state.season===3?0xaeb8ae:0x698e43,roughness:1,side:THREE.DoubleSide});
+    const geo=new THREE.PlaneGeometry(.14,.7);geo.translate(0,.35,0);const mesh=new THREE.InstancedMesh(geo,mat,count);const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
+    for(let i=0;i<count*3&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.7)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<35))continue;q.setFromEuler(new THREE.Euler(0,random()*Math.PI*2,0));const sc=.55+random()*.8;scale.set(sc,sc,sc);matrix.compose(new THREE.Vector3(lx,y+.015,lz),q,scale);mesh.setMatrixAt(used++,matrix);}
+    mesh.count=used;mesh.instanceMatrix.needsUpdate=true;chunk.group.add(mesh);this.seasonMaterials.push({material:mat,kind:'foliage',chunkKey:chunk.key});
   }
 
   buildChunkVillage(chunk) {
@@ -1653,7 +1675,7 @@ class CenterDynastyGame {
       const box=new THREE.Box3().setFromObject(root); const height=Math.max(.01,box.max.y-box.min.y);
       root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height); root.updateMatrixWorld(true);
       const scaled=new THREE.Box3().setFromObject(root); const center=scaled.getCenter(new THREE.Vector3());
-      root.position.x-=center.x; root.position.z-=center.z; root.position.y-=scaled.min.y; root.rotation.y=CHARACTER_MODEL_YAW;
+      root.position.x-=center.x; root.position.z-=center.z; root.position.y-=scaled.min.y-.035; root.rotation.y=CHARACTER_MODEL_YAW;
       root.traverse((object)=>{if(object.isMesh){object.castShadow=false;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m)m.envMapIntensity=.25;});}});
       this.playerModel=root; this.modelPivot.add(root);
       const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.playerMixer.timeScale=0;}
@@ -1798,13 +1820,18 @@ class CenterDynastyGame {
     const speed=this.isOwnerActive&&this.ownerFlags.freezeTime?0:2.25;
     this.state.time+=delta*speed/60;
     if(this.state.time>=24){this.state.time-=24;this.state.day+=1;this.dailySettlementTick();if((this.state.day-1)%3===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name} hat begonnen.`);}}
-    if(this.state.time>=this.state.weatherUntil)this.chooseWeather();
+    this.state.weatherRemaining=Math.max(0,Number(this.state.weatherRemaining||0)-delta*speed/60);
+    if(this.state.weatherRemaining<=0)this.chooseWeather();
     const angle=(this.state.time/24)*Math.PI*2-Math.PI/2;
     this.sun.position.set(Math.cos(angle)*180,Math.sin(angle)*210,Math.sin(angle*.7)*120);
     const daylight=clamp(Math.sin(angle)*.65+.42,.04,1);
     this.sun.intensity=daylight*3.6;this.moon.intensity=(1-daylight)*.65;
     this.hemisphere.intensity=.35+daylight*1.55;
     this.moon.position.copy(this.sun.position).multiplyScalar(-1);
+    if(this.sunDisc){this.sunDisc.position.copy(this.sun.position).normalize().multiplyScalar(720);this.sunDisc.visible=daylight>.12;}
+    if(this.moonDisc){this.moonDisc.position.copy(this.moon.position).normalize().multiplyScalar(700);this.moonDisc.lookAt(this.camera.position);this.moonDisc.visible=daylight<.7;const lunarDay=(this.state.day%29.53)/29.53;this.moonMaterial.uniforms.phase.value=lunarDay;}
+    if(this.starMaterial)this.starMaterial.opacity=clamp((.42-daylight)*2.8,0,.9);
+    if(this.cloudGroup){const weatherCloud={clear:.12,cloudy:.62,rain:.82,storm:.96,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.forEach((cloud,i)=>{cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2);if(cloud.position.x>320)cloud.position.x=-320;cloud.children.forEach(p=>{p.material.opacity=weatherCloud*(daylight*.38+.2);p.material.color.set(this.state.weather==='storm'?0x59616b:0xe7edf2);});});}
     const season=SEASONS[this.state.season];
     const nightColor=new THREE.Color(0x13233c),dayColor=new THREE.Color(season.sky);
     this.skyMaterial.uniforms.topColor.value.copy(nightColor).lerp(dayColor,daylight);
@@ -1819,8 +1846,7 @@ class CenterDynastyGame {
     let weather='clear';
     if(season==='winter') weather=roll<.42?'snow':roll<.66?'cloudy':roll<.78?'storm':'clear';
     else weather=roll<.16?'rain':roll<.23?'storm':roll<.48?'cloudy':'clear';
-    this.state.weather=weather;this.state.weatherUntil=this.state.time+3+Math.random()*6;
-    if(this.state.weatherUntil>=24)this.state.weatherUntil-=24;
+    this.state.weather=weather;this.state.weatherRemaining=3.5+Math.random()*5.5;this.state.weatherUntil=(this.state.time+this.state.weatherRemaining)%24;
     this.updateWeatherParticles();
     this.toast(`${WEATHER[weather].icon} Wetterwechsel: ${WEATHER[weather].name}`);
   }
@@ -1946,8 +1972,8 @@ class CenterDynastyGame {
     this.interactButton.classList.toggle('is-visible',!!nearest);
     if(nearest)this.interactLabel.textContent=nearest.label;
     const region=this.locationFromPosition(px,pz);
-    this.locationLabel.textContent=region;
-    this.regionLabel.textContent=region;
+    if(this.locationLabel)this.locationLabel.textContent=region;
+    if(this.regionLabel)this.regionLabel.textContent=region;
   }
 
   locationFromPosition(x,z) {
@@ -2388,7 +2414,7 @@ class CenterDynastyGame {
     remote.group.visible=!remote.vanished||roleSnapshot().isOwner;remote.group.traverse((object)=>{if(!object.isMesh&&!object.isSprite)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=remote.vanished;mat.opacity=remote.vanished?.3:1;mat.depthWrite=!remote.vanished;mat.needsUpdate=true;}});
   }
 
-  async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
+  async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
 
   async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);const action=remote.mixer.clipAction(locomotion);action.play();}}catch{remote.pivot.add(this.makeFallbackCharacter(skin));}remote.skin=skin;}
 
@@ -2447,7 +2473,7 @@ class CenterDynastyGame {
     else if(action==='unstuck'){const a=this.yaw;this.teleportOwner(this.player.position.x+Math.sin(a)*-6,this.player.position.z+Math.cos(a)*-6,null,'freie Position');}
     else if(action==='time-day'){this.state.time=12;this.ownerFlags.freezeTime=true;this.toast('Mittag eingestellt und Zeit angehalten.');}
     else if(action==='time-night'){this.state.time=0;this.ownerFlags.freezeTime=true;this.toast('Mitternacht eingestellt und Zeit angehalten.');}
-    else if(action.startsWith('weather-')){this.state.weather=action.replace('weather-','');this.state.weatherUntil=(this.state.time+8)%24;this.updateWeatherParticles();this.toast(`Wetter: ${WEATHER[this.state.weather]?.name||this.state.weather}`);}
+    else if(action.startsWith('weather-')){this.state.weather=action.replace('weather-','');this.state.weatherRemaining=8;this.state.weatherUntil=(this.state.time+8)%24;this.updateWeatherParticles();this.toast(`Wetter: ${WEATHER[this.state.weather]?.name||this.state.weather}`);}
     else if(action==='season-next'){this.state.season=(this.state.season+1)%SEASONS.length;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name}`);}
     else if(action==='grant-resource'){const id=this.ownerPanelBody.querySelector('[data-owner-resource]')?.value,amount=Math.floor(clamp(this.ownerPanelBody.querySelector('[data-owner-amount]')?.value,1,9999));if(id in this.state.inventory){this.state.inventory[id]+=amount;this.toast(`+${amount} ${RESOURCE_LABELS[id]||id}`);}}
     else if(action==='grant-all'){for(const id of Object.keys(this.state.inventory))this.state.inventory[id]+=100;this.toast('Alle Center-Ressourcen +100.');}
