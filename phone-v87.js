@@ -1689,7 +1689,10 @@
 
   function phoneMarketStateV68(mode) {
     const key = mode === "fobile" ? "phoneFobileUiV68" : "phoneShopUiV68";
-    state[key] ||= { query: "", category: "Alle" };
+    state[key] ||= { query: "", category: "Alle", categoryScrollLeft: 0 };
+    state[key].query = String(state[key].query || "");
+    state[key].category = String(state[key].category || "Alle");
+    state[key].categoryScrollLeft = Math.max(0, Number(state[key].categoryScrollLeft || 0));
     return state[key];
   }
 
@@ -1698,11 +1701,15 @@
     const progression = shopProgressionStatus(item, entry.marketKey);
     const missingNeed = item.needItem && !(isWorkshopTuningItem(item) ? vehicleCount() > 0 : state.items.includes(item.needItem));
     const missingProperty = item.needProperty && !hasProperty(item.needProperty);
-    const owned = (!item.repeatable && item.item && !item.wear && (stateHasItemNamed(item.item) || (item.backpackSlots && Number(state.backpackSlots || 0) >= Number(item.backpackSlots)))) || (item.property && hasProperty(item.property.id));
+    const directlyOwned = !!(!item.repeatable && item.item && !item.wear && stateHasItemNamed(item.item));
+    const owned = directlyOwned || !!(item.backpackSlots && Number(state.backpackSlots || 0) >= Number(item.backpackSlots)) || !!(item.property && hasProperty(item.property.id));
+    const deviceMarket = entry.marketKey === "smartphone" || entry.marketKey === "computer";
+    const sellValue = directlyOwned && deviceMarket ? Math.max(0, Number(inventorySellValue(item.item) || 0)) : 0;
+    const sellableDevice = directlyOwned && deviceMarket && sellValue > 0;
     const noVehicleSlot = isVehicleShopItem(item) && vehicleCount() >= vehicleCapacity() && !owned;
     const locked = !!(progression.locked || missingNeed || missingProperty || owned || noVehicleSlot);
-    const label = owned ? "Besitzt du" : noVehicleSlot ? "Garage voll" : progression.locked || missingNeed || missingProperty ? "Gesperrt" : "Kaufen";
-    return { locked, label, detail: progression.text || "" };
+    const label = sellableDevice ? "Verkaufen" : owned ? "Besitzt du" : noVehicleSlot ? "Garage voll" : progression.locked || missingNeed || missingProperty ? "Gesperrt" : "Kaufen";
+    return { locked, label, detail: progression.text || "", sellableDevice, sellValue };
   }
 
   function phoneMarketViewHtmlV68(mode) {
@@ -1721,10 +1728,13 @@
       const index = all.indexOf(entry);
       const status = marketOfferStatusV68(entry);
       const fuel = vehicleMode ? `<small>${escapeHtml(vehicleFuelLabel(entry.offer.item || entry.offer.name))} · ${escapeHtml(vehicleSpecText(entry.offer.item || entry.offer.name))} · Fahrzeugplätze ${vehicleCount()}/${vehicleCapacity()}</small>` : "";
-      return `<article class="phone-market-card-v68 ${status.locked ? "locked" : ""}">
+      const action = status.sellableDevice
+        ? `<button type="button" class="phone-market-device-sell-v196" data-phone-market-sell="${index}" title="Für ${euro.format(status.sellValue)} verkaufen"><span>Verkaufen</span><small>${euro.format(status.sellValue)}</small></button>`
+        : `<button type="button" data-phone-market-buy="${index}" ${status.locked ? "disabled" : ""}>${status.label}</button>`;
+      return `<article class="phone-market-card-v68 ${status.locked && !status.sellableDevice ? "locked" : ""} ${status.sellableDevice ? "owned-device-v196" : ""}">
         <div class="phone-market-card-icon-v68">${vehicleMode ? (/Yacht|Boot/i.test(entry.offer.name) ? "🛥️" : /Elektro/i.test(`${entry.offer.name} ${entry.offer.item || ""}`) ? "⚡" : "🚘") : "◈"}</div>
         <div><small>${escapeHtml(entry.section)}</small><h3>${escapeHtml(entry.offer.name)}</h3><p>${escapeHtml(entry.offer.text || "")}</p>${fuel}<strong>${euro.format(entry.offer.price)}</strong></div>
-        <button type="button" data-phone-market-buy="${index}" ${status.locked ? "disabled" : ""}>${status.label}</button>
+        ${action}
       </article>`;
     }).join("");
     return `<div class="phone-market-app-v68" data-phone-market-mode="${mode}">
@@ -1735,7 +1745,11 @@
         <div><b>${euro.format(state.bank)}</b><span>Konto</span><b>${euro.format(state.cash)}</b><span>Bar</span></div>
       </section>
       <label class="phone-market-search-v68"><span>⌕</span><input type="search" value="${escapeHtml(ui.query || "")}" placeholder="${vehicleMode ? "Fahrzeug suchen" : "Im Shop suchen"}" data-phone-market-search></label>
-      <div class="phone-market-tabs-v68">${categories.map((category) => `<button type="button" class="${category === ui.category ? "active" : ""}" data-phone-market-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
+      <div class="phone-market-tabs-shell-v196">
+        <button type="button" class="phone-market-tabs-arrow-v196 left" data-phone-market-tabs-scroll="-1" aria-label="Kategorien nach links">‹</button>
+        <div class="phone-market-tabs-v68" data-phone-market-tabs>${categories.map((category) => `<button type="button" class="${category === ui.category ? "active" : ""}" data-phone-market-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
+        <button type="button" class="phone-market-tabs-arrow-v196 right" data-phone-market-tabs-scroll="1" aria-label="Kategorien nach rechts">›</button>
+      </div>
       <section class="phone-market-list-v68">${cards || `<div class="phone-market-empty-v68"><span>⌕</span><b>Keine Angebote gefunden</b><small>Ändere Suche oder Kategorie.</small></div>`}</section>
     </div>`;
   }
@@ -1766,11 +1780,15 @@
   }
 
   function rerenderMarketAppV68(item, mode, preserveScroll = true, restoreSearchFocus = false, requestedCaret = null) {
-    const currentSearch = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"] [data-phone-market-search]`);
+    const currentRoot = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"]`);
+    const currentSearch = currentRoot?.querySelector?.("[data-phone-market-search]");
+    const currentTabs = currentRoot?.querySelector?.("[data-phone-market-tabs]");
+    const ui = phoneMarketStateV68(mode);
+    if (currentTabs) ui.categoryScrollLeft = Math.max(0, Number(currentTabs.scrollLeft || 0));
     const caret = Number.isFinite(Number(requestedCaret))
       ? Number(requestedCaret)
       : (currentSearch && Number.isFinite(Number(currentSearch.selectionStart)) ? Number(currentSearch.selectionStart) : null);
-    if (preserveScroll) pendingDeviceScrollTop = els.dialog?.querySelector?.(".phone-market-list-v68")?.scrollTop ?? null;
+    if (preserveScroll) pendingDeviceScrollTop = currentRoot?.querySelector?.(".phone-market-list-v68")?.scrollTop ?? null;
     openDeviceInterface(item, mode, false);
     if (restoreSearchFocus) {
       const restore = () => {
@@ -1896,11 +1914,123 @@
     window.requestAnimationFrame?.(() => panel.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
 
+  function sellPhoneMarketDeviceV196(item, mode, entry) {
+    const targetName = entry?.offer?.item || entry?.offer?.name || "";
+    const ownedName = (state.items || []).find((owned) => itemMatchesName(owned, targetName));
+    if (!ownedName) {
+      showPhoneMarketNoticeV184(mode, "Dieses Gerät befindet sich nicht mehr im Inventar.", "error");
+      return;
+    }
+    const value = Math.max(0, Number(inventorySellValue(ownedName) || 0));
+    if (value <= 0) {
+      showPhoneMarketNoticeV184(mode, "Dieses Gerät besitzt aktuell keinen Verkaufswert.", "error");
+      return;
+    }
+    if (!window.confirm(`${ownedName} für ${euro.format(value)} verkaufen?`)) return;
+    if (!consumeInventoryItem(ownedName, 1)) {
+      showPhoneMarketNoticeV184(mode, "Das Gerät konnte nicht aus dem Inventar entfernt werden.", "error");
+      return;
+    }
+    payoutFromTreasury(value);
+    recordIncome("sales", value);
+    addFeed(`${ownedName} verkauft: ${euro.format(value)} erhalten.`, { purchase: { kind: "sell", title: "Gerät verkauft", name: ownedName, total: value, method: "Konto" } });
+    save();
+    render();
+    const nextPhone = ownedPhoneItem();
+    window.setTimeout(() => {
+      if (mode === "shop" && !nextPhone) {
+        clearDialogDynamic();
+        if (els.dialog?.open) els.dialog.close();
+        return;
+      }
+      const marketPhone = mode === "shop" ? nextPhone : (item || nextPhone);
+      if (!marketPhone) return;
+      openDeviceInterface(marketPhone, mode, false);
+      window.requestAnimationFrame?.(() => showPhoneMarketNoticeV184(mode, `${ownedName} verkauft · ${euro.format(value)} erhalten`));
+    }, 0);
+  }
+
   function bindMarketWindowV68(shell, item, mode) {
     const root = shell?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${mode}"]`);
     if (!root) return;
     const ui = phoneMarketStateV68(mode);
     const entries = phoneMarketEntriesV68(mode);
+    const tabs = root.querySelector("[data-phone-market-tabs]");
+
+    if (tabs) {
+      const restoreTabs = () => {
+        const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+        tabs.scrollLeft = Math.max(0, Math.min(max, Number(ui.categoryScrollLeft || 0)));
+      };
+      if (window.requestAnimationFrame) window.requestAnimationFrame(restoreTabs);
+      else window.setTimeout(restoreTabs, 0);
+
+      let pointerId = null;
+      let startX = 0;
+      let startScroll = 0;
+      let dragged = false;
+      let suppressClickUntil = 0;
+
+      tabs.addEventListener("scroll", () => {
+        ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+      }, { passive: true });
+
+      tabs.addEventListener("wheel", (event) => {
+        const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (!horizontal || tabs.scrollWidth <= tabs.clientWidth) return;
+        tabs.scrollLeft += horizontal;
+        ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+        event.preventDefault();
+      }, { passive: false });
+
+      tabs.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startScroll = tabs.scrollLeft;
+        dragged = false;
+        try { tabs.setPointerCapture(pointerId); } catch {}
+      });
+
+      tabs.addEventListener("pointermove", (event) => {
+        if (pointerId !== event.pointerId) return;
+        const distance = event.clientX - startX;
+        if (Math.abs(distance) > 5) {
+          dragged = true;
+          tabs.classList.add("dragging");
+        }
+        if (!dragged) return;
+        tabs.scrollLeft = startScroll - distance;
+        ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+        event.preventDefault();
+      }, { passive: false });
+
+      const finishTabsDrag = (event) => {
+        if (pointerId !== event.pointerId) return;
+        if (dragged) suppressClickUntil = performance.now() + 300;
+        try { tabs.releasePointerCapture(pointerId); } catch {}
+        pointerId = null;
+        dragged = false;
+        tabs.classList.remove("dragging");
+      };
+      tabs.addEventListener("pointerup", finishTabsDrag);
+      tabs.addEventListener("pointercancel", finishTabsDrag);
+      tabs.addEventListener("click", (event) => {
+        if (performance.now() < suppressClickUntil) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+
+      root.querySelectorAll("[data-phone-market-tabs-scroll]").forEach((button) => button.addEventListener("click", () => {
+        const direction = Number(button.dataset.phoneMarketTabsScroll || 0) || 1;
+        const amount = Math.max(160, Math.round(tabs.clientWidth * 0.78));
+        if (typeof tabs.scrollBy === "function") tabs.scrollBy({ left: direction * amount, behavior: "smooth" });
+        else tabs.scrollLeft += direction * amount;
+        window.setTimeout(() => { ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0)); }, 260);
+      }));
+    }
+
     root.querySelector("[data-phone-market-search]")?.addEventListener("input", (event) => {
       const search = event.currentTarget;
       ui.query = search.value;
@@ -1909,12 +2039,18 @@
       search.__jkSearchTimerV68 = window.setTimeout(() => rerenderMarketAppV68(item, mode, false, true, caret), 180);
     });
     root.querySelectorAll("[data-phone-market-category]").forEach((button) => button.addEventListener("click", () => {
+      if (tabs) ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
       ui.category = button.dataset.phoneMarketCategory || "Alle";
       rerenderMarketAppV68(item, mode, false);
     }));
     root.querySelectorAll("[data-phone-market-buy]").forEach((button) => button.addEventListener("click", () => {
       const entry = entries[Number(button.dataset.phoneMarketBuy)];
       if (entry) showPhonePaymentSheetV68(item, mode, entry, button);
+    }));
+    root.querySelectorAll("[data-phone-market-sell]").forEach((button) => button.addEventListener("click", () => {
+      if (tabs) ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+      const entry = entries[Number(button.dataset.phoneMarketSell)];
+      if (entry) sellPhoneMarketDeviceV196(item, mode, entry);
     }));
   }
 

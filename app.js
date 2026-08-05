@@ -6318,7 +6318,9 @@ function inventoryEntryIcon(category, name = "") {
 }
 
 function inventoryProtectedTopTierItem(name) {
-  return itemMatchesName(name, "Ultra Smartphone") || itemMatchesName(name, "High-End Gaming-PC");
+  // V196: Auch die höchste Smartphone- und Computer-Stufe darf wieder verkauft
+  // werden. Der Spieler entscheidet selbst, ob er sein aktuelles Hauptgerät behält.
+  return false;
 }
 
 function inventoryWorkbenchEntries() {
@@ -34878,3 +34880,5 @@ window.addEventListener("runner-kl-world-reward", (event) => {
   if (typeof queuePurchaseConfirmation === "function") queuePurchaseConfirmation({ kind: "use", title: "Runner.KL World Bonus", name: `${euro.format(amount)} · Monatsplatz 1`, icon: "🏆" });
   save();
 });
+
+/* JK.Games V196 · Smartphones und Computer wieder verkäuflich */
