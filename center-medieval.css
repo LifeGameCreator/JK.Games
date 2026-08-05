@@ -138,3 +138,19 @@
 .mdc-needs>div.health.is-low{border-color:#df5757;background:rgba(104,20,20,.84)}
 .c3d-mobile-actions [data-c3d-attack]{background:linear-gradient(145deg,#d19c46,#61401c);color:#fff3cd}
 .mdc-tutorial-note{padding:10px;border:1px solid rgba(229,188,82,.25);border-radius:12px;background:rgba(229,188,82,.07)}
+
+
+/* V197 · kompakte Werkzeuge, Flugstabilität, Grafikstufen und Exit-Abfrage */
+.mdc-controls-hint{transition:opacity .28s ease,transform .28s ease;opacity:1}
+.mdc-controls-hint.is-hidden{opacity:0;transform:translate(-50%,10px);pointer-events:none}
+.mdc-exit-confirm{position:absolute;inset:0;z-index:260;display:grid;place-items:center;padding:20px;background:rgba(3,7,5,.72);backdrop-filter:blur(8px)}
+.mdc-exit-confirm[hidden]{display:none}
+.mdc-exit-confirm>div{width:min(440px,calc(100vw - 28px));padding:23px;border:1px solid rgba(232,194,102,.3);border-radius:20px;background:linear-gradient(155deg,rgba(31,39,29,.99),rgba(11,17,12,.99));box-shadow:0 24px 70px #000b;text-align:center}
+.mdc-exit-confirm small{color:#d8b86b;font-size:8px;font-weight:950;letter-spacing:.17em}
+.mdc-exit-confirm h2{margin:8px 0;color:#fff0c6;font:700 24px/1.2 Georgia,serif}
+.mdc-exit-confirm p{margin:0;color:#b7c1b3;font-size:10px}
+.mdc-exit-confirm>div>div{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:17px}
+.mdc-exit-confirm button{min-height:44px;border:1px solid rgba(231,191,91,.25);border-radius:12px;background:#33452d;color:#f4e8c4;font-weight:900;cursor:pointer}
+.mdc-exit-confirm [data-mdc-exit-leave]{background:linear-gradient(180deg,#9e493f,#652b28);border-color:#db7468}
+.mdc-overlay.is-exit-confirm-open .mdc-minimap,.mdc-overlay.is-exit-confirm-open .mdc-needs,.mdc-overlay.is-exit-confirm-open .mdc-quest-card{filter:blur(2px);opacity:.32}
+@media(max-width:720px){.mdc-exit-confirm>div>div{grid-template-columns:1fr}.mdc-exit-confirm h2{font-size:20px}}

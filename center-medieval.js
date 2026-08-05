@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-05-jkgames-v195-center-survival-movement-stability';
+const CENTER_VERSION = '2026-08-05-jkgames-v197-center-items-flight-graphics-exit-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -22,6 +22,10 @@ const MIN_WORLD_CLEARANCE = .08;
 const MAX_FLY_HEIGHT = 165;
 const PRIMARY_ACTION_COOLDOWN_MS = 520;
 const DAYS_PER_SEASON = 12;
+const WORLD_TIME_HOURS_PER_MINUTE = 1.35;
+const CONTROLS_HINT_DURATION_MS = 6500;
+const GRAPHICS_QUALITIES = Object.freeze(['low','medium','high','ultra']);
+const SHADOW_MODES = Object.freeze(['off','character','world']);
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
 const ASSET_ROOT = './assets/cottbus/';
@@ -151,7 +155,7 @@ function defaultSaveState() {
   return {
     version: 5,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
-    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', shadows: false, onlineKoop: false },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineKoop: false },
     day: 1,
     season: 0,
     time: 8.25,
@@ -191,8 +195,11 @@ function normalizeSaveState(raw) {
   state.world.renderDistance = Math.floor(clamp(state.world.renderDistance, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
   state.world.density = ['low','normal','high'].includes(state.world.density) ? state.world.density : 'normal';
   state.world.landmarkDensity = ['low','normal','high'].includes(state.world.landmarkDensity) ? state.world.landmarkDensity : 'normal';
+  state.world.graphicsQuality = GRAPHICS_QUALITIES.includes(state.world.graphicsQuality) ? state.world.graphicsQuality : (state.world.shadows ? 'ultra' : 'medium');
+  state.world.shadowMode = SHADOW_MODES.includes(state.world.shadowMode) ? state.world.shadowMode : (state.world.shadows ? 'world' : (state.world.graphicsQuality === 'high' ? 'character' : state.world.graphicsQuality === 'ultra' ? 'world' : 'off'));
+  state.world.controlsHint = ['auto','always','hidden'].includes(state.world.controlsHint) ? state.world.controlsHint : 'auto';
   state.world.spawnAssigned = !!state.world.spawnAssigned;
-  state.world.shadows = !!state.world.shadows;
+  state.world.shadows = state.world.shadowMode !== 'off';
   state.world.onlineKoop = !!state.world.onlineKoop;
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
@@ -359,6 +366,8 @@ class CenterDynastyGame {
     this.ownerFormObject = null;
     this.ownerItemLight = null;
     this.ownerThrownObjects = [];
+    this.flightEffects = null;
+    this.flightVerticalVelocity = 0;
     this.tutorialNodes = [];
     this.collectingTutorialNode = null;
     this.actionCooldownUntil = 0;
@@ -400,6 +409,9 @@ class CenterDynastyGame {
     this.lastSaveAt = 0;
     this.lastNeedsAt = 0;
     this.toastTimer = 0;
+    this.controlsHintTimer = 0;
+    this.controlsHintElement = null;
+    this.exitConfirm = null;
     this.rolePollTimer = 0;
     this.bodyOverflow = '';
     this.resizeObserver = null;
@@ -450,6 +462,10 @@ class CenterDynastyGame {
     this.state.world.renderDistance = Math.floor(clamp(this.state.world.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
     this.state.world.density = ['low','normal','high'].includes(this.state.world.density) ? this.state.world.density : 'normal';
     this.state.world.landmarkDensity = ['low','normal','high'].includes(this.state.world.landmarkDensity) ? this.state.world.landmarkDensity : 'normal';
+    this.state.world.graphicsQuality = GRAPHICS_QUALITIES.includes(this.state.world.graphicsQuality) ? this.state.world.graphicsQuality : 'medium';
+    this.state.world.shadowMode = SHADOW_MODES.includes(this.state.world.shadowMode) ? this.state.world.shadowMode : (this.state.world.graphicsQuality === 'high' ? 'character' : this.state.world.graphicsQuality === 'ultra' ? 'world' : 'off');
+    this.state.world.controlsHint = ['auto','always','hidden'].includes(this.state.world.controlsHint) ? this.state.world.controlsHint : 'auto';
+    this.state.world.shadows = this.state.world.shadowMode !== 'off';
     const needsSpawn = !this.state.world.spawnAssigned;
     if (Number(this.state.version || 0) < 5) this.state.version = 5;
     if (!needsSpawn) return;
@@ -522,6 +538,13 @@ class CenterDynastyGame {
         <div class="c3d-mobile-actions"><button type="button" data-c3d-attack>⚔</button><button type="button" data-c3d-perspective>◉</button><button type="button" data-c3d-jump>↑</button><button type="button" data-c3d-sprint>»</button><button type="button" data-mdc-mobile-menu>☰</button><button type="button" data-mdc-mobile-build>⌂</button></div>
       </div>
       <div class="c3d-toast" data-c3d-toast></div>
+      <div class="mdc-exit-confirm" data-mdc-exit-confirm hidden>
+        <div role="dialog" aria-modal="true" aria-labelledby="mdcExitTitle">
+          <small>CENTER VERLASSEN</small><h2 id="mdcExitTitle">Möchtest du das Spiel wirklich verlassen?</h2>
+          <p>Dein aktueller Center-Spielstand wird vorher gespeichert.</p>
+          <div><button type="button" data-mdc-exit-stay>Weiterspielen</button><button type="button" data-mdc-exit-leave>Spiel verlassen</button></div>
+        </div>
+      </div>
     `;
     document.body.appendChild(overlay);
     this.overlay = overlay;
@@ -560,8 +583,12 @@ class CenterDynastyGame {
     this.ownerPanel = overlay.querySelector('[data-mdc-owner-panel]');
     this.ownerPanelBody = overlay.querySelector('[data-mdc-owner-body]');
     this.ownerMenuButton = overlay.querySelector('[data-mdc-owner-menu]');
+    this.controlsHintElement = overlay.querySelector('.mdc-controls-hint');
+    this.exitConfirm = overlay.querySelector('[data-mdc-exit-confirm]');
 
-    overlay.querySelector('[data-c3d-close]').addEventListener('click', () => this.close());
+    overlay.querySelector('[data-c3d-close]').addEventListener('click', () => this.openExitConfirmation());
+    overlay.querySelector('[data-mdc-exit-stay]').addEventListener('click', () => this.closeExitConfirmation());
+    overlay.querySelector('[data-mdc-exit-leave]').addEventListener('click', () => { this.closeExitConfirmation(); this.close(); });
     overlay.querySelector('[data-c3d-panel-close]').addEventListener('click', () => this.closePanel());
     overlay.querySelector('[data-mdc-owner-close]').addEventListener('click', () => this.closeOwnerMenu());
     this.ownerMenuButton.addEventListener('click', () => this.toggleOwnerMenu());
@@ -635,11 +662,12 @@ class CenterDynastyGame {
       if (event.code === 'KeyB' && !event.repeat) { this.toggleManagement('building'); return; }
       if (event.code === 'KeyR' && !event.repeat && this.buildMode) this.rotateBuildGhost();
       if (event.code === 'Escape') {
-        if (this.ownerPanel?.classList.contains('is-open')) this.closeOwnerMenu();
+        if (this.exitConfirm && !this.exitConfirm.hidden) this.closeExitConfirmation();
+        else if (this.ownerPanel?.classList.contains('is-open')) this.closeOwnerMenu();
         else if (this.buildMode) this.cancelBuildMode();
         else if (this.panel.classList.contains('is-open')) this.closePanel();
-        else if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
-        else this.close();
+        else if (document.pointerLockElement === this.canvas) { document.exitPointerLock?.(); this.openExitConfirmation(); }
+        else this.openExitConfirmation();
       }
     }, true);
     document.addEventListener('keyup', (event) => this.keys.delete(event.code), true);
@@ -711,6 +739,33 @@ class CenterDynastyGame {
     this.pitch = clamp(this.pitch + vertical * sensitivity, -1.05, .62);
   }
 
+  openExitConfirmation() {
+    if (!this.opened || !this.exitConfirm) return;
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock?.();
+    this.keys.clear();
+    this.exitConfirm.hidden = false;
+    this.overlay.classList.add('is-exit-confirm-open');
+    this.exitConfirm.querySelector('[data-mdc-exit-stay]')?.focus?.({ preventScroll: true });
+  }
+
+  closeExitConfirmation() {
+    if (!this.exitConfirm) return;
+    this.exitConfirm.hidden = true;
+    this.overlay?.classList.remove('is-exit-confirm-open');
+    this.canvas?.focus?.({ preventScroll: true });
+  }
+
+  scheduleControlsHint(force = false) {
+    clearTimeout(this.controlsHintTimer);
+    if (!this.controlsHintElement) return;
+    const mode = this.state.world?.controlsHint || 'auto';
+    const visible = force || mode !== 'hidden';
+    this.controlsHintElement.classList.toggle('is-hidden', !visible);
+    if (visible && mode === 'auto' && !force) {
+      this.controlsHintTimer = setTimeout(() => this.controlsHintElement?.classList.add('is-hidden'), CONTROLS_HINT_DURATION_MS);
+    }
+  }
+
   async open() {
     if (this.opened || this.opening) return;
     this.reloadLatestSave();
@@ -740,6 +795,7 @@ class CenterDynastyGame {
       this.lastRenderedAt = 0;
       this.lastNeedsAt = performance.now();
       this.startLoop();
+      this.scheduleControlsHint();
       this.canvas.focus({ preventScroll: true });
       this.toast('Du bist an einem einzigartigen Ort gespawnt. Erkunde Wälder, Wege, Berge und Dörfer.');
       this.startRolePolling();
@@ -758,6 +814,8 @@ class CenterDynastyGame {
   close() {
     if (!this.opened) return;
     this.saveState(true);
+    clearTimeout(this.controlsHintTimer);
+    this.closeExitConfirmation();
     this.disconnectMultiplayer().catch(() => {});
     this.opened = false;
     this.opening = false;
@@ -788,7 +846,7 @@ class CenterDynastyGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
-    this.renderer.shadowMap.enabled = !!this.state.world?.shadows;
+    this.renderer.shadowMap.enabled = this.state.world?.shadowMode !== 'off';
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.buildSkyAndLights();
     await nextPaint();
@@ -809,7 +867,7 @@ class CenterDynastyGame {
     this.buildWeatherParticles();
     this.applySeasonVisuals(true);
     this.applyWorldRenderSettings(true);
-    this.applyShadowSettings();
+    this.applyGraphicsQuality();
     this.initialized = true;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.overlay);
@@ -830,7 +888,7 @@ class CenterDynastyGame {
     this.hemisphere = new THREE.HemisphereLight(0xd4e8ff, 0x5c503b, 1.8);
     this.scene.add(this.hemisphere);
     this.sun = new THREE.DirectionalLight(0xffdd9b, 3.2);
-    this.sun.castShadow=!!this.state.world?.shadows;
+    this.sun.castShadow=this.state.world?.shadowMode !== 'off';
     this.sun.shadow.mapSize.set(1024,1024);
     this.sun.shadow.camera.near=.5;this.sun.shadow.camera.far=520;
     this.sun.shadow.camera.left=-85;this.sun.shadow.camera.right=85;this.sun.shadow.camera.top=85;this.sun.shadow.camera.bottom=-85;
@@ -850,18 +908,43 @@ class CenterDynastyGame {
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
   }
 
+  applyGraphicsQuality() {
+    const quality = GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality) ? this.state.world.graphicsQuality : 'medium';
+    const device = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const ratio = quality === 'low' ? .75 : quality === 'medium' ? Math.min(device, 1.1) : quality === 'high' ? Math.min(device, 1.45) : Math.min(device, 2);
+    this.renderer?.setPixelRatio?.(ratio);
+    if (this.renderer) {
+      this.renderer.toneMappingExposure = quality === 'ultra' ? 1.06 : quality === 'high' ? 1.03 : 1;
+    }
+    this.applyShadowSettings();
+    this.resize();
+  }
+
   applyShadowSettings() {
-    const enabled=!!this.state.world?.shadows;
+    const mode = SHADOW_MODES.includes(this.state.world?.shadowMode) ? this.state.world.shadowMode : 'off';
+    const enabled = mode !== 'off';
+    const worldShadows = mode === 'world';
+    this.state.world.shadows = enabled;
     if(this.renderer){this.renderer.shadowMap.enabled=enabled;this.renderer.shadowMap.needsUpdate=true;}
-    if(this.sun)this.sun.castShadow=enabled;
+    if(this.sun){
+      this.sun.castShadow=enabled;
+      const quality=this.state.world?.graphicsQuality||'medium';
+      const mapSize=quality==='ultra'?2048:quality==='high'?1024:512;
+      this.sun.shadow.mapSize.set(mapSize,mapSize);
+      this.sun.shadow.map?.dispose?.();
+      this.sun.shadow.map=null;
+    }
     this.scene?.traverse?.((object)=>{
       if(!object?.isMesh&&!object?.isInstancedMesh)return;
       if(object===this.sky||object===this.sunDisc||object===this.moonDisc)return;
       const isGround=/terrain|ground|soil|field|road|path/i.test(object.name||'')||object.geometry?.type==='PlaneGeometry';
-      object.castShadow=enabled&&!isGround;
-      object.receiveShadow=enabled;
+      const belongsToPlayer=!!this.playerModel&&(object===this.playerModel||this.playerModel.children?.includes?.(object));
+      object.castShadow=enabled&&(worldShadows&&!isGround||belongsToPlayer);
+      object.receiveShadow=enabled&&(isGround||worldShadows);
     });
-    if(this.playerModel)this.playerModel.traverse((object)=>{if(object.isMesh){object.castShadow=enabled;object.receiveShadow=enabled;}});
+    if(this.playerModel)this.playerModel.traverse((object)=>{if(object.isMesh){object.castShadow=enabled;object.receiveShadow=worldShadows;}});
+    if(this.ownerHeldObject)this.ownerHeldObject.traverse((object)=>{if(object.isMesh){object.castShadow=enabled;object.receiveShadow=worldShadows;}});
+    if(this.ownerFormObject)this.ownerFormObject.traverse((object)=>{if(object.isMesh){object.castShadow=enabled;object.receiveShadow=worldShadows;}});
   }
 
   initializeStreamingWorld() {
@@ -1871,7 +1954,13 @@ class CenterDynastyGame {
       shoulderLeft:find(/(?:shoulder_L|left.*shoulder)/i),
       chest:find(/(?:^chest|spine_?2|upperchest)/i),
       neck:find(/(?:^neck|neck_)/i),
-      head:find(/(?:^head|head_)/i)
+      head:find(/(?:^head|head_)/i),
+      upperLegRight:find(/(?:thigh.*r|upperleg.*r|right.*thigh|leg_up_R)/i),
+      lowerLegRight:find(/(?:calf.*r|lowerleg.*r|right.*calf|leg_dawn_R)/i),
+      footRight:find(/(?:foot.*r|right.*foot|ankle.*r)/i),
+      upperLegLeft:find(/(?:thigh.*l|upperleg.*l|left.*thigh|leg_up_L)/i),
+      lowerLegLeft:find(/(?:calf.*l|lowerleg.*l|left.*calf|leg_dawn_L)/i),
+      footLeft:find(/(?:foot.*l|left.*foot|ankle.*l)/i)
     };
     this.prepareIdlePoseTargets();
   }
@@ -1884,12 +1973,12 @@ class CenterDynastyGame {
       bone.userData.__centerIdleQuaternion=q;
       bone.userData.__centerIdlePosition=bone.userData.__centerBindPosition?.clone?.()||bone.position.clone();
     };
-    setTarget(this.playerBones.upperRight,{x:.04,y:.02,z:.22});
-    setTarget(this.playerBones.upperLeft,{x:.04,y:-.02,z:-.22});
-    setTarget(this.playerBones.lowerRight,{x:-.08,y:.01,z:.04});
-    setTarget(this.playerBones.lowerLeft,{x:-.08,y:-.01,z:-.04});
-    setTarget(this.playerBones.shoulderRight,{z:.06});
-    setTarget(this.playerBones.shoulderLeft,{z:-.06});
+    setTarget(this.playerBones.upperRight,{x:.03,y:.02,z:1.02});
+    setTarget(this.playerBones.upperLeft,{x:.03,y:-.02,z:-1.02});
+    setTarget(this.playerBones.lowerRight,{x:-.12,y:.01,z:.03});
+    setTarget(this.playerBones.lowerLeft,{x:-.12,y:-.01,z:-.03});
+    setTarget(this.playerBones.shoulderRight,{z:.1});
+    setTarget(this.playerBones.shoulderLeft,{z:-.1});
     setTarget(this.playerBones.chest,{x:.01});
     setTarget(this.playerBones.neck,{x:.01});
     setTarget(this.playerBones.head,{x:.01});
@@ -1897,7 +1986,7 @@ class CenterDynastyGame {
 
   applyIdlePose(delta=.016,instant=false) {
     if(!this.playerModel)return;
-    const alpha=instant?1:1-Math.exp(-Math.max(.001,delta)*4.8);
+    const alpha=instant?1:1-Math.exp(-Math.max(.001,delta)*3.8);
     const now=performance.now();
     const breathe=Math.sin(now*.00155)*.018;
     const lookCycle=Math.sin(now*.00031);
@@ -1960,20 +2049,61 @@ class CenterDynastyGame {
     const airborne=!this.onGround&&!flying;
     const isBall=this.isOwnerActive&&this.state.ownerAppearance?.skin==='ball';
     this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.002)*.035:airborne?0:Math.sin(now*.0016)*.008);
-    this.modelPivot.rotation.x=0;
+    const flightTilt=flying?-1.02:0;
+    this.modelPivot.rotation.x+=(flightTilt-this.modelPivot.rotation.x)*(1-Math.exp(-delta*(flying?5.8:8.5)));
     if(flying)this.applyFlyingPose(delta);
+    this.updateFlightEffects(delta,moving,sprint);
     this.applyActionAnimation(now);
     this.updateHeldItemTransform(now);
   }
 
   applyFlyingPose(delta=.016) {
     if(!this.playerModel)return;
-    const alpha=1-Math.exp(-Math.max(.001,delta)*7);
+    const alpha=1-Math.exp(-Math.max(.001,delta)*6.2);
     this.applyIdlePose(delta,false);
     const q=(bone,euler)=>{if(!bone)return;const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;if(!base)return;const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};
-    q(this.playerBones.upperRight,{x:-.2,z:.34});q(this.playerBones.upperLeft,{x:-.2,z:-.34});
-    q(this.playerBones.lowerRight,{x:-.16});q(this.playerBones.lowerLeft,{x:-.16});
-    if(this.playerBones.chest){const base=this.playerBones.chest.userData.__centerIdleQuaternion||this.playerBones.chest.userData.__centerBindQuaternion;if(base)this.playerBones.chest.quaternion.slerp(base,alpha);}
+    q(this.playerBones.upperRight,{x:.22,z:.04});q(this.playerBones.upperLeft,{x:.22,z:-.04});
+    q(this.playerBones.lowerRight,{x:-.12});q(this.playerBones.lowerLeft,{x:-.12});
+    q(this.playerBones.upperLegRight,{x:.16});q(this.playerBones.lowerLegRight,{x:-.12});
+    q(this.playerBones.upperLegLeft,{x:.46});q(this.playerBones.lowerLegLeft,{x:-.78});
+    q(this.playerBones.footLeft,{x:.2});q(this.playerBones.footRight,{x:.08});
+    if(this.playerBones.chest){const base=this.playerBones.chest.userData.__centerIdleQuaternion||this.playerBones.chest.userData.__centerBindQuaternion;if(base)this.playerBones.chest.quaternion.slerp(base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-.08,0,0))),alpha);}
+  }
+
+  ensureFlightEffects() {
+    if(this.flightEffects||!this.modelPivot)return;
+    const root=new THREE.Group();root.name='owner-flight-boot-flames';
+    const flameMaterial=new THREE.MeshBasicMaterial({color:0xffb13b,transparent:true,opacity:.86,depthWrite:false,blending:THREE.AdditiveBlending});
+    const coreMaterial=new THREE.MeshBasicMaterial({color:0xdff8ff,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending});
+    const makeFlame=(foot,fallbackX)=>{
+      const holder=new THREE.Group();
+      const outer=new THREE.Mesh(new THREE.ConeGeometry(.075,.42,8),flameMaterial.clone());outer.rotation.z=Math.PI;outer.position.y=-.2;holder.add(outer);
+      const core=new THREE.Mesh(new THREE.ConeGeometry(.035,.25,7),coreMaterial.clone());core.rotation.z=Math.PI;core.position.y=-.12;holder.add(core);
+      holder.userData.outer=outer;holder.userData.core=core;
+      if(foot){foot.add(holder);holder.position.set(0,-.08,.02);}else{root.add(holder);holder.position.set(fallbackX,.08,.02);}
+      return holder;
+    };
+    this.modelPivot.add(root);
+    const left=makeFlame(this.playerBones.footLeft,-.14),right=makeFlame(this.playerBones.footRight,.14);
+    this.flightEffects={root,left,right};
+    root.visible=false;
+  }
+
+  updateFlightEffects(delta,moving,sprint) {
+    this.ensureFlightEffects();
+    if(!this.flightEffects)return;
+    const flying=this.isOwnerActive&&this.ownerFlags.fly&&['normal','shadow'].includes(this.state.ownerAppearance?.skin||'normal');
+    this.flightEffects.root.visible=flying;
+    for(const holder of [this.flightEffects.left,this.flightEffects.right])holder.visible=flying;
+    if(!flying)return;
+    const speedLevel=Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1));
+    const inputBoost=moving?.22:0;
+    const strength=.78+speedLevel*.32+(sprint?.22:0)+inputBoost+Math.min(.28,Math.abs(this.flightVerticalVelocity)*.035);
+    const pulse=1+Math.sin(performance.now()*.018)*.08;
+    for(const holder of [this.flightEffects.left,this.flightEffects.right]){
+      holder.userData.outer.scale.set(.88+strength*.14,strength*pulse,1);
+      holder.userData.core.scale.set(.8+strength*.1,strength*.82*pulse,1);
+    }
   }
 
   triggerActionAnimation(kind='chop',duration=560) {
@@ -2060,7 +2190,8 @@ class CenterDynastyGame {
       const light=new THREE.PointLight(0xff8b32,4.2,18,2);light.position.y=1.03;group.add(light);group.userData.light=light;
       group.rotation.set(.02,0,-.12);
     }
-    group.scale.setScalar(.88);
+    const scale={staff:.88,sword:.52,axe:.46,hammer:.48,torch:.52}[kind]||.5;
+    group.scale.setScalar(scale);
     group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});
     return group;
   }
@@ -2140,27 +2271,29 @@ class CenterDynastyGame {
     const mesh=this.createHeldItemMesh(kind);
     if(!mesh)return;
     this.modelPivot.add(mesh);
-    mesh.position.set(.34,1.06,.03);
     this.ownerHeldObject=mesh;
     this.ownerItemLight=mesh.userData.light||null;
     this.updateHeldItemTransform(performance.now(),true);
+    const hand=this.playerBones.handRight;
+    if(hand){
+      hand.attach(mesh);
+      mesh.userData.fixedToHand=true;
+      mesh.position.y-=.018;
+    }
   }
 
   updateHeldItemTransform(now=performance.now(),instant=false) {
     const item=this.ownerHeldObject;if(!item||!this.modelPivot)return;
     const hand=this.playerBones.handRight;
-    if(hand){
+    if(hand&&!item.userData.fixedToHand){
       hand.getWorldPosition(this.tmpVector);
       this.modelPivot.worldToLocal(this.tmpVector);
-      const alpha=instant?1:1-Math.exp(-.016*18);
-      item.position.lerp(this.tmpVector,alpha);
-      const handQ=new THREE.Quaternion();hand.getWorldQuaternion(handQ);const pivotQ=new THREE.Quaternion();this.modelPivot.getWorldQuaternion(pivotQ);item.quaternion.copy(pivotQ.invert().multiply(handQ));
+      item.position.copy(this.tmpVector);
+      const grip={sword:new THREE.Euler(-.14,.08,-1.48),axe:new THREE.Euler(-.12,.04,-1.5),hammer:new THREE.Euler(-.1,.04,-1.5),staff:new THREE.Euler(.02,0,-.18),torch:new THREE.Euler(.02,0,-.16)}[item.userData.kind];
+      if(grip)item.rotation.copy(grip);
     }
     const kind=item.userData.kind;
-    const grip={sword:new THREE.Euler(-.18,.08,-2.42),axe:new THREE.Euler(-.12,.04,-2.38),hammer:new THREE.Euler(-.1,.04,-2.4),staff:new THREE.Euler(.02,0,-.2),torch:new THREE.Euler(.02,0,-.16)}[kind];
-    if(grip)item.rotation.set(grip.x,grip.y,grip.z);
     if(kind==='staff'){
-      item.rotation.z=-.12+Math.sin(now*.0012)*.018;
       const lightning=item.userData.lightning;
       if(lightning){
         const arr=lightning.geometry.attributes.position.array;
@@ -2232,7 +2365,7 @@ class CenterDynastyGame {
     const player=bridgeSnapshot();
     const skin=role.isOwner?'owner':player.gender;
     if(this.playerSkin===skin&&this.playerModel) { this.updateRoleHud(); return; }
-    this.modelPivot.clear(); this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerFormObject=null;
+    this.modelPivot.clear(); this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerFormObject=null;this.flightEffects=null;
     try {
       const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);
       const root=gltf.scene;
@@ -2409,11 +2542,15 @@ class CenterDynastyGame {
     const terrainFloor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;
     if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
-      const minimumY=terrainFloor+.18,maximumY=Math.min(MAX_FLY_HEIGHT,terrainFloor+150);
-      const nextY=clamp(this.player.position.y+vertical*speed*delta*.85,minimumY,maximumY);
-      if(this.ownerFlags.noclip||!this.collides(this.player.position.x,this.player.position.z,nextY))this.player.position.y=nextY;
-      this.player.position.y=Math.max(minimumY,this.player.position.y);this.velocityY=0;this.onGround=false;this.fallStartY=null;if(god)this.state.needs.stamina=100;
+      const minimumY=terrainFloor+.22,maximumY=Math.min(MAX_FLY_HEIGHT,terrainFloor+150);
+      const targetVertical=vertical*speed*.78;
+      this.flightVerticalVelocity+=(targetVertical-this.flightVerticalVelocity)*(1-Math.exp(-delta*8));
+      if(!Number.isFinite(this.flightVerticalVelocity))this.flightVerticalVelocity=0;
+      const nextY=clamp(this.player.position.y+this.flightVerticalVelocity*delta,minimumY,maximumY);
+      if(this.ownerFlags.noclip||!this.collides(this.player.position.x,this.player.position.z,nextY))this.player.position.y=nextY;else this.flightVerticalVelocity=0;
+      this.player.position.y=clamp(this.player.position.y,minimumY,maximumY);this.velocityY=0;this.onGround=false;this.fallStartY=null;if(god)this.state.needs.stamina=100;
     }else if(this.onGround&&this.velocityY<=0){
+      this.flightVerticalVelocity*=Math.exp(-delta*12);
       const ground=this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
       const amount=1-Math.exp(-delta*22);this.player.position.y+=(ground-this.player.position.y)*amount;
       if(Math.abs(this.player.position.y-ground)<.006)this.player.position.y=ground;
@@ -2469,7 +2606,7 @@ class CenterDynastyGame {
   snapCamera(){this.updateCamera(.016,true);}
 
   updateWorldTime(delta) {
-    const speed=this.isOwnerActive&&this.ownerFlags.freezeTime?0:2.25;
+    const speed=this.isOwnerActive&&this.ownerFlags.freezeTime?0:WORLD_TIME_HOURS_PER_MINUTE;
     this.state.time+=delta*speed/60;
     if(this.state.time>=24){this.state.time-=24;this.state.day+=1;this.dailySettlementTick();if((this.state.day-1)%DAYS_PER_SEASON===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name} hat begonnen.`);}}
     this.state.weatherRemaining=Math.max(0,Number(this.state.weatherRemaining||0)-delta*speed/60);
@@ -3106,8 +3243,14 @@ class CenterDynastyGame {
   }
 
   renderWorldSettingsPanel() {
-    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',shadows=!!this.state.world?.shadows,onlineKoop=!!this.state.world?.onlineKoop;
-    return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Center-Koop (Beta)</h3><p>Ist standardmäßig ausgeschaltet, damit fehlende Firestore-Rechte das Center nicht stören. Nach passenden Firebase-Regeln kann es hier aktiviert werden.</p><div class="mdc-setting-options"><button class="${onlineKoop?'active':''}" data-mdc-action="world-online" data-value="${onlineKoop?'off':'on'}">${onlineKoop?'Koop ausschalten':'Koop einschalten'}<small>${onlineKoop?'Aktiv':'Offline'}</small></button></div></div><div class="mdc-settings-card"><small>GRAFIK</small><h3>Dynamische Schatten</h3><p>Charaktere, Bäume, Gebäude und Gegenstände werfen Schatten entsprechend der Sonnenposition. Standardmäßig ausgeschaltet, weil diese Option mehr Leistung benötigt.</p><div class="mdc-setting-options"><button class="${shadows?'active':''}" data-mdc-action="world-shadows" data-value="${shadows?'off':'on'}">${shadows?'Schatten ausschalten':'Schatten einschalten'}<small>${shadows?'Aktiv':'Aus'}</small></button></div></div>
+    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',onlineKoop=!!this.state.world?.onlineKoop;
+    const quality=GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality)?this.state.world.graphicsQuality:'medium';
+    const shadowMode=SHADOW_MODES.includes(this.state.world?.shadowMode)?this.state.world.shadowMode:'off';
+    const controls=this.state.world?.controlsHint||'auto';
+    return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Center-Koop (Beta)</h3><p>Ist standardmäßig ausgeschaltet, damit fehlende Firestore-Rechte das Center nicht stören. Nach passenden Firebase-Regeln kann es hier aktiviert werden.</p><div class="mdc-setting-options"><button class="${onlineKoop?'active':''}" data-mdc-action="world-online" data-value="${onlineKoop?'off':'on'}">${onlineKoop?'Koop ausschalten':'Koop einschalten'}<small>${onlineKoop?'Aktiv':'Offline'}</small></button></div></div>
+      <div class="mdc-settings-card"><small>GRAFIKQUALITÄT</small><h3>Darstellung und Leistung</h3><p>Mittel läuft ohne dynamische Schatten. Hoch aktiviert den Charakterschatten. Ultra aktiviert vollständige Welt- und Objektschatten sowie die höchste Auflösung.</p><div class="mdc-setting-options">${[['low','Niedrig'],['medium','Mittel'],['high','Hoch'],['ultra','Ultra']].map(([id,label])=>`<button class="${quality===id?'active':''}" data-mdc-action="world-quality" data-value="${id}">${label}<small>${id==='low'?'Maximale Leistung':id==='medium'?'Ausgewogen':id==='high'?'Charakterschatten':'Welt-Schatten'}</small></button>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>SCHATTEN</small><h3>Schattenmodus</h3><p>Der Modus kann unabhängig von der Grafikstufe angepasst werden.</p><div class="mdc-setting-options three">${[['off','Aus'],['character','Nur Charakter'],['world','Gesamte Welt']].map(([id,label])=>`<button class="${shadowMode===id?'active':''}" data-mdc-action="world-shadow-mode" data-value="${id}">${label}</button>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>STEUERUNGSHILFE</small><h3>Tastenanzeige</h3><p>Standardmäßig wird die Tastenhilfe beim Betreten nur einige Sekunden eingeblendet.</p><div class="mdc-setting-options three">${[['auto','Kurz beim Start'],['always','Immer anzeigen'],['hidden','Ausblenden']].map(([id,label])=>`<button class="${controls===id?'active':''}" data-mdc-action="world-controls" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>DYNAMISCHES WELT-STREAMING</small><h3>Sichtweite</h3><p>Nur Regionen rund um dich werden geladen. Entfernte Regionen werden automatisch aus dem Speicher entfernt.</p><div class="mdc-setting-options">${[1,2,3,4,5].map((value)=>`<button class="${distance===value?'active':''}" data-mdc-action="world-distance" data-value="${value}">${value===1?'Kurz':value===2?'Mittel':value===3?'Weit':value===4?'Sehr weit':'Extrem'}<small>${(value*CHUNK_SIZE).toLocaleString('de-DE')} m Radius</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>OBJEKTDICHTE</small><h3>Wälder und Landschaft</h3><p>Bestimmt, wie viele Bäume, Felsen und Büsche pro Region erzeugt werden.</p><div class="mdc-setting-options three">${[['low','Niedrig'],['normal','Normal'],['high','Sehr dicht']].map(([id,label])=>`<button class="${density===id?'active':''}" data-mdc-action="world-density" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>ENTDECKUNGEN</small><h3>Höhlen, Ruinen und Lager</h3><p>Bestimmt, wie häufig besondere Orte und zufällige Begegnungen in neuen Regionen entstehen.</p><div class="mdc-setting-options three">${[['low','Selten'],['normal','Normal'],['high','Häufig']].map(([id,label])=>`<button class="${landmarks===id?'active':''}" data-mdc-action="landmark-density" data-value="${id}">${label}</button>`).join('')}</div></div>
@@ -3163,7 +3306,9 @@ class CenterDynastyGame {
     if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
     if(action==='landmark-density'){const value=button.dataset.value;this.state.world.landmarkDensity=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Besondere Orte: ${this.state.world.landmarkDensity}.`);}
     if(action==='world-online'){this.state.world.onlineKoop=button.dataset.value==='on';this.saveState(true);if(this.state.world.onlineKoop)this.connectMultiplayer().catch(()=>{});else this.disconnectMultiplayer().catch(()=>{});this.openManagement('settings');this.toast(this.state.world.onlineKoop?'Center-Koop wird versucht.':'Center-Koop ausgeschaltet.');}
-    if(action==='world-shadows'){this.state.world.shadows=button.dataset.value==='on';this.applyShadowSettings();this.saveState(true);this.openManagement('settings');this.toast(this.state.world.shadows?'Dynamische Schatten aktiviert.':'Dynamische Schatten deaktiviert.');}
+    if(action==='world-quality'){const value=button.dataset.value;this.state.world.graphicsQuality=GRAPHICS_QUALITIES.includes(value)?value:'medium';this.state.world.shadowMode=value==='ultra'?'world':value==='high'?'character':'off';this.applyGraphicsQuality();this.saveState(true);this.openManagement('settings');this.toast(`Grafikqualität: ${value==='low'?'Niedrig':value==='medium'?'Mittel':value==='high'?'Hoch':'Ultra'}.`);}
+    if(action==='world-shadow-mode'){const value=button.dataset.value;this.state.world.shadowMode=SHADOW_MODES.includes(value)?value:'off';this.applyShadowSettings();this.saveState(true);this.openManagement('settings');this.toast(value==='off'?'Schatten ausgeschaltet.':value==='character'?'Nur Charakterschatten aktiv.':'Vollständige Weltschatten aktiv.');}
+    if(action==='world-controls'){const value=button.dataset.value;this.state.world.controlsHint=['auto','always','hidden'].includes(value)?value:'auto';this.scheduleControlsHint(value==='always');if(value==='hidden')this.controlsHintElement?.classList.add('is-hidden');this.saveState(true);this.openManagement('settings');}
     if(action==='job-plus')this.adjustVillageJob(button.dataset.job,1);
     if(action==='job-minus')this.adjustVillageJob(button.dataset.job,-1);
     if(action==='courtship')this.advanceRelationship();
@@ -3343,7 +3488,7 @@ class CenterDynastyGame {
 
   handleOwnerAction(event) {
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.ownerOnly())return;const action=button.dataset.ownerAction;
-    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'&&this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'){this.flightVerticalVelocity=0;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}else{this.modelPivot.rotation.x=0;}}if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='cycle-speed'){this.ownerFlags.speedLevel=(this.ownerFlags.speedLevel+1)%OWNER_SPEED_LEVELS.length;this.renderOwnerMenu();return;}
     if(action.startsWith('skin-')){this.state.ownerAppearance.skin=action.replace('skin-','');this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-item'){this.state.ownerAppearance.heldItem=button.dataset.ownerItem||'none';this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();return;}
@@ -3377,7 +3522,7 @@ class CenterDynastyGame {
     this.raf=requestAnimationFrame(frame);
   }
 
-  resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,this.isMobile?1:1.25));this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+  resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));const quality=GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality)?this.state.world.graphicsQuality:'medium';const device=Math.max(1,Number(window.devicePixelRatio)||1);const maxRatio=this.isMobile?(quality==='ultra'?1.5:quality==='high'?1.25:quality==='medium'?1:.75):(quality==='ultra'?2:quality==='high'?1.45:quality==='medium'?1.1:.75);this.renderer.setPixelRatio(Math.min(device,maxRatio));this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
 }
 
 const game=new CenterDynastyGame();
