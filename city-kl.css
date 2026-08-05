@@ -141,3 +141,4 @@
   .city-kl-dice-webgl .city-kl-dice-total{bottom:0;min-height:39px;padding:6px 12px}
   .city-kl-dice-webgl .city-kl-dice-total b{font-size:14px}
 }
+\n/* V191 · Mobile Cutout Safe Area */\n.city-kl-overlay{padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)}.city-kl-topbar{top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right))}.city-kl-back,.city-kl-menu-button{min-width:42px;min-height:42px}@media(max-width:760px){.city-kl-start-card{max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 78px)}}\n

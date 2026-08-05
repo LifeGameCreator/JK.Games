@@ -49,3 +49,4 @@
     display: grid !important;
   }
 }
+\n/* V191 · Mobile Cutout Safe Area */\n.match-kl-overlay{padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)}.mkl-appbar{padding-top:max(7px,env(safe-area-inset-top));padding-right:max(7px,env(safe-area-inset-right));padding-left:max(7px,env(safe-area-inset-left))}.mkl-icon-btn{min-width:42px;min-height:42px}.mkl-modal{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}\n

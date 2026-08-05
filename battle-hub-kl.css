@@ -1447,3 +1447,4 @@ body.bh-open { overflow: hidden !important; }
 .bh-resume-local b,.bh-resume-local small { display:block; }
 .bh-resume-local small { margin-top:3px; color:rgba(232,244,255,.66); }
 .bh-resume-local i { color:var(--accent); font-size:1.8rem; font-style:normal; }
+\n/* V191 · Mobile Cutout Safe Area */\n.bh-overlay{padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)}.bh-header{padding-top:max(9px,env(safe-area-inset-top))!important;padding-right:max(9px,env(safe-area-inset-right))!important;padding-left:max(9px,env(safe-area-inset-left))!important}.bh-header button,.bh-power-head-actions button{min-width:42px;min-height:42px}\n

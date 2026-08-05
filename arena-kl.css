@@ -1051,3 +1051,4 @@ body.arena-kl-open { -webkit-touch-callout: none; -webkit-user-select: none; use
   .arena-kl-difficulty-options { grid-template-columns:1fr; }
   .arena-kl-difficulty-option { min-height:72px; }
 }
+\n/* V191 · Mobile Cutout Safe Area */\n.arena-kl-shell{padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)}.arena-kl-head{padding-top:max(8px,env(safe-area-inset-top))!important}.arena-kl-head-actions button{min-width:42px;min-height:42px}.arena-kl-modal{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}\n

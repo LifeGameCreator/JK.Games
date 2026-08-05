@@ -1054,3 +1054,4 @@ body.am-game-open { overflow: hidden; }
 .am-classic-board .am-base-slot{fill:#ead7b5!important}
 .am-classic-board .am-classic-center circle{fill:#e8d3ad!important;stroke:#513923!important}
 @media(max-width:850px){.am-main-controls,.am-game-head,.am-target-panel,.am-winner-panel{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}}
+\n/* V191 · Mobile Cutout Safe Area */\n.am-overlay{padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)}.am-game-head{padding-top:max(9px,env(safe-area-inset-top))!important;padding-right:max(9px,env(safe-area-inset-right))!important;padding-left:max(9px,env(safe-area-inset-left))!important}.am-head-actions button,.am-app-back{min-width:42px;min-height:42px}\n

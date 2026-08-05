@@ -568,3 +568,97 @@ body.fight-kl-open{overflow:hidden!important}
 .fkl-weapon-render.variant-2.family-melee i{background:#8b5a2b}
 .fkl-weapon-render.variant-3.family-melee i{background:#313b42}
 .fkl-weapon-render.variant-4.family-melee i{background:linear-gradient(#222,#765036)}
+
+
+/* V191 · Fight.KL Übersicht, Friends, Werte, Waffenoptik und Mobile Safe Area */
+.fkl-dashboard.v191{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(275px,.8fr);gap:14px;align-items:stretch}
+.fkl-dashboard.v191 .fkl-hero.compact{min-height:315px;padding:26px 24px}
+.fkl-dashboard.v191 .fkl-hero-copy{max-width:620px}
+.fkl-dashboard.v191 .fkl-hero h1{font-size:clamp(48px,7vw,82px);margin:7px 0 8px}
+.fkl-wave-start-card.compact{width:min(430px,100%);margin-top:17px;padding:11px 12px;border-radius:15px}
+.fkl-wave-start-card.compact label{display:grid;grid-template-columns:auto minmax(150px,1fr);gap:10px;align-items:center}
+.fkl-wave-start-card.compact select{min-height:40px}
+.fkl-dashboard-lower.v191{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.fkl-feature{min-height:154px;cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}
+.fkl-feature:hover,.fkl-feature:focus-within{transform:translateY(-3px);border-color:#5beac477;box-shadow:0 16px 35px #0005}
+.fkl-feature.primary{background:linear-gradient(145deg,#123b34,#092029 58%,#10162b);border-color:#54ebbb77}
+.fkl-feature.owner{background:linear-gradient(145deg,#3c2e0c,#161a19 55%,#281634);border-color:#ffd96188}
+.fkl-feature>i{font-size:34px}.fkl-feature>b{font-size:18px}.fkl-feature>small{line-height:1.45}
+
+/* Nur Symbol + Wert. Bezeichnung erscheint bei Hover, Tastaturfokus oder Tap. */
+.fkl-four-values{gap:5px}
+.fkl-four-values>span{position:relative;display:flex!important;align-items:center;justify-content:center;gap:5px;min-width:0;min-height:38px;padding:6px 5px!important;overflow:visible}
+.fkl-four-values>span small{display:none!important}
+.fkl-four-values>span i{font-size:13px}.fkl-four-values>span b{min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fkl-four-values>span:after{content:attr(aria-label);position:absolute;z-index:80;left:50%;bottom:calc(100% + 7px);translate:-50% 5px;max-width:180px;padding:6px 8px;border:1px solid var(--rarity,#65f1c1);border-radius:8px;background:#02080bea;color:#f5fbfc;font-size:10px;font-weight:850;line-height:1.25;white-space:nowrap;opacity:0;pointer-events:none;transition:.14s}
+.fkl-four-values>span:hover:after,.fkl-four-values>span:focus:after,.fkl-four-values>span:focus-visible:after{opacity:1;translate:-50% 0}
+.fkl-item-card .fkl-four-values{grid-template-columns:repeat(4,minmax(0,1fr));margin:6px 0}
+.fkl-item-card .fkl-four-values>span{min-height:33px;padding:4px 3px!important}.fkl-item-card .fkl-four-values b{font-size:9px}
+.fkl-inventory{grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:9px}
+.fkl-item-card{min-width:0;padding:10px}.fkl-item-card h4{font-size:13px;line-height:1.18}.fkl-item-card>p{font-size:10px;line-height:1.38}
+
+/* Echte lange Schrotflinten-Silhouette statt Pistolenform. */
+.fkl-weapon-render.family-shotgun{width:72px;height:54px;transform:rotate(-7deg)!important}
+.fkl-weapon-render.family-shotgun i{left:4px!important;top:15px!important;width:63px!important;height:7px!important;border-radius:5px 2px 2px 5px!important;background:linear-gradient(90deg,#293943 0 18%,var(--weapon-color) 18% 86%,#182329 86%)!important;clip-path:none!important}
+.fkl-weapon-render.family-shotgun b{left:42px!important;top:21px!important;width:11px!important;height:24px!important;transform:skew(-14deg)!important;border-radius:2px 2px 7px 7px!important;background:#493626!important}
+.fkl-weapon-render.family-shotgun em{left:6px!important;top:22px!important;width:28px!important;height:8px!important;transform:rotate(16deg)!important;border-radius:2px 7px 7px 2px!important;background:#503a28!important}
+.fkl-weapon-render.family-shotgun span{left:23px;top:23px;width:20px;height:7px;border-radius:3px;background:color-mix(in srgb,var(--weapon-color) 70%,#fff)}
+.fkl-weapon-render.shape-double-shotgun i{height:5px!important;box-shadow:0 6px 0 var(--weapon-color),0 0 8px var(--weapon-glow)!important}
+.fkl-weapon-render.shape-drum-shotgun span{left:34px;top:23px;width:19px;height:19px;border-radius:50%;background:#1d282e;border:4px solid var(--weapon-color)}
+.fkl-weapon-render.shape-pump-shotgun span{left:23px;top:23px;width:23px;height:9px}
+
+/* Friends-Auswahl neu strukturiert. */
+.fkl-friend-modal.v191{display:grid;gap:16px;width:min(840px,100%)}
+.fkl-friend-modal.v191>header{display:grid;grid-template-columns:64px 1fr;gap:14px;align-items:center;padding:14px;border:1px solid color-mix(in srgb,var(--friend-color,#65f1c1) 35%,#fff1);border-radius:18px;background:linear-gradient(135deg,#10252d,#08141a)}
+.fkl-friend-modal.v191>header>span{display:grid;place-items:center;width:64px;height:64px;border-radius:19px;background:#ffffff0b;font-size:34px}
+.fkl-friend-modal.v191 h3{margin:2px 0 5px;font-size:clamp(25px,4vw,38px)}
+.fkl-friend-modal.v191 p{margin:0;color:#adc1c7;line-height:1.48}
+.fkl-friend-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:min(55dvh,520px);overflow:auto;padding:2px}
+.fkl-friend-picker-card{display:grid;grid-template-columns:74px minmax(0,1fr);gap:12px;padding:13px;border:1px solid #ffffff18;border-radius:17px;background:linear-gradient(145deg,#10252d,#071319)}
+.fkl-friend-picker-card.active{border-color:var(--friend-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--friend-color) 28%,transparent)}
+.fkl-friend-picker-copy{min-width:0}.fkl-friend-picker-copy h4{margin:2px 0 5px;font-size:17px}.fkl-friend-picker-copy p{font-size:10px}
+.fkl-friend-picker-copy>div{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.fkl-friend-picker-copy>div span{padding:4px 6px;border-radius:7px;background:#ffffff0a;font-size:9px;font-weight:850}
+.fkl-friend-picker-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.fkl-friend-picker-actions .fkl-btn{min-height:38px;padding:7px}
+.fkl-friend-empty{grid-column:1/-1;text-align:center;padding:28px;border:1px dashed #ffffff26;border-radius:18px;background:#ffffff05}.fkl-friend-empty>div{font-size:50px}
+
+/* Rails bleiben an ihrer Scrollposition. */
+.fkl-shop-tabs,.fkl-shop-rarity-tabs,.fkl-friend-role-tabs{scroll-behavior:auto!important;overscroll-behavior-inline:contain;scroll-snap-type:none!important;touch-action:pan-x;scrollbar-width:thin}
+.fkl-shop-tabs button,.fkl-shop-rarity-tabs button,.fkl-friend-role-tabs button{scroll-snap-align:none!important}
+
+/* Endgame-Hinweisflächen aus V189 werden nicht mehr angezeigt. */
+.fkl-endgame-banners{display:none!important}
+
+/* Safe Area für Dynamic Island, Notch, Android Cutouts und Desktop. */
+.fight-kl-overlay{padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)}
+.fight-kl-overlay .fkl-head{padding-top:max(10px,env(safe-area-inset-top,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-left:max(12px,env(safe-area-inset-left,0px))}
+.fight-kl-overlay .fkl-head-actions{padding-right:max(0px,env(safe-area-inset-right,0px))}
+.fkl-page-head{scroll-margin-top:calc(68px + env(safe-area-inset-top,0px))}
+@media(max-width:1100px){.fkl-dashboard-lower.v191{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:820px){
+ .fight-kl-overlay{padding:0!important}.fkl-shell{width:100%!important;height:100dvh!important;max-height:none!important;border-radius:0!important}
+ .fkl-head{min-height:calc(66px + env(safe-area-inset-top,0px));padding-top:calc(8px + env(safe-area-inset-top,0px))!important}
+ .fkl-main{height:calc(100dvh - 66px - env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+ .fkl-dashboard.v191{grid-template-columns:1fr}.fkl-dashboard.v191 .fkl-hero.compact{min-height:235px;padding:18px}.fkl-dashboard-lower.v191{grid-template-columns:repeat(2,minmax(0,1fr))}.fkl-feature{min-height:135px;padding:14px}
+ .fkl-page-head{position:sticky;z-index:50;top:0;padding:9px 7px;background:#061216f2;backdrop-filter:blur(14px)}.fkl-page-head .fkl-toolbar{flex-wrap:wrap;justify-content:flex-end}.fkl-page-head .fkl-btn{min-height:42px}
+ .fkl-friend-picker{grid-template-columns:1fr}.fkl-friend-modal.v191>header{grid-template-columns:50px 1fr}.fkl-friend-modal.v191>header>span{width:50px;height:50px}
+ .fkl-shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fkl-shop-card-head{grid-template-columns:58px minmax(0,1fr) auto!important}.fkl-buy-top{grid-column:auto!important;width:auto!important;padding:7px 9px}
+ .fkl-inventory{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:520px){
+ .fkl-head-stats .fkl-head-stat:nth-child(3),.fkl-head-stats .fkl-head-stat:nth-child(4){display:none}.fkl-dashboard-lower.v191{grid-template-columns:1fr 1fr}.fkl-feature{min-height:124px}.fkl-feature>i{font-size:28px}.fkl-feature>b{font-size:14px}.fkl-feature>small{font-size:9px}
+ .fkl-shop-grid{grid-template-columns:1fr}.fkl-shop-card-head{grid-template-columns:64px minmax(0,1fr) auto!important}.fkl-inventory{grid-template-columns:1fr 1fr}.fkl-item-card{padding:8px}.fkl-item-card h4{font-size:11px}.fkl-item-card>p{display:none}
+ .fkl-friend-picker-actions{grid-template-columns:1fr}.fkl-modal-card{max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 16px);padding:14px}
+}
+
+
+/* V191.1 · tatsächliche Fight.KL-Klassennamen und kompakte Inventarkarten */
+.fight-kl-modal{padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)}
+.fight-kl-modal .fkl-head{padding-top:max(10px,env(safe-area-inset-top,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-left:max(12px,env(safe-area-inset-left,0px))}
+.fight-kl-modal .fkl-head-actions{padding-right:max(0px,env(safe-area-inset-right,0px))}
+.fkl-item .fkl-four-values{grid-template-columns:repeat(4,minmax(0,1fr));margin:6px 0}.fkl-item .fkl-four-values>span{min-height:31px;padding:3px 2px!important}.fkl-item .fkl-four-values i{font-size:10px}.fkl-item .fkl-four-values b{font-size:8px}
+.fkl-item{min-width:0;padding:10px}.fkl-item h4{font-size:12px;line-height:1.17}.fkl-item>small{font-size:9px;line-height:1.3}.fkl-item .fkl-power-up.compact{padding:4px}.fkl-item .fkl-power-up.compact b{font-size:7px}
+@media(max-width:820px){
+ .fight-kl-modal{padding:0!important}.fight-kl-shell{width:100%!important;height:100dvh!important;max-height:none!important;border-radius:0!important}
+ .fight-kl-modal .fkl-head{height:calc(66px + env(safe-area-inset-top,0px));min-height:calc(66px + env(safe-area-inset-top,0px));padding-top:calc(8px + env(safe-area-inset-top,0px))!important}
+ .fight-kl-modal .fkl-main{height:calc(100dvh - 66px - env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+}
