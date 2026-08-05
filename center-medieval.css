@@ -85,3 +85,38 @@
 @media(max-width:720px){.mdc-owner-panel{width:100vw}.mdc-owner-panel-body{padding-left:12px;padding-right:12px}.mdc-owner-toggle-grid,.mdc-owner-actions,.mdc-owner-teleports{grid-template-columns:1fr 1fr}.mdc-owner-actions.three{grid-template-columns:repeat(2,1fr)}.mdc-owner-grant{grid-template-columns:1fr 76px}.mdc-owner-grant button{grid-column:1/-1}}
 /* V190: location banner removed; controls live in the ESC overview. */
 .mdc-location{display:none!important}
+
+
+/* V192 · Center-Bedienung, Weltoptik, Dörfer und Owner-Werkzeuge */
+.mdc-topbar{justify-content:center;min-height:54px}
+.mdc-topbar .mdc-world-status{margin:0 auto}
+.mdc-topbar .c3d-top-actions{position:absolute;right:8px;top:50%;transform:translateY(-50%)}
+.mdc-minimap{z-index:8;transition:opacity .18s ease,filter .18s ease}
+.mdc-panel{z-index:145!important}
+.mdc-overlay.is-panel-open .mdc-minimap,.mdc-overlay.is-owner-panel-open .mdc-minimap{opacity:.18;filter:blur(1px) drop-shadow(0 10px 25px #0008)}
+.mdc-overlay.is-panel-open .mdc-quest-card,.mdc-overlay.is-owner-panel-open .mdc-quest-card{opacity:.28}
+.mdc-controls-hint{left:50%;bottom:max(68px,calc(env(safe-area-inset-bottom) + 60px));z-index:23;transform:translateX(-50%);flex-wrap:wrap;justify-content:center;max-width:calc(100% - 32px)}
+.mdc-hotbar{z-index:24}
+.mdc-hotbar .mdc-equipped-tool{border-color:rgba(230,189,79,.55);background:linear-gradient(160deg,rgba(119,80,24,.9),rgba(27,25,16,.9))}
+.mdc-inventory-list article.is-equipped{border-color:rgba(226,185,80,.55);background:linear-gradient(145deg,rgba(216,170,60,.14),rgba(255,255,255,.035))}
+.mdc-map-current{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding:11px 13px;border:1px solid rgba(220,187,107,.25);border-radius:13px;background:rgba(214,177,84,.08)}
+.mdc-map-current small{color:#bfa96e;font-size:7px;font-weight:950;letter-spacing:.14em}.mdc-map-current strong{color:#fff0be;font-family:Georgia,serif}
+.mdc-world-map i{width:auto;min-width:23px;height:auto;min-height:23px;padding:3px 5px;gap:4px;border-radius:9px;white-space:nowrap}
+.mdc-world-map i span{font-style:normal}.mdc-world-map i em{display:none;color:#f4e7c1;font:700 7px/1.2 system-ui;font-style:normal}
+.mdc-world-map i:hover em,.mdc-world-map i:focus em{display:inline}
+.mdc-owner-character{display:grid;gap:9px;padding:11px;border:1px solid rgba(231,190,92,.17);border-radius:13px;background:rgba(255,255,255,.025)}
+.mdc-owner-character label{display:grid;grid-template-columns:auto minmax(0,1fr) 48px;align-items:center;gap:9px;color:#e7d8ad;font-size:8px;font-weight:850}
+.mdc-owner-character input{width:100%;accent-color:#d7ad53}.mdc-owner-character label b{text-align:right;color:#fff1c7}
+.mdc-owner-actions button.active{border-color:rgba(242,196,87,.72)!important;background:linear-gradient(145deg,#8c682e,#4a351a)!important;color:#fff1b9!important}
+.mdc-owner-player-list{display:grid;gap:6px}
+.mdc-owner-player-list article{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px;border:1px solid rgba(255,255,255,.08);border-radius:11px;background:rgba(255,255,255,.035)}
+.mdc-owner-player-list article>span{color:#70d17b}.mdc-owner-player-list b{display:block;color:#f4e8c3;font-size:9px}.mdc-owner-player-list small{display:block;color:#9da795;font-size:7px}
+.mdc-owner-player-list button{min-height:32px;padding:6px 9px;border:1px solid rgba(230,188,86,.22);border-radius:9px;background:#44351f;color:#f3e2b6;font-size:7px;font-weight:900}
+.mdc-owner-player-list>p{margin:0;padding:11px;border:1px dashed rgba(255,255,255,.1);border-radius:11px;color:#aab1a4;font-size:8px}
+@media(max-width:720px){
+  .mdc-topbar .mdc-world-status{margin-left:0;transform:none;left:8px;top:55px}
+  .mdc-topbar .c3d-top-actions{right:4px}
+  .mdc-controls-hint{display:none}
+  .mdc-owner-character label{grid-template-columns:1fr}.mdc-owner-character label b{text-align:left}
+  .mdc-owner-player-list article{grid-template-columns:18px minmax(0,1fr)}.mdc-owner-player-list button{grid-column:1/-1}
+}

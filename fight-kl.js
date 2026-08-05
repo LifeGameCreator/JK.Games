@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260805-fight-kl-v191-specials-ui-mobile";
+  const VERSION = "20260805-fight-kl-v193-start-fix";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -547,7 +547,7 @@
     if(def.category==="weapon"){
       if(def.rarity==="blackhole")def.special=V191_SPECIAL_ROTATION.blackhole[v191Hash(def.id)%V191_SPECIAL_ROTATION.blackhole.length];
       else if(def.rarity==="galaxy")def.special=V191_SPECIAL_ROTATION.galaxy[v191Hash(def.id)%V191_SPECIAL_ROTATION.galaxy.length];
-      else if(rarityIndex(def.rarity)>=rarityIndex("epic")&&!def.special)def.special=V191_GENERAL_SPECIALS[v191Hash(def.id)%V191_GENERAL_SPECIALS.length];
+      else if(RARITY_ORDER.indexOf(def.rarity)>=RARITY_ORDER.indexOf("epic")&&!def.special)def.special=V191_GENERAL_SPECIALS[v191Hash(def.id)%V191_GENERAL_SPECIALS.length];
     }
     if(def.specialGrant&&def.rarity==="blackhole")def.specialGrant=V191_SPECIAL_ROTATION.blackhole[v191Hash(`${def.id}-module`)%V191_SPECIAL_ROTATION.blackhole.length];
     if(def.specialGrant&&def.rarity==="galaxy")def.specialGrant=V191_SPECIAL_ROTATION.galaxy[v191Hash(`${def.id}-module`)%V191_SPECIAL_ROTATION.galaxy.length];

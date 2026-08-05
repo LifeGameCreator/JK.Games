@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-05-jkgames-v190-center-world-sky-weather-owner-model';
+const CENTER_VERSION = '2026-08-05-jkgames-v192-center-world-villages-owner-tools';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -13,10 +13,12 @@ const WATER_LEVEL = -2.15;
 const ONLINE_WRITE_INTERVAL_MS = 1250;
 const ONLINE_HEARTBEAT_MS = 10000;
 const ONLINE_STALE_MS = 26000;
-const ONLINE_QUERY_LIMIT = 16;
-const MAX_REMOTE_PLAYERS = 4;
+const ONLINE_QUERY_LIMIT = 32;
+const MAX_REMOTE_PLAYERS = 16;
 const CHARACTER_MODEL_YAW = 0;
 const COLLIDER_CELL_SIZE = 16;
+const PLAYER_COLLIDER_RADIUS = .62;
+const DAYS_PER_SEASON = 12;
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
 const ASSET_ROOT = './assets/cottbus/';
@@ -139,7 +141,7 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 3,
+    version: 4,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
     world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal' },
     day: 1,
@@ -151,6 +153,8 @@ function defaultSaveState() {
     needs: { health: 100, hunger: 92, thirst: 90, stamina: 100, warmth: 88 },
     inventory: { wood: 8, logs: 0, stone: 5, berries: 4, meat: 0, cookedMeat: 0, water: 2, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 120 },
     tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
+    equippedTool: '',
+    ownerAppearance: { skin: 'normal', size: 1, heldItem: 'none' },
     xp: 0,
     skillPoints: 0,
     skills: { survival: 0, forestry: 0, mining: 0, hunting: 0, building: 0, diplomacy: 0, agriculture: 0, crafting: 0 },
@@ -181,6 +185,11 @@ function normalizeSaveState(raw) {
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
   state.tools = { ...base.tools, ...(raw.tools || {}) };
+  state.equippedTool = RECIPES[raw.equippedTool] ? String(raw.equippedTool) : '';
+  state.ownerAppearance = { ...base.ownerAppearance, ...(raw.ownerAppearance || {}) };
+  state.ownerAppearance.skin = ['normal','ball','crystal','shadow'].includes(state.ownerAppearance.skin) ? state.ownerAppearance.skin : 'normal';
+  state.ownerAppearance.size = clamp(Number(state.ownerAppearance.size) || 1, .45, 2.5);
+  state.ownerAppearance.heldItem = ['none','sword','axe','staff','torch','hammer'].includes(state.ownerAppearance.heldItem) ? state.ownerAppearance.heldItem : 'none';
   state.skills = { ...base.skills, ...(raw.skills || {}) };
   state.settlement = { ...base.settlement, ...(raw.settlement || {}) };
   state.settlement.jobs = { ...base.settlement.jobs, ...(raw.settlement?.jobs || {}) };
@@ -191,7 +200,7 @@ function normalizeSaveState(raw) {
   state.buildings = Array.isArray(raw.buildings) ? raw.buildings.slice(0, 140).filter((entry) => entry && BUILDINGS[entry.type]) : [];
   state.harvested = raw.harvested && typeof raw.harvested === 'object' ? raw.harvested : {};
   state.completedQuests = Array.isArray(raw.completedQuests) ? [...new Set(raw.completedQuests.map(String))].slice(0, 40) : [];
-  state.discovered = Array.isArray(raw.discovered) ? [...new Set(raw.discovered.map(String))].slice(0, 40) : ['Siedlungsplatz'];
+  state.discovered = Array.isArray(raw.discovered) ? [...new Set(raw.discovered.map(String))].slice(0, 250) : ['Siedlungsplatz'];
   state.day = Math.max(1, Math.floor(Number(state.day) || 1));
   state.season = Math.floor(clamp(state.season, 0, 3));
   state.time = ((Number(state.time) || 8) % 24 + 24) % 24;
@@ -323,6 +332,13 @@ class CenterDynastyGame {
     this.playerModel = null;
     this.playerMixer = null;
     this.playerAction = null;
+    this.playerActionWasMoving = false;
+    this.playerBones = {};
+    this.actionAnimation = null;
+    this.ownerHeldObject = null;
+    this.ownerFormObject = null;
+    this.fallStartY = null;
+    this.currentRegion = '';
     this.playerSkin = '';
     this.walking = false;
     this.velocityY = 0;
@@ -375,6 +391,8 @@ class CenterDynastyGame {
     this.lastPresenceWriteAt = 0;
     this.lastPresenceKey = '';
     this.isOwnerActive = false;
+    this.ownerVerificationChecked = false;
+    this.ownerVerifiedByFirebase = false;
     this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, freezeTime: false };
     this.ownerPanel = null;
     this.ownerPanelBody = null;
@@ -403,7 +421,7 @@ class CenterDynastyGame {
     this.state.world.density = ['low','normal','high'].includes(this.state.world.density) ? this.state.world.density : 'normal';
     this.state.world.landmarkDensity = ['low','normal','high'].includes(this.state.world.landmarkDensity) ? this.state.world.landmarkDensity : 'normal';
     const needsSpawn = !this.state.world.spawnAssigned;
-    if (Number(this.state.version || 0) < 3) this.state.version = 3;
+    if (Number(this.state.version || 0) < 4) this.state.version = 4;
     if (!needsSpawn) return;
     const maxAttempts = 900;
     const randomIndex = Math.floor((crypto?.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : Math.random()) * maxAttempts);
@@ -424,7 +442,7 @@ class CenterDynastyGame {
     this.state.world.spawnIndex = selected.index;
     this.state.world.spawnX = Number(selected.x.toFixed(2));
     this.state.world.spawnZ = Number(selected.z.toFixed(2));
-    this.state.version = 3;
+    this.state.version = 4;
     this.state.discovered = ['Unbekannte Wildnis'];
   }
 
@@ -437,12 +455,10 @@ class CenterDynastyGame {
       <div class="c3d-stage"><canvas aria-label="Center 3D-Spielwelt" tabindex="0"></canvas></div>
       <div class="c3d-vignette"></div><div class="c3d-crosshair" aria-hidden="true"></div>
       <header class="c3d-topbar mdc-topbar">
-        <div class="c3d-brand"><span class="c3d-brand-mark">JK</span><div><small>CENTER · DYNASTIE-WELT</small><strong data-mdc-region>Das Grenztal</strong></div></div>
-        <div class="mdc-world-status"><span data-mdc-season>🌱 Frühling</span><span data-mdc-day>Tag 1</span><span data-mdc-time>08:15</span><span data-mdc-weather>☀ Klar</span></div>
+        <div class="mdc-world-status"><span data-mdc-season>🌱 Frühling</span><span data-mdc-daytime>Tag 1 · 08:15</span><span data-mdc-weather>☀ Klar</span></div>
         <div class="c3d-top-actions">
-          <div class="c3d-online-card is-connecting" data-c3d-online-card><i></i><span><small>KOOP</small><strong><b data-c3d-online-count>1</b>/4</strong></span></div>
           <button class="c3d-icon-button mdc-owner-menu-button" type="button" data-mdc-owner-menu title="Owner-Menü (Punkt)">◆</button>
-          <button class="c3d-icon-button" type="button" data-mdc-menu title="Dorfverwaltung">☰</button>
+          <button class="c3d-icon-button" type="button" data-mdc-menu title="Center-Menü öffnen oder schließen">☰</button>
           <button class="c3d-icon-button" type="button" data-c3d-close title="Center verlassen">×</button>
         </div>
       </header>
@@ -470,7 +486,7 @@ class CenterDynastyGame {
       <button class="c3d-interact mdc-interact" type="button" data-c3d-interact><kbd>E</kbd><span data-c3d-interact-label>Untersuchen</span></button>
       <div class="mdc-build-actions" data-mdc-build-actions hidden><button type="button" data-mdc-build-rotate>↻ Drehen</button><button type="button" data-mdc-build-place>✓ Bauen</button><button type="button" data-mdc-build-cancel>× Abbrechen</button></div>
       <div class="mdc-hotbar" data-mdc-hotbar></div>
-      <div class="c3d-controls-hint mdc-controls-hint" aria-hidden="true"><span><kbd>WASD</kbd> Laufen</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>E</kbd> Interagieren</span><span><kbd>M</kbd> Verwaltung</span><span><kbd>B</kbd> Bauen</span><span><kbd>V</kbd> Ansicht</span></div>
+      <div class="c3d-controls-hint mdc-controls-hint" aria-hidden="true"><span><kbd>WASD</kbd> Laufen</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>Space</kbd> Springen</span><span><kbd>E</kbd> Interagieren</span><span><kbd>M</kbd> Center-Menü</span><span><kbd>C</kbd> Herstellen</span></div>
       <div class="c3d-mobile-controls mdc-mobile-controls">
         <div class="c3d-joystick" data-c3d-joystick><span class="c3d-joystick-knob" data-c3d-joystick-knob></span></div>
         <div class="c3d-mobile-actions"><button type="button" data-c3d-perspective>◉</button><button type="button" data-c3d-jump>↑</button><button type="button" data-c3d-sprint>»</button><button type="button" data-mdc-mobile-menu>☰</button><button type="button" data-mdc-mobile-build>⌂</button></div>
@@ -505,10 +521,11 @@ class CenterDynastyGame {
     this.hotbarElement = overlay.querySelector('[data-mdc-hotbar]');
     this.buildActions = overlay.querySelector('[data-mdc-build-actions]');
     this.seasonLabel = overlay.querySelector('[data-mdc-season]');
-    this.dayLabel = overlay.querySelector('[data-mdc-day]');
-    this.timeLabel = overlay.querySelector('[data-mdc-time]');
+    this.dayTimeLabel = overlay.querySelector('[data-mdc-daytime]');
+    this.dayLabel = null;
+    this.timeLabel = null;
     this.weatherLabel = overlay.querySelector('[data-mdc-weather]');
-    this.regionLabel = overlay.querySelector('[data-mdc-region]');
+    this.regionLabel = null;
     this.compassLabel = overlay.querySelector('[data-mdc-compass]');
     this.ownerPanel = overlay.querySelector('[data-mdc-owner-panel]');
     this.ownerPanelBody = overlay.querySelector('[data-mdc-owner-body]');
@@ -519,9 +536,10 @@ class CenterDynastyGame {
     overlay.querySelector('[data-mdc-owner-close]').addEventListener('click', () => this.closeOwnerMenu());
     this.ownerMenuButton.addEventListener('click', () => this.toggleOwnerMenu());
     this.ownerPanelBody.addEventListener('click', (event) => this.handleOwnerAction(event));
-    overlay.querySelector('[data-mdc-menu]').addEventListener('click', () => this.openManagement('overview'));
-    overlay.querySelector('[data-mdc-mobile-menu]').addEventListener('click', () => this.openManagement('overview'));
-    overlay.querySelector('[data-mdc-mobile-build]').addEventListener('click', () => this.openManagement('building'));
+    this.ownerPanelBody.addEventListener('input', (event) => this.handleOwnerInput(event));
+    overlay.querySelector('[data-mdc-menu]').addEventListener('click', () => this.toggleManagement('overview'));
+    overlay.querySelector('[data-mdc-mobile-menu]').addEventListener('click', () => this.toggleManagement('overview'));
+    overlay.querySelector('[data-mdc-mobile-build]').addEventListener('click', () => this.toggleManagement('building'));
     overlay.querySelector('[data-c3d-perspective]').addEventListener('click', () => this.togglePerspective());
     overlay.querySelector('[data-c3d-jump]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.requestJump(); });
     this.sprintButton.addEventListener('pointerdown', (event) => { event.preventDefault(); this.input.sprint = !this.input.sprint; this.sprintButton.classList.toggle('is-active', this.input.sprint); });
@@ -580,10 +598,10 @@ class CenterDynastyGame {
       if (event.code === 'Space' && !event.repeat) this.requestJump();
       if (event.code === 'KeyV' && !event.repeat) this.togglePerspective();
       if (event.code === 'KeyE' && !event.repeat) this.buildMode ? this.placeBuilding() : this.activateNearestHotspot();
-      if (event.code === 'KeyM' && !event.repeat) this.openManagement('overview');
-      if (event.code === 'KeyI' && !event.repeat) this.openManagement('inventory');
-      if (event.code === 'KeyC' && !event.repeat) this.openManagement('crafting');
-      if (event.code === 'KeyB' && !event.repeat) this.openManagement('building');
+      if (event.code === 'KeyM' && !event.repeat) { this.toggleManagement('overview'); return; }
+      if (event.code === 'KeyI' && !event.repeat) { this.toggleManagement('inventory'); return; }
+      if (event.code === 'KeyC' && !event.repeat) { this.toggleManagement('crafting'); return; }
+      if (event.code === 'KeyB' && !event.repeat) { this.toggleManagement('building'); return; }
       if (event.code === 'KeyR' && !event.repeat && this.buildMode) this.rotateBuildGhost();
       if (event.code === 'Escape') {
         if (this.ownerPanel?.classList.contains('is-open')) this.closeOwnerMenu();
@@ -600,7 +618,7 @@ class CenterDynastyGame {
 
   bindLookControls() {
     const start = (event) => {
-      if (!this.opened || event.target.closest?.('button,.c3d-side-panel,.mdc-needs,.mdc-quest-card,.mdc-hotbar,.mdc-minimap,.c3d-topbar')) return;
+      if (!this.opened || event.target.closest?.('button,.c3d-side-panel,.mdc-owner-panel,.mdc-needs,.mdc-quest-card,.mdc-hotbar,.mdc-minimap,.c3d-topbar')) return;
       if (this.isMobile) {
         this.lookPointerId = event.pointerId;
         this.lookLast = { x: event.clientX, y: event.clientY };
@@ -766,10 +784,11 @@ class CenterDynastyGame {
     this.skyMaterial = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       uniforms: { topColor: { value: new THREE.Color(0x679bca) }, bottomColor: { value: new THREE.Color(0xe2c993) }, offset: { value: 22 }, exponent: { value: .72 } },
-      vertexShader: 'varying vec3 vWorldPosition;void main(){vec4 wp=modelMatrix*vec4(position,1.0);vWorldPosition=wp.xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      vertexShader: 'varying vec3 vWorldPosition;void main(){vWorldPosition=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
       fragmentShader: 'uniform vec3 topColor;uniform vec3 bottomColor;uniform float offset;uniform float exponent;varying vec3 vWorldPosition;void main(){float h=normalize(vWorldPosition+offset).y;gl_FragColor=vec4(mix(bottomColor,topColor,max(pow(max(h,0.0),exponent),0.0)),1.0);}'
     });
     this.sky = new THREE.Mesh(geometry, this.skyMaterial);
+    this.sky.frustumCulled=false;this.sky.renderOrder=-1000;
     this.scene.add(this.sky);
     this.hemisphere = new THREE.HemisphereLight(0xd4e8ff, 0x5c503b, 1.8);
     this.scene.add(this.hemisphere);
@@ -919,18 +938,23 @@ class CenterDynastyGame {
   buildChunkForest(chunk) {
     const random = seededRandom((Math.imul(chunk.cx + 8192, 83492791) ^ Math.imul(chunk.cz + 8192, 2971215073) ^ (WORLD_SEED + 77)) >>> 0);
     const density = densityMultiplier(this.state.world?.density);
-    const count = Math.floor((76 + random() * 82) * density);
+    const forestProfile=hash2(chunk.cx,chunk.cz,WORLD_SEED+8811);
+    const localDensity=forestProfile>.72?1.34:forestProfile<.2?.7:1;
+    const minTreeSpacing=forestProfile>.72?4.15:forestProfile<.2?7.2:5.35;
+    const count = Math.floor((88 + random() * 96) * density * localDensity);
     const nodes = [];
     for (let i = 0; i < count; i += 1) {
       const lx = 5 + random() * (CHUNK_SIZE - 10), lz = 5 + random() * (CHUNK_SIZE - 10);
       const x = chunk.originX + lx, z = chunk.originZ + lz, y = terrainHeightAt(x, z);
       if (y > 62 || Math.abs(x - riverCenter(z)) < 25 || this.pointNearChunkRoad(chunk, x, z, 2.8) || chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<50)) continue;
-      if(nodes.some((other)=>Math.hypot(x-other.x,z-other.z)<Math.max(5.8,3.5+other.scale*2.6)))continue;
+      const prospectiveScale=.58+random()*1.18;
+      if(nodes.some((other)=>Math.hypot(x-other.x,z-other.z)<Math.max(minTreeSpacing,(other.scale+prospectiveScale)*1.35)))continue;
       const roll = random();
       const localBiome=hash2(Math.floor(x/360),Math.floor(z/360),WORLD_SEED+911);
-      const livingType=localBiome<.46?'pine':'broadleaf';
+      const livingType=localBiome<.24?'pine':localBiome<.47?'birch':localBiome<.69?'darkpine':'broadleaf';
       const archetype = roll < .055 ? 'fallen' : roll < .105 ? 'broken' : roll < .15 ? 'dead' : roll < .24 ? 'giant' : livingType;
-      const scale = archetype === 'giant' ? 1.65 + random() * 1.15 : archetype === 'fallen' ? .9 + random() * 1.25 : .58 + random() * 1.18;
+      const scale = archetype === 'giant' ? 1.65 + random() * 1.15 : archetype === 'fallen' ? .9 + random() * 1.25 : prospectiveScale;
+      if(nodes.some((other)=>Math.hypot(x-other.x,z-other.z)<Math.max(minTreeSpacing,(other.scale+scale)*(archetype==='fallen'?.9:1.55))))continue;
       nodes.push({ id: `tree-${chunk.key}-${i}`, type: 'tree', archetype, x, z, y, scale, yaw: random() * Math.PI * 2, active: true, chunkKey: chunk.key, instanceEntries: [] });
     }
     if (!nodes.length) return;
@@ -938,6 +962,9 @@ class CenterDynastyGame {
     const deadMat = new THREE.MeshStandardMaterial({ color: 0x69513c, roughness: 1, flatShading: true });
     const leafMat = new THREE.MeshStandardMaterial({ color: SEASONS[this.state.season].foliage, roughness: 1, flatShading: true });
     const leafMat2 = leafMat.clone(); leafMat2.color.offsetHSL(.02, .03, .06);
+    const birchTrunkMat=new THREE.MeshStandardMaterial({color:0xd8d2ba,roughness:1,flatShading:true});
+    const birchLeafMat=leafMat.clone();birchLeafMat.color.offsetHSL(.08,.02,.12);
+    const darkLeafMat=leafMat.clone();darkLeafMat.color.set(0x173c25);
     const up = new THREE.Vector3(0,1,0);
     const byType = (type) => nodes.filter((node) => node.archetype === type);
     const addPart = (list, geometry, material, transform) => {
@@ -955,9 +982,16 @@ class CenterDynastyGame {
     const local = (node, yOffset = 0) => new THREE.Vector3(node.x - chunk.originX, node.y + yOffset, node.z - chunk.originZ);
     const yawQ = (node) => new THREE.Quaternion().setFromAxisAngle(up, node.yaw);
     const pine = [...byType('pine'), ...byType('giant')];
+    const darkPine=byType('darkpine');
     addPart(pine, new THREE.CylinderGeometry(.36,.54,4.4,7), trunkMat, (n,m)=>m.compose(local(n,2.2*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
     addPart(pine, new THREE.ConeGeometry(2.35,4.8,8,2), leafMat, (n,m)=>m.compose(local(n,5.0*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
     addPart(pine, new THREE.ConeGeometry(1.8,4.2,8,2), leafMat2, (n,m)=>m.compose(local(n,7.2*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
+    addPart(darkPine,new THREE.CylinderGeometry(.38,.58,4.8,7),trunkMat,(n,m)=>m.compose(local(n,2.4*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
+    addPart(darkPine,new THREE.ConeGeometry(2.45,5.2,8,2),darkLeafMat,(n,m)=>m.compose(local(n,5.25*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
+    addPart(darkPine,new THREE.ConeGeometry(1.72,4.1,8,2),darkLeafMat,(n,m)=>m.compose(local(n,7.35*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
+    const birch=byType('birch');
+    addPart(birch,new THREE.CylinderGeometry(.32,.48,5.2,8),birchTrunkMat,(n,m)=>m.compose(local(n,2.6*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
+    addPart(birch,new THREE.IcosahedronGeometry(2.05,1),birchLeafMat,(n,m)=>m.compose(local(n,5.6*n.scale),yawQ(n),new THREE.Vector3(n.scale*1.05,n.scale*.9,n.scale)));
     const broad = byType('broadleaf');
     addPart(broad, new THREE.CylinderGeometry(.4,.62,4.8,8), trunkMat, (n,m)=>m.compose(local(n,2.4*n.scale),yawQ(n),new THREE.Vector3(n.scale,n.scale,n.scale)));
     addPart(broad, new THREE.IcosahedronGeometry(2.25,1), leafMat, (n,m)=>m.compose(local(n,5.45*n.scale),yawQ(n),new THREE.Vector3(n.scale*1.18,n.scale*.95,n.scale*1.1)));
@@ -968,7 +1002,7 @@ class CenterDynastyGame {
     const fallen = byType('fallen');
     addPart(fallen, new THREE.CylinderGeometry(.32,.48,5.4,7), deadMat, (n,m)=>{const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,n.yaw,0));m.compose(local(n,.48*n.scale),q,new THREE.Vector3(n.scale,n.scale,n.scale));});
     addPart(fallen, new THREE.CylinderGeometry(.12,.2,2.4,5), deadMat, (n,m)=>{const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2,n.yaw+.75,.5));m.compose(new THREE.Vector3(n.x-chunk.originX+Math.cos(n.yaw)*.8*n.scale,n.y+.65*n.scale,n.z-chunk.originZ+Math.sin(n.yaw)*.8*n.scale),q,new THREE.Vector3(n.scale,n.scale,n.scale));});
-    this.seasonMaterials.push({ material: leafMat, kind: 'foliage', chunkKey: chunk.key }, { material: leafMat2, kind: 'foliage', chunkKey: chunk.key });
+    this.seasonMaterials.push({ material: leafMat, kind: 'foliage', chunkKey: chunk.key }, { material: leafMat2, kind: 'foliage', chunkKey: chunk.key }, {material:birchLeafMat,kind:'foliage',chunkKey:chunk.key},{material:darkLeafMat,kind:'dark-foliage',chunkKey:chunk.key});
     nodes.forEach((node) => {
       const radius = node.archetype === 'fallen' ? 2.2 * node.scale : node.archetype === 'giant' ? .95 * node.scale : .63 * node.scale;
       node.collider = this.registerCollider(node.x, node.z, radius, 'resource', chunk.key, node);
@@ -1012,68 +1046,107 @@ class CenterDynastyGame {
 
   buildChunkGrass(chunk) {
     const random=seededRandom((Math.imul(chunk.cx+7001,1103515245)^Math.imul(chunk.cz+9001,12345)^(WORLD_SEED+333))>>>0);
-    const density=densityMultiplier(this.state.world?.density);const count=Math.floor((this.isMobile?110:220)*density);
+    const density=densityMultiplier(this.state.world?.density);const count=Math.floor((this.isMobile?190:420)*density);
     const mat=new THREE.MeshStandardMaterial({color:this.state.season===3?0xaeb8ae:0x698e43,roughness:1,side:THREE.DoubleSide});
     const geo=new THREE.PlaneGeometry(.14,.7);geo.translate(0,.35,0);const mesh=new THREE.InstancedMesh(geo,mat,count);const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
     for(let i=0;i<count*3&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.7)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<35))continue;q.setFromEuler(new THREE.Euler(0,random()*Math.PI*2,0));const sc=.55+random()*.8;scale.set(sc,sc,sc);matrix.compose(new THREE.Vector3(lx,y+.015,lz),q,scale);mesh.setMatrixAt(used++,matrix);}
     mesh.count=used;mesh.instanceMatrix.needsUpdate=true;chunk.group.add(mesh);this.seasonMaterials.push({material:mat,kind:'foliage',chunkKey:chunk.key});
   }
 
+  createVillageNpcPlaceholder(chunk,lx,lz,worldX,worldZ,index=0) {
+    const holder=new THREE.Group();
+    holder.position.set(lx,terrainHeightAt(worldX,worldZ),lz);
+    holder.rotation.y=(index*.83)% (Math.PI*2);
+    const white=new THREE.MeshStandardMaterial({color:0xe8eceb,roughness:.82});
+    const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.82,4,8),white);body.position.y=1.02;holder.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.25,12,8),white);head.position.y=1.87;holder.add(head);
+    for(const sx of [-1,1]){const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.085,.55,3,7),white);arm.position.set(sx*.4,1.08,0);arm.rotation.z=sx*.08;holder.add(arm);const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.1,.63,3,7),white);leg.position.set(sx*.17,.35,0);holder.add(leg);}
+    chunk.group.add(holder);
+    this.remoteTemplate('owner').then((template)=>{
+      if(!this.chunks.has(chunk.key)||!holder.parent)return;
+      const model=cloneSkeleton(template.root);model.scale.multiplyScalar(.92);model.traverse((object)=>{if(object.isMesh){if(object.geometry)object.geometry=object.geometry.clone();if(Array.isArray(object.material))object.material=object.material.map((m)=>m.clone());else if(object.material)object.material=object.material.clone();}});holder.clear();holder.add(model);
+      const locomotion=this.selectLocomotionClip(template.animations||[]);
+      if(locomotion){const mixer=new THREE.AnimationMixer(model),action=mixer.clipAction(locomotion);action.play();action.time=0;action.paused=true;mixer.update(0);holder.userData.mixer=mixer;}
+    }).catch(()=>{});
+    return holder;
+  }
+
   buildChunkVillage(chunk) {
-    const chance = hash2(chunk.cx, chunk.cz, WORLD_SEED + 707);
-    if (chance < .76) return;
-    const random = seededRandom((Math.imul(chunk.cx + 512, 1640531513) ^ Math.imul(chunk.cz + 512, 2246822519) ^ (WORLD_SEED + 701)) >>> 0);
-    const lx=42+random()*(CHUNK_SIZE-84),lz=42+random()*(CHUNK_SIZE-84),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
+    const chance=hash2(chunk.cx,chunk.cz,WORLD_SEED+707);
+    if(chance<.76)return;
+    const random=seededRandom((Math.imul(chunk.cx+512,1640531513)^Math.imul(chunk.cz+512,2246822519)^(WORLD_SEED+701))>>>0);
+    const lx=45+random()*(CHUNK_SIZE-90),lz=45+random()*(CHUNK_SIZE-90),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
     if(y>48||y<-3||Math.abs(x-riverCenter(z))<38)return;
     const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen','Drachen','Königs'];
     const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see','mark','hof'];
     const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
-    const villageType=random()<.28?'Bergdorf':random()<.56?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
-    const houseCount=8+Math.floor(random()*13);
-    const wallMat=new THREE.MeshStandardMaterial({color:villageType==='Bergdorf'?0x9f9584:0xb39a72,roughness:1});
-    const roofMat=new THREE.MeshStandardMaterial({color:random()<.5?0x65412f:0x513128,roughness:1});
-    const woodMat=new THREE.MeshStandardMaterial({color:0x60402b,roughness:1});
-    const houses=new THREE.InstancedMesh(new THREE.BoxGeometry(5.4,3.5,4.8),wallMat,houseCount);
-    const roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(4.3,2.5,4),roofMat,houseCount);
-    const matrix=new THREE.Matrix4(),q=new THREE.Quaternion();
+    const villageType=random()<.26?'Bergdorf':random()<.55?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
+    const wallColors={Bergdorf:0xaaa391,Bauerndorf:0xbda77c,Handelsdorf:0xc0aa82,Jägerdorf:0x9e8e69};
+    const wallMat=new THREE.MeshStandardMaterial({color:wallColors[villageType],roughness:1});
+    const timberMat=new THREE.MeshStandardMaterial({color:0x513321,roughness:1});
+    const roofMat=new THREE.MeshStandardMaterial({color:villageType==='Bergdorf'?0x494541:0x5b3326,roughness:1});
+    const glassMat=new THREE.MeshStandardMaterial({color:0xb8d5dc,emissive:0x182d32,emissiveIntensity:.22,roughness:.3});
+    const roadMat=new THREE.MeshStandardMaterial({color:0x76644c,roughness:1,polygonOffset:true,polygonOffsetFactor:-3});
+    const square=new THREE.Mesh(new THREE.CircleGeometry(15,32),roadMat);square.rotation.x=-Math.PI/2;square.position.set(lx,y+.025,lz);chunk.group.add(square);
+
+    const houseCount=7+Math.floor(random()*6);
     const housePositions=[];
     for(let i=0;i<houseCount;i+=1){
-      const angle=i/houseCount*Math.PI*2+random()*.42,radius=16+(i%3)*8+random()*5,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2;
-      q.setFromAxisAngle(new THREE.Vector3(0,1,0),yaw);
-      matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+1.75,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));houses.setMatrixAt(i,matrix);
-      matrix.compose(new THREE.Vector3(hx-chunk.originX,hy+4.25,hz-chunk.originZ),q,new THREE.Vector3(1,1,1));roofs.setMatrixAt(i,matrix);
-      housePositions.push({x:hx,z:hz,y:hy,yaw});
+      const angle=i/houseCount*Math.PI*2+(random()-.5)*.22;
+      const radius=21+(i%2)*10+random()*3;
+      const hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2;
+      const localX=hx-chunk.originX,localZ=hz-chunk.originZ;
+      const group=new THREE.Group();group.position.set(localX,hy,localZ);group.rotation.y=yaw;
+      const w=5.8+(i%3)*.55,d=4.8+(i%2)*.65,h=3.5+(i%2)*.35;
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),wallMat);wall.position.y=h/2;group.add(wall);
+      const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*.73,2.65,4),roofMat);roof.position.y=h+1.15;roof.rotation.y=Math.PI/4;roof.scale.z=d/w;group.add(roof);
+      const door=new THREE.Mesh(new THREE.BoxGeometry(1.05,2.05,.16),timberMat);door.position.set(0,1.03,d/2+.09);group.add(door);
+      for(const sx of [-1,1]){const beam=new THREE.Mesh(new THREE.BoxGeometry(.18,h+.18,.18),timberMat);beam.position.set(sx*(w/2-.18),h/2,d/2+.1);group.add(beam);const win=new THREE.Mesh(new THREE.BoxGeometry(.78,.72,.12),glassMat);win.position.set(sx*w*.26,2.05,d/2+.1);group.add(win);}
+      const cross=new THREE.Mesh(new THREE.BoxGeometry(w-.3,.15,.15),timberMat);cross.position.set(0,h*.56,d/2+.11);group.add(cross);
+      if(i%3===0){const chimney=new THREE.Mesh(new THREE.BoxGeometry(.55,1.8,.55),new THREE.MeshStandardMaterial({color:0x69645c,roughness:1}));chimney.position.set(w*.24,h+1.25,0);group.add(chimney);}
+      chunk.group.add(group);
+      const collider=this.registerCollider(hx,hz,Math.max(w,d)*.43,'village',chunk.key);collider.height=h+2.5;chunk.colliders.push(collider);
+      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ});
+      const length=Math.max(4,radius-8),road=new THREE.Mesh(new THREE.PlaneGeometry(3.4,length),roadMat);road.rotation.x=-Math.PI/2;road.rotation.z=-angle;road.position.set(lx+Math.cos(angle)*(radius-length/2),terrainHeightAt(x+Math.cos(angle)*(radius-length/2),z+Math.sin(angle)*(radius-length/2))+.018,lz+Math.sin(angle)*(radius-length/2));chunk.group.add(road);
     }
-    for (const house of housePositions) { const collider=this.registerCollider(house.x,house.z,3.55,'village',chunk.key);chunk.colliders.push(collider); }
-    chunk.group.add(houses,roofs);
-    const square=new THREE.Mesh(new THREE.CircleGeometry(13,24),new THREE.MeshStandardMaterial({color:0x80694d,roughness:1,polygonOffset:true,polygonOffsetFactor:-3}));square.rotation.x=-Math.PI/2;square.position.set(lx,y+.09,lz);chunk.group.add(square);
-    for(let i=0;i<8;i+=1){
-      const angle=i/8*Math.PI*2,roadLength=20+(i%2)*9;
-      const road=new THREE.Mesh(new THREE.PlaneGeometry(3.2,roadLength),new THREE.MeshStandardMaterial({color:0x756146,roughness:1,polygonOffset:true,polygonOffsetFactor:-2}));
-      road.rotation.x=-Math.PI/2;road.rotation.z=-angle;road.position.set(lx+Math.sin(angle)*roadLength*.48,y+.085,lz+Math.cos(angle)*roadLength*.48);chunk.group.add(road);
-    }
-    const well=new THREE.Mesh(new THREE.CylinderGeometry(2.1,2.4,1.2,12),new THREE.MeshStandardMaterial({color:0x77736b,roughness:1}));well.position.set(lx,y+.6,lz);chunk.group.add(well);{const collider=this.registerCollider(x,z,2.35,'village',chunk.key);chunk.colliders.push(collider);}
-    const market=new THREE.Group();
-    const stall=new THREE.Mesh(new THREE.BoxGeometry(5,.35,2.4),woodMat);stall.position.y=1;market.add(stall);
-    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),woodMat);post.position.set(sx*2.1,1.6,sz*.9);market.add(post);}
-    const canopy=new THREE.Mesh(new THREE.PlaneGeometry(5.2,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x8d3f32:0x486f62,side:THREE.DoubleSide}));canopy.rotation.x=-Math.PI/2;canopy.position.y=3.05;market.add(canopy);market.position.set(lx+7,y,lz+5);chunk.group.add(market);
+
+    const stoneMat=new THREE.MeshStandardMaterial({color:0x7f817d,roughness:1});
+    const wellGroup=new THREE.Group();const well=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.35,1.25,16),stoneMat);well.position.y=.62;wellGroup.add(well);
+    for(const sx of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.22,3.2,.22),timberMat);post.position.set(sx*1.55,2,0);wellGroup.add(post);}
+    const beam=new THREE.Mesh(new THREE.BoxGeometry(3.5,.22,.22),timberMat);beam.position.y=3.45;wellGroup.add(beam);wellGroup.position.set(lx,y,lz);chunk.group.add(wellGroup);
+    {const collider=this.registerCollider(x,z,2.1,'village',chunk.key);collider.height=1.35;chunk.colliders.push(collider);}
+
+    const market=new THREE.Group();market.position.set(lx+8,y,lz+5);
+    const table=new THREE.Mesh(new THREE.BoxGeometry(5,.32,2.3),timberMat);table.position.y=1;market.add(table);
+    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),timberMat);post.position.set(sx*2.1,1.55,sz*.9);market.add(post);}
+    const canopy=new THREE.Mesh(new THREE.BoxGeometry(5.4,.12,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x9b4237:0x4f7663,roughness:.9}));canopy.position.y=3.05;market.add(canopy);
+    for(let crate=0;crate<4;crate++){const box=new THREE.Mesh(new THREE.BoxGeometry(.72,.55,.72),new THREE.MeshStandardMaterial({color:0x76502e,roughness:1}));box.position.set(-1.7+crate*1.1,.3,1.4);market.add(box);}
+    chunk.group.add(market);
+
     const fieldCount=villageType==='Bauerndorf'?4:2;
     for(let f=0;f<fieldCount;f+=1){
-      const fx=lx-31+(f%2)*16,fz=lz+25+Math.floor(f/2)*12;
-      const field=new THREE.Mesh(new THREE.PlaneGeometry(13,9),new THREE.MeshStandardMaterial({color:0x4b3422,roughness:1,side:THREE.DoubleSide}));field.rotation.x=-Math.PI/2;field.position.set(fx,terrainHeightAt(chunk.originX+fx,chunk.originZ+fz)+.06,fz);chunk.group.add(field);
-      for(let row=-4;row<=4;row+=2){const crop=new THREE.Mesh(new THREE.BoxGeometry(11,.12,.12),new THREE.MeshStandardMaterial({color:0xa99a48,roughness:1}));crop.position.set(fx,field.position.y+.12,fz+row);chunk.group.add(crop);}
+      const fx=lx-34+(f%2)*18,fz=lz+27+Math.floor(f/2)*13,worldFx=chunk.originX+fx,worldFz=chunk.originZ+fz,fy=terrainHeightAt(worldFx,worldFz);
+      const fieldGroup=new THREE.Group();fieldGroup.position.set(fx,fy,fz);
+      const soil=new THREE.Mesh(new THREE.BoxGeometry(14,.12,10),new THREE.MeshStandardMaterial({color:0x65442a,roughness:1}));soil.position.y=.03;fieldGroup.add(soil);
+      for(let row=-4;row<=4;row+=1.6){const furrow=new THREE.Mesh(new THREE.BoxGeometry(12,.12,.28),new THREE.MeshStandardMaterial({color:0x7d5a33,roughness:1}));furrow.position.set(0,.12,row);fieldGroup.add(furrow);for(let c=-5.5;c<=5.5;c+=1.1){const crop=new THREE.Mesh(new THREE.ConeGeometry(.08,.48,5),new THREE.MeshStandardMaterial({color:0x9eaa4d,roughness:1}));crop.position.set(c,.4,row);fieldGroup.add(crop);}}
+      for(const side of [-1,1]){const fence=new THREE.Mesh(new THREE.BoxGeometry(14.8,.14,.14),timberMat);fence.position.set(0,.65,side*5.2);fieldGroup.add(fence);}
+      chunk.group.add(fieldGroup);
     }
-    const barn=new THREE.Mesh(new THREE.BoxGeometry(8,4.4,6.6),woodMat);barn.position.set(lx-25,y+2.2,lz-20);chunk.group.add(barn);{const collider=this.registerCollider(x-25,z-20,4.5,'village',chunk.key);chunk.colliders.push(collider);}
-    const barnRoof=new THREE.Mesh(new THREE.ConeGeometry(6.3,3,4),roofMat);barnRoof.position.set(lx-25,y+5.6,lz-20);barnRoof.rotation.y=Math.PI/4;barnRoof.scale.z=.78;chunk.group.add(barnRoof);
-    const peopleCount=6+Math.floor(random()*12),bodyMat=new THREE.MeshStandardMaterial({color:0x48646d,roughness:1}),skinMat=new THREE.MeshStandardMaterial({color:0xc58d70,roughness:1});
-    const bodies=new THREE.InstancedMesh(new THREE.CapsuleGeometry(.25,.8,2,5),bodyMat,peopleCount),heads=new THREE.InstancedMesh(new THREE.SphereGeometry(.28,6,5),skinMat,peopleCount);
-    for(let i=0;i<peopleCount;i+=1){const angle=random()*Math.PI*2,radius=4+random()*13,px=lx+Math.cos(angle)*radius,pz=lz+Math.sin(angle)*radius,py=terrainHeightAt(chunk.originX+px,chunk.originZ+pz);q.setFromAxisAngle(new THREE.Vector3(0,1,0),random()*Math.PI*2);matrix.compose(new THREE.Vector3(px,py+1,pz),q,new THREE.Vector3(1,1,1));bodies.setMatrixAt(i,matrix);matrix.compose(new THREE.Vector3(px,py+2,pz),q,new THREE.Vector3(1,1,1));heads.setMatrixAt(i,matrix);}
-    chunk.group.add(bodies,heads);
+
+    const barn=new THREE.Group();barn.position.set(lx-27,terrainHeightAt(x-27,z-20),lz-20);
+    const barnBase=new THREE.Mesh(new THREE.BoxGeometry(9,4.8,7),timberMat);barnBase.position.y=2.4;barn.add(barnBase);
+    const barnRoof=new THREE.Mesh(new THREE.ConeGeometry(6.7,3.3,4),roofMat);barnRoof.position.y=6;barnRoof.rotation.y=Math.PI/4;barnRoof.scale.z=.78;barn.add(barnRoof);
+    const barnDoor=new THREE.Mesh(new THREE.BoxGeometry(2.4,3.2,.2),new THREE.MeshStandardMaterial({color:0x342116,roughness:1}));barnDoor.position.set(0,1.6,3.6);barn.add(barnDoor);chunk.group.add(barn);
+    {const collider=this.registerCollider(x-27,z-20,4.1,'village',chunk.key);collider.height=7;chunk.colliders.push(collider);}
+
+    const peopleCount=6+Math.floor(random()*4);
+    for(let i=0;i<peopleCount;i+=1){const angle=random()*Math.PI*2,radius=5+random()*12,px=lx+Math.cos(angle)*radius,pz=lz+Math.sin(angle)*radius;this.createVillageNpcPlaceholder(chunk,px,pz,chunk.originX+px,chunk.originZ+pz,i);}
+
     const people=Array.from({length:peopleCount},(_,i)=>`Bewohner ${i+1}`);
     const village={name,x,z,people,buildings:houseCount+2,npcs:[],chunkKey:chunk.key,type:villageType};
     chunk.villages.push(village);this.villages.push(village);
-    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:24,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
-    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+7,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
+    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:30,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
+    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+8,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
     const wellHotspot={id:`well-${chunk.key}`,type:'well',x,z,radius:5,label:'Am Dorfbrunnen Wasser holen',data:{village:name},chunkKey:chunk.key};
     chunk.hotspots.push(villageHotspot,marketHotspot,wellHotspot);this.hotspots.push(villageHotspot,marketHotspot,wellHotspot);
   }
@@ -1350,7 +1423,8 @@ class CenterDynastyGame {
   colliderBucketKey(x, z) { return `${Math.floor(x / COLLIDER_CELL_SIZE)}:${Math.floor(z / COLLIDER_CELL_SIZE)}`; }
 
   registerCollider(x, z, radius, source = 'world', chunkKeyValue = '', node = null) {
-    const collider = { x: Number(x), z: Number(z), radius: Math.max(.2, Number(radius) || 1), source, chunkKey: chunkKeyValue, node, active: true, bucketKeys: [] };
+    const inferredHeight=node?.type==='bush'?1.05:node?.archetype==='fallen'?.85:node?.type==='rock'?Math.max(.75,(node?.scale||1)*1.45):node?.archetype==='broken'?Math.max(1.5,(node?.scale||1)*3):source==='village'?6.5:source==='owned'?7:Math.max(3,(node?.scale||1)*6);
+    const collider = { x: Number(x), z: Number(z), radius: Math.max(.18, (Number(radius) || 1) * .86), height: inferredHeight, source, chunkKey: chunkKeyValue, node, active: true, bucketKeys: [] };
     const minX=Math.floor((collider.x-collider.radius)/COLLIDER_CELL_SIZE),maxX=Math.floor((collider.x+collider.radius)/COLLIDER_CELL_SIZE),minZ=Math.floor((collider.z-collider.radius)/COLLIDER_CELL_SIZE),maxZ=Math.floor((collider.z+collider.radius)/COLLIDER_CELL_SIZE);
     for(let gx=minX;gx<=maxX;gx+=1)for(let gz=minZ;gz<=maxZ;gz+=1){const key=`${gx}:${gz}`;let bucket=this.collisionBuckets.get(key);if(!bucket){bucket=new Set();this.collisionBuckets.set(key,bucket);}bucket.add(collider);collider.bucketKeys.push(key);}
     this.colliders.push(collider); return collider;
@@ -1565,7 +1639,7 @@ class CenterDynastyGame {
   }
 
   createNpc(name,x,z,village,index) {
-    const group=this.makeFallbackCharacter(index%2?'female':'male', index%3);
+    const group=this.makeFallbackCharacter('npcwhite', index%3);
     group.scale.setScalar(.95);
     group.position.set(x,terrainHeightAt(x,z),z);
     this.scene.add(group);
@@ -1657,6 +1731,148 @@ class CenterDynastyGame {
     return this.makeInPlaceLocomotionClip(clip);
   }
 
+  cachePlayerBones(root) {
+    const all=[];
+    root?.traverse?.((object)=>{if(object?.isBone){object.userData.__centerBindQuaternion=object.quaternion.clone();object.userData.__centerBindPosition=object.position.clone();}if(object?.isBone||/arm|palm|hand|spine|chest/i.test(object?.name||''))all.push(object);});
+    const find=(pattern)=>all.find((object)=>pattern.test(object.name||''));
+    this.playerBones={
+      upperRight:find(/(?:a r m_up_R|upperarm.*r|right.*upperarm)/i),
+      lowerRight:find(/(?:a r m_dawn_R|forearm.*r|right.*forearm)/i),
+      handRight:find(/(?:palm_R|hand.*r|right.*hand)/i),
+      upperLeft:find(/(?:a r m_up_L|upperarm.*l|left.*upperarm)/i),
+      lowerLeft:find(/(?:a r m_dawn_L|forearm.*l|left.*forearm)/i),
+      handLeft:find(/(?:palm_L|hand.*l|left.*hand)/i),
+      chest:find(/(?:^chest|spine_?2|upperchest)/i)
+    };
+  }
+
+  resetLocomotionToIdle() {
+    if(!this.playerAction||!this.playerMixer)return;
+    this.playerAction.paused=false;
+    this.playerAction.reset();
+    this.playerAction.play();
+    this.playerAction.time=0;
+    this.playerMixer.setTime(0);
+    this.playerModel?.traverse?.((object)=>{if(object?.isBone&&object.userData.__centerBindQuaternion){object.quaternion.copy(object.userData.__centerBindQuaternion);object.position.copy(object.userData.__centerBindPosition);}});
+    this.playerAction.paused=true;
+    this.playerMixer.timeScale=1;
+    this.playerActionWasMoving=false;
+  }
+
+  updatePlayerAnimation(delta,moving,sprint) {
+    if(this.playerMixer&&this.playerAction){
+      if(moving){
+        if(!this.playerActionWasMoving){
+          this.playerAction.paused=false;
+          this.playerAction.enabled=true;
+          this.playerAction.play();
+        }
+        this.playerMixer.timeScale=sprint?1.45:1;
+        this.playerMixer.update(delta);
+        this.playerActionWasMoving=true;
+      }else{
+        if(this.playerActionWasMoving)this.resetLocomotionToIdle();
+        else this.playerMixer.update(0);
+      }
+    }
+    const now=performance.now();
+    const airborne=!this.onGround&&!this.ownerFlags.fly;
+    this.modelPivot.position.y=airborne?Math.sin(Math.min(1,Math.max(0,(this.player.position.y-(terrainHeightAt(this.player.position.x,this.player.position.z)))/2))*Math.PI)*.08:Math.sin(now*.0016)*.008;
+    this.modelPivot.rotation.x=airborne?-.06:0;
+    this.applyActionAnimation(now);
+  }
+
+  triggerActionAnimation(kind='chop',duration=560) {
+    this.actionAnimation={kind,start:performance.now(),duration};
+  }
+
+  applyActionAnimation(now=performance.now()) {
+    const action=this.actionAnimation;
+    if(!action)return;
+    const t=clamp((now-action.start)/action.duration,0,1);
+    const swing=Math.sin(t*Math.PI);
+    const upper=this.playerBones.upperRight,lower=this.playerBones.lowerRight,left=this.playerBones.upperLeft,chest=this.playerBones.chest;
+    if(action.kind==='jump'){
+      if(upper){upper.rotateX(-.35*swing);upper.rotateZ(-.58*swing);}
+      if(left){left.rotateX(-.35*swing);left.rotateZ(.58*swing);}
+      if(chest)chest.rotateX(-.08*swing);
+    }else if(action.kind==='gather'){
+      if(upper)upper.rotateX(-.45*swing);
+      if(lower)lower.rotateX(-.5*swing);
+    }else{
+      if(upper)upper.rotateX(-1.15*swing);
+      if(upper)upper.rotateZ(-.42*swing);
+      if(lower)lower.rotateX(-.55*swing);
+      if(chest)chest.rotateY((action.kind==='mine'?.22:.14)*swing);
+    }
+    if(t>=1){this.actionAnimation=null;if(!this.walking)this.playerModel?.traverse?.((object)=>{if(object?.isBone&&object.userData.__centerBindQuaternion){object.quaternion.copy(object.userData.__centerBindQuaternion);object.position.copy(object.userData.__centerBindPosition);}});}
+  }
+
+  createHeldItemMesh(kind='none') {
+    if(kind==='none')return null;
+    const group=new THREE.Group();
+    const metal=new THREE.MeshStandardMaterial({color:kind==='sword'?0xc9d2da:kind==='staff'?0x8a6cff:0x81878b,roughness:.45,metalness:kind==='torch'?0:.35});
+    const wood=new THREE.MeshStandardMaterial({color:0x6a4125,roughness:1});
+    if(kind==='sword'){
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(.08,.08,1.45),metal);blade.position.z=-.72;group.add(blade);
+      const guard=new THREE.Mesh(new THREE.BoxGeometry(.55,.09,.09),metal);guard.position.z=.02;group.add(guard);
+      const grip=new THREE.Mesh(new THREE.CylinderGeometry(.06,.07,.48,8),wood);grip.rotation.x=Math.PI/2;grip.position.z=.3;group.add(grip);
+    }else if(kind==='axe'){
+      const handle=new THREE.Mesh(new THREE.CylinderGeometry(.055,.07,1.25,8),wood);handle.rotation.x=Math.PI/2;handle.position.z=-.36;group.add(handle);
+      const head=new THREE.Mesh(new THREE.BoxGeometry(.48,.12,.38),metal);head.position.set(.15,0,-.93);head.rotation.z=.18;group.add(head);
+    }else if(kind==='hammer'){
+      const handle=new THREE.Mesh(new THREE.CylinderGeometry(.06,.075,1.15,8),wood);handle.rotation.x=Math.PI/2;handle.position.z=-.32;group.add(handle);
+      const head=new THREE.Mesh(new THREE.BoxGeometry(.55,.24,.25),metal);head.position.z=-.88;group.add(head);
+    }else if(kind==='staff'){
+      const pole=new THREE.Mesh(new THREE.CylinderGeometry(.045,.06,1.75,8),wood);pole.rotation.x=Math.PI/2;pole.position.z=-.75;group.add(pole);
+      const orb=new THREE.Mesh(new THREE.SphereGeometry(.18,12,8),new THREE.MeshStandardMaterial({color:0x8e72ff,emissive:0x4a24ff,emissiveIntensity:1.3}));orb.position.z=-1.68;group.add(orb);
+    }else if(kind==='torch'){
+      const pole=new THREE.Mesh(new THREE.CylinderGeometry(.055,.07,1.1,8),wood);pole.rotation.x=Math.PI/2;pole.position.z=-.42;group.add(pole);
+      const flame=new THREE.Mesh(new THREE.ConeGeometry(.13,.42,8),new THREE.MeshStandardMaterial({color:0xffb14a,emissive:0xff5a00,emissiveIntensity:1.5}));flame.rotation.x=Math.PI/2;flame.position.z=-1.12;group.add(flame);
+    }
+    group.rotation.set(0,Math.PI/2,Math.PI/2);
+    group.scale.setScalar(.8);
+    return group;
+  }
+
+  applyHeldItemVisual() {
+    this.ownerHeldObject?.removeFromParent?.();
+    this.ownerHeldObject=null;
+    const ownerKind=this.isOwnerActive?this.state.ownerAppearance?.heldItem:'none';
+    const toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'hammer':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'staff':'none';
+    const kind=ownerKind&&ownerKind!=='none'?ownerKind:toolKind;
+    const mesh=this.createHeldItemMesh(kind);
+    if(!mesh)return;
+    const hand=this.playerBones.handRight;
+    if(hand){hand.add(mesh);mesh.position.set(0,0,0);}
+    else {this.modelPivot.add(mesh);mesh.position.set(.45,1.05,.05);}
+    this.ownerHeldObject=mesh;
+  }
+
+  applyOwnerAppearance() {
+    if(!this.playerModel)return;
+    const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none'};
+    const size=this.isOwnerActive?clamp(Number(appearance.size)||1,.45,2.5):1;
+    this.modelPivot.scale.setScalar(size);
+    this.ownerFormObject?.removeFromParent?.();
+    this.ownerFormObject=null;
+    this.playerModel.visible=!this.firstPerson;
+    if(this.isOwnerActive&&appearance.skin!=='normal'){
+      this.playerModel.visible=false;
+      const form=new THREE.Group();
+      if(appearance.skin==='ball'){
+        const ball=new THREE.Mesh(new THREE.SphereGeometry(.72,24,16),new THREE.MeshStandardMaterial({color:0xd7b356,metalness:.25,roughness:.35}));ball.position.y=.72;form.add(ball);
+      }else if(appearance.skin==='crystal'){
+        const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.82,1),new THREE.MeshStandardMaterial({color:0x7fe9ff,emissive:0x235f85,emissiveIntensity:.8,transparent:true,opacity:.86}));crystal.position.y=1;form.add(crystal);
+      }else if(appearance.skin==='shadow'){
+        const shadow=new THREE.Mesh(new THREE.CapsuleGeometry(.45,1.1,5,12),new THREE.MeshStandardMaterial({color:0x08060e,emissive:0x2d0e56,emissiveIntensity:.8,transparent:true,opacity:.88}));shadow.position.y=1;form.add(shadow);
+      }
+      this.modelPivot.add(form);this.ownerFormObject=form;
+    }
+    this.applyHeldItemVisual();
+    this.applyOwnerVisualState();
+  }
+
   applyOwnerVisualState() {
     if(!this.playerModel)return;const vanished=this.isOwnerActive&&this.ownerFlags.vanish;
     this.playerModel.traverse((object)=>{if(!object.isMesh)return;const materials=Array.isArray(object.material)?object.material:[object.material];for(const material of materials){if(!material)continue;if(material.userData.__ownerOpacity===undefined)material.userData.__ownerOpacity=material.opacity??1;material.transparent=vanished||material.userData.__ownerOpacity<1;material.opacity=vanished?.3:material.userData.__ownerOpacity;material.depthWrite=!vanished;material.needsUpdate=true;}});
@@ -1667,7 +1883,7 @@ class CenterDynastyGame {
     const player=bridgeSnapshot();
     const skin=role.isOwner?'owner':player.gender;
     if(this.playerSkin===skin&&this.playerModel) { this.updateRoleHud(); return; }
-    this.modelPivot.clear(); this.playerModel=null; this.playerMixer=null; this.playerAction=null;
+    this.modelPivot.clear(); this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerFormObject=null;
     try {
       const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);
       const root=gltf.scene;
@@ -1678,14 +1894,14 @@ class CenterDynastyGame {
       root.position.x-=center.x; root.position.z-=center.z; root.position.y-=scaled.min.y-.035; root.rotation.y=CHARACTER_MODEL_YAW;
       root.traverse((object)=>{if(object.isMesh){object.castShadow=false;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m)m.envMapIntensity=.25;});}});
       this.playerModel=root; this.modelPivot.add(root);
-      const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.playerMixer.timeScale=0;}
+      this.cachePlayerBones(root);const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.resetLocomotionToIdle();}
     } catch(error) { console.warn('Center-Charaktermodell konnte nicht geladen werden',error); this.playerModel=this.makeFallbackCharacter(skin); this.modelPivot.add(this.playerModel); }
-    this.playerSkin=skin; this.updateRoleHud(); this.applyOwnerVisualState(); this.applyPerspectiveVisibility();
+    this.playerSkin=skin; this.updateRoleHud(); this.applyPerspectiveVisibility(); this.applyOwnerAppearance();
   }
 
   makeFallbackCharacter(skin='male',variant=0) {
     const group=new THREE.Group();
-    const colors=skin==='owner'?[0x20211f,0x9a7a3c]:skin==='female'?[0x684f7a,0xd3a786]:[0x435f69,0xb88869];
+    const colors=skin==='npcwhite'?[0xe8eceb,0xe8eceb]:skin==='owner'?[0x20211f,0x9a7a3c]:skin==='female'?[0x684f7a,0xd3a786]:[0x435f69,0xb88869];
     const body=new THREE.Mesh(new THREE.CapsuleGeometry(.36,.85,4,8),new THREE.MeshStandardMaterial({color:colors[0],roughness:.85})); body.position.y=1.05; group.add(body);
     const head=new THREE.Mesh(new THREE.SphereGeometry(.27,12,8),new THREE.MeshStandardMaterial({color:colors[1],roughness:.9})); head.position.y=1.92; group.add(head);
     const hair=new THREE.Mesh(new THREE.SphereGeometry(.285,10,6,0,Math.PI*2,0,Math.PI*.58),new THREE.MeshStandardMaterial({color:variant%2?0x5a3824:0x2e241f})); hair.position.y=1.98; group.add(hair);
@@ -1695,11 +1911,22 @@ class CenterDynastyGame {
 
   updateRoleHud() {
     const role=roleSnapshot();
-    this.isOwnerActive=role.isOwner;
-    this.overlay.classList.toggle('is-owner',role.isOwner);
-    if(this.ownerMenuButton)this.ownerMenuButton.hidden=!role.isOwner;
-    if(!role.isOwner){this.ownerFlags={vanish:false,god:false,noclip:false,fly:false,speedLevel:0,freezeTime:false};this.closeOwnerMenu();}
-    this.applyOwnerVisualState();
+    const firebaseAllows=!this.onlineUser||!this.ownerVerificationChecked||this.ownerVerifiedByFirebase;
+    this.isOwnerActive=role.isOwner&&firebaseAllows;
+    this.overlay.classList.toggle('is-owner',this.isOwnerActive);
+    if(this.ownerMenuButton)this.ownerMenuButton.hidden=!this.isOwnerActive;
+    if(!this.isOwnerActive){this.ownerFlags={vanish:false,god:false,noclip:false,fly:false,speedLevel:0,freezeTime:false};this.closeOwnerMenu();}
+    this.applyOwnerAppearance();
+  }
+
+  async verifyLocalOwnerRole() {
+    this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;
+    if(!this.onlineFb||!this.onlineUser?.uid){this.updateRoleHud();return false;}
+    try{
+      const snap=await this.onlineFb.getDoc(this.onlineFb.doc(this.onlineFb.db,'staffRoles',this.onlineUser.uid));
+      this.ownerVerifiedByFirebase=snap.exists()&&String(snap.data()?.role||'').toLowerCase()==='owner';
+    }catch(error){console.warn('Center Owner-Rolle konnte nicht über Firebase bestätigt werden',error);this.ownerVerifiedByFirebase=false;}
+    this.ownerVerificationChecked=true;this.updateRoleHud();return this.ownerVerifiedByFirebase;
   }
 
   reloadLatestSave() {
@@ -1741,7 +1968,7 @@ class CenterDynastyGame {
     const now=Date.now();
     if(!force&&now-this.lastSaveAt<5000) return;
     this.lastSaveAt=now;
-    this.state.version=2;
+    this.state.version=4;
     this.state.position={x:Number(this.player.position.x.toFixed(2)),z:Number(this.player.position.z.toFixed(2)),yaw:Number(this.yaw.toFixed(4)),view:this.firstPerson?'first':'third'};
     this.state.lastSavedAt=now;
     const bridge=window.JKGamesCenterBridge;
@@ -1750,8 +1977,8 @@ class CenterDynastyGame {
   }
 
   togglePerspective() { this.firstPerson=!this.firstPerson; this.applyPerspectiveVisibility(); this.toast(this.firstPerson?'Ego-Perspektive':'Außenperspektive'); }
-  applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson); this.overlay.classList.toggle('is-third-person',!this.firstPerson); if(this.playerModel)this.playerModel.visible=!this.firstPerson; if(this.viewLabel)this.viewLabel.textContent=`${this.firstPerson?'Ego':'Außen'}perspektive · V wechseln`; }
-  requestJump() { if(this.isOwnerActive&&this.ownerFlags.fly)return;if(this.onGround&&this.state.needs.stamina>8){this.velocityY=5.8;this.onGround=false;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);} }
+  applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson); this.overlay.classList.toggle('is-third-person',!this.firstPerson); if(this.playerModel)this.playerModel.visible=!this.firstPerson; if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson; this.applyOwnerAppearance(); }
+  requestJump() { if(this.isOwnerActive&&this.ownerFlags.fly)return;if(this.onGround&&this.state.needs.stamina>8){this.fallStartY=this.player.position.y;this.velocityY=6.25;this.onGround=false;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.triggerActionAnimation('jump',420);} }
 
   currentInput() {
     const forward=(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+this.input.forward;
@@ -1759,49 +1986,100 @@ class CenterDynastyGame {
     return {forward:clamp(forward,-1,1),right:clamp(right,-1,1),sprint:this.input.sprint||this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')};
   }
 
-  collides(x,z) {
-    if(this.isOwnerActive&&(this.ownerFlags.noclip||this.ownerFlags.fly))return false;
+  collides(x,z,y=this.player?.position.y||0) {
+    if(this.isOwnerActive&&this.ownerFlags.noclip)return false;
     const found=new Set();const gx=Math.floor(x/COLLIDER_CELL_SIZE),gz=Math.floor(z/COLLIDER_CELL_SIZE);
     for(let dx=-1;dx<=1;dx+=1)for(let dz=-1;dz<=1;dz+=1){const bucket=this.collisionBuckets.get(`${gx+dx}:${gz+dz}`);if(bucket)for(const collider of bucket)found.add(collider);}
-    for(const collider of found){if(collider.active===false||collider.node?.active===false)continue;if(Math.hypot(x-collider.x,z-collider.z)<collider.radius+1)return true;}
+    for(const collider of found){
+      if(collider.active===false||collider.node?.active===false)continue;
+      const ground=terrainHeightAt(collider.x,collider.z);
+      if(y>ground+Number(collider.height||4)+.18)continue;
+      if(Math.hypot(x-collider.x,z-collider.z)<collider.radius+PLAYER_COLLIDER_RADIUS)return true;
+    }
     return false;
   }
 
   updateMovement(delta) {
     const input=this.currentInput();
     const length=Math.hypot(input.forward,input.right);
-    let moving=length>.05;
+    const moving=length>.05;
     const owner=this.isOwnerActive,fly=owner&&this.ownerFlags.fly;
     const inWater=!fly&&this.isInWater(this.player.position.x,this.player.position.z);
-    let sprint=input.sprint&&this.state.needs.stamina>2&&!inWater;
+    const sprint=input.sprint&&this.state.needs.stamina>2&&!inWater;
     const speedBoost=owner?OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]:1;
-    const speed=(sprint?8.8:5.1)*(inWater ? .48 : 1)*((this.state.needs.health<25&&!this.ownerFlags.god) ? .72 : 1)*speedBoost;
+    const speed=(sprint?8.8:5.1)*(inWater?.48:1)*((this.state.needs.health<25&&!this.ownerFlags.god)?.72:1)*speedBoost;
     if(moving) {
       const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length);
       const sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
       const dx=(r*cos-f*sin)*speed*delta;
       const dz=(-r*sin-f*cos)*speed*delta;
+      const currentY=this.player.position.y;
       const nx=clamp(this.player.position.x+dx,this.worldBounds.minX,this.worldBounds.maxX);
       const nz=clamp(this.player.position.z+dz,this.worldBounds.minZ,this.worldBounds.maxZ);
-      if(!this.collides(nx,nz)) { this.player.position.x=nx; this.player.position.z=nz; this.state.stats.distance+=Math.hypot(dx,dz); }
+      let movedX=this.player.position.x,movedZ=this.player.position.z;
+      if(!this.collides(nx,nz,currentY)){movedX=nx;movedZ=nz;}
+      else{
+        if(!this.collides(nx,this.player.position.z,currentY))movedX=nx;
+        if(!this.collides(movedX,nz,currentY))movedZ=nz;
+      }
+      const movedDistance=Math.hypot(movedX-this.player.position.x,movedZ-this.player.position.z);
+      this.player.position.x=movedX;this.player.position.z=movedZ;this.state.stats.distance+=movedDistance;
       const targetYaw=Math.atan2(dx,dz);
-      if(Math.hypot(dx,dz)>.001)this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*11));
+      if(movedDistance>.001)this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*11));
       if(!fly){if(sprint)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*10.5);else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}
+      if(this.isOwnerActive&&this.state.ownerAppearance?.skin==='ball'&&this.ownerFormObject)this.ownerFormObject.rotation.x-=movedDistance*1.4;
     } else if(!fly)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*6.3);
+
     if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
-      this.player.position.y=clamp(this.player.position.y+vertical*speed*delta*.85,-4,180);this.velocityY=0;this.onGround=false;this.state.needs.stamina=100;
+      const nextY=clamp(this.player.position.y+vertical*speed*delta*.85,-4,180);
+      if(this.ownerFlags.noclip||!this.collides(this.player.position.x,this.player.position.z,nextY))this.player.position.y=nextY;
+      this.velocityY=0;this.onGround=false;this.fallStartY=null;this.state.needs.stamina=100;
     }else{
-      this.velocityY-=15.5*delta;this.player.position.y+=this.velocityY*delta;
+      const wasGrounded=this.onGround;
+      if(!wasGrounded&&this.fallStartY===null)this.fallStartY=this.player.position.y;
+      this.velocityY-=15.5*delta;
+      this.player.position.y+=this.velocityY*delta;
       const ground=Math.max(terrainHeightAt(this.player.position.x,this.player.position.z),inWater?WATER_LEVEL-1.05:-999);
-      if(this.player.position.y<=ground){this.player.position.y=ground;this.velocityY=0;this.onGround=true;}
+      if(this.player.position.y<=ground){
+        this.player.position.y=ground;this.velocityY=0;this.onGround=true;
+        if(!wasGrounded&&this.fallStartY!==null){
+          const fallDistance=Math.max(0,this.fallStartY-ground);
+          if(fallDistance>4.25&&!this.ownerFlags.god){
+            const damage=Math.min(70,Math.round((fallDistance-4.25)*7.2));
+            this.state.needs.health=Math.max(0,this.state.needs.health-damage);
+            this.toast(`Fallschaden: -${damage} Leben`);
+          }
+        }
+        this.fallStartY=null;
+      }else this.onGround=false;
     }
     this.walking=moving;
-    if(this.playerMixer){const desired=moving?(sprint?1.45:1):0;this.playerMixer.timeScale+=(desired-this.playerMixer.timeScale)*Math.min(1,delta*7);this.playerMixer.update(delta);}
+    this.updatePlayerAnimation(delta,moving,sprint);
+    this.updateCurrentRegion();
     if(this.buildMode)this.updateBuildGhost();
   }
 
   isInWater(x,z) { const river=Math.abs(x-riverCenter(z))<14.5; const lake=Math.hypot(x-188,(z+185)/.72)<48; return river||lake; }
+
+  updateCurrentRegion() {
+    if(!this.player)return;
+    const px=this.player.position.x,pz=this.player.position.z;
+    const nearest=[...this.villages].sort((a,b)=>Math.hypot(a.x-px,a.z-pz)-Math.hypot(b.x-px,b.z-pz))[0];
+    let region='';
+    if(nearest&&Math.hypot(nearest.x-px,nearest.z-pz)<58){
+      region=nearest.name;
+      if(!this.state.discovered.includes(nearest.name)){
+        this.state.discovered.push(nearest.name);
+        this.toast(`Ort entdeckt: ${nearest.name}`);
+        this.saveState(true);
+      }
+    }else{
+      const biome=hash2(Math.floor(px/360),Math.floor(pz/360),WORLD_SEED+911);
+      region=biome<.24?'Fichtenwald':biome<.46?'Birkenwald':biome<.68?'Dunkelwald':biome<.84?'Braunwald':'Offene Wildnis';
+    }
+    this.currentRegion=region;
+  }
 
   updateCamera(delta,snap=false) {
     const head=this.tmpVector.set(this.player.position.x,this.player.position.y+1.65,this.player.position.z);
@@ -1819,24 +2097,32 @@ class CenterDynastyGame {
   updateWorldTime(delta) {
     const speed=this.isOwnerActive&&this.ownerFlags.freezeTime?0:2.25;
     this.state.time+=delta*speed/60;
-    if(this.state.time>=24){this.state.time-=24;this.state.day+=1;this.dailySettlementTick();if((this.state.day-1)%3===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name} hat begonnen.`);}}
+    if(this.state.time>=24){this.state.time-=24;this.state.day+=1;this.dailySettlementTick();if((this.state.day-1)%DAYS_PER_SEASON===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name} hat begonnen.`);}}
     this.state.weatherRemaining=Math.max(0,Number(this.state.weatherRemaining||0)-delta*speed/60);
     if(this.state.weatherRemaining<=0)this.chooseWeather();
     const angle=(this.state.time/24)*Math.PI*2-Math.PI/2;
-    this.sun.position.set(Math.cos(angle)*180,Math.sin(angle)*210,Math.sin(angle*.7)*120);
+    const skyOrigin=this.camera?.position||this.player.position;
+    if(this.sky)this.sky.position.copy(skyOrigin);
+    if(this.stars)this.stars.position.copy(skyOrigin);
+    if(this.cloudGroup)this.cloudGroup.position.set(this.player.position.x,0,this.player.position.z);
+    this.sun.position.set(skyOrigin.x+Math.cos(angle)*180,skyOrigin.y+Math.sin(angle)*210,skyOrigin.z+Math.sin(angle*.7)*120);
     const daylight=clamp(Math.sin(angle)*.65+.42,.04,1);
     this.sun.intensity=daylight*3.6;this.moon.intensity=(1-daylight)*.65;
     this.hemisphere.intensity=.35+daylight*1.55;
-    this.moon.position.copy(this.sun.position).multiplyScalar(-1);
-    if(this.sunDisc){this.sunDisc.position.copy(this.sun.position).normalize().multiplyScalar(720);this.sunDisc.visible=daylight>.12;}
-    if(this.moonDisc){this.moonDisc.position.copy(this.moon.position).normalize().multiplyScalar(700);this.moonDisc.lookAt(this.camera.position);this.moonDisc.visible=daylight<.7;const lunarDay=(this.state.day%29.53)/29.53;this.moonMaterial.uniforms.phase.value=lunarDay;}
+    this.moon.position.set(skyOrigin.x-(this.sun.position.x-skyOrigin.x),skyOrigin.y-(this.sun.position.y-skyOrigin.y),skyOrigin.z-(this.sun.position.z-skyOrigin.z));
+    if(this.sunDisc){this.sunDisc.position.copy(this.sun.position).sub(skyOrigin).normalize().multiplyScalar(720).add(skyOrigin);this.sunDisc.visible=daylight>.12;}
+    if(this.moonDisc){this.moonDisc.position.copy(this.moon.position).sub(skyOrigin).normalize().multiplyScalar(700).add(skyOrigin);this.moonDisc.lookAt(this.camera.position);this.moonDisc.visible=daylight<.7;const lunarDay=(this.state.day%29.53)/29.53;this.moonMaterial.uniforms.phase.value=lunarDay;}
     if(this.starMaterial)this.starMaterial.opacity=clamp((.42-daylight)*2.8,0,.9);
     if(this.cloudGroup){const weatherCloud={clear:.12,cloudy:.62,rain:.82,storm:.96,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.forEach((cloud,i)=>{cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2);if(cloud.position.x>320)cloud.position.x=-320;cloud.children.forEach(p=>{p.material.opacity=weatherCloud*(daylight*.38+.2);p.material.color.set(this.state.weather==='storm'?0x59616b:0xe7edf2);});});}
     const season=SEASONS[this.state.season];
-    const nightColor=new THREE.Color(0x13233c),dayColor=new THREE.Color(season.sky);
-    this.skyMaterial.uniforms.topColor.value.copy(nightColor).lerp(dayColor,daylight);
-    this.skyMaterial.uniforms.bottomColor.value.set(0x2a3040).lerp(new THREE.Color(0xe1c895),daylight);
-    this.renderer.toneMappingExposure=.55+daylight*.62;
+    const nightColor=new THREE.Color(0x071225);
+    const clearDay=new THREE.Color(season.sky);
+    const weatherDay=new THREE.Color(['rain','storm'].includes(this.state.weather)?0x657580:this.state.weather==='cloudy'?0x91a3ad:season.sky);
+    const horizonDay=new THREE.Color(['rain','storm'].includes(this.state.weather)?0x9ca5a4:this.state.weather==='cloudy'?0xbac2bd:0xe6d5ad);
+    this.skyMaterial.uniforms.topColor.value.copy(nightColor).lerp(weatherDay,daylight);
+    this.skyMaterial.uniforms.bottomColor.value.set(0x151d2d).lerp(horizonDay,daylight);
+    this.renderer.setClearColor(this.skyMaterial.uniforms.topColor.value,1);
+    this.renderer.toneMappingExposure=.58+daylight*.7;
     if(this.waterMaterials) this.waterMaterials.forEach((m)=>{m.opacity=.62+daylight*.2;});
   }
 
@@ -2023,13 +2309,17 @@ class CenterDynastyGame {
   useTool(name,amount=1) {
     if((this.state.tools[name]||0)<=0)return false;
     this.state.tools[name]=Math.max(0,this.state.tools[name]-amount);
-    if(this.state.tools[name]<=0)this.toast(`${RECIPES[name]?.name||name} ist zerbrochen.`);
+    if(this.state.tools[name]<=0){
+      this.toast(`${RECIPES[name]?.name||name} ist zerbrochen.`);
+      if(this.state.equippedTool===name){this.state.equippedTool='';this.applyHeldItemVisual();}
+    }
     return true;
   }
 
   harvestTree(node) {
     const forestry=this.state.skills.forestry||0;
-    if(!this.useTool('axe',4)){this.state.inventory.wood+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.toast('Ohne Axt sammelst du nur einen trockenen Ast.');this.gainXp(1,'Überleben');return;}
+    const axeId=(this.state.tools.ironAxe||0)>0?'ironAxe':'axe';this.state.equippedTool=axeId;this.applyHeldItemVisual();this.triggerActionAnimation('chop',620);
+    if(!this.useTool(axeId,axeId==='ironAxe'?2:4)){this.state.inventory.wood+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.toast('Ohne Axt sammelst du nur einen trockenen Ast.');this.gainXp(1,'Überleben');return;}
     const bonus=node?.archetype==='fallen'?2:node?.archetype==='broken'?1:0;const logs=3+Math.floor(forestry/2)+bonus,wood=2+forestry+bonus;
     this.state.inventory.logs+=logs;this.state.inventory.wood+=wood;this.state.stats.trees+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-9);
     this.harvestNode(node,150000);this.gainXp(8+forestry*2,'Forstwirtschaft');this.toast(`+${logs} Stämme · +${wood} Holz`);this.checkQuestProgress();
@@ -2037,6 +2327,7 @@ class CenterDynastyGame {
 
   harvestRock(node) {
     const mining=this.state.skills.mining||0;
+    this.state.equippedTool='pickaxe';this.applyHeldItemVisual();this.triggerActionAnimation('mine',650);
     if(!this.useTool('pickaxe',5)){this.toast('Du brauchst eine Spitzhacke.');return;}
     const stone=3+mining,iron=Math.random()<.2+mining*.08?1:0;
     this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.stats.rocks+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-10);
@@ -2044,6 +2335,7 @@ class CenterDynastyGame {
   }
 
   harvestBush(node) {
+    this.triggerActionAnimation('gather',420);
     const berries=2+Math.floor(Math.random()*4),flax=Math.random()<.45?1:0,herbs=Math.random()<.38?1+Math.floor(Math.random()*2):0;
     this.state.inventory.berries+=berries;this.state.inventory.flax+=flax;this.state.inventory.herbs+=herbs;this.harvestNode(node,90000);this.gainXp(3+herbs,'Sammeln');this.toast(`+${berries} Beeren${flax?' · +1 Flachs':''}${herbs?` · +${herbs} Kräuter`:''}`);
   }
@@ -2131,7 +2423,7 @@ class CenterDynastyGame {
   }
 
   sleepUntilMorning() {
-    this.state.day+=1;if((this.state.day-1)%3===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();}
+    this.state.day+=1;if((this.state.day-1)%DAYS_PER_SEASON===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();}
     this.state.time=7;this.state.needs.stamina=100;this.state.needs.health=Math.min(100,this.state.needs.health+18);this.state.needs.hunger=Math.max(0,this.state.needs.hunger-10);this.state.needs.thirst=Math.max(0,this.state.needs.thirst-8);this.dailySettlementTick();this.toast(`Tag ${this.state.day} beginnt.`);this.renderHud(true);
   }
 
@@ -2159,11 +2451,20 @@ class CenterDynastyGame {
     window.JKGamesCenterBridge?.addMainXp?.(Math.max(1,Math.round(value*.25)),reason);
   }
 
+  equipTool(id) {
+    if(!RECIPES[id]||['cookedMeat','medicine'].includes(id)||Number(this.state.tools[id]||0)<=0)return;
+    this.state.equippedTool=this.state.equippedTool===id?'':id;
+    this.applyHeldItemVisual();
+    this.saveState(true);
+    this.openManagement('inventory');
+    this.toast(this.state.equippedTool?`${RECIPES[id].name} ausgerüstet.`:'Werkzeug abgelegt.');
+  }
+
   craft(recipeId) {
     const recipe=RECIPES[recipeId];if(!recipe)return;
     if(!this.hasCost(recipe.cost)){this.toast('Nicht genügend Rohstoffe.');return;}
     this.payCost(recipe.cost);
-    if(recipeId==='cookedMeat')this.state.inventory.cookedMeat+=recipe.amount||1;else if(recipeId==='medicine')this.state.inventory.medicine+=recipe.amount||1;else this.state.tools[recipeId]=Math.min(recipeId==='ironAxe'?180:120,(this.state.tools[recipeId]||0)+recipe.durability);
+    if(recipeId==='cookedMeat')this.state.inventory.cookedMeat+=recipe.amount||1;else if(recipeId==='medicine')this.state.inventory.medicine+=recipe.amount||1;else {this.state.tools[recipeId]=Math.min(recipeId==='ironAxe'?180:120,(this.state.tools[recipeId]||0)+recipe.durability);if(!this.state.equippedTool)this.state.equippedTool=recipeId;this.applyHeldItemVisual();}
     this.state.stats.crafted+=1;this.gainXp(8,`Herstellung: ${recipe.name}`);this.toast(`${recipe.name} hergestellt.`);this.openManagement('crafting');this.checkQuestProgress();
   }
 
@@ -2211,8 +2512,21 @@ class CenterDynastyGame {
 
   cancelBuildMode() { if(this.buildGhost){this.buildGhost.removeFromParent();this.buildGhost=null;}this.buildMode='';if(this.buildActions)this.buildActions.hidden=true; }
 
+  toggleManagement(tab='overview') {
+    if (this.panel?.classList.contains('is-open') && this.panelMode === tab) {
+      this.closePanel();
+      return;
+    }
+    this.openManagement(tab);
+  }
+
   openManagement(tab='overview') {
     this.panelMode=tab;
+    this.closeOwnerMenu();
+    if (document.pointerLockElement===this.canvas) document.exitPointerLock?.();
+    this.keys.clear();
+    this.input.forward=0;
+    this.input.right=0;
     const tabs=['overview','inventory','crafting','building','skills','village','dynasty','map','settings'];
     const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',dynasty:'Dynastie',map:'Karte',settings:'Welt'};
     const nav=`<nav class="mdc-panel-tabs">${tabs.map((id)=>`<button class="${id===tab?'active':''}" data-mdc-tab="${id}">${labels[id]}</button>`).join('')}</nav>`;
@@ -2239,8 +2553,8 @@ class CenterDynastyGame {
 
   renderInventoryPanel() {
     const items=Object.entries(RESOURCE_LABELS).map(([id,name])=>`<article><span>${this.itemIcon(id)}</span><div><b>${name}</b><small>Im Rucksack</small></div><strong>${this.state.inventory[id]||0}</strong>${['berries','cookedMeat','water','medicine'].includes(id)?`<button data-mdc-use="${id}">Benutzen</button>`:''}</article>`).join('');
-    const tools=Object.entries(RECIPES).filter(([id])=>!['cookedMeat','medicine'].includes(id)).map(([id,r])=>`<article><span>${r.icon}</span><div><b>${r.name}</b><small>Haltbarkeit</small></div><strong>${Math.round(this.state.tools[id]||0)}%</strong></article>`).join('');
-    return `<h3 class="mdc-section-title">Rohstoffe</h3><div class="mdc-inventory-list">${items}</div><h3 class="mdc-section-title">Werkzeuge</h3><div class="mdc-inventory-list">${tools}</div>`;
+    const tools=Object.entries(RECIPES).filter(([id])=>!['cookedMeat','medicine'].includes(id)).map(([id,r])=>{const amount=Math.round(this.state.tools[id]||0),equipped=this.state.equippedTool===id;return `<article class="${equipped?'is-equipped':''}"><span>${r.icon}</span><div><b>${r.name}</b><small>${equipped?'In der Hand':'Haltbarkeit'}</small></div><strong>${amount}%</strong><button ${amount>0?'':'disabled'} data-mdc-action="equip-tool" data-tool="${id}">${equipped?'Ablegen':'Ausrüsten'}</button></article>`;}).join('');
+    return `<h3 class="mdc-section-title">Rohstoffe</h3><div class="mdc-inventory-list">${items}</div><h3 class="mdc-section-title">Werkzeuge</h3><p class="mdc-note">Ausrüsten zeigt das Werkzeug direkt in der Hand. Mit C öffnest und schließt du dieses Menü.</p><div class="mdc-inventory-list">${tools}</div>`;
   }
 
   renderCraftingPanel() {
@@ -2276,8 +2590,11 @@ class CenterDynastyGame {
 
   renderMapPanel() {
     const px=this.player?.position.x||0,pz=this.player?.position.z||0,range=Math.max(650,(this.state.world?.renderDistance||2)*CHUNK_SIZE*1.25);
-    const marker=(name,x,z,icon)=>{const left=clamp(50+(x-px)/range*50,2,98).toFixed(2),top=clamp(50+(z-pz)/range*50,2,98).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${name}">${icon}</i>`;};
-    return `<div class="mdc-world-map streamed"><div class="local-grid"></div>${this.villages.map((v)=>marker(v.name,v.x,v.z,'♜')).join('')}${this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)&&Math.hypot(h.x-px,h.z-pz)<range).map((h)=>marker(h.data?.title||h.label,h.x,h.z,h.type==='cave'?'◒':h.type==='mine'?'⛏':h.type==='encounter'?'⛺':'◆')).join('')}${this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon)).join('')}<b style="left:50%;top:50%">▲</b></div><p class="mdc-note">Lokale Karte der aktuell geladenen Welt. Die vollständige Open World umfasst mehr als 12 × 12 Kilometer und erzeugt hunderte Dörfer prozedural.</p>`;
+    const marker=(name,x,z,icon,known=true)=>{if(!known)return'';const left=clamp(50+(x-px)/range*50,2,98).toFixed(2),top=clamp(50+(z-pz)/range*50,2,98).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${escapeHtml(name)}"><span>${icon}</span><em>${escapeHtml(name)}</em></i>`;};
+    const villages=this.villages.map((v)=>marker(v.name,v.x,v.z,'♜',this.state.discovered.includes(v.name)||Math.hypot(v.x-px,v.z-pz)<80)).join('');
+    const landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)&&Math.hypot(h.x-px,h.z-pz)<range).map((h)=>{const name=h.data?.title||h.label;return marker(name,h.x,h.z,h.type==='cave'?'◒':h.type==='mine'?'⛏':h.type==='encounter'?'⛺':'◆',this.state.discovered.includes(name));}).join('');
+    const buildings=this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon,true)).join('');
+    return `<div class="mdc-map-current"><small>AKTUELLER ORT</small><strong>${escapeHtml(this.currentRegion||'Offene Wildnis')}</strong></div><div class="mdc-world-map streamed"><div class="local-grid"></div>${villages}${landmarks}${buildings}<b style="left:50%;top:50%" title="Deine Position">▲</b></div><p class="mdc-note">Entdeckte Dörfer und Orte bleiben dauerhaft auf der Karte sichtbar. Du befindest dich aktuell in <b>${escapeHtml(this.currentRegion||'Offene Wildnis')}</b>.</p>`;
   }
 
   renderWorldSettingsPanel() {
@@ -2320,6 +2637,7 @@ class CenterDynastyGame {
     const button=event.target.closest?.('[data-mdc-action]');if(!button)return;
     const action=button.dataset.mdcAction;
     if(action==='craft')this.craft(button.dataset.recipe);
+    if(action==='equip-tool')this.equipTool(button.dataset.tool);
     if(action==='build')this.beginBuildMode(button.dataset.building);
     if(action==='skill')this.upgradeSkill(button.dataset.skill);
     if(action==='npc-gift')this.giveNpcGift(button.dataset.npc);
@@ -2346,17 +2664,31 @@ class CenterDynastyGame {
   payTax(){const due=this.state.settlement.taxDue;if(due<=0||this.state.inventory.coins<due)return;this.state.inventory.coins-=due;this.state.settlement.taxDue=0;this.state.settlement.morale=Math.min(100,this.state.settlement.morale+4);this.toast('Steuern bezahlt.');this.openManagement('village');}
 
   openInfo(title,text){this.openPanel('ENTDECKUNG',title,`<div class="mdc-dialogue-card"><p>${text}</p></div><button data-mdc-action="open-map">Karte öffnen</button>`);}
-  openPanel(kicker,title,html){this.panelKicker.textContent=kicker;this.panelTitle.textContent=title;this.panelBody.innerHTML=html;this.panel.classList.add('is-open');}
-  closePanel(){this.panel.classList.remove('is-open');}
+  openPanel(kicker,title,html){
+    this.panelKicker.textContent=kicker;
+    this.panelTitle.textContent=title;
+    this.panelBody.innerHTML=html;
+    this.panel.classList.add('is-open');
+    this.overlay.classList.add('is-panel-open');
+    if(document.pointerLockElement===this.canvas)document.exitPointerLock?.();
+    this.keys.clear();this.input.forward=0;this.input.right=0;
+  }
+  closePanel(){
+    if(!this.panel)return;
+    this.panel.classList.remove('is-open');
+    this.overlay.classList.remove('is-panel-open');
+    this.canvas?.focus?.({preventScroll:true});
+  }
 
   renderHud(force=false) {
     const now=performance.now();if(!force&&now-this.lastHudAt<200)return;this.lastHudAt=now;
     const needs=[['health','Leben','♥'],['hunger','Hunger','●'],['thirst','Durst','◆'],['stamina','Ausdauer','⚡'],['warmth','Wärme','♨']];
     this.needsElement.innerHTML=needs.map(([id,name,icon])=>`<div class="${id}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${clamp(this.state.needs[id],0,100)}%"></b></i></div><strong>${Math.round(this.state.needs[id])}</strong></div>`).join('');
     const q=this.currentQuest();this.questElement.innerHTML=`<small>AUFGABE</small><strong>${q.title}</strong><span>${q.progress}</span>`;
-    this.hotbarElement.innerHTML=`<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
+    const equipped=this.state.equippedTool&&RECIPES[this.state.equippedTool]?`<div class="mdc-equipped-tool"><span>${RECIPES[this.state.equippedTool].icon}</span><b>${Math.round(this.state.tools[this.state.equippedTool]||0)}%</b><small>${RECIPES[this.state.equippedTool].name}</small></div>`:'';
+    this.hotbarElement.innerHTML=`${equipped}<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
     const season=SEASONS[this.state.season],weather=WEATHER[this.state.weather];const hours=Math.floor(this.state.time),minutes=Math.floor((this.state.time-hours)*60);
-    this.seasonLabel.textContent=`${season.icon} ${season.name}`;this.dayLabel.textContent=`Tag ${this.state.day}`;this.timeLabel.textContent=`${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;this.weatherLabel.textContent=`${weather.icon} ${weather.name}`;
+    this.seasonLabel.textContent=`${season.icon} ${season.name}`;if(this.dayTimeLabel)this.dayTimeLabel.textContent=`Tag ${this.state.day} · ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;this.weatherLabel.textContent=`${weather.icon} ${weather.name}`;
     this.compassLabel.textContent=this.compassDirection();
     this.drawMinimap();
   }
@@ -2366,7 +2698,7 @@ class CenterDynastyGame {
   drawMinimap() {
     const canvas=this.minimap;if(!canvas||!this.player)return;const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(18,31,20,.88)';ctx.beginPath();ctx.arc(w/2,h/2,w*.48,0,Math.PI*2);ctx.fill();ctx.save();ctx.beginPath();ctx.arc(w/2,h/2,w*.46,0,Math.PI*2);ctx.clip();const range=125,scale=w/(range*2);const px=this.player.position.x,pz=this.player.position.z;
     ctx.strokeStyle='rgba(75,145,176,.8)';ctx.lineWidth=10;ctx.beginPath();for(let z=pz-range;z<=pz+range;z+=4){const x=riverCenter(z);const sx=w/2+(x-px)*scale,sy=h/2+(z-pz)*scale;if(z===pz-range)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);}ctx.stroke();
-    ctx.fillStyle='#d4b36c';for(const v of this.villages){const x=w/2+(v.x-px)*scale,y=h/2+(v.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-3,y-3,6,6);}}
+    ctx.fillStyle='#d4b36c';ctx.font='bold 9px system-ui';for(const v of this.villages){const x=w/2+(v.x-px)*scale,y=h/2+(v.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-3,y-3,6,6);if(this.state.discovered.includes(v.name)||Math.hypot(v.x-px,v.z-pz)<70){ctx.fillStyle='rgba(255,244,206,.92)';ctx.fillText(v.name,x+5,y-5);ctx.fillStyle='#d4b36c';}}}
     ctx.fillStyle='#d98b60';for(const hspot of this.hotspots){if(!['cave','mine','landmark','encounter'].includes(hspot.type))continue;const x=w/2+(hspot.x-px)*scale,y=h/2+(hspot.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}}
     ctx.fillStyle='#e8f2d0';for(const b of this.state.buildings){const x=w/2+(b.x-px)*scale,y=h/2+(b.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-2,y-2,4,4);}}
     ctx.translate(w/2,h/2);ctx.rotate(-this.yaw);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,4);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.restore();ctx.strokeStyle='rgba(225,194,120,.85)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(w/2,h/2,w*.46,0,Math.PI*2);ctx.stroke();
@@ -2378,19 +2710,19 @@ class CenterDynastyGame {
 
   presencePayload(online=true) {
     const player=bridgeSnapshot(),role=roleSnapshot();
-    return {centerWorld:{online:!!online,mapId:ONLINE_MAP_ID,sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),y:Number((this.player?.position.y||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,view:this.firstPerson?'first':'third',gender:player.gender,firstName:player.firstName.slice(0,30),lastName:player.lastName.slice(0,30),level:player.level,slot:player.slot,ownerClaim:role.isOwner,vanished:!!(role.isOwner&&this.ownerFlags.vanish),flying:!!(role.isOwner&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,updatedAtMs:Date.now(),version:CENTER_VERSION}};
+    return {centerWorld:{online:!!online,mapId:ONLINE_MAP_ID,sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),y:Number((this.player?.position.y||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,view:this.firstPerson?'first':'third',gender:player.gender,firstName:player.firstName.slice(0,30),lastName:player.lastName.slice(0,30),level:player.level,slot:player.slot,ownerClaim:!!this.isOwnerActive,vanished:!!(this.isOwnerActive&&this.ownerFlags.vanish),flying:!!(this.isOwnerActive&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,updatedAtMs:Date.now(),version:CENTER_VERSION}};
   }
 
   async prepareMultiplayer(){const core=window.LifeBuilderFirebaseCore;if(!core?.load)return null;try{const fb=await core.load();const user=await core.waitForAuth?.(5200);return user?.uid?{fb,user}:null;}catch(error){console.warn('Center Firebase-Vorbereitung',error);return null;}}
 
   async connectMultiplayer(prepared=null) {
     if(this.onlineConnected||this.onlineConnecting)return false;this.onlineConnecting=true;this.setOnlineUi('connecting','Koop-Spieler werden geladen …',1);
-    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.publishPresence(true);const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('centerWorld.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));this.onlineUnsubscribe?.();this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>this.applyPresenceSnapshot(snapshot).catch(()=>{}),()=>{this.onlineConnected=false;this.setOnlineUi('offline','Koop-Verbindung unterbrochen.',1+this.remotePlayers.size);});clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch(()=>{}),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch(()=>{}),ONLINE_WRITE_INTERVAL_MS);this.onlineConnected=true;this.onlineConnecting=false;this.setOnlineUi('online','Center-Koop verbunden.',1+this.remotePlayers.size);return true;}catch(error){console.warn('Center Koop konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}
+    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.verifyLocalOwnerRole();await this.publishPresence(true);const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('centerWorld.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));this.onlineUnsubscribe?.();this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>this.applyPresenceSnapshot(snapshot).catch(()=>{}),()=>{this.onlineConnected=false;this.setOnlineUi('offline','Koop-Verbindung unterbrochen.',1+this.remotePlayers.size);});clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch(()=>{}),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch(()=>{}),ONLINE_WRITE_INTERVAL_MS);this.onlineConnected=true;this.onlineConnecting=false;this.setOnlineUi('online','Center-Koop verbunden.',1+this.remotePlayers.size);return true;}catch(error){console.warn('Center Koop konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}
   }
 
   async publishPresence(force=false){if(!this.opened||!this.onlineFb||!this.onlineDocRef||!this.player||this.presenceWriteInFlight)return false;const now=Date.now(),payload=this.presencePayload(true),live=payload.centerWorld,key=`${live.x.toFixed(2)}|${live.y.toFixed(2)}|${live.z.toFixed(2)}|${live.bodyYaw.toFixed(2)}|${live.walking}|${live.vanished}|${live.flying}`;if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;this.presenceWriteInFlight=true;try{await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});this.lastPresenceWriteAt=Date.now();this.lastPresenceKey=key;return true;}finally{this.presenceWriteInFlight=false;}}
 
-  async disconnectMultiplayer(){clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=0;this.onlinePublishTimer=0;try{this.onlineUnsubscribe?.();}catch{}this.onlineUnsubscribe=null;const fb=this.onlineFb,ref=this.onlineDocRef;this.onlineConnected=false;this.onlineConnecting=false;for(const uid of [...this.remotePlayers.keys()])this.removeRemotePlayer(uid);if(fb&&ref){const payload=this.presencePayload(false);payload.centerWorld.leftAtMs=Date.now();try{await fb.setDoc(ref,payload,{merge:true});}catch{}}this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.lastPresenceKey='';}
+  async disconnectMultiplayer(){clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=0;this.onlinePublishTimer=0;try{this.onlineUnsubscribe?.();}catch{}this.onlineUnsubscribe=null;const fb=this.onlineFb,ref=this.onlineDocRef;this.onlineConnected=false;this.onlineConnecting=false;for(const uid of [...this.remotePlayers.keys()])this.removeRemotePlayer(uid);if(fb&&ref){const payload=this.presencePayload(false);payload.centerWorld.leftAtMs=Date.now();try{await fb.setDoc(ref,payload,{merge:true});}catch{}}this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.updateRoleHud();this.lastPresenceKey='';}
 
   async applyPresenceSnapshot(snapshot){
     if(!this.opened)return;const active=new Set(),ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=roleSnapshot().isOwner;
@@ -2401,7 +2733,7 @@ class CenterDynastyGame {
       active.add(uid);await this.upsertRemotePlayer(uid,data,live);
     }
     for(const uid of [...this.remotePlayers.keys()])if(!active.has(uid))this.removeRemotePlayer(uid);
-    this.setOnlineUi(this.onlineConnected?'online':'connecting',`${1+this.remotePlayers.size} Spieler im Grenztal.`,1+this.remotePlayers.size);
+    this.setOnlineUi(this.onlineConnected?'online':'connecting',`${1+this.remotePlayers.size} Spieler im Center.`,1+this.remotePlayers.size);if(this.ownerPanel?.classList.contains('is-open')&&this.isOwnerActive)this.renderOwnerMenu();
   }
 
   async verifiedRemoteSkin(uid,live){const gender=live.gender==='female'?'female':'male';if(!live.ownerClaim||!this.onlineFb)return gender;const cached=this.remoteRoleCache.get(uid);if(cached&&Date.now()-cached.checkedAt<60000)return cached.isOwner?'owner':gender;let isOwner=false;try{const snap=await this.onlineFb.getDoc(this.onlineFb.doc(this.onlineFb.db,'staffRoles',uid));isOwner=snap.exists()&&String(snap.data()?.role||'').toLowerCase()==='owner';}catch{}this.remoteRoleCache.set(uid,{isOwner,checkedAt:Date.now()});return isOwner?'owner':gender;}
@@ -2416,29 +2748,43 @@ class CenterDynastyGame {
 
   async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
 
-  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);const action=remote.mixer.clipAction(locomotion);action.play();}}catch{remote.pivot.add(this.makeFallbackCharacter(skin));}remote.skin=skin;}
+  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.pivot.add(this.makeFallbackCharacter(skin));}remote.skin=skin;}
 
   updateRemotePlayers(delta){
-    const now=Date.now();for(const [uid,remote] of this.remotePlayers){if(now-remote.lastSeenAt>ONLINE_STALE_MS){this.removeRemotePlayer(uid);continue;}const amount=1-Math.exp(-delta*7);remote.group.position.x+=(remote.targetX-remote.group.position.x)*amount;remote.group.position.z+=(remote.targetZ-remote.group.position.z)*amount;const targetY=remote.flying?remote.targetY:terrainHeightAt(remote.group.position.x,remote.group.position.z);remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));if(remote.mixer){remote.mixer.timeScale+=((remote.walking?1:0)-remote.mixer.timeScale)*Math.min(1,delta*7);remote.mixer.update(delta);}}
+    const now=Date.now();for(const [uid,remote] of this.remotePlayers){if(now-remote.lastSeenAt>ONLINE_STALE_MS){this.removeRemotePlayer(uid);continue;}const amount=1-Math.exp(-delta*7);remote.group.position.x+=(remote.targetX-remote.group.position.x)*amount;remote.group.position.z+=(remote.targetZ-remote.group.position.z)*amount;const targetY=remote.flying?remote.targetY:terrainHeightAt(remote.group.position.x,remote.group.position.z);remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));if(remote.mixer&&remote.action){if(remote.walking){remote.action.paused=false;remote.mixer.timeScale=1;remote.mixer.update(delta);remote.wasWalking=true;}else if(remote.wasWalking){remote.action.reset();remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);remote.wasWalking=false;}}}
   }
 
   removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.mixer?.stopAllAction?.();this.remotePlayers.delete(uid);}
 
-  ownerOnly() { if(!roleSnapshot().isOwner){this.toast('Dieses Menü ist ausschließlich für den Owner.');return false;}return true; }
+  ownerOnly() { const local=roleSnapshot().isOwner;const verified=!this.onlineUser||(!this.ownerVerificationChecked?false:this.ownerVerifiedByFirebase);if(!local||!verified){this.toast(this.onlineUser&&!this.ownerVerificationChecked?'Owner-Rolle wird noch über Firebase geprüft.':'Dieses Menü ist ausschließlich für den bestätigten Owner.');return false;}return true; }
 
   toggleOwnerMenu() { if(!this.ownerOnly())return;if(this.ownerPanel.classList.contains('is-open'))this.closeOwnerMenu();else this.openOwnerMenu(); }
 
   openOwnerMenu() {
-    if(!this.ownerOnly())return;this.closePanel();this.renderOwnerMenu();this.ownerPanel.classList.add('is-open');this.ownerPanel.setAttribute('aria-hidden','false');
+    if(!this.ownerOnly())return;
+    this.closePanel();
+    this.renderOwnerMenu();
+    this.ownerPanel.classList.add('is-open');
+    this.ownerPanel.setAttribute('aria-hidden','false');
+    this.overlay.classList.add('is-owner-panel-open');
     if(document.pointerLockElement===this.canvas)document.exitPointerLock?.();
+    this.keys.clear();this.input.forward=0;this.input.right=0;
   }
 
-  closeOwnerMenu() { if(!this.ownerPanel)return;this.ownerPanel.classList.remove('is-open');this.ownerPanel.setAttribute('aria-hidden','true'); }
+  closeOwnerMenu() {
+    if(!this.ownerPanel)return;
+    this.ownerPanel.classList.remove('is-open');
+    this.ownerPanel.setAttribute('aria-hidden','true');
+    this.overlay?.classList.remove('is-owner-panel-open');
+    this.canvas?.focus?.({preventScroll:true});
+  }
 
   ownerToggleButton(action,label,enabled,description='') { return `<button class="mdc-owner-toggle ${enabled?'active':''}" data-owner-action="${action}"><span>${enabled?'✓':'○'}</span><b>${label}</b><small>${description}</small></button>`; }
 
   renderOwnerMenu() {
     if(!this.ownerOnly())return;const f=this.ownerFlags,speedNames=['Normal','Schnell','Extrem'];
+    const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none'};
+    const onlinePlayers=[...this.remotePlayers.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
     const villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
     const landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
     this.ownerPanelBody.innerHTML=`
@@ -2452,22 +2798,41 @@ class CenterDynastyGame {
         ${this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Tag und Nacht einfrieren')}
       </div>
       <div class="mdc-owner-actions"><button data-owner-action="heal">❤ Alles heilen</button><button data-owner-action="ground">↓ Sicher landen</button><button data-owner-action="unstuck">↺ Befreien</button><button data-owner-action="reveal">⌖ Orte aufdecken</button></div>
+      <h3>Charakter</h3>
+      <div class="mdc-owner-character">
+        <label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>
+        <div class="mdc-owner-actions three"><button class="${appearance.skin==='normal'?'active':''}" data-owner-action="skin-normal">Normal</button><button class="${appearance.skin==='ball'?'active':''}" data-owner-action="skin-ball">Rollender Ball</button><button class="${appearance.skin==='crystal'?'active':''}" data-owner-action="skin-crystal">Kristall</button><button class="${appearance.skin==='shadow'?'active':''}" data-owner-action="skin-shadow">Schatten</button></div>
+      </div>
+      <h3>Admin-Items</h3>
+      <div class="mdc-owner-actions three">${[['none','Leer'],['sword','Owner-Schwert'],['axe','Admin-Axt'],['staff','Weltenstab'],['torch','Ewige Fackel'],['hammer','Bauhammer']].map(([id,label])=>`<button class="${appearance.heldItem===id?'active':''}" data-owner-action="admin-item" data-owner-item="${id}">${label}</button>`).join('')}</div>
       <h3>Welt und Zeit</h3><div class="mdc-owner-actions three"><button data-owner-action="time-day">☀ Tag</button><button data-owner-action="time-night">☾ Nacht</button><button data-owner-action="weather-clear">Klar</button><button data-owner-action="weather-rain">Regen</button><button data-owner-action="weather-snow">Schnee</button><button data-owner-action="season-next">Jahreszeit +</button></div>
       <h3>Ressourcen und Fortschritt</h3><div class="mdc-owner-grant"><select data-owner-resource>${Object.entries(RESOURCE_LABELS).map(([id,name])=>`<option value="${id}">${escapeHtml(name)}</option>`).join('')}</select><input data-owner-amount type="number" min="1" max="9999" value="100"><button data-owner-action="grant-resource">Hinzufügen</button></div>
       <div class="mdc-owner-actions"><button data-owner-action="grant-all">Alle Ressourcen +100</button><button data-owner-action="grant-tools">Alle Werkzeuge 100 %</button><button data-owner-action="grant-skills">Skills und XP</button><button data-owner-action="respawn-resources">Ressourcen regenerieren</button></div>
-      <h3>Teleportieren</h3><div class="mdc-owner-teleports"><button data-owner-action="tp-spawn">Siedlungs-Spawn</button><button data-owner-action="tp-river">Nächster Fluss</button><button data-owner-action="tp-random">Sicherer Zufallsort</button>${villages.map((v,i)=>`<button data-owner-action="tp-village" data-owner-index="${i}">Dorf: ${escapeHtml(v.name)}</button>`).join('')}${landmarks.map((h,i)=>`<button data-owner-action="tp-landmark" data-owner-index="${i}">${escapeHtml(h.data?.title||h.label||'Weltort')}</button>`).join('')}</div>
-      <p class="mdc-note">Vanish, Fly, Noclip und Unbesiegbarkeit werden nur akzeptiert, wenn die aktive Rolle tatsächlich Owner ist. Andere Rollen können das Menü weder öffnen noch die Funktionen auslösen.</p>`;
-    this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
+      <h3>Online-Spieler im Center</h3><div class="mdc-owner-player-list">${onlinePlayers.length?onlinePlayers.map((p,i)=>`<article><span>●</span><div><b>${escapeHtml(p.name)}</b><small>${Math.round(Math.hypot(p.group.position.x-this.player.position.x,p.group.position.z-this.player.position.z))} m entfernt${p.vanished?' · Vanish':''}</small></div><button data-owner-action="tp-player" data-owner-index="${i}">Teleportieren</button></article>`).join(''):'<p>Aktuell ist kein weiterer Spieler im Center verbunden.</p>'}</div>
+      <h3>Teleportieren</h3><div class="mdc-owner-teleports"><button data-owner-action="tp-spawn">Siedlungs-Spawn</button><button data-owner-action="tp-river">Nächster Fluss</button><button data-owner-action="tp-random">Sicherer Zufallsort</button>${villages.map((v,i)=>`<button data-owner-action="tp-village" data-owner-index="${i}">Dorf: ${escapeHtml(v.name)}</button>`).join('')}${landmarks.map((h,i)=>`<button data-owner-action="tp-landmark" data-owner-index="${i}">${escapeHtml(h.data?.title||h.label||'Weltort')}</button>`).join('')}</div>`;
+    this.ownerTeleportPlayers=onlinePlayers;this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
   }
 
   teleportOwner(x,z,y=null,label='Ort') {
     if(!this.ownerOnly())return;const tx=clamp(Number(x)||0,this.worldBounds.minX,this.worldBounds.maxX),tz=clamp(Number(z)||0,this.worldBounds.minZ,this.worldBounds.maxZ);this.player.position.set(tx,y===null?terrainHeightAt(tx,tz):Number(y),tz);this.velocityY=0;this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();this.toast(`Teleportiert: ${label}`);this.publishPresence(true).catch(()=>{});
   }
 
+  handleOwnerInput(event) {
+    if(!this.ownerOnly())return;
+    const sizeInput=event.target.closest?.('[data-owner-size]');
+    if(sizeInput){
+      this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);
+      const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;
+      this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});
+    }
+  }
+
   handleOwnerAction(event) {
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.ownerOnly())return;const action=button.dataset.ownerAction;
     if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'&&this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='cycle-speed'){this.ownerFlags.speedLevel=(this.ownerFlags.speedLevel+1)%OWNER_SPEED_LEVELS.length;this.renderOwnerMenu();return;}
+    if(action.startsWith('skin-')){this.state.ownerAppearance.skin=action.replace('skin-','');this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action==='admin-item'){this.state.ownerAppearance.heldItem=button.dataset.ownerItem||'none';this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();return;}
     if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
     else if(action==='unstuck'){const a=this.yaw;this.teleportOwner(this.player.position.x+Math.sin(a)*-6,this.player.position.z+Math.cos(a)*-6,null,'freie Position');}
@@ -2484,6 +2849,7 @@ class CenterDynastyGame {
     else if(action==='tp-spawn')this.teleportOwner(this.state.world.spawnX,this.state.world.spawnZ,null,'Siedlungs-Spawn');
     else if(action==='tp-river'){const z=this.player.position.z,x=riverCenter(z)+(this.player.position.x<riverCenter(z)?-20:20);this.teleportOwner(x,z,null,'Grenzfluss');}
     else if(action==='tp-random'){for(let i=0;i<80;i+=1){const x=(Math.random()*2-1)*(WORLD_HALF-150),z=(Math.random()*2-1)*(WORLD_HALF-150),y=terrainHeightAt(x,z);if(y>-2&&y<48&&Math.abs(x-riverCenter(z))>28){this.teleportOwner(x,z,null,'sicherer Zufallsort');break;}}}
+    else if(action==='tp-player'){const p=this.ownerTeleportPlayers?.[Number(button.dataset.ownerIndex)];if(p)this.teleportOwner(p.group.position.x+1.8,p.group.position.z+1.8,p.group.position.y,`Spieler ${p.name}`);}
     else if(action==='tp-village'){const v=this.ownerTeleportVillages?.[Number(button.dataset.ownerIndex)];if(v)this.teleportOwner(v.x+10,v.z+10,null,v.name);}
     else if(action==='tp-landmark'){const h=this.ownerTeleportLandmarks?.[Number(button.dataset.ownerIndex)];if(h)this.teleportOwner(h.x+7,h.z+7,null,h.data?.title||h.label);}
     this.renderOwnerMenu();this.renderHud(true);this.saveState(true);

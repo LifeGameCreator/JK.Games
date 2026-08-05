@@ -716,7 +716,8 @@
     close(false);
     try { if (typeof prepareGameOverlay === "function") prepareGameOverlay(); } catch {}
     UI.phoneItem = phoneItem || window.JKGamesOwnedPhoneItem?.() || "";
-    if (!ensureState()) return;
+    const d = ensureState();
+    if (!d) return;
     UI.overlay = document.createElement("div");
     UI.overlay.className = "dkl-modal";
     UI.overlay.innerHTML = `<section class="dkl-shell"><header class="dkl-head"><div class="dkl-brand"><span>◈</span><div><small>PARTY DUNGEON RPG</small><h2>DUNGEON<span>.KL</span></h2></div></div><div class="dkl-head-stats" data-dkl-head></div><div class="dkl-head-actions"><button data-dkl-home title="Hauptlobby">⌂</button><button data-dkl-close title="Zurück">×</button></div></header><main class="dkl-main" data-dkl-main></main><div class="dkl-toast" data-dkl-toast></div></section>`;

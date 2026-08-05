@@ -27,7 +27,7 @@ const WORLD_THEMES = [
 ];
 
 const S = {
-  overlay:null, scene:null, camera:null, renderer:null, composer:null, bloom:null, ssao:null, clock:new THREE.Clock(), raf:0,
+  overlay:null, scene:null, camera:null, renderer:null, composer:null, bloom:null, ssao:null, timer:new THREE.Timer(), raf:0,
   loader:new GLTFLoader(), running:false, paused:false, gameOver:false,
   lane:1, targetX:0, y:0, vy:0, slide:0, speed:12, distance:0, runCoins:0,
   wallet:0, best:0, owned:['maleStreet','femaleStreet'], outfit:'maleStreet',
@@ -506,7 +506,7 @@ function update(dt){
 }
 function endGame(){S.running=false;S.gameOver=true;S.best=Math.max(S.best,Math.floor(S.distance));save();submitRemoteRun();if(S.action)S.action.paused=true;const mainXpBase=(S.distance>=40||S.runCoins>0)?Math.min(40,Math.max(3,Math.floor(S.distance/240)+Math.floor(S.runCoins/18)+Math.floor(S.score/2200))):0;const mainXp=typeof window.JKGamesAwardMainGameXp==='function'?window.JKGamesAwardMainGameXp('runner',mainXpBase,'Runner.KL Run',{eventKey:`runner:${S.runStartedAt}`}):0;showCard(`<div class="rkl-kicker">RUNDE BEENDET</div><h1>${Math.floor(S.distance)} m</h1><div class="rkl-result"><span>Gesammelt<b>🪙 ${S.runCoins}</b></span><span>Punkte<b>${Math.floor(S.score)}</b></span><span>Haupt-EP<b>+${mainXp}</b></span><span>Bestwert<b>${S.best} m</b></span><span>Boards<b>🛹 ${S.boardTokens}</b></span></div><button data-rkl-retry>Noch einmal</button><button class="rkl-secondary" data-rkl-shop>Coin-Shop</button><button class="rkl-secondary" data-rkl-world>World Rekorde</button><button class="rkl-secondary" data-rkl-exit>Top Games</button>`);bindCard()}
 function render(){S.renderer.render(S.scene,S.camera)}
-function loop(){const dt=Math.min(.04,S.clock.getDelta());update(dt);render();S.perfTime+=dt;S.perfFrames++;if(S.perfTime>=2.2){const fps=S.perfFrames/S.perfTime;if((S.quality==='ultra'||S.quality==='high')&&fps<42&&S.renderScale>.78){S.renderScale=Math.max(.78,S.renderScale-.1);resize()}else if(fps>57&&S.renderScale<1){S.renderScale=Math.min(1,S.renderScale+.05);resize()}S.perfTime=0;S.perfFrames=0}S.raf=requestAnimationFrame(loop)}
+function loop(timestamp){S.timer.update(timestamp);const dt=Math.min(.04,S.timer.getDelta());update(dt);render();S.perfTime+=dt;S.perfFrames++;if(S.perfTime>=2.2){const fps=S.perfFrames/S.perfTime;if((S.quality==='ultra'||S.quality==='high')&&fps<42&&S.renderScale>.78){S.renderScale=Math.max(.78,S.renderScale-.1);resize()}else if(fps>57&&S.renderScale<1){S.renderScale=Math.min(1,S.renderScale+.05);resize()}S.perfTime=0;S.perfFrames=0}S.raf=requestAnimationFrame(loop)}
 
 function showCard(html){const c=S.overlay?.querySelector('[data-rkl-card]');if(!c)return;c.innerHTML=html;c.hidden=false}
 function hideCard(){const c=S.overlay?.querySelector('[data-rkl-card]');if(c)c.hidden=true}
@@ -578,9 +578,9 @@ function open(sourceDevice=''){
   el.querySelector('[data-rkl-close]').onclick=returnToTopGames;el.querySelector('[data-rkl-pause]').onclick=togglePause;el.querySelector('[data-rkl-board]').onclick=activateHoverboard;el.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>input(b.dataset.dir));
   const canvas=el.querySelector('canvas');canvas.addEventListener('pointerdown',e=>{const now=performance.now();if(now-S.lastTap<330)activateHoverboard();S.lastTap=now;S.pointerStart={x:e.clientX,y:e.clientY}});canvas.addEventListener('pointerup',e=>{if(!S.pointerStart)return;const dx=e.clientX-S.pointerStart.x,dy=e.clientY-S.pointerStart.y;S.pointerStart=null;if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>24)input(dx>0?'right':'left');else if(Math.abs(dy)>24)input(dy>0?'down':'up')});
   S.keyHandler=e=>{const m={ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowUp:'up',w:'up',' ':'up',ArrowDown:'down',s:'down'};if(e.key==='Escape'||e.key==='p'||e.key==='P'){e.preventDefault();togglePause();return}if(e.key==='b'||e.key==='B'){e.preventDefault();activateHoverboard();return}if(m[e.key]){e.preventDefault();input(m[e.key])}};document.addEventListener('keydown',S.keyHandler);S.resizeHandler=resize;window.addEventListener('resize',resize,{passive:true});
-  runInitialLoading();updateHud();S.clock.start();loop();
+  runInitialLoading();updateHud();S.timer.connect(document);S.timer.reset();S.raf=requestAnimationFrame(loop);
 }
-function close(){if(!S.overlay)return;if(S.saveDirty){S.saveDirty=false;save()}cancelAnimationFrame(S.raf);document.removeEventListener('keydown',S.keyHandler);window.removeEventListener('resize',S.resizeHandler);clearObjects();disposePlayer();S.cloudMaterial?.dispose?.();S.cloudMaterial=null;S.rain?.geometry?.dispose?.();S.rain?.material?.dispose?.();S.rain=null;S.segments=[];S.renderer?.dispose();disposeResources();S.overlay.remove();S.overlay=null;S.scene=null;S.renderer=null;S.running=false;S.paused=false}
+function close(){if(!S.overlay)return;if(S.saveDirty){S.saveDirty=false;save()}cancelAnimationFrame(S.raf);S.timer.disconnect();document.removeEventListener('keydown',S.keyHandler);window.removeEventListener('resize',S.resizeHandler);clearObjects();disposePlayer();S.cloudMaterial?.dispose?.();S.cloudMaterial=null;S.rain?.geometry?.dispose?.();S.rain?.material?.dispose?.();S.rain=null;S.segments=[];S.renderer?.dispose();disposeResources();S.overlay.remove();S.overlay=null;S.scene=null;S.renderer=null;S.running=false;S.paused=false}
 function openHub(){
   if(typeof window.JKGamesOpenTopGames==='function')return window.JKGamesOpenTopGames(S.sourceDevice||'');
   const item=typeof window.JKGamesOwnedPhoneItem==='function'?window.JKGamesOwnedPhoneItem():'';
