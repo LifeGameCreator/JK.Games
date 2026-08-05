@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260804-fight-kl-v183-coop-performance-rare-beasts";
+  const VERSION = "20260805-fight-kl-v189-black-hole-galaxy-arsenal";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -42,10 +42,12 @@
     rare: 1.23,
     epic: 1.18,
     legendary: 1.15,
-    special: 1.12,
+    special: 1.10,
     mythic: 0.80,
     exotic: 0.62,
-    universe: 0.52
+    universe: 0.64,
+    blackhole: 0.74,
+    galaxy: 0.72
   });
   // V142: Hauptbosse jeder zehnten Welle besitzen doppelte Lebenspunkte und verursachen doppelten Schaden.
   const MAIN_BOSS_HEALTH_MULTIPLIER = 2;
@@ -57,20 +59,23 @@
   const ENDGAME_BOSS_HEALTH_MULTIPLIER = 1.35;
   const ENDGAME_BOSS_DAMAGE_MULTIPLIER = 1.5;
 
-  const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary", "special", "mythic", "exotic", "universe"];
+  const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary", "special", "mythic", "exotic", "universe", "blackhole", "galaxy"];
   const RARITIES = {
     common: { name: "Gewöhnlich", color: "#9aa6ad", glow: "#9aa6ad55", mult: 1, price: 280, drop: 54, minLevel: 1 },
     uncommon: { name: "Ungewöhnlich", color: "#52da79", glow: "#52da7966", mult: 1.2, price: 950, drop: 25, minLevel: 1 },
     rare: { name: "Selten", color: "#4ca8ff", glow: "#4ca8ff77", mult: 1.5, price: 4200, drop: 12, minLevel: 1 },
-    epic: { name: "Episch", color: "#b76cff", glow: "#b76cff88", mult: 1.9, price: 16500, drop: 5.5, minLevel: 1 },
-    legendary: { name: "Legendär", color: "#ffb52e", glow: "#ff9f2888", mult: 2.42, price: 52000, drop: 2.5, minLevel: 1 },
-    special: { name: "Special", color: "#ff4e78", glow: "#ff4e7899", mult: 3.05, price: 82000, drop: .85, minLevel: 1 },
-    mythic: { name: "Mystisch", color: "#ffd36a", glow: "#ff4bbaaa", mult: 3.82, price: 172000, drop: .18, minLevel: 10, gradient: "linear-gradient(135deg,#ff335f,#4a8cff,#ffd35c,#ff335f)" },
-    exotic: { name: "Exotisch", color: "#63f8ff", glow: "#63f8ffbb", mult: 4.75, price: 345000, drop: .04, minLevel: 15, gradient: "linear-gradient(135deg,#5fffff,#ffd35a,#ff4fd8,#5fffff)" },
-    universe: { name: "Universe", color: "#ffffff", glow: "#b86cffdd", mult: 5.9, price: 650000, drop: .004, minLevel: 50, gradient: "linear-gradient(135deg,#ffffff,#7ffcff,#9b6cff,#ff65dc,#ffd75f,#ffffff)" }
+    epic: { name: "Episch", color: "#b76cff", glow: "#b76cff88", mult: 1.9, price: 16500, drop: 5.5, minLevel: 10 },
+    legendary: { name: "Legendär", color: "#ffb52e", glow: "#ff9f2888", mult: 2.42, price: 52000, drop: 2.5, minLevel: 15 },
+    special: { name: "Special", color: "#ff4e78", glow: "#ff4e7899", mult: 3.05, price: 98000, drop: .85, minLevel: 20 },
+    mythic: { name: "Mystisch", color: "#ffd36a", glow: "#ff4bbaaa", mult: 3.82, price: 190000, drop: .18, minLevel: 30, gradient: "linear-gradient(135deg,#ff335f,#4a8cff,#ffd35c,#ff335f)" },
+    exotic: { name: "Exotisch", color: "#63f8ff", glow: "#63f8ffbb", mult: 4.75, price: 390000, drop: .04, minLevel: 40, gradient: "linear-gradient(135deg,#5fffff,#ffd35a,#ff4fd8,#5fffff)" },
+    universe: { name: "Universe", color: "#ffffff", glow: "#b86cffdd", mult: 5.9, price: 720000, drop: .004, minLevel: 50, gradient: "linear-gradient(135deg,#ffffff,#7ffcff,#9b6cff,#ff65dc,#ffd75f,#ffffff)" },
+    blackhole: { name: "Black Hole", color: "#9a6cff", glow: "#0cf4ffdd", mult: 6.8, price: 1250000, drop: .0007, minLevel: 80, gradient: "linear-gradient(135deg,#020207,#5a16a8,#00f5ff,#03030a,#ff2bd6,#020207)" },
+    galaxy: { name: "Galaxy", color: "#7ffcff", glow: "#ff63eadd", mult: 7.8, price: 2250000, drop: .00015, minLevel: 100, gradient: "linear-gradient(135deg,#07112f,#00eaff,#7b4dff,#ff4dcf,#ffd86b,#07112f)" }
   };
 
-  const STAR_MULT = [1, 1.34, 1.78, 2.35, 3.05, 4.0];
+  // V189: Jeder Sternbonus wurde gegenüber V188 um 15 % abgeschwächt.
+  const STAR_MULT = [1, 1.29, 1.66, 2.15, 2.74, 3.55];
   const SPEED_BONUS = [8, 18, 38, 80, 130, 200];
   const SPECIALS = {
     chain: { name: "Blitz-Kette", icon: "⚡", color: "#62d9ff", text: "Springt auf mehrere nahe Gegner über." },
@@ -375,6 +380,103 @@
     noShop: true
   });
 
+
+
+  // V189: Noch einmal vier neue Waffen pro Waffenfamilie und Seltenheit.
+  // Black Hole (Level 80) und Galaxy (Level 100) erhalten zusätzlich komplette Ausrüstungslinien.
+  const V189_PREFIXES = {
+    common:["Werkstatt","Grenzland","Handwerker","Patrouillen"], uncommon:["Smaragd","Ranger","Wächter","Grünlicht"],
+    rare:["Azur","Sturm","Tiefblau","Kobalt"], epic:["Runen","Violett","Arkan","Phantom"],
+    legendary:["Sonnen","Königs","Titanen","Goldkern"], special:["Puls","Neon","Anomalie","Phasen"],
+    mythic:["Orakel","Chrono","Himmels","Traum"], exotic:["Prisma","Dimensions","Quanten","Void"],
+    universe:["Kosmos","Infinity","Sternen","Multiversum"], blackhole:["Ereignishorizont","Singularität","Graviton","Dunkelmaterie"],
+    galaxy:["Andromeda","Nebula","Supercluster","Galaxiekern"]
+  };
+  const V189_FAMILY_BLUEPRINTS = {
+    pistol:[
+      {suffix:"Pistole",shape:"pistol",icon:"🔫"},{suffix:"Revolver",shape:"revolver",icon:"🔫"},
+      {suffix:"Handkanone",shape:"handcannon",icon:"🔫"},{suffix:"Burst-Seitenwaffe",shape:"burst-pistol",icon:"🔫"}
+    ],
+    automatic:[
+      {suffix:"SMG",shape:"smg",icon:"🔫"},{suffix:"Sturmgewehr",shape:"rifle",icon:"🎯"},
+      {suffix:"Präzisionsgewehr",shape:"sniper",icon:"🎯"},{suffix:"Maschinengewehr",shape:"lmg",icon:"🔫"}
+    ],
+    shotgun:[
+      {suffix:"Pumpflinte",shape:"pump-shotgun",icon:"💥"},{suffix:"Doppelflinte",shape:"double-shotgun",icon:"💥"},
+      {suffix:"Trommelflinte",shape:"drum-shotgun",icon:"💥"},{suffix:"Taktik-Schrotflinte",shape:"tactical-shotgun",icon:"💥"}
+    ],
+    melee:[
+      {suffix:"Baseballschläger",shape:"bat",icon:"🏏"},{suffix:"Brecheisen",shape:"crowbar",icon:"🛠️"},
+      {suffix:"Hammer",shape:"hammer",icon:"🔨"},{suffix:"Schwert",shape:"sword",icon:"⚔️"},
+      {suffix:"Holzkeule",shape:"club",icon:"🪵"},{suffix:"Axt",shape:"axe",icon:"🪓"},
+      {suffix:"Speer",shape:"spear",icon:"🔱"},{suffix:"Dreizack",shape:"trident",icon:"🔱"}
+    ]
+  };
+  const v189Slug=value=>String(value||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  const V189_EXPANSION_ITEMS=[];
+  const v189TierScale=[1,1.2,1.5,1.9,2.35,2.9,3.5,4.25,5.15,6.15,7.15];
+  for(const rarityKeyValue of RARITY_ORDER){
+    const rarity=RARITIES[rarityKeyValue],tier=RARITY_ORDER.indexOf(rarityKeyValue),scale=v189TierScale[tier];
+    for(const family of ["pistol","automatic","shotgun","melee"]){
+      const blueprints=V189_FAMILY_BLUEPRINTS[family];
+      for(let variant=0;variant<4;variant++){
+        const source=family==="melee"?blueprints[(variant+tier)%blueprints.length]:blueprints[variant];
+        const prefix=V189_PREFIXES[rarityKeyValue][variant],name=`${prefix}-${source.suffix}`;
+        const basePrice=Math.round(rarity.price*(1.02+variant*.14)*(family==="automatic"?1.12:family==="shotgun"?1.08:family==="melee"?.96:1));
+        const common={id:`v189-${rarityKeyValue}-${family}-${variant+1}-${v189Slug(name)}`,name,icon:source.icon,category:"weapon",family,rarity:rarityKeyValue,minLevel:rarity.minLevel,price:basePrice,weaponVariant:variant+1,weaponShape:source.shape,weaponGlow:1+(variant%3),text:`${rarity.name}e ${source.suffix} mit eigener Silhouette, eigenem Griff und individuellen Anbauteilen.`};
+        if(family==="pistol")Object.assign(common,{attack:"gun",damage:+(22*scale*(1+variant*.12)).toFixed(2),fireRate:+(2.15+variant*.62+tier*.035).toFixed(2),magazine:8+variant*4+Math.floor(tier*.8),reload:+Math.max(.55,1.42-variant*.09-tier*.025).toFixed(2),range:650+variant*75+tier*20,durability:950+tier*270+variant*110,spread:Math.max(.004,.04-variant*.007-tier*.0015)});
+        if(family==="automatic")Object.assign(common,{attack:"gun",damage:+(15.5*scale*(1+variant*.115)).toFixed(2),fireRate:+(6.2+variant*1.3+tier*.12).toFixed(2),magazine:28+variant*14+tier*3,reload:+Math.max(.62,1.82-variant*.12-tier*.035).toFixed(2),range:760+variant*120+tier*25,durability:1250+tier*340+variant*150,spread:Math.max(.003,.052-variant*.011-tier*.0016)});
+        if(family==="shotgun")Object.assign(common,{attack:"shotgun",damage:+(17*scale*(1+variant*.12)).toFixed(2),pellets:7+variant*2+Math.floor(tier/3),fireRate:+(.95+variant*.38+tier*.025).toFixed(2),magazine:4+variant*4+Math.floor(tier*.7),reload:+Math.max(.72,2.05-variant*.14-tier*.035).toFixed(2),range:440+variant*68+tier*16,durability:1100+tier*310+variant*125,spread:Math.max(.07,.27-variant*.04-tier*.008)});
+        if(family==="melee")Object.assign(common,{attack:"melee",damage:+(50*scale*(1+variant*.13)).toFixed(2),fireRate:+(1.12+variant*.28+tier*.035).toFixed(2),range:96+variant*18+tier*3,arc:+(1.65+variant*.22).toFixed(2),durability:1500+tier*390+variant*180});
+        if(tier>=3){const specials=["chain","explosion","pierce","stasis","emp"];common.special=specials[(tier+variant)%specials.length];if(variant>=2)common.pierce=Math.max(1,Math.floor(tier/3));if(variant===3)common.splash=28+tier*14;}
+        V189_EXPANSION_ITEMS.push(common);
+      }
+    }
+  }
+  const V189_GEAR_BLUEPRINTS={
+    helmet:{icon:"🪖",names:["Visierhelm","Kronenhelm","Jägerhelm","Kernhelm"]}, armor:{icon:"🛡️",names:["Panzerung","Brustplatte","Aegis-Rüstung","Wächterrüstung"]},
+    suit:{icon:"🥋",names:["Vollanzug","Kampfanzug","Phasenanzug","Kommandorüstung"]}, boots:{icon:"👟",names:["Stiefel","Sprungschuhe","Phasenschuhe","Tempo-Stiefel"]},
+    chip:{icon:"💠",names:["Kernmodul","Taktikmodul","Overdrive-Modul","Singularitätschip"]}, charm:{icon:"🧿",names:["Talisman","Siegel","Emblem","Kernamulett"]},
+    companion:{icon:"🐾",names:["Bestie","Wächter","Drohne","Phantomtier"]}, companioncare:{icon:"🩹",names:["Pflegekern","Rettungsdrohne","Regenerationsset","Notfallklinik"]},
+    mount:{icon:"🐎",names:["Reittier","Sturmreiter","Hoverbike","Drache"]}, mountcare:{icon:"🧰",names:["Stallkern","Reparaturset","Panzerpflege","Rettungsklinik"]}
+  };
+  for(const rarityKeyValue of ["blackhole","galaxy"]){
+    const rarity=RARITIES[rarityKeyValue],endScale=rarityKeyValue==="blackhole"?1:1.22;
+    for(const [category,blueprint] of Object.entries(V189_GEAR_BLUEPRINTS))for(let variant=0;variant<4;variant++){
+      const prefix=V189_PREFIXES[rarityKeyValue][variant],name=`${prefix}-${blueprint.names[variant]}`,price=Math.round(rarity.price*(1.02+variant*.16)*(category==="suit"?1.2:category==="mount"?1.17:1));
+      const item={id:`v189-${rarityKeyValue}-${category}-${variant+1}-${v189Slug(name)}`,name,icon:blueprint.icon,category,rarity:rarityKeyValue,minLevel:rarity.minLevel,price,text:`${rarity.name}-${blueprint.names[variant]} mit ${rarityKeyValue==="galaxy"?"Galaxiepartikeln, Kosmik-Hintergrund und Sternenstaub":"dunklem Gravitationskern und pulsierendem Ereignishorizont"}.`};
+      const v=1+variant*.12;
+      if(category==="helmet")Object.assign(item,{health:210*endScale*v,armor:30*endScale*v,shield:185*endScale*v,crit:15*endScale*v,durability:6500+variant*500});
+      if(category==="armor")Object.assign(item,{health:360*endScale*v,armor:48*endScale*v,shield:260*endScale*v,regen:2.4*endScale*v,durability:8200+variant*650});
+      if(category==="suit")Object.assign(item,{health:470*endScale*v,armor:42*endScale*v,shield:330*endScale*v,damagePct:18*endScale*v,speed:18*endScale*v,durability:9400+variant*720});
+      if(category==="boots")Object.assign(item,{health:95*endScale*v,speed:54*endScale*v,dodge:14*endScale*v,durability:5200+variant*420});
+      if(category==="chip")Object.assign(item,{damagePct:31*endScale*v,crit:18*endScale*v,reloadPct:24*endScale*v,magazinePct:18*endScale*v,specialGrant:["chain","explosion","stasis","pierce"][variant]});
+      if(category==="charm")Object.assign(item,{loot:32*endScale*v,bossDamage:29*endScale*v,dodge:12*endScale*v,lifesteal:8*endScale*v,shield:180*endScale*v});
+      if(category==="companion")Object.assign(item,{companionType:variant===1?"support":variant===2?"ranged":"melee",companionDamage:260*endScale*v,companionRate:1.7+variant*.22,companionHealth:2100*endScale*v,companionRange:variant===0?100:780+variant*90,companionSpeed:430+variant*18,companionSplash:150*endScale*v,companionPierce:4+variant,companionHeal:variant===1?7.5*endScale:0});
+      if(category==="companioncare")Object.assign(item,{companionCareHealthPct:92*endScale*v,companionCareHealPct:128*endScale*v,careCooldown:Math.max(4.2,8-variant*.8)});
+      if(category==="mount")Object.assign(item,{mountArmor:2900*endScale*v,speed:82*endScale*v,armor:20*endScale*v,shield:260*endScale*v,dodge:15*endScale*v,damagePct:24*endScale*v});
+      if(category==="mountcare")Object.assign(item,{mountCareHealthPct:98*endScale*v,mountCareHealPct:135*endScale*v,careCooldown:Math.max(4.4,8.4-variant*.85)});
+      V189_EXPANSION_ITEMS.push(item);
+    }
+  }
+  // Zusätzliches Zwischenarsenal ab Fight-Level 25, ohne eine neue Seltenheitsfarbe einzuführen.
+  const V189_LEVEL25_ITEMS=[];
+  for(const family of ["pistol","automatic","shotgun","melee"]){
+    const blueprints=V189_FAMILY_BLUEPRINTS[family];
+    for(let variant=0;variant<4;variant++){
+      const source=family==="melee"?blueprints[(variant+4)%blueprints.length]:blueprints[variant],name=`Elite-${source.suffix} MK-${variant+1}`;
+      const item={id:`v189-level25-${family}-${variant+1}`,name,icon:source.icon,category:"weapon",family,rarity:"special",minLevel:25,price:Math.round(132000*(1+variant*.16)*(family==="automatic"?1.12:family==="shotgun"?1.08:1)),weaponVariant:variant+1,weaponShape:source.shape,text:"Teil des Level-25-Zwischenarsenals: stärker als die frühe Special-Linie, aber bewusst unter Mystisch eingeordnet."};
+      const scale=3.25*(1+variant*.1);
+      if(family==="pistol")Object.assign(item,{attack:"gun",damage:26*scale,fireRate:3+variant*.7,magazine:12+variant*5,reload:1.12-variant*.07,range:820+variant*65,durability:2400+variant*180,spread:.025-variant*.004,special:["chain","pierce","emp","explosion"][variant]});
+      if(family==="automatic")Object.assign(item,{attack:"gun",damage:18*scale,fireRate:7.4+variant*1.1,magazine:38+variant*14,reload:1.48-variant*.08,range:900+variant*90,durability:2850+variant*220,spread:.035-variant*.006,special:["chain","pierce","stasis","explosion"][variant]});
+      if(family==="shotgun")Object.assign(item,{attack:"shotgun",damage:20*scale,pellets:9+variant*2,fireRate:1.2+variant*.34,magazine:6+variant*4,reload:1.9-variant*.11,range:560+variant*55,durability:2600+variant*210,spread:.22-variant*.028,special:["explosion","chain","stasis","pierce"][variant]});
+      if(family==="melee")Object.assign(item,{attack:"melee",damage:58*scale,fireRate:1.28+variant*.22,range:112+variant*14,arc:1.8+variant*.2,durability:3200+variant*260,special:["chain","explosion","stasis","pierce"][variant]});
+      V189_LEVEL25_ITEMS.push(item);
+    }
+  }
+  V189_EXPANSION_ITEMS.push(...V189_LEVEL25_ITEMS);
+  ITEMS.push(...V189_EXPANSION_ITEMS);
+
   const ITEM_MAP = new Map(ITEMS.map(item => [item.id, item]));
   const REPAIR_KITS = {
     pistol: { name: "Pistolen-Reparaturset", icon: "🧰", price: 420, amount: 420, text: "Repariert Pistolen und Revolver." },
@@ -411,6 +513,23 @@
     { id: "chaos-speculator", name: "Chaos Speculator", body: "#130f20", accent: "#8b6cff", accent2: "#43f6ff", accent3: "#ff58c7", trim: "#06030c", stripes: 3, price: 0, variant: "chaos-speculator", glow: "#8b6cff" }
   ];
   CHARACTER_STYLES.push(...[{"id":"v137-style-royal-sapphire","name":"Royal Sapphire","body":"#14264d","accent":"#57a8ff","accent2":"#86d7ff","trim":"#071124","stripes":2,"price":32000},{"id":"v137-style-royal-ruby","name":"Royal Ruby","body":"#4b1725","accent":"#ff5278","accent2":"#ff9dba","trim":"#1b080d","stripes":2,"price":36200},{"id":"v137-style-royal-emerald","name":"Royal Emerald","body":"#123b2c","accent":"#4dff9a","accent2":"#c5ff68","trim":"#06150f","stripes":2,"price":40400},{"id":"v137-style-royal-amethyst","name":"Royal Amethyst","body":"#32184f","accent":"#bf69ff","accent2":"#ff74d9","trim":"#10071a","stripes":2,"price":44600},{"id":"v137-style-royal-obsidian","name":"Royal Obsidian","body":"#111319","accent":"#e4e9ff","accent2":"#6cf5ff","trim":"#030406","stripes":2,"price":48800},{"id":"v137-style-royal-ivory","name":"Royal Ivory","body":"#e9e4d8","accent":"#d8a937","accent2":"#fff2a6","trim":"#4a4438","stripes":2,"price":53000},{"id":"v137-style-royal-azure","name":"Royal Azure","body":"#123c52","accent":"#4ee7ff","accent2":"#7687ff","trim":"#06151d","stripes":2,"price":57200},{"id":"v137-style-royal-rose","name":"Royal Rose","body":"#4d1838","accent":"#ff62c6","accent2":"#ffb56d","trim":"#180713","stripes":2,"price":61400},{"id":"v137-style-royal-bronze","name":"Royal Bronze","body":"#4b321b","accent":"#ffb45a","accent2":"#ffe177","trim":"#1a0d05","stripes":2,"price":65600},{"id":"v137-style-royal-frost","name":"Royal Frost","body":"#d8f4ff","accent":"#42bfff","accent2":"#c17bff","trim":"#45636d","stripes":2,"price":69800},{"id":"v137-style-royal-inferno","name":"Royal Inferno","body":"#4d1710","accent":"#ff6a35","accent2":"#ffd35c","trim":"#190503","stripes":2,"price":74000},{"id":"v137-style-royal-toxic","name":"Royal Toxic","body":"#183f13","accent":"#98ff45","accent2":"#4dffe1","trim":"#071505","stripes":2,"price":78200},{"id":"v137-style-neon-cyan","name":"Neon Cyan","body":"#101d2f","accent":"#43f8ff","accent2":"#7191ff","trim":"#050a12","stripes":3,"price":82400},{"id":"v137-style-neon-magenta","name":"Neon Magenta","body":"#29102c","accent":"#ff4fe1","accent2":"#62f7ff","trim":"#0d0410","stripes":3,"price":86600},{"id":"v137-style-neon-lime","name":"Neon Lime","body":"#162718","accent":"#9cff42","accent2":"#ffef5e","trim":"#060d07","stripes":3,"price":90800},{"id":"v137-style-neon-orange","name":"Neon Orange","body":"#351b0e","accent":"#ff8d3d","accent2":"#ffe85b","trim":"#110703","stripes":3,"price":95000},{"id":"v137-style-neon-plasma","name":"Neon Plasma","body":"#23113e","accent":"#9b64ff","accent2":"#ff4fbc","trim":"#090414","stripes":3,"price":99200},{"id":"v137-style-neon-arctic","name":"Neon Arctic","body":"#dcefff","accent":"#44d5ff","accent2":"#7a67ff","trim":"#35444f","stripes":3,"price":103400},{"id":"v137-style-neon-blood","name":"Neon Blood","body":"#381017","accent":"#ff334f","accent2":"#ff9f4f","trim":"#100306","stripes":3,"price":107600},{"id":"v137-style-neon-ocean","name":"Neon Ocean","body":"#0e3041","accent":"#3fe2ff","accent2":"#55ffa6","trim":"#041118","stripes":3,"price":111800},{"id":"v137-style-neon-solar","name":"Neon Solar","body":"#3c3210","accent":"#ffe13f","accent2":"#ff7a3f","trim":"#120e02","stripes":3,"price":116000},{"id":"v137-style-neon-void","name":"Neon Void","body":"#151022","accent":"#c074ff","accent2":"#4fffea","trim":"#050309","stripes":3,"price":120200},{"id":"v137-style-neon-chrome","name":"Neon Chrome","body":"#313740","accent":"#f0f6ff","accent2":"#55e8ff","trim":"#0d1116","stripes":3,"price":124400},{"id":"v137-style-neon-aurora","name":"Neon Aurora","body":"#153328","accent":"#5dffc1","accent2":"#d25fff","trim":"#06120d","stripes":3,"price":128600}]);
+
+  // V189: 20 neue Skins über alle Spielphasen, inklusive Black-Hole- und Galaxy-Designs.
+  const V189_STYLE_SPECS=[
+    ["common","Werkstatt Graphit","#20262b","#9aa6ad","#d9e1e5",18000,0,0,0],
+    ["uncommon","Smaragd Scout","#102b20","#52da79","#a8ffbd",42000,1,0,1],["uncommon","Grünlicht Ranger","#162719","#8dff45","#43f6ff",56000,0,1,1],
+    ["rare","Azur Vanguard","#10263b","#4ca8ff","#77e7ff",98000,1,1,1],["rare","Kobalt Striker","#111d3e","#6685ff","#4fffd7",124000,2,0,1],
+    ["epic","Arkan Phantom","#26123c","#b76cff","#ff63d8",205000,2,1,2],["epic","Runenjäger","#321644","#d57cff","#62eaff",238000,1,2,2],
+    ["legendary","Solar König","#3b2609","#ffb52e","#fff086",390000,3,2,2],["legendary","Titan Goldkern","#2c2010","#ffd45a","#ff7545",455000,3,2,3],
+    ["special","Neon Anomalie","#240d24","#ff4e78","#48f6ff",620000,4,3,3],["special","Phasen Puls","#151631","#ff56ca","#7d80ff",690000,3,4,3],
+    ["mythic","Chrono Orakel","#2b163d","#ffd36a","#527cff",890000,5,4,4],["mythic","Traumwächter","#22193f","#ff6fdc","#ffd96a",980000,4,5,4],
+    ["exotic","Prisma Null","#10283a","#63f8ff","#ff4fd8",1250000,6,5,5],["exotic","Quantenjäger","#13233c","#5fffff","#ffd35a",1390000,5,6,5],
+    ["universe","Infinity Stern","#11142f","#ffffff","#9b6cff",1680000,7,6,6],["universe","Multiversum Aurora","#101d35","#7ffcff","#ff65dc",1850000,6,7,6],
+    ["blackhole","Ereignishorizont","#030308","#9a6cff","#00f5ff",1980000,8,7,7],
+    ["galaxy","Andromeda Sovereign","#081331","#7ffcff","#ff63ea",2350000,9,8,8],["galaxy","Galaxiekern Prime","#090b2b","#ffd86b","#7b4dff",2750000,10,9,8]
+  ];
+  CHARACTER_STYLES.push(...V189_STYLE_SPECS.map((spec,index)=>{const[rarity,name,body,accent,accent2,price,damagePct,healthPct,speedPct]=spec;return{id:`v189-style-${v189Slug(name)}`,name,body,accent,accent2,trim:"#04070d",stripes:index%3+1,price,rarity,minLevel:RARITIES[rarity].minLevel,damagePct,healthPct,speedPct,armorPct:Math.max(0,Math.round((damagePct+healthPct)*.35)),variant:rarity==="galaxy"?"galaxy":rarity==="blackhole"?"blackhole":"v189"};}));
+
   const STYLE_MAP = new Map(CHARACTER_STYLES.map(style => [style.id, style]));
   const STYLE_ALIAS_MAP = new Map([
     ["chaos speculator", "chaos-speculator"],
@@ -462,12 +581,13 @@
   function friendStarScale(friend){ return 1 + friendStar(friend) * .05; }
   function playerEquipmentPower(data=ensureState()){
     if(!data)return 0;
+    const style=styleById(data.cosmetics?.active),stylePower=Math.round((Number(style.damagePct||0)*110)+(Number(style.healthPct||0)*70)+(Number(style.speedPct||0)*85)+(Number(style.armorPct||0)*95));
     return EQUIPMENT_SLOT_KEYS.reduce((sum,slot)=>{
       const item=data.inventory.find(entry=>entry.uid===data.equipped?.[slot]);
       if(!item)return sum;
       const s=effectiveStats(item);
       return sum+powerValueOfItem(item)+Math.round((s.companionRate||0)*90);
-    },Math.max(50,Number(data.level||1)*50));
+    },Math.max(50,Number(data.level||1)*50)+stylePower);
   }
   function friendRolePowerFactor(role){ return (role==="dd"?.78:role==="tank"?.62:.54)*FRIEND_STRENGTH_MULTIPLIER; }
   function friendPowerValue(friend,data=ensureState(),basePower=null){
@@ -615,11 +735,11 @@
   function companionOwnerBonuses(item) {
     if (!item || itemDef(item).category !== "companion") return { damage: 0, defense: 0 };
     const def = itemDef(item);
-    const rarityBaseDamage = [2, 4, 7, 11, 16, 20, 25, 32, 42][rarityIndex(item)] || 2;
-    const rarityBaseDefense = [1, 2, 4, 6, 9, 12, 15, 20, 27][rarityIndex(item)] || 1;
+    const rarityBaseDamage = [2,4,7,11,16,20,25,32,42,50,60][rarityIndex(item)] || 2;
+    const rarityBaseDefense = [1,2,4,6,9,12,15,20,27,34,42][rarityIndex(item)] || 1;
     const star = clamp(Number(item.star) || 0, 0, MAX_STAR);
-    let damage = rarityBaseDamage * (1 + star * .28);
-    let defense = rarityBaseDefense * (1 + star * .24);
+    let damage = rarityBaseDamage * (1 + star * .238);
+    let defense = rarityBaseDefense * (1 + star * .204);
     if (["street-dog", "shepherd-dog", "battle-hound"].includes(def.id)) defense += 1 + star * .45;
     if (["alley-cat", "ranger-cat", "lynx-companion", "tiger-companion", "void-beast"].includes(def.id)) damage += 1.5 + star * .55;
     if (["medic-companion", "phoenix-cub"].includes(def.id)) defense += 3 + star * .7;
@@ -877,7 +997,7 @@ function ensureStateV116() {
     if (!def.durability) return 0;
     const star = Number(item?.star) || 0;
     const rarityBoost = rarityIndex(item) * .12;
-    return Math.round(def.durability * (1 + star * .16 + rarityBoost));
+    return Math.round(def.durability * (1 + star * .136 + rarityBoost));
   }
   function equipped(slot) {
     const data = ensureState();
@@ -904,11 +1024,11 @@ function ensureStateV116() {
     const mult = rarity.mult * STAR_MULT[star];
     const out = { ...def, rarity: rarityKeyValue, star, mult, maxDurability: itemMaxDurability(item) };
     ["damage", "health", "shield", "mountArmor", "armor", "regen", "crit", "critDamage", "lifesteal", "bossDamage", "loot", "dodge", "damagePct", "reloadPct", "magazinePct", "companionDamage", "companionHealth", "companionRange", "companionSpeed", "companionHeal", "companionPierce", "companionSplash", "companionRoar", "companionDamagePct", "companionHealthPct", "companionRatePct", "companionCareHealthPct", "companionCareHealPct", "mountCareHealthPct", "mountCareHealPct", "dodgeHeal", "dodgeBurst"].forEach(key => {
-      if (Number.isFinite(def[key])) out[key] = def[key] * (key === "armor" || key.endsWith("Pct") || ["speed", "crit", "critDamage", "lifesteal", "bossDamage", "loot", "dodge"].includes(key) ? (1 + star * .26 + rarityIndex(item) * .08) : mult);
+      if (Number.isFinite(def[key])) out[key] = def[key] * (key === "armor" || key.endsWith("Pct") || ["speed", "crit", "critDamage", "lifesteal", "bossDamage", "loot", "dodge"].includes(key) ? (1 + star * .221 + rarityIndex(item) * .08) : mult);
     });
-    if (Number.isFinite(def.speed)) out.speed = def.id === "speed-chip" ? SPEED_BONUS[star] * (1 + rarityIndex(item) * .1) : def.speed * (1 + star * .32 + rarityIndex(item) * .08);
-    if (Number.isFinite(def.companionRate)) out.companionRate = def.companionRate * (1 + star * .10 + rarityIndex(item) * .025);
-    if (Number.isFinite(def.fireRate)) out.fireRate = def.fireRate * (1 + star * .08 + rarityIndex(item) * .018);
+    if (Number.isFinite(def.speed)) out.speed = def.id === "speed-chip" ? SPEED_BONUS[star] * (1 + rarityIndex(item) * .1) : def.speed * (1 + star * .272 + rarityIndex(item) * .08);
+    if (Number.isFinite(def.companionRate)) out.companionRate = def.companionRate * (1 + star * .0685 + rarityIndex(item) * .025);
+    if (Number.isFinite(def.fireRate)) out.fireRate = def.fireRate * (1 + star * .068 + rarityIndex(item) * .018);
     if (Number.isFinite(def.magazine)) out.magazine = Math.round(def.magazine * (1 + star * .07 + rarityIndex(item) * .025));
     if (Number.isFinite(def.reload)) out.reload = def.reload * Math.max(.42, 1 - star * .065 - rarityIndex(item) * .015);
     if (Number.isFinite(def.careCooldown)) out.careCooldown = def.careCooldown * Math.max(.45, 1 - star * .07 - rarityIndex(item) * .025);
@@ -962,11 +1082,12 @@ function aggregateLoadoutStats() {
   const sum = key => items.reduce((total, item) => total + Number(item[key] || 0), 0);
   const weapons = WEAPON_SLOT_KEYS.map(slot => equipped(slot)).filter(Boolean).map(effectiveStats);
   const strongest = weapons.reduce((best, item) => Math.max(best, Number(item.damage || 0)), 0);
+  const style=styleById(data.cosmetics.active),styleHealth=Number(style.healthPct||0),styleArmor=Number(style.armorPct||0),styleSpeed=Number(style.speedPct||0),styleDamage=Number(style.damagePct||0);
   return {
-    health: Math.round(130 + data.level * 3 + sum("health")),
-    armor: Math.round(Math.min(72, sum("armor"))),
-    speed: Math.round(sum("speed") - items.reduce((t, item) => t + Number(item.speedPenalty || 0) * 100, 0)),
-    damage: Math.round(strongest), damagePct: Math.round(sum("damagePct")),
+    health: Math.round((130 + data.level * 3 + sum("health"))*(1+styleHealth/100)),
+    armor: Math.round(Math.min(72, sum("armor")+styleArmor)),
+    speed: Math.round(sum("speed")+styleSpeed-items.reduce((t,item)=>t+Number(item.speedPenalty||0)*100,0)),
+    damage: Math.round(strongest*(1+styleDamage/100)), damagePct: Math.round(sum("damagePct")+styleDamage),
     shield: Math.round(sum("shield")), crit: Math.round(5 + sum("crit")),
     dodge: Math.round(Math.min(48, sum("dodge"))), loot: Math.round(sum("loot")),
     mountArmor: Math.round(sum("mountArmor")), power: powerScore()
@@ -1041,7 +1162,7 @@ function renderDashboard() {
   const need = data.level >= MAX_LEVEL ? 1 : levelNeed(data.level);
   const pct = data.level >= MAX_LEVEL ? 100 : clamp(data.xp / need * 100, 0, 100);
   const weapon = equipped(data.activeWeaponSlot) || equipped("primary") || equipped("sidearm") || equipped("melee");
-  UI.main.innerHTML = `<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">UNENDLICHE BOT-WELLEN · BOSS ALLE 10 WELLEN</small><h1>FIGHT<span>.KL</span></h1><p>Baue dein Arsenal auf, kombiniere zwei identische Items zu Sternen und entwickle normale Ausrüstung bis Legendär. Special-, mystische und exotische Ausrüstung besitzt eigene Endgame-Linien. Universe ist die neue höchste Stufe ab Fight-Level 50. Drei Waffen, Vollanzug, Helm und Reittier bilden deinen persönlichen Build.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Kampf starten</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button></div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level >= MAX_LEVEL ? "Maximallevel erreicht" : `${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level + 1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Waffen-Slot</small><b>${escapeHtml(SLOT_META[data.activeWeaponSlot]?.name || "Waffe")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Gesamtkills</small><b>${NUMBER.format(data.totalKills)}</b></div></div></aside><div class="fkl-dashboard-lower"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Merge & Loadout</b><small>Charakter in der Mitte, zehn Ausrüstungsplätze und zwei gleiche Items pro Stern.</small></article><article class="fkl-panel fkl-feature" data-fkl-loadout><i>🧍</i><b>Charakterwerte</b><small>Tempo, Stärke, Rüstung, Schild, Reittierpanzerung und alle Equip-Slots.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Neu abgestimmte Seltenheitskurve: Legendär ist für etwa Welle 50 gedacht; Endgame-Stufen steigen kontrollierter weiter.</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Firebase-Rangliste nach höchster Welle und bestem Score.</small></article></div></div>`;
+  UI.main.innerHTML = `<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">UNENDLICHE BOT-WELLEN · BOSS ALLE 10 WELLEN</small><h1>FIGHT<span>.KL</span></h1><p>Baue dein Arsenal auf, kombiniere zwei identische Items zu Sternen und entwickle normale Ausrüstung bis Legendär. Special-, mystische und exotische Ausrüstung besitzt eigene Endgame-Linien. Universe beginnt ab Fight-Level 50, Black Hole folgt ab Level 80 und Galaxy bildet ab Level 100 die letzte Stufe. Drei Waffen, Vollanzug, Helm und Reittier bilden deinen persönlichen Build.</p><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Kampf starten</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button></div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level >= MAX_LEVEL ? "Maximallevel erreicht" : `${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level + 1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Waffen-Slot</small><b>${escapeHtml(SLOT_META[data.activeWeaponSlot]?.name || "Waffe")}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Gesamtkills</small><b>${NUMBER.format(data.totalKills)}</b></div></div></aside><div class="fkl-dashboard-lower"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Merge & Loadout</b><small>Charakter in der Mitte, zehn Ausrüstungsplätze und zwei gleiche Items pro Stern.</small></article><article class="fkl-panel fkl-feature" data-fkl-loadout><i>🧍</i><b>Charakterwerte</b><small>Tempo, Stärke, Rüstung, Schild, Reittierpanzerung und alle Equip-Slots.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>Neu abgestimmte Seltenheitskurve: Legendär ist für etwa Welle 50 gedacht; Endgame-Stufen steigen kontrollierter weiter.</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Firebase-Rangliste nach höchster Welle und bestem Score.</small></article></div></div>`;
   UI.main.querySelector("[data-fkl-start]").addEventListener("click", startCombat);
   UI.main.querySelectorAll("[data-fkl-inventory],[data-fkl-loadout]").forEach(btn => btn.addEventListener("click", renderInventory));
   UI.main.querySelectorAll("[data-fkl-shop]").forEach(btn => btn.addEventListener("click", renderShop));
@@ -1055,6 +1176,32 @@ function renderDashboard() {
   function itemStyle(item) {
     const r = rarityDef(item);
     return `--rarity:${r.color};--rarity-glow:${r.glow};--rarity-gradient:${r.gradient || r.color}`;
+  }
+  function weaponVisualType(def){
+    if(!def||def.category!=="weapon")return "item";
+    if(def.weaponShape)return def.weaponShape;
+    const name=String(def.name||"").toLowerCase();
+    if(/dreizack/.test(name))return "trident";if(/speer/.test(name))return "spear";if(/hammer/.test(name))return "hammer";if(/axt|beil|spalter/.test(name))return "axe";
+    if(/brecheisen/.test(name))return "crowbar";if(/baseball|schläger/.test(name))return "bat";if(/keule/.test(name))return "club";if(/sense/.test(name))return "scythe";if(/machete/.test(name))return "machete";if(/schwert|klinge|katana|säbel/.test(name))return "sword";
+    if(/doppellauf|doppelflinte/.test(name))return "double-shotgun";if(/trommel/.test(name))return "drum-shotgun";if(/pump/.test(name))return "pump-shotgun";
+    if(/scharfsch|präzision|sniper/.test(name))return "sniper";if(/maschinengewehr|lmg/.test(name))return "lmg";if(/smg|uzi|maschinenpistole/.test(name))return "smg";if(/gewehr|karabiner/.test(name))return "rifle";
+    if(/revolver/.test(name))return "revolver";if(/handkanone/.test(name))return "handcannon";if(/burst/.test(name))return "burst-pistol";
+    return def.family==="shotgun"?"tactical-shotgun":def.family==="automatic"?"rifle":def.family==="pistol"?"pistol":def.attack==="melee"?"sword":"item";
+  }
+  function weaponVariantNumber(def){
+    const explicit=Math.floor(Number(def?.weaponVariant)||0);if(explicit>0)return clamp(explicit,1,4);
+    const seed=String(def?.id||def?.name||"weapon");let hash=0;for(let i=0;i<seed.length;i++)hash=(hash*31+seed.charCodeAt(i))>>>0;return hash%4+1;
+  }
+  function weaponVisualHtml(def,compact=false){
+    if(!def||def.category!=="weapon")return `<span class="fkl-emoji-icon">${def?.icon||"◆"}</span>`;
+    const rarity=RARITIES[def.rarity]||RARITIES.common,shape=weaponVisualType(def),variant=weaponVariantNumber(def);
+    return `<div class="fkl-weapon-render shape-${shape} family-${def.family||"weapon"} variant-${variant} ${compact?"compact":""}" style="--weapon-color:${rarity.color};--weapon-glow:${rarity.glow};--weapon-gradient:${rarity.gradient||rarity.color}" aria-label="${escapeHtml(def.name)}"><i></i><b></b><em></em><span></span></div>`;
+  }
+  function promotionCost(item){
+    if(!item||Number(item.star||0)>=MAX_STAR)return 0;
+    const next=RARITIES[RARITY_ORDER[rarityIndex(item)+1]];if(!next||Number(item.star||0)<2)return 0;
+    const factor=Number(item.star)===2?.82:Number(item.star)===3?.54:.28;
+    return Math.max(100,Math.round((next.price+shopPrice(itemDef(item))*.25)*factor/100)*100);
   }
   function fightFourValueData(itemOrDef) {
     const ownedItem = !!itemOrDef?.baseId;
@@ -1089,7 +1236,7 @@ function renderDashboard() {
   function fightFourValuesHtml(itemOrDef, compact = false) {
     const values = fightFourValueData(itemOrDef);
     if (!values) return "";
-    return `<div class="fkl-four-values ${compact ? "compact" : ""}">${values.map(([label,value,icon]) => `<span title="${escapeHtml(label)}"><i>${icon}</i><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}</div>`;
+    return `<div class="fkl-four-values ${compact ? "compact" : ""}">${values.map(([label,value,icon]) => `<span tabindex="0" role="button" aria-label="${escapeHtml(label)}: ${escapeHtml(value)}" title="${escapeHtml(label)}: ${escapeHtml(value)}"><i>${icon}</i><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></span>`).join("")}</div>`;
   }
   function weaponPowerUpData(itemOrDef) {
     const ownedItem = !!itemOrDef?.baseId;
@@ -1122,7 +1269,7 @@ function itemCard(item) {
   const def = itemDef(item); const r = rarityDef(item); const selected = UI.selected.has(item.uid); const data = ensureState();
   const isEquipped = Object.values(data.equipped).includes(item.uid); const max = itemMaxDurability(item); const pct = max ? clamp(item.durability / max * 100, 0, 100) : 100;
   const locked = data.level < requiredLevel(item); const slot = equipmentSlotForDef(def);
-  return `<article class="fkl-item rarity-${rarityKey(item)} ${selected ? "selected" : ""} ${isEquipped ? "equipped" : ""} ${locked ? "locked" : ""}" style="${itemStyle(item)}" data-fkl-item="${item.uid}" draggable="true" title="${escapeHtml(SLOT_META[slot]?.hint || def.text)}"><button class="fkl-item-info" type="button" data-fkl-item-info="${item.uid}" title="Item-Information">i</button><div class="fkl-item-icon">${def.icon}</div><span class="rarity">${r.name}</span><h4>${escapeHtml(def.name)}</h4><div class="fkl-stars">${starText(item.star)}</div>${fightFourValuesHtml(item, true)}${fightWeaponPowerUpHtml(item, true)}<small>${locked ? `Nutzbar ab Level ${requiredLevel(item)}` : escapeHtml(def.category === "weapon" ? `${Math.round(effectiveStats(item).damage)} Schaden · ${SLOT_META[slot]?.name || "Waffe"}` : def.text)}</small>${max ? `<div class="fkl-durability"><i style="width:${pct}%"></i></div><small>${Math.round(item.durability)}/${max}</small>` : ""}</article>`;
+  return `<article class="fkl-item rarity-${rarityKey(item)} ${selected ? "selected" : ""} ${isEquipped ? "equipped" : ""} ${locked ? "locked" : ""}" style="${itemStyle(item)}" data-fkl-item="${item.uid}" draggable="true" title="${escapeHtml(SLOT_META[slot]?.hint || def.text)}"><button class="fkl-item-info" type="button" data-fkl-item-info="${item.uid}" title="Item-Information">i</button><div class="fkl-item-icon">${weaponVisualHtml(def,true)}</div><span class="rarity">${r.name}</span><h4>${escapeHtml(def.name)}</h4><div class="fkl-stars">${starText(item.star)}</div>${fightFourValuesHtml(item, true)}${fightWeaponPowerUpHtml(item, true)}<small>${locked ? `Nutzbar ab Level ${requiredLevel(item)}` : escapeHtml(def.category === "weapon" ? `${Math.round(effectiveStats(item).damage)} Schaden · ${SLOT_META[slot]?.name || "Waffe"}` : def.text)}</small>${max ? `<div class="fkl-durability"><i style="width:${pct}%"></i></div><small>${Math.round(item.durability)}/${max}</small>` : ""}</article>`;
 }
 
 function detailHtml(item) {
@@ -1168,11 +1315,12 @@ function detailHtml(item) {
   if (max) lines.push(["Haltbarkeit", `${Math.round(item.durability)} / ${max}`]);
   const repairFamily = def.category === "weapon" ? def.family : ["armor","helmet","suit"].includes(def.category) ? "armor" : "";
   const canRepair = max && item.durability < max && ([repairFamily,"universal","field","precision","pulse","nano","royal","phase","chaos","mythic","astral","exotic","singularity","universe","omniverse"].some(id=>id&&data.repairKits[id]>0));
-  const currentIndex = rarityIndex(item); const nextKey = currentIndex < rarityIndex("legendary") ? RARITY_ORDER[currentIndex + 1] : ""; const next = nextKey ? RARITIES[nextKey] : null;
-  const canPromote = item.star >= MAX_STAR && !!next;
+  const currentIndex = rarityIndex(item); const nextKey = currentIndex < RARITY_ORDER.length - 1 ? RARITY_ORDER[currentIndex + 1] : ""; const next = nextKey ? RARITIES[nextKey] : null;
+  const promotePrice = promotionCost(item); const levelReady = !next || data.level >= next.minLevel;
+  const canPromote = item.star >= 2 && !!next && levelReady;
   const adminBlock = canUseStaffModMenu() ? `<div class="fkl-admin-block"><div class="fkl-admin-head"><small class="fkl-kicker">OWNER-MOD-MENÜ</small><b>${staffRoleLabel()}</b></div><p>Direkte Item-Verwaltung ausschließlich für den Owner. Sterne werden sofort übernommen.</p><div class="fkl-admin-stars">${Array.from({length: MAX_STAR + 1}, (_,index) => `<button class="${Number(item.star||0)===index?"active":""}" type="button" data-fkl-admin-star="${item.uid}" data-star="${index}">${index===0?"Basis":`${index}★`}</button>`).join("")}</div><div class="fkl-admin-actions"><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="-1">−1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-star-step="${item.uid}" data-step="1">+1 Stern</button><button class="fkl-btn" type="button" data-fkl-admin-durability="${item.uid}">Max. Haltbarkeit</button><button class="fkl-btn gold" type="button" data-fkl-admin-duplicate="${item.uid}">Duplizieren</button></div></div>` : "";
   const equipButtons = def.category === "companion" ? `<button class="fkl-btn primary" type="button" data-fkl-equip-to="companion" data-item="${item.uid}" ${locked ? "disabled" : ""}>Als Begleiter 1 ausrüsten</button><button class="fkl-btn primary" type="button" data-fkl-equip-to="companion2" data-item="${item.uid}" ${locked ? "disabled" : ""}>Als Begleiter 2 ausrüsten</button>` : `<button class="fkl-btn primary" type="button" data-fkl-equip="${item.uid}" ${locked ? "disabled" : ""}>${isEquipped ? `${SLOT_META[slot]?.name || "Item"} ausgerüstet` : `In ${SLOT_META[slot]?.name || "Slot"} ausrüsten`}</button>`;
-  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${def.icon}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div>${fightFourValuesHtml(item)}${fightWeaponPowerUpHtml(item)}<p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions">${equipButtons}${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ Zu ${next.name}</button>` : ""}${item.star >= MAX_STAR && currentIndex >= rarityIndex("legendary") ? `<small class="fkl-rarity-cap">${r.name} bleibt eine eigene Itemlinie und kann nur bis fünf Sterne verbessert werden.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}${data.inventory.length <= 1 ? `<button class="fkl-btn danger" type="button" disabled title="Das letzte Item muss im Inventar bleiben.">Letztes Item · nicht verkäuflich</button>` : `<button class="fkl-btn danger" type="button" data-fkl-sell="${item.uid}">Verkaufen · ${EURO.format(fightItemSellPrice(item))}</button>`}</div>${adminBlock}</aside>`;
+  return `<aside class="fkl-panel fkl-detail rarity-${rarityKey(item)}" style="${itemStyle(item)}"><div class="fkl-detail-icon">${weaponVisualHtml(def)}</div><span class="fkl-rarity">${r.name}</span><h3>${escapeHtml(def.name)}</h3><div class="fkl-stars">${starText(item.star)}</div>${fightFourValuesHtml(item)}${fightWeaponPowerUpHtml(item)}<p style="color:var(--fkl-muted)">${escapeHtml(def.text)}</p>${locked ? `<div class="fkl-level-lock">🔒 Nutzbar ab Fight-Level ${req}</div>` : ""}<div class="fkl-stat-list">${lines.map(([k,v]) => `<div class="fkl-stat-line"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join("")}</div><div class="fkl-detail-actions">${equipButtons}${canPromote ? `<button class="fkl-btn rarity-up" type="button" data-fkl-promote="${item.uid}">⬆ ${next.name}${promotePrice?` · ${EURO.format(promotePrice)}`:" · KOSTENLOS"}</button>` : next && item.star>=2 && !levelReady ? `<small class="fkl-rarity-cap">🔒 ${next.name} wird erst ab Fight-Level ${next.minLevel} freigeschaltet.</small>` : item.star<2 && next ? `<small class="fkl-rarity-cap">Ab zwei Sternen kann dieses Item gegen Geld auf ${next.name} steigen. Mit fünf Sternen ist das Upgrade kostenlos.</small>` : ""}${max ? `<button class="fkl-btn" type="button" data-fkl-repair="${item.uid}" ${canRepair ? "" : "disabled"}>Reparieren</button>` : ""}${data.inventory.length <= 1 ? `<button class="fkl-btn danger" type="button" disabled title="Das letzte Item muss im Inventar bleiben.">Letztes Item · nicht verkäuflich</button>` : `<button class="fkl-btn danger" type="button" data-fkl-sell="${item.uid}">Verkaufen · ${EURO.format(fightItemSellPrice(item))}</button>`}</div>${adminBlock}</aside>`;
 }
 
 
@@ -1326,15 +1474,15 @@ function drawInventory() {
     setTimeout(() => { drawInventory(); toast(`${itemDef(merged).name} verbessert`, `${rarityDef(merged).name} · ${starText(merged.star)} erreicht.`); }, 420);
   }
 function promoteItem(id) {
-  const data = ensureState(); const item = data.inventory.find(entry => entry.uid === id); if (!item) return;
-  if (item.star < MAX_STAR) return toast("Fünf Sterne nötig", "Erreiche zuerst fünf Sterne.");
-  const currentIndex = rarityIndex(item);
-  if (currentIndex >= rarityIndex("legendary")) return toast("Seltenheitsgrenze erreicht", `${rarityDef(item).name} ist eine eigene Itemlinie und wird nur noch über Sterne verbessert.`);
-  const nextKey = RARITY_ORDER[currentIndex + 1]; const next = RARITIES[nextKey];
-  item.rarity = nextKey; item.star = 0; item.durability = itemMaxDurability(item); UI.detailUid = item.uid; UI.selected.clear(); safeSave(); updateHead();
-  const flash = document.createElement("div"); flash.className = `fkl-merge-flash rarity-${nextKey}`; flash.innerHTML = `<div class="fkl-merge-core">${itemDef(item).icon}</div>`; document.body.appendChild(flash); setTimeout(() => flash.remove(), 950);
-  playSound(520, .12, "triangle"); setTimeout(() => playSound(920, .22, "sine"), 120); setTimeout(() => playSound(1320, .2, "triangle"), 260);
-  setTimeout(() => { drawInventory(); toast("Seltenheit aufgestiegen", `${itemDef(item).name} ist jetzt ${next.name}.`); }, 480);
+  const data=ensureState(),item=data.inventory.find(entry=>entry.uid===id);if(!item)return;
+  if(Number(item.star||0)<2)return toast("Zwei Sterne nötig","Ab zwei Sternen kannst du die nächste Seltenheit gegen Geld freischalten.");
+  const currentIndex=rarityIndex(item);if(currentIndex>=RARITY_ORDER.length-1)return toast("Maximale Seltenheit",`${rarityDef(item).name} ist bereits die letzte Stufe.`);
+  const nextKey=RARITY_ORDER[currentIndex+1],next=RARITIES[nextKey];if(data.level<next.minLevel)return toast(`Fight-Level ${next.minLevel} nötig`,`${next.name} ist für dein aktuelles Fight-Level noch gesperrt.`);
+  const cost=promotionCost(item);if(cost&&!payFight(cost,`${itemDef(item).name} → ${next.name}`))return toast("Nicht genug Geld",`Für das Upgrade werden ${EURO.format(cost)} benötigt.`);
+  item.rarity=nextKey;item.star=0;item.durability=itemMaxDurability(item);UI.detailUid=item.uid;UI.selected.clear();safeSave();updateHead();
+  const flash=document.createElement("div");flash.className=`fkl-merge-flash rarity-${nextKey}`;flash.innerHTML=`<div class="fkl-merge-core">${itemDef(item).icon}</div>`;document.body.appendChild(flash);setTimeout(()=>flash.remove(),1100);
+  playSound(520,.12,"triangle");setTimeout(()=>playSound(920,.22,"sine"),120);setTimeout(()=>playSound(1320,.2,"triangle"),260);
+  setTimeout(()=>{drawInventory();toast("Seltenheit aufgestiegen",`${itemDef(item).name} ist jetzt ${next.name}${cost?` · ${EURO.format(cost)}`:" · kostenlos"}.`);},480);
 }
 
 function equipItem(id) {
@@ -1478,17 +1626,17 @@ function dailyShopItems(category = UI.shopCategory) {
     if (category === "repair") {
       content = `<div class="fkl-repair-grid">${Object.entries(REPAIR_KITS).map(([id,kit]) => `<article class="fkl-panel fkl-repair-card"><i>${kit.icon}</i><b>${escapeHtml(kit.name)}</b><small>${escapeHtml(kit.text)}</small><div class="fkl-price">${EURO.format(kit.price)}</div><button class="fkl-btn" type="button" data-fkl-buy-kit="${id}">Kaufen · Besitz ${data.repairKits[id]}</button></article>`).join("")}</div>`;
     } else if (category === "style") {
-      content = `<div class="fkl-style-grid">${CHARACTER_STYLES.map(style => { const owned = data.cosmetics.owned.includes(style.id), active = data.cosmetics.active === style.id; return `<article class="fkl-panel fkl-style-card ${active ? "active" : ""}"><div class="fkl-style-preview stripes-${clamp(Math.floor(Number(style.stripes)||1),1,3)}" style="--body:${style.body};--accent:${style.accent};--accent2:${style.accent2||style.accent};--trim:${style.trim}"><i></i><b></b></div><h4>${escapeHtml(style.name)}</h4><small>${style.stripes||1} Neonstreifen · ${style.accent}${style.accent2?` + ${style.accent2}`:""}</small><div class="fkl-price">${style.price ? EURO.format(style.price) : "Kostenlos"}</div><button class="fkl-btn ${active ? "primary" : ""}" type="button" data-fkl-style="${style.id}">${active ? "Aktiv" : owned ? "Anlegen" : "Kaufen"}</button></article>`; }).join("")}</div>`;
+      content = `<div class="fkl-style-grid">${CHARACTER_STYLES.map(style => { const owned=data.cosmetics.owned.includes(style.id),active=data.cosmetics.active===style.id,rarity=RARITIES[style.rarity]||RARITIES.common,req=Math.max(1,Number(style.minLevel||rarity.minLevel||1)),locked=data.level<req;return `<article class="fkl-panel fkl-style-card ${active?"active":""} rarity-${style.rarity||"common"}" style="--rarity:${rarity.color};--rarity-glow:${rarity.glow};--rarity-gradient:${rarity.gradient||rarity.color}"><div class="fkl-style-preview stripes-${clamp(Math.floor(Number(style.stripes)||1),1,3)} ${style.variant||""}" style="--body:${style.body};--accent:${style.accent};--accent2:${style.accent2||style.accent};--trim:${style.trim}"><i></i><b></b></div><span class="fkl-style-rarity">${rarity.name}${req>1?` · LV ${req}`:""}</span><h4>${escapeHtml(style.name)}</h4><small>${style.damagePct?`+${style.damagePct}% Schaden · `:""}${style.healthPct?`+${style.healthPct}% Leben · `:""}${style.speedPct?`+${style.speedPct}% Tempo`:"Kosmetischer Skin"}</small><div class="fkl-price">${style.price?EURO.format(style.price):"Kostenlos"}</div><button class="fkl-btn ${active?"primary":""}" type="button" data-fkl-style="${style.id}" ${locked?"disabled":""}>${locked?`Ab Level ${req}`:active?"Aktiv":owned?"Anlegen":"Kaufen"}</button></article>`;}).join("")}</div>`;
     } else if (category === "friends") {
       const roleTabs=`<nav class="fkl-friend-role-tabs"><button class="${UI.friendShopRole==="all"?"active":""}" type="button" data-fkl-friend-role="all">Alle Freunde</button>${FRIEND_SLOT_ROLES.map(role=>`<button class="${UI.friendShopRole===role?"active":""}" type="button" data-fkl-friend-role="${role}">${friendRoleMeta(role).icon} ${friendRoleMeta(role).name}</button>`).join("")}</nav>`;
       const friends=FRIEND_DEFS.filter(def=>UI.friendShopRole==="all"||def.role===UI.friendShopRole);
       content=`${roleTabs}<section class="fkl-friends-intro"><div><small>FRIENDS · KÄMPFEN FÜR DICH</small><h3>Tank, DD und Heiler</h3><p>Jeder Freund passt sich automatisch an deine aktuelle Power an. Es gibt keine Seltenheitsstufen mehr. Boss-Kopien und Fusionen erhöhen ausschließlich die Sterne. Pro Rolle ist ein Freund aktiv.</p></div><b>${Object.keys(data.friends.owned).length}/${FRIEND_DEFS.length} freigeschaltet</b></section><div class="fkl-friend-shop-grid">${friends.map(def=>{const entry=friendEntry(data,def.id),meta=friendRoleMeta(def.role),equippedId=data.friends.equipped[def.role];return `<article class="fkl-panel fkl-friend-shop-card ${equippedId===def.id?"equipped":""}" style="--friend-color:${meta.color};--friend-body:${def.body};--friend-accent:${def.accent};--friend-accent2:${def.accent2}"><div class="fkl-friend-shop-avatar"><i></i><b></b><em>${meta.icon}</em></div><span class="fkl-kicker">${meta.name} · kämpft für dich</span><h4>${escapeHtml(def.name)}</h4><p>${escapeHtml(def.text)}</p><small>${escapeHtml(meta.text)}</small><div class="fkl-friend-shop-status">${entry?friendStatusText(entry):`Power-Skalierung · Basis`}</div><div class="fkl-price">${entry?`Power ${NUMBER.format(friendPowerValue(entry))}`:EURO.format(def.price)}</div>${entry?`<div class="fkl-friend-shop-actions"><button class="fkl-btn ${equippedId===def.id?"primary":""}" type="button" data-fkl-friend-shop-equip="${def.id}">${equippedId===def.id?"Aktiv":"Ausrüsten"}</button><button class="fkl-btn gold" type="button" data-fkl-friend-fuse="${def.id}" ${entry.copies<2?"disabled":""}>Fusion · ${entry.copies}/2</button></div>`:`<button class="fkl-btn primary" type="button" data-fkl-buy-friend="${def.id}">Freund kaufen</button>`}</article>`}).join("")}</div>`;
     } else {
       const catalog = categoryCatalog.filter(def=>UI.shopRarity==="all"||def.rarity===UI.shopRarity);
-      content = `<div class="fkl-shop-grid">${catalog.map(def => { const r = RARITIES[def.rarity]; const price = shopPrice(def); const req = Math.max(def.minLevel || 1, r.minLevel || 1); const locked = data.level < req; return `<article class="fkl-panel fkl-shop-card rarity-${def.rarity}" style="--rarity:${r.color};--rarity-glow:${r.glow};--rarity-gradient:${r.gradient || r.color}"><div class="fkl-item-icon">${def.icon}</div><span class="fkl-kicker" style="color:${r.color}">${r.name}</span><h4>${escapeHtml(def.name)}</h4><p>${escapeHtml(def.text)}</p>${fightFourValuesHtml(def)}${fightWeaponPowerUpHtml(def)}${def.rarity === "universe" ? `<small class="fkl-universe-tag">🌌 UNIVERSE · LEVEL 50</small>` : ""}<div class="fkl-price">${EURO.format(price)}</div><button class="fkl-btn primary" type="button" data-fkl-buy-item="${def.id}" data-price="${price}" ${locked || data.inventory.length >= INVENTORY_LIMIT ? "disabled" : ""}>${locked ? `Ab Level ${req}` : data.inventory.length >= INVENTORY_LIMIT ? "Inventar voll" : "Kaufen"}</button></article>`; }).join("")}</div>`;
+      content = `<div class="fkl-shop-grid">${catalog.map(def => { const r = RARITIES[def.rarity]; const price = shopPrice(def); const req = Math.max(def.minLevel || 1, r.minLevel || 1); const locked = data.level < req; return `<article class="fkl-panel fkl-shop-card rarity-${def.rarity}" style="--rarity:${r.color};--rarity-glow:${r.glow};--rarity-gradient:${r.gradient||r.color}"><div class="fkl-shop-card-head"><div class="fkl-item-icon">${weaponVisualHtml(def)}</div><div class="fkl-shop-card-title"><span class="fkl-kicker" style="color:${r.color}">${r.name} · LV ${req}</span><h4>${escapeHtml(def.name)}</h4><div class="fkl-price">${EURO.format(price)}</div></div><button class="fkl-btn primary fkl-buy-top" type="button" data-fkl-buy-item="${def.id}" data-price="${price}" ${locked||data.inventory.length>=INVENTORY_LIMIT?"disabled":""}>${locked?`LV ${req}`:data.inventory.length>=INVENTORY_LIMIT?"Voll":"Kaufen"}</button></div><p>${escapeHtml(def.text)}</p>${fightFourValuesHtml(def)}${fightWeaponPowerUpHtml(def)}${["universe","blackhole","galaxy"].includes(def.rarity)?`<small class="fkl-endgame-tag">${def.rarity==="blackhole"?"🕳️ BLACK HOLE":def.rarity==="galaxy"?"🌌 GALAXY":"✨ UNIVERSE"} · LEVEL ${req}</small>`:""}</article>`; }).join("")}</div>`;
     }
-    const universeBanner = `<section class="fkl-universe-banner ${data.level >= 50 ? "unlocked" : "locked"}"><div><small>NEUE HÖCHSTE SELTENHEIT</small><h3>🌌 UNIVERSE · AB FIGHT-LEVEL 50</h3><p>${data.level >= 50 ? "Freigeschaltet: Universe-Pistolen, Langwaffen, Schrotflinten, Nahkampfwaffen und drei neue Items in jeder Ausrüstungskategorie." : `Noch ${50 - data.level} Fight-Level bis zur Universe-Ausrüstung. Die Karten bleiben sichtbar, können vorher aber nicht gekauft oder ausgerüstet werden.`}</p></div><b>${data.level >= 50 ? "FREIGESCHALTET" : `LEVEL ${data.level}/50`}</b></section>`;
-    UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Arsenal-Shop", "Großes Arsenal, individuelle Charaktere und Friends. Tank, DD und Heiler skalieren mit deiner Power und erhalten Sterne durch Hauptbosse.")}<nav class="fkl-shop-tabs">${tabs}</nav>${rarityTabs}${category==="friends"?"":universeBanner}${content}</div>`;
+    const endgameBanners=`<div class="fkl-endgame-banners"><section class="fkl-universe-banner blackhole ${data.level>=80?"unlocked":"locked"}"><div><small>ENDGAME-SELTENHEIT</small><h3>🕳️ BLACK HOLE · AB FIGHT-LEVEL 80</h3><p>${data.level>=80?"Freigeschaltet: Black-Hole-Waffen und komplette Gravitationsausrüstung. Ein vollständiges Build ist auf ungefähr 120.000 bis 130.000 Power ausgelegt.":`Noch ${80-data.level} Fight-Level bis zu Black Hole. Die Items bleiben sichtbar, sind vorher aber weder kaufbar, ausrüstbar noch als Beute erhältlich.`}</p></div><b>${data.level>=80?"FREIGESCHALTET":`LEVEL ${data.level}/80`}</b></section><section class="fkl-universe-banner galaxy ${data.level>=100?"unlocked":"locked"}"><div><small>LETZTE AUSRÜSTUNGSSTUFE</small><h3>🌌 GALAXY · AB FIGHT-LEVEL 100</h3><p>${data.level>=100?"Freigeschaltet: Galaxy-Waffen, Rüstungen, Helme, Begleiter, Reittiere und exklusive Kosmik-Skins.":`Galaxy ist die letzte Stufe. Noch ${100-data.level} Fight-Level bis zur vollständigen Galaxie-Ausrüstung.`}</p></div><b>${data.level>=100?"MAXIMUM":`LEVEL ${data.level}/100`}</b></section></div>`;
+    UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Arsenal-Shop", "Alle Seltenheiten besitzen eigene Itemlinien. Episch startet bei Level 10, Black Hole bei 80 und Galaxy bei 100.")}<nav class="fkl-shop-tabs">${tabs}</nav>${rarityTabs}${category==="friends"?"":endgameBanners}${content}</div>`;
     bindPageHome();
     UI.main.querySelectorAll("[data-fkl-shop-category]").forEach(btn => btn.addEventListener("click", () => { UI.shopCategory = btn.dataset.fklShopCategory; renderShop(); }));
     UI.main.querySelectorAll("[data-fkl-shop-rarity]").forEach(btn=>btn.addEventListener("click",()=>{UI.shopRarity=btn.dataset.fklShopRarity;renderShop();}));
@@ -1509,8 +1657,8 @@ function dailyShopItems(category = UI.shopCategory) {
       data.repairKits[id] += 1; safeSave(); updateHead(); toast("Gekauft", kit.name); renderShop();
     }));
     UI.main.querySelectorAll("[data-fkl-style]").forEach(btn => btn.addEventListener("click", () => {
-      const style = STYLE_MAP.get(btn.dataset.fklStyle); if (!style) return;
-      if (!data.cosmetics.owned.includes(style.id)) { if (!payFight(style.price, `Charakterfarbe ${style.name}`)) return toast("Nicht genug Geld"); data.cosmetics.owned.push(style.id); }
+      const style=STYLE_MAP.get(btn.dataset.fklStyle);if(!style)return;const rarity=RARITIES[style.rarity]||RARITIES.common,req=Math.max(1,Number(style.minLevel||rarity.minLevel||1));if(data.level<req)return toast(`Fight-Level ${req} nötig`);
+      if(!data.cosmetics.owned.includes(style.id)){if(!payFight(style.price,`Charakterfarbe ${style.name}`))return toast("Nicht genug Geld");data.cosmetics.owned.push(style.id);}
       data.cosmetics.active = style.id; safeSave(); toast("Charakterfarbe aktiv", style.name); renderShop();
     }));
   }
@@ -1564,9 +1712,9 @@ function buildPlayer() {
   const gear = Object.fromEntries(gearSlots.map(slot => [slot, gearItems[slot] ? effectiveStats(gearItems[slot]) : {}]));
   const sum = key => gearSlots.reduce((total, slot) => total + Number(gear[slot][key] || 0), 0);
   const levelBonus = 1 + (data.level - 1) * .012;
-  const damageMult = levelBonus * (1 + sum("damagePct") / 100);
-  const speedBonus = sum("speed"), speedPenalty = gearSlots.reduce((total, slot) => total + Number(gear[slot].speedPenalty || 0), 0);
-  const style = styleById(data.cosmetics.active);
+  const style=styleById(data.cosmetics.active),styleDamage=Number(style.damagePct||0),styleHealth=Number(style.healthPct||0),styleSpeed=Number(style.speedPct||0),styleArmor=Number(style.armorPct||0);
+  const damageMult=levelBonus*(1+(sum("damagePct")+styleDamage)/100);
+  const speedBonus=sum("speed")+styleSpeed,speedPenalty=gearSlots.reduce((total,slot)=>total+Number(gear[slot].speedPenalty||0),0);
   const weaponRuntimes = {};
   WEAPON_SLOT_KEYS.forEach(slot => {
     const item = equipped(slot); if (!item) return;
@@ -1578,11 +1726,11 @@ function buildPlayer() {
   const mountArmor = Math.round(Number(gear.mount.mountArmor || 0));
   return {
     x: WORLD_W / 2, y: WORLD_H / 2, radius: 18,
-    maxHp: Math.round(130 + data.level * 3 + sum("health")), hp: 0,
+    maxHp: Math.round((130+data.level*3+sum("health"))*(1+styleHealth/100)), hp: 0,
     maxShield: Math.round(sum("shield")), shield: Math.round(sum("shield")),
     baseSpeed: 250 * (1 + (speedBonus - Number(gear.mount.speed || 0)) / 100) * Math.max(.55, 1 - speedPenalty),
     mountSpeedPct: Number(gear.mount.speed || 0), mountMaxArmor: mountArmor, mountArmor, mountActive: !!gearItems.mount && mountArmor > 0, mountItem: gearItems.mount, mountStats: gear.mount,
-    speed: 250, armor: clamp(sum("armor") / 100, 0, .72),
+    speed:250,armor:clamp((sum("armor")+styleArmor)/100,0,.72),
     dodge: clamp(sum("dodge") / 100, 0, .48), regen: sum("regen"),
     crit: .05 + sum("crit") / 100, critDamage: 1.75 + sum("critDamage") / 100,
     lifesteal: (sum("lifesteal") + Number(active.stats.lifesteal || 0)) / 100,
@@ -2148,26 +2296,33 @@ function grantCombatLoot(wave,boss){
   }
   return item;
 }
-function grantLoot(wave, boss) {
-  const data = ensureState(); if (data.inventory.length >= INVENTORY_LIMIT) { UI.session.moneyEarned += boss ? 1200 : 300; return null; }
-  const roll = Math.random() * 100; const luck = Math.min(.45, UI.session.player.lootBonus / 1000) + (boss ? .08 : 0); let rarity = "common";
-  const universeChance = data.level >= 50 && wave >= 100 ? .002 + Math.min(.008, (wave - 100) * .00008) + (boss ? .006 : 0) + luck * .004 : 0;
-  const exoticChance = data.level >= 15 && wave >= 60 ? .012 + Math.min(.018, (wave - 60) * .00025) + luck * .01 : 0;
-  const mythicChance = data.level >= 10 && wave >= 35 ? .20 + Math.min(.10, (wave - 35) * .0015) + luck * .04 : 0;
-  const legendaryChance = wave >= 18 ? .35 + Math.min(1.1, (wave - 18) * .018) + (boss ? .9 : 0) + luck * .6 : .05;
-  if (roll < universeChance) rarity = "universe";
-  else if (roll < universeChance + exoticChance) rarity = "exotic";
-  else if (roll < universeChance + exoticChance + mythicChance) rarity = "mythic";
-  else if (roll < universeChance + exoticChance + mythicChance + legendaryChance) rarity = "legendary";
-  else if (roll < 5 + Math.min(8, wave * .07) + luck * 2) rarity = "epic";
-  else if (roll < 20 + Math.min(12, wave * .1) + luck * 3) rarity = "rare";
-  else if (roll < 55 + Math.min(8, wave * .08) + luck * 4) rarity = "uncommon";
-  let pool;
-  if (["mythic","exotic","universe"].includes(rarity)) pool = ITEMS.filter(def => def.rarity === rarity && data.level >= requiredLevel({baseId:def.id,rarity,star:0}));
-  else pool = ITEMS.filter(def => rarityIndex(def.rarity) <= rarityIndex("legendary") && !["special","mythic","exotic","universe"].includes(def.rarity) && data.level >= Math.max(def.minLevel || 1, RARITIES[rarity].minLevel || 1));
-  if (!pool.length) pool = ITEMS.filter(item => item.rarity === "common");
-  const def = pick(pool); const star = wave >= 80 && Math.random() < .05 ? 1 : 0; const item = makeItem(def.id, star, null, rarity);
-  data.inventory.unshift(item); UI.session.lootEarned.push(item); safeSave(); toast("Persönliche Beute", `${RARITIES[rarity].name}: ${def.name} ${starText(star)}`); return item;
+function rollFightLootRarity(level,wave,boss,luck){
+  const unlocked=RARITY_ORDER.filter(id=>level>=RARITIES[id].minLevel),highest=unlocked[unlocked.length-1]||"common",roll=Math.random()*100;
+  const chances={
+    galaxy:level>=100&&wave>=220?.003+Math.min(.012,(wave-220)*.00005)+(boss ? .008 : 0):0,
+    blackhole:level>=80&&wave>=150?.012+Math.min(.04,(wave-150)*.00018)+(boss ? .025 : 0):0,
+    universe:level>=50&&wave>=100?.04+Math.min(.11,(wave-100)*.00055)+(boss ? .07 : 0):0,
+    exotic:level>=40&&wave>=70?.12+Math.min(.28,(wave-70)*.0012)+(boss ? .18 : 0):0,
+    mythic:level>=30&&wave>=45?.35+Math.min(.55,(wave-45)*.002)+(boss ? .28 : 0):0,
+    special:level>=20&&wave>=28?.75+Math.min(1.1,(wave-28)*.004)+(boss ? .45 : 0):0,
+    legendary:level>=15&&wave>=18?1.25+Math.min(1.9,(wave-18)*.008)+(boss ? .75 : 0):0,
+    epic:level>=10?4.2+Math.min(5.5,wave*.03)+(boss?1.1:0):0,
+    rare:11+Math.min(8,wave*.04),uncommon:28+Math.min(9,wave*.035)
+  };
+  let cursor=luck*1.8;
+  for(const id of ["galaxy","blackhole","universe","exotic","mythic","special","legendary","epic"]){cursor+=chances[id]||0;if(roll<cursor&&unlocked.includes(id))return id;}
+  cursor+=chances.rare;if(roll<cursor)return unlocked.includes("rare")?"rare":highest;
+  cursor+=chances.uncommon;if(roll<cursor)return unlocked.includes("uncommon")?"uncommon":"common";
+  return "common";
+}
+function grantLoot(wave,boss){
+  const data=ensureState();if(data.inventory.length>=INVENTORY_LIMIT){UI.session.moneyEarned+=boss?1200:300;return null;}
+  const luck=Math.min(.45,UI.session.player.lootBonus/1000)+(boss ? .08 : 0),rarity=rollFightLootRarity(data.level,wave,boss,luck);
+  let actualRarity=rarity;
+  let pool=ITEMS.filter(def=>def.id!=="star-upgrade-core"&&!def.noShop&&def.rarity===actualRarity&&data.level>=requiredLevel({baseId:def.id,rarity:actualRarity,star:0}));
+  while(!pool.length&&rarityIndex(actualRarity)>0){actualRarity=RARITY_ORDER[rarityIndex(actualRarity)-1];pool=ITEMS.filter(def=>def.id!=="star-upgrade-core"&&!def.noShop&&def.rarity===actualRarity&&data.level>=requiredLevel({baseId:def.id,rarity:actualRarity,star:0}));}
+  if(!pool.length){actualRarity="common";pool=ITEMS.filter(def=>def.rarity==="common"&&def.id!=="star-upgrade-core");}
+  const def=pick(pool),star=wave>=80&&Math.random()<.035?1:0,item=makeItem(def.id,star,null,actualRarity);data.inventory.unshift(item);UI.session.lootEarned.push(item);safeSave();toast("Persönliche Beute",`${RARITIES[actualRarity].name}: ${def.name} ${starText(star)}`);return item;
 }
 
   function addFightXp(amount) {
@@ -2274,25 +2429,35 @@ function updateHud() {
 
 
   function drawDetailedWeapon(ctx,p,w,now){
-    const rarity=RARITIES[w.rarity]||RARITIES.common,stars=clamp(Math.floor(Number(w.star)||0),0,MAX_STAR),family=w.family|| (w.attack==="melee"?"melee":"automatic"),variant=Math.max(1,Math.floor(Number(w.weaponVariant)||((String(w.id||w.name||"").length%4)+1))),pulse=.65+.35*Math.sin(now*.011+variant);
-    ctx.save();ctx.rotate(p.angle+Math.PI/2);
-    const attackMax=Math.max(.12,Number(p.attackAnimMax||.24)),attackRatio=clamp(Number(p.attackAnim||0)/attackMax,0,1);
-    if((family==="melee"||w.attack==="melee")&&attackRatio>0){
-      const swingPhase=1-attackRatio;
-      ctx.rotate(-.95+swingPhase*1.9);
-      ctx.translate(Math.sin(swingPhase*Math.PI)*9,-Math.sin(swingPhase*Math.PI)*3);
-    }else if(attackRatio>0){
-      ctx.translate(0,Math.sin(attackRatio*Math.PI)*3);
-    }
-    ctx.lineCap="round";ctx.lineJoin="round";ctx.shadowColor=rarity.color;ctx.shadowBlur=8+rarityIndex(w.rarity)*1.6;
+    const rarity=RARITIES[w.rarity]||RARITIES.common,stars=clamp(Math.floor(Number(w.star)||0),0,MAX_STAR),family=w.family||(w.attack==="melee"?"melee":"automatic"),shape=weaponVisualType(w),variant=weaponVariantNumber(w),pulse=.65+.35*Math.sin(now*.011+variant);
+    ctx.save();ctx.rotate(p.angle+Math.PI/2);const attackMax=Math.max(.12,Number(p.attackAnimMax||.24)),attackRatio=clamp(Number(p.attackAnim||0)/attackMax,0,1);
+    if((family==="melee"||w.attack==="melee")&&attackRatio>0){const swing=1-attackRatio;ctx.rotate(-.95+swing*1.9);ctx.translate(Math.sin(swing*Math.PI)*9,-Math.sin(swing*Math.PI)*3);}else if(attackRatio>0)ctx.translate(0,Math.sin(attackRatio*Math.PI)*3);
+    ctx.lineCap="round";ctx.lineJoin="round";ctx.shadowColor=rarity.color;ctx.shadowBlur=8+rarityIndex(w.rarity)*1.6;ctx.strokeStyle=rarity.color;ctx.fillStyle=rarity.color;
     if(family==="melee"||w.attack==="melee"){
-      const length=38+variant*4+stars*2;ctx.strokeStyle="#252a30";ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,7);ctx.lineTo(0,-8);ctx.stroke();ctx.strokeStyle=rarity.color;ctx.lineWidth=5+variant*.7;ctx.beginPath();ctx.moveTo(0,-6);ctx.lineTo((variant%2?4:-4),-length);ctx.stroke();ctx.strokeStyle=w.special?"#fff":rarity.color;ctx.lineWidth=1.8;ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo((variant%2?4:-4),-length+2);ctx.stroke();if(variant>=3){ctx.fillStyle=rarity.color;ctx.beginPath();ctx.moveTo(-9,-8);ctx.lineTo(9,-8);ctx.lineTo(0,-15);ctx.closePath();ctx.fill();}
+      const length=44+stars*2;ctx.strokeStyle="#3b2c25";ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,10);ctx.lineTo(0,-length+8);ctx.stroke();ctx.strokeStyle=rarity.color;ctx.fillStyle=rarity.color;
+      if(shape==="hammer"){ctx.fillRect(-14,-length-2,28,12);ctx.fillStyle="#eef7ff";ctx.fillRect(-10,-length+1,20,3);}
+      else if(shape==="axe"){ctx.beginPath();ctx.moveTo(0,-length);ctx.lineTo(18,-length+4);ctx.lineTo(13,-length+18);ctx.lineTo(0,-length+13);ctx.closePath();ctx.fill();}
+      else if(shape==="spear"||shape==="trident"){ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(0,-length-12);ctx.stroke();if(shape==="trident"){[-7,0,7].forEach(x=>{ctx.beginPath();ctx.moveTo(x,-length+1);ctx.lineTo(x,-length-13);ctx.stroke();});ctx.beginPath();ctx.moveTo(-7,-length);ctx.lineTo(7,-length);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(0,-length-17);ctx.lineTo(-7,-length-4);ctx.lineTo(7,-length-4);ctx.closePath();ctx.fill();}}
+      else if(shape==="bat"||shape==="club"){ctx.lineWidth=shape==="club"?13:10;ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(shape==="club"?4:0,-length);ctx.stroke();}
+      else if(shape==="crowbar"){ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(0,-length);ctx.quadraticCurveTo(0,-length-12,11,-length-10);ctx.stroke();}
+      else if(shape==="scythe"){ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(0,-length);ctx.stroke();ctx.beginPath();ctx.arc(10,-length+3,17,Math.PI*.9,Math.PI*1.7);ctx.stroke();}
+      else{ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(variant%2?3:-3,-length);ctx.stroke();ctx.lineWidth=2;ctx.strokeStyle="#fff";ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(variant%2?3:-3,-length+2);ctx.stroke();ctx.fillStyle=rarity.color;ctx.fillRect(-10,-8,20,4);}
     }else{
-      const long=family==="automatic"?38:family==="shotgun"?34:25,wide=family==="shotgun"?8:6;ctx.fillStyle="#1a2228";ctx.strokeStyle=rarity.color;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-wide,-long+8,wide*2,long,3);ctx.fill();ctx.stroke();ctx.fillStyle=rarity.color;ctx.globalAlpha=.8;ctx.fillRect(-wide+2,-long+13,wide*2-4,4+variant);ctx.globalAlpha=1;ctx.strokeStyle="#dcecff";ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(0,-long+8);ctx.lineTo(0,-long-5-variant*2);ctx.stroke();if(family==="automatic"){ctx.strokeStyle="#303b43";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-3,5);ctx.lineTo(-9,14);ctx.moveTo(3,5);ctx.lineTo(8,13);ctx.stroke();}if(family==="shotgun"){ctx.strokeStyle=rarity.color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-5,-long+5);ctx.lineTo(-5,-long-7);ctx.moveTo(5,-long+5);ctx.lineTo(5,-long-7);ctx.stroke();}if(variant>=2){ctx.fillStyle="#11181d";ctx.strokeStyle=rarity.color;ctx.beginPath();ctx.roundRect(-5,-long+3,10,7,2);ctx.fill();ctx.stroke();}if(variant>=3||stars>=3){ctx.fillStyle=rarity.color;ctx.globalAlpha=.5+.35*pulse;ctx.beginPath();ctx.arc(0,-long/2,3.5+stars*.35,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
+      let long=shape==="sniper"?52:shape==="lmg"?44:family==="automatic"?39:family==="shotgun"?38:27,wide=shape==="lmg"?10:family==="shotgun"?8:6;
+      ctx.fillStyle="#172127";ctx.strokeStyle=rarity.color;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-wide,-long+9,wide*2,long,3);ctx.fill();ctx.stroke();
+      ctx.fillStyle=rarity.color;ctx.globalAlpha=.82;ctx.fillRect(-wide+2,-long+14,wide*2-4,4+variant);ctx.globalAlpha=1;
+      ctx.strokeStyle="#dcecff";ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(0,-long+8);ctx.lineTo(0,-long-8-(shape==="handcannon"?7:0));ctx.stroke();
+      if(shape==="revolver"){ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(0,-long+20,7,0,Math.PI*2);ctx.fill();}
+      if(shape==="burst-pistol"||shape==="smg"){ctx.strokeStyle="#303b43";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-3,4);ctx.lineTo(-9,14);ctx.moveTo(3,4);ctx.lineTo(8,12);ctx.stroke();}
+      if(shape==="sniper"){ctx.strokeStyle=rarity.color;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-9,-long+18);ctx.lineTo(9,-long+18);ctx.stroke();ctx.fillStyle="#0a0e12";ctx.fillRect(-8,-long+12,16,5);}
+      if(shape==="lmg"){ctx.fillStyle="#25323a";ctx.beginPath();ctx.arc(0,-long+29,10,0,Math.PI*2);ctx.fill();}
+      if(shape==="double-shotgun"){ctx.strokeStyle=rarity.color;ctx.lineWidth=3;[-4,4].forEach(x=>{ctx.beginPath();ctx.moveTo(x,-long+5);ctx.lineTo(x,-long-12);ctx.stroke();});}
+      if(shape==="pump-shotgun"){ctx.fillStyle=rarity.color;ctx.fillRect(-7,-long+24,14,8);}
+      if(shape==="drum-shotgun"){ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(0,-long+28,9,0,Math.PI*2);ctx.fill();}
     }
-    for(let i=0;i<stars;i++){const a=(i/(Math.max(1,stars)))*Math.PI*1.4-.7;ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(Math.sin(a)*(8+i*.5),-13-Math.cos(a)*4,1.2,0,Math.PI*2);ctx.fill();}
-    if(p.attackAnim>0){ctx.shadowBlur=22;ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(0,family==="melee"?-45:-44,5+rarityIndex(w.rarity)*.35,0,Math.PI*2);ctx.fill();}
-    ctx.restore();
+    for(let i=0;i<stars;i++){const a=(i/Math.max(1,stars))*Math.PI*1.4-.7;ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(Math.sin(a)*(8+i*.5),-13-Math.cos(a)*4,1.2,0,Math.PI*2);ctx.fill();}
+    if(w.rarity==="blackhole"||w.rarity==="galaxy"){ctx.globalAlpha=.35+.35*pulse;ctx.fillStyle=rarity.color;for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(Math.sin(now*.002+i)*14,-24+Math.cos(now*.0024+i)*18,1.4,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+    if(p.attackAnim>0){ctx.shadowBlur=22;ctx.fillStyle=rarity.color;ctx.beginPath();ctx.arc(0,family==="melee"?-49:-46,5+rarityIndex(w.rarity)*.3,0,Math.PI*2);ctx.fill();}ctx.restore();
   }
 
   function drawPlayer(ctx,s,now) {
@@ -2493,7 +2658,8 @@ function updateHud() {
     const sum = key => items.reduce((total,item)=>total+Number(item[key]||0),0);
     const weapons=WEAPON_SLOT_KEYS.map(slot=>equipped(slot)).filter(Boolean).map(effectiveStats),strongest=weapons.reduce((best,item)=>Math.max(best,Number(item.damage||0)),0);
     const compItems=[equipped("companion"),equipped("companion2")].filter(Boolean),compStats=compItems.map(effectiveStats),primary=compStats[0]||{},ownerBonus=combinedCompanionOwnerBonuses(compItems);
-    return {health:Math.round(130+data.level*3+sum("health")),armor:Math.round(Math.min(72,sum("armor"))),speed:Math.round(sum("speed")-items.reduce((total,item)=>total+Number(item.speedPenalty||0)*100,0)),damage:Math.round(strongest),damagePct:Math.round(sum("damagePct")),shield:Math.round(sum("shield")),crit:Math.round(5+sum("crit")),dodge:Math.round(Math.min(58,sum("dodge"))),loot:Math.round(sum("loot")),mountArmor:Math.round(sum("mountArmor")),companionDamage:Math.round(compStats.reduce((t,s)=>t+Number(s.companionDamage||0),0)*(1+sum("companionDamagePct")/100)),companionHealth:Math.round(Number(primary.companionHealth||0)*(1+sum("companionHealthPct")/100)),companionRate:compStats.reduce((t,s)=>t+Number(s.companionRate||0),0)*(1+sum("companionRatePct")/100),companionOwnerDamage:Math.round(ownerBonus.damage),companionOwnerDefense:Math.round(ownerBonus.defense),companionCareHealthPct:Math.round(sum("companionCareHealthPct")),companionCareHealPct:Math.round(sum("companionCareHealPct")),mountCareHealthPct:Math.round(sum("mountCareHealthPct")),mountCareHealPct:Math.round(sum("mountCareHealPct")),dodgeHeal:Math.round(sum("dodgeHeal")),power:powerScore()};
+    const style=styleById(data.cosmetics.active),styleHealth=Number(style.healthPct||0),styleArmor=Number(style.armorPct||0),styleSpeed=Number(style.speedPct||0),styleDamage=Number(style.damagePct||0);
+    return {health:Math.round((130+data.level*3+sum("health"))*(1+styleHealth/100)),armor:Math.round(Math.min(72,sum("armor")+styleArmor)),speed:Math.round(sum("speed")+styleSpeed-items.reduce((total,item)=>total+Number(item.speedPenalty||0)*100,0)),damage:Math.round(strongest*(1+styleDamage/100)),damagePct:Math.round(sum("damagePct")+styleDamage),shield:Math.round(sum("shield")),crit:Math.round(5+sum("crit")),dodge:Math.round(Math.min(58,sum("dodge"))),loot:Math.round(sum("loot")),mountArmor:Math.round(sum("mountArmor")),companionDamage:Math.round(compStats.reduce((t,s)=>t+Number(s.companionDamage||0),0)*(1+sum("companionDamagePct")/100)),companionHealth:Math.round(Number(primary.companionHealth||0)*(1+sum("companionHealthPct")/100)),companionRate:compStats.reduce((t,s)=>t+Number(s.companionRate||0),0)*(1+sum("companionRatePct")/100),companionOwnerDamage:Math.round(ownerBonus.damage),companionOwnerDefense:Math.round(ownerBonus.defense),companionCareHealthPct:Math.round(sum("companionCareHealthPct")),companionCareHealPct:Math.round(sum("companionCareHealPct")),mountCareHealthPct:Math.round(sum("mountCareHealthPct")),mountCareHealPct:Math.round(sum("mountCareHealPct")),dodgeHeal:Math.round(sum("dodgeHeal")),power:powerScore()};
   }
 
   function powerScore() {
@@ -2552,7 +2718,7 @@ function updateHud() {
     stopCoopWaiting(true); stopCombat(false); stopDuel(false);
     const data=ensureState(),need=data.level>=MAX_LEVEL?1:levelNeed(data.level),pct=data.level>=MAX_LEVEL?100:clamp(data.xp/need*100,0,100),weapon=equipped(data.activeWeaponSlot)||equipped("primary")||equipped("sidearm")||equipped("melee"),comp=equipped("companion"),comp2=equipped("companion2"),companions=[comp,comp2].filter(Boolean);
     const startOptions=waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart);
-    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · 1–4-PLAYER-KOOP · BOSS-CHECKPOINTS</small><h1>FIGHT<span>.KL</span></h1><p>Erreichte Zehner-Wellen bleiben als Startpunkte freigeschaltet. Du kannst weiterhin bei Welle 1 beginnen oder direkt an einem erreichten Boss-Abschnitt einsteigen.</p><div class="fkl-wave-start-card"><label><span>Startwelle</span><select data-fkl-start-wave>${startOptions}</select></label><small>Freigeschaltet bis Welle ${data.unlockedWaveStart}. Neue Punkte erhältst du bei 10, 20, 30, 40 und immer weiter.</small></div><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena starten</button><button class="fkl-btn gold" type="button" data-fkl-coop>🤝 Wellen-KOOP</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button>${fightAdminButtonHtml()}</div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${companions.length?`${companions.length} aktiv`:"Keiner"}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, Ausrüstung, Pflege-Sets, Filter und Zwei-Item-Merge.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>648 zusätzliche Shop-Items, 18 Friends sowie Royal-/Neon-Charaktere und Universe-Ausrüstung ab Level 50.</small></article><article class="fkl-panel fkl-feature" data-fkl-coop><i>🤝</i><b>Wellen-KOOP</b><small>Solo sowie KOOP für 2, 3 oder 4 Spieler. Der Host bestimmt die Startwelle; KOOP-Wellen zählen nicht als neue Startpunkte.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
+    UI.main.innerHTML=`<div class="fkl-dashboard"><section class="fkl-panel fkl-hero"><div class="fkl-hero-copy"><small class="fkl-kicker">ENDLOSE ARENA · 1–4-PLAYER-KOOP · BOSS-CHECKPOINTS</small><h1>FIGHT<span>.KL</span></h1><p>Erreichte Zehner-Wellen bleiben als Startpunkte freigeschaltet. Du kannst weiterhin bei Welle 1 beginnen oder direkt an einem erreichten Boss-Abschnitt einsteigen.</p><div class="fkl-wave-start-card"><label><span>Startwelle</span><select data-fkl-start-wave>${startOptions}</select></label><small>Freigeschaltet bis Welle ${data.unlockedWaveStart}. Neue Punkte erhältst du bei 10, 20, 30, 40 und immer weiter.</small></div><div class="fkl-hero-actions"><button class="fkl-btn primary" type="button" data-fkl-start>⚔ Bot-Arena starten</button><button class="fkl-btn gold" type="button" data-fkl-coop>🤝 Wellen-KOOP</button><button class="fkl-btn ${data.level>=5?"gold":""}" type="button" data-fkl-duel>${data.level>=5?"🌐 Online 1 gegen 1":"🔒 Online-Duell ab Level 5"}</button><button class="fkl-btn" type="button" data-fkl-inventory>🎒 Inventar & Ausrüstung</button><button class="fkl-btn" type="button" data-fkl-shop>🛒 Arsenal-Shop</button>${fightAdminButtonHtml()}</div></div><div class="fkl-hero-figure"></div></section><aside class="fkl-panel fkl-level-card"><div class="fkl-level-row"><div><small class="fkl-kicker">DEIN FIGHT-PROFIL</small><h3>${escapeHtml(playerName())}</h3></div><strong>LV ${data.level}</strong></div><div class="fkl-progress"><i style="width:${pct}%"></i></div><small>${data.level>=MAX_LEVEL?"Maximallevel erreicht":`${NUMBER.format(data.xp)} / ${NUMBER.format(need)} XP bis Level ${data.level+1}`}</small><div class="fkl-stat-grid" style="margin-top:15px"><div class="fkl-stat-card"><small>Aktive Waffe</small><b>${escapeHtml(itemDef(weapon).name)}</b></div><div class="fkl-stat-card"><small>Begleiter</small><b>${companions.length?`${companions.length} aktiv`:"Keiner"}</b></div><div class="fkl-stat-card"><small>Bestleistung</small><b>Welle ${data.bestWave}</b></div><div class="fkl-stat-card"><small>Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div></div></aside><div class="fkl-dashboard-lower v117"><article class="fkl-panel fkl-feature" data-fkl-inventory><i>🎒</i><b>Inventar & Loadout</b><small>Charakteransicht, Ausrüstung, Pflege-Sets, Filter und Zwei-Item-Merge.</small></article><article class="fkl-panel fkl-feature" data-fkl-shop><i>🛒</i><b>Arsenal-Shop</b><small>${NUMBER.format(ITEMS.length)} Items, farbcodierte Seltenheiten, individuelle Waffensilhouetten sowie Universe ab Level 50, Black Hole ab 80 und Galaxy ab 100.</small></article><article class="fkl-panel fkl-feature" data-fkl-coop><i>🤝</i><b>Wellen-KOOP</b><small>Solo sowie KOOP für 2, 3 oder 4 Spieler. Der Host bestimmt die Startwelle; KOOP-Wellen zählen nicht als neue Startpunkte.</small></article><article class="fkl-panel fkl-feature" data-fkl-duel><i>🌐</i><b>Online 1 gegen 1</b><small>${data.level>=5?"Firebase-Matchmaking mit Bewegung, Angriff, Ausweichen und Special.":"Wird mit Fight-Level 5 freigeschaltet."}</small></article><article class="fkl-panel fkl-feature" data-fkl-leader><i>🏆</i><b>Online-Scores</b><small>Rangliste nach Wellen, Score und Power.</small></article></div></div>`;
     const startSelect=UI.main.querySelector("[data-fkl-start-wave]");
     startSelect?.addEventListener("change",()=>{data.selectedStartWave=normalizeWaveCheckpoint(startSelect.value,data.unlockedWaveStart);safeSave();});
     UI.main.querySelector("[data-fkl-start]").addEventListener("click",()=>{const wave=normalizeWaveCheckpoint(startSelect?.value||data.selectedStartWave,data.unlockedWaveStart);data.selectedStartWave=wave;safeSave();startCombat(wave);});
@@ -2632,10 +2798,10 @@ function updateHud() {
   }
   function drawFriends(ctx,s,now){for(const friend of friendList(s.player))drawOneFriend(ctx,s,now,friend);}
   function buildPlayer() {
-    const data=ensureState(),gearSlots=["helmet","armor","suit","boots","chip","charm","mount","mountcare","companion","companion2","companioncare"],gearItems=Object.fromEntries(gearSlots.map(slot=>[slot,equipped(slot)])),gear=Object.fromEntries(gearSlots.map(slot=>[slot,gearItems[slot]?effectiveStats(gearItems[slot]):{}])),sum=key=>gearSlots.reduce((total,slot)=>total+Number(gear[slot][key]||0),0),levelBonus=1+(data.level-1)*.012,speedBonus=sum("speed"),speedPenalty=gearSlots.reduce((total,slot)=>total+Number(gear[slot].speedPenalty||0),0),style=styleById(data.cosmetics.active),weaponRuntimes={};
+    const data=ensureState(),gearSlots=["helmet","armor","suit","boots","chip","charm","mount","mountcare","companion","companion2","companioncare"],gearItems=Object.fromEntries(gearSlots.map(slot=>[slot,equipped(slot)])),gear=Object.fromEntries(gearSlots.map(slot=>[slot,gearItems[slot]?effectiveStats(gearItems[slot]):{}])),sum=key=>gearSlots.reduce((total,slot)=>total+Number(gear[slot][key]||0),0),levelBonus=1+(data.level-1)*.012,style=styleById(data.cosmetics.active),styleDamage=Number(style.damagePct||0),styleHealth=Number(style.healthPct||0),styleSpeed=Number(style.speedPct||0),styleArmor=Number(style.armorPct||0),speedBonus=sum("speed")+styleSpeed,speedPenalty=gearSlots.reduce((total,slot)=>total+Number(gear[slot].speedPenalty||0),0),weaponRuntimes={};
     const staff=canUseStaffModMenu()?data.staffTools:{godMode:false,damageMultiplier:1,speedMultiplier:1,defenseMultiplier:1};
     const compItems=[gearItems.companion,gearItems.companion2].filter(Boolean),ownerBonus=combinedCompanionOwnerBonuses(compItems);
-    const damageMult=levelBonus*(1+sum("damagePct")/100)*(1+ownerBonus.damage/100)*Number(staff.damageMultiplier||1);
+    const damageMult=levelBonus*(1+(sum("damagePct")+styleDamage)/100)*(1+ownerBonus.damage/100)*Number(staff.damageMultiplier||1);
     WEAPON_SLOT_KEYS.forEach(slot=>{const item=equipped(slot);if(!item)return;const stats=effectiveStats(item);weaponRuntimes[slot]={slot,item,stats,ammo:Math.max(1,Math.round(stats.magazine||1)),reloading:false,reloadTimer:0,specialCharge:0,specialReady:false}});
     let activeWeaponSlot=WEAPON_SLOT_KEYS.includes(data.activeWeaponSlot)&&weaponRuntimes[data.activeWeaponSlot]?data.activeWeaponSlot:WEAPON_SLOT_KEYS.find(slot=>weaponRuntimes[slot]);
     const active=weaponRuntimes[activeWeaponSlot]||{slot:"fists",item:null,stats:{id:"fists",name:"Fäuste",attack:"melee",family:"melee",rarity:"common",damage:9,fireRate:1.2,range:62,arc:1.5},ammo:1,reloading:false,reloadTimer:0,specialCharge:0,specialReady:false},moduleSpecial=gear.chip.specialGrant||gear.suit.specialGrant||gear.helmet.specialGrant||"";
@@ -2647,7 +2813,7 @@ function updateHud() {
     const companionCare=gearItems.companioncare?{item:gearItems.companioncare,healPct:Number(compCareStats.companionCareHealPct||25),cooldown:Number(compCareStats.careCooldown||18),timer:0,maxCharges:careUseLimit(gearItems.companioncare),charges:careUseLimit(gearItems.companioncare)}:null;
     const mountCare=gearItems.mountcare?{item:gearItems.mountcare,healPct:Number(mountCareStats.mountCareHealPct||25),cooldown:Number(mountCareStats.careCooldown||18),timer:0,maxCharges:careUseLimit(gearItems.mountcare),charges:careUseLimit(gearItems.mountcare)}:null;
     const baseSpeed=250*(1+(speedBonus-Number(gear.mount.speed||0))/100)*Math.max(.55,1-speedPenalty)*Number(staff.speedMultiplier||1);
-    const player={x:WORLD_W/2,y:WORLD_H/2,radius:18,maxHp:Math.round(130+data.level*3+sum("health")),hp:0,maxShield:Math.round(sum("shield")),shield:Math.round(sum("shield")),baseSpeed,mountSpeedPct:Number(gear.mount.speed||0),mountMaxArmor:mountArmor,mountArmor,mountActive:!!gearItems.mount&&mountArmor>0,mountItem:gearItems.mount,mountStats:gear.mount,mountCare,speed:baseSpeed,armor:clamp(sum("armor")/100,0,.72),dodge:clamp(sum("dodge")/100,0,.58),dodgeHeal:sum("dodgeHeal"),dodgeBurst:sum("dodgeBurst"),regen:sum("regen"),crit:.05+sum("crit")/100,critDamage:1.75+sum("critDamage")/100,lifesteal:(sum("lifesteal")+Number(active.stats.lifesteal||0))/100,bossDamage:1+sum("bossDamage")/100,lootBonus:sum("loot"),revive:Math.floor(sum("revive")),armorItem:gearItems.armor||gearItems.suit||gearItems.helmet,weaponRuntimes,activeWeaponSlot,weaponItem:active.item,weapon:active.stats,ammo:active.ammo,reloading:active.reloading,reloadTimer:active.reloadTimer,moduleSpecial,damageMult,fireCooldown:0,attackAnim:0,hitFlash:0,angle:-Math.PI/2,vx:0,vy:0,moving:false,weaponBroken:!active.item||Number(active.item.durability)<=0,cosmetics:style,lookX:0,lookY:-1,specialType:active.stats.special||moduleSpecial||"",specialCharge:active.specialCharge,specialReady:active.specialReady,specialPulse:0,companion,companion2,companionPool,companionCare,companionDefensePct:ownerBonus.defense,godMode:!!staff.godMode,staffDefenseMultiplier:Number(staff.defenseMultiplier||1)};
+    const player={x:WORLD_W/2,y:WORLD_H/2,radius:18,maxHp:Math.round((130+data.level*3+sum("health"))*(1+styleHealth/100)),hp:0,maxShield:Math.round(sum("shield")),shield:Math.round(sum("shield")),baseSpeed,mountSpeedPct:Number(gear.mount.speed||0),mountMaxArmor:mountArmor,mountArmor,mountActive:!!gearItems.mount&&mountArmor>0,mountItem:gearItems.mount,mountStats:gear.mount,mountCare,speed:baseSpeed,armor:clamp((sum("armor")+styleArmor)/100,0,.72),dodge:clamp(sum("dodge")/100,0,.58),dodgeHeal:sum("dodgeHeal"),dodgeBurst:sum("dodgeBurst"),regen:sum("regen"),crit:.05+sum("crit")/100,critDamage:1.75+sum("critDamage")/100,lifesteal:(sum("lifesteal")+Number(active.stats.lifesteal||0))/100,bossDamage:1+sum("bossDamage")/100,lootBonus:sum("loot"),revive:Math.floor(sum("revive")),armorItem:gearItems.armor||gearItems.suit||gearItems.helmet,weaponRuntimes,activeWeaponSlot,weaponItem:active.item,weapon:active.stats,ammo:active.ammo,reloading:active.reloading,reloadTimer:active.reloadTimer,moduleSpecial,damageMult,fireCooldown:0,attackAnim:0,hitFlash:0,angle:-Math.PI/2,vx:0,vy:0,moving:false,weaponBroken:!active.item||Number(active.item.durability)<=0,cosmetics:style,lookX:0,lookY:-1,specialType:active.stats.special||moduleSpecial||"",specialCharge:active.specialCharge,specialReady:active.specialReady,specialPulse:0,companion,companion2,companionPool,companionCare,companionDefensePct:ownerBonus.defense,godMode:!!staff.godMode,staffDefenseMultiplier:Number(staff.defenseMultiplier||1)};
     player.friends=buildFriendRuntimes(data,player);syncSharedCompanionPool(player);return player;
   }
 
@@ -3044,13 +3210,15 @@ function updateHud() {
     if(selected&&!tools.selectedInventoryUid)tools.selectedInventoryUid=selected.uid;
     const equippedCards=EQUIPMENT_SLOT_KEYS.map(slot=>{const item=equipped(slot),def=item?itemDef(item):null;return `<button class="fkl-mod-equip ${selected?.uid===item?.uid?"active":""}" type="button" data-fkl-mod-select="${item?.uid||""}" ${item?"":"disabled"}><span>${def?.icon||SLOT_META[slot].icon}</span><small>${escapeHtml(SLOT_META[slot].name)}</small><b>${escapeHtml(def?.name||"Leer")}</b>${item?`<em>${rarityDef(item).name} · ${starText(item.star)}</em>`:""}</button>`}).join("");
     const catalog=ITEMS.slice().sort((a,b)=>a.category.localeCompare(b.category)||rarityIndex(a.rarity)-rarityIndex(b.rarity)||a.name.localeCompare(b.name,"de"));
-    const rarityOptions=RARITY_ORDER.map(id=>`<option value="${id}" ${tools.grantRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("");
+    const rarityOptions=RARITY_ORDER.map(id=>`<option value="${id}" style="color:${RARITIES[id].color};background:#071216" ${tools.grantRarity===id?"selected":""}>${RARITIES[id].name} · ab LV ${RARITIES[id].minLevel}</option>`).join("");
     const selectedRarity=selected?rarityKey(selected):"common";
+    const grantSelected=ITEM_MAP.get(tools.selectedItemId)||catalog[0],grantColor=RARITIES[tools.grantRarity]?.color||RARITIES.common.color;
+    const rarityLegend=RARITY_ORDER.map(id=>`<span style="--legend:${RARITIES[id].color}" title="Ab Fight-Level ${RARITIES[id].minLevel}">${RARITIES[id].name}</span>`).join("");
     const inventorySelect=data.inventory.map(item=>{const def=itemDef(item);return `<option value="${item.uid}" ${selected?.uid===item.uid?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${rarityDef(item).name} · ${starText(item.star)}</option>`}).join("");
     const unlockOptions=waveCheckpointValues(MAX_WAVE_CHECKPOINT).map(wave=>`<option value="${wave}" ${data.unlockedWaveStart===wave?"selected":""}>${wave===1?"Nur Welle 1":`Bis Welle ${wave}`}</option>`).join("");
     const activeWaveOptions=waveCheckpointOptions(data.selectedStartWave,data.unlockedWaveStart);
     const adminFriendCards=Object.values(data.friends?.owned||{}).map(entry=>{const def=FRIEND_MAP.get(entry.id),meta=friendRoleMeta(def?.role);if(!def)return"";return `<article class="fkl-mod-friend-card" style="--friend-color:${meta.color}"><b>${meta.icon} ${escapeHtml(def.name)}</b><small>${meta.name} · Power-Skalierung · ${entry.copies} Kopien</small><label><span>Sterne</span><select data-fkl-mod-friend-star="${entry.id}">${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(entry.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><button type="button" data-fkl-mod-friend-copy="${entry.id}">+1 Boss-Kopie</button></article>`}).join("")||`<p>Noch keine Freunde freigeschaltet.</p>`;
-    UI.main.innerHTML=`<div class="fkl-page fkl-mod-page">${pageHeader("Owner-Mod-Menü","Direkte Fight.KL-Verwaltung. Friends besitzen nur Sterne und skalieren automatisch mit der Spieler-Power.",`<button class="fkl-btn" type="button" data-fkl-mod-inventory>🎒 Inventar</button>`)}<div class="fkl-mod-layout">${adminCharacterCardHtml()}<section class="fkl-panel fkl-mod-tools"><div class="fkl-mod-title"><div><small class="fkl-kicker">KAMPF-CHEATS</small><h3>Ingame-Einstellungen</h3></div><b>${staffRoleLabel()}</b></div><div class="fkl-mod-toggle-row"><button class="fkl-mod-toggle ${tools.godMode?"active":""}" type="button" data-fkl-mod-god><span>♾</span><div><b>God Mode</b><small>${tools.godMode?"Aktiv · unendlich Leben":"Aus"}</small></div></button></div><div class="fkl-mod-control-grid"><label><span>Schaden</span><select data-fkl-mod-setting="damageMultiplier">${[1,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.damageMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Speed</span><select data-fkl-mod-setting="speedMultiplier">${[1,1.5,2,3,5,8,10].map(v=>`<option value="${v}" ${Number(tools.speedMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Verteidigung</span><select data-fkl-mod-setting="defenseMultiplier">${[1,1.5,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.defenseMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label></div><small class="fkl-mod-note">Die Einstellungen gelten für die Bot-Arena. Online-Duelle bleiben serverseitig normal.</small></section><section class="fkl-panel fkl-mod-waves"><small class="fkl-kicker">WELLEN-STARTPUNKTE</small><h3>Startwellen verwalten</h3><div class="fkl-mod-control-grid"><label><span>Freigeschaltet</span><select data-fkl-mod-wave-unlock>${unlockOptions}</select></label><label><span>Aktive Startwelle</span><select data-fkl-mod-wave-active>${activeWaveOptions}</select></label></div><p>Spieler schalten regulär alle zehn Wellen einen neuen Startpunkt frei. Der Owner kann diese Grenze hier direkt festlegen.</p></section><section class="fkl-panel fkl-mod-friends"><small class="fkl-kicker">FRIENDS-EDITOR</small><h3>Tank, DD und Heiler direkt verwalten</h3><p>Regulär verbessern Boss-Kopien ausschließlich die Sterne. Der Owner darf Sterne und Kopien direkt setzen.</p><div class="fkl-mod-friend-grid">${adminFriendCards}</div></section><section class="fkl-panel fkl-mod-money"><small class="fkl-kicker">GELD</small><h3>Geld hinzufügen</h3><div class="fkl-mod-money-actions">${[10000,100000,1000000,10000000].map(v=>`<button type="button" data-fkl-mod-money="${v}">+${NUMBER.format(v)} €</button>`).join("")}</div><label class="fkl-mod-custom-money"><input type="number" min="1" step="1000" placeholder="Eigener Betrag" data-fkl-mod-money-input><button type="button" data-fkl-mod-money-custom>Hinzufügen</button></label><p>Aktuell: <b>${EURO.format(playerFunds())}</b></p></section><section class="fkl-panel fkl-mod-equipped"><small class="fkl-kicker">CHARAKTER-AUSRÜSTUNG</small><h3>Slot anklicken und bearbeiten</h3><div class="fkl-mod-equipped-grid">${equippedCards}</div></section><section class="fkl-panel fkl-mod-item-editor"><small class="fkl-kicker">ITEM-EDITOR</small><h3>Item direkt bearbeiten</h3>${data.inventory.length?`<label class="fkl-mod-inventory-picker"><span>Vorhandenes Item</span><select data-fkl-mod-inventory-select>${inventorySelect}</select></label>`:""}${selected?`<div class="fkl-mod-selected"><span>${selectedDef.icon}</span><div><b>${rarityDef(selected).name}</b><small>${starText(selected.star)} · ${itemMaxDurability(selected)?`${Math.round(selected.durability)}/${itemMaxDurability(selected)} Haltbarkeit`:"Ohne Haltbarkeit"}</small></div></div><div class="fkl-mod-control-grid"><label><span>Seltenheit</span><select data-fkl-mod-item-rarity>${RARITY_ORDER.map(id=>`<option value="${id}" ${selectedRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("")}</select></label><label><span>Sterne</span><select data-fkl-mod-item-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(selected.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label></div><div class="fkl-mod-item-actions"><button type="button" data-fkl-mod-item-repair>Max. Haltbarkeit</button><button type="button" data-fkl-mod-item-duplicate>Duplizieren</button></div>`:`<p>Dein Inventar ist leer. Über den Item-Geber kannst du direkt einen Gegenstand hinzufügen.</p>`}</section><section class="fkl-panel fkl-mod-grant"><small class="fkl-kicker">SHOP / ITEM-GEBER</small><h3>Beliebiges Item geben</h3><div class="fkl-mod-grant-grid"><label><span>Item</span><select data-fkl-mod-grant-item>${catalog.map(def=>`<option value="${def.id}" ${tools.selectedItemId===def.id?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${RARITIES[def.rarity].name}</option>`).join("")}</select></label><label><span>Seltenheit</span><select data-fkl-mod-grant-rarity>${rarityOptions}</select></label><label><span>Sterne</span><select data-fkl-mod-grant-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(tools.grantStar)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><label><span>Anzahl</span><select data-fkl-mod-grant-quantity>${[1,2,5,10].map(v=>`<option value="${v}" ${Number(tools.grantQuantity)===v?"selected":""}>${v}</option>`).join("")}</select></label></div><button class="fkl-btn gold fkl-mod-grant-button" type="button" data-fkl-mod-grant>Item geben</button></section></div></div>`;
+    UI.main.innerHTML=`<div class="fkl-page fkl-mod-page">${pageHeader("Owner Control Center","Fight.KL-Verwaltung mit Live-Charakter, Kampfeinstellungen, Item-Editor und farbcodiertem Arsenal-Geber.",`<button class="fkl-btn" type="button" data-fkl-mod-inventory>🎒 Inventar</button>`)}<section class="fkl-mod-hero"><div><small>OWNER · LIVE ADMINISTRATION</small><h2>Fight.KL Control Center</h2><p>Alle Eingriffe bleiben klar getrennt: Kampf, Wellen, Geld, Ausrüstung, Friends und Item-Vergabe.</p></div><b>${NUMBER.format(ITEMS.length)} ITEMS</b></section><div class="fkl-mod-layout">${adminCharacterCardHtml()}<section class="fkl-panel fkl-mod-tools"><div class="fkl-mod-title"><div><small class="fkl-kicker">KAMPF-CHEATS</small><h3>Ingame-Einstellungen</h3></div><b>${staffRoleLabel()}</b></div><div class="fkl-mod-toggle-row"><button class="fkl-mod-toggle ${tools.godMode?"active":""}" type="button" data-fkl-mod-god><span>♾</span><div><b>God Mode</b><small>${tools.godMode?"Aktiv · unendlich Leben":"Aus"}</small></div></button></div><div class="fkl-mod-control-grid"><label><span>Schaden</span><select data-fkl-mod-setting="damageMultiplier">${[1,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.damageMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Speed</span><select data-fkl-mod-setting="speedMultiplier">${[1,1.5,2,3,5,8,10].map(v=>`<option value="${v}" ${Number(tools.speedMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label><label><span>Verteidigung</span><select data-fkl-mod-setting="defenseMultiplier">${[1,1.5,2,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(tools.defenseMultiplier)===v?"selected":""}>${v}×</option>`).join("")}</select></label></div><small class="fkl-mod-note">Die Einstellungen gelten für die Bot-Arena. Online-Duelle bleiben serverseitig normal.</small></section><section class="fkl-panel fkl-mod-waves"><small class="fkl-kicker">WELLEN-STARTPUNKTE</small><h3>Startwellen verwalten</h3><div class="fkl-mod-control-grid"><label><span>Freigeschaltet</span><select data-fkl-mod-wave-unlock>${unlockOptions}</select></label><label><span>Aktive Startwelle</span><select data-fkl-mod-wave-active>${activeWaveOptions}</select></label></div><p>Spieler schalten regulär alle zehn Wellen einen neuen Startpunkt frei. Der Owner kann diese Grenze hier direkt festlegen.</p></section><section class="fkl-panel fkl-mod-friends"><small class="fkl-kicker">FRIENDS-EDITOR</small><h3>Tank, DD und Heiler direkt verwalten</h3><p>Regulär verbessern Boss-Kopien ausschließlich die Sterne. Der Owner darf Sterne und Kopien direkt setzen.</p><div class="fkl-mod-friend-grid">${adminFriendCards}</div></section><section class="fkl-panel fkl-mod-money"><small class="fkl-kicker">GELD</small><h3>Geld hinzufügen</h3><div class="fkl-mod-money-actions">${[10000,100000,1000000,10000000].map(v=>`<button type="button" data-fkl-mod-money="${v}">+${NUMBER.format(v)} €</button>`).join("")}</div><label class="fkl-mod-custom-money"><input type="number" min="1" step="1000" placeholder="Eigener Betrag" data-fkl-mod-money-input><button type="button" data-fkl-mod-money-custom>Hinzufügen</button></label><p>Aktuell: <b>${EURO.format(playerFunds())}</b></p></section><section class="fkl-panel fkl-mod-equipped"><small class="fkl-kicker">CHARAKTER-AUSRÜSTUNG</small><h3>Slot anklicken und bearbeiten</h3><div class="fkl-mod-equipped-grid">${equippedCards}</div></section><section class="fkl-panel fkl-mod-item-editor"><small class="fkl-kicker">ITEM-EDITOR</small><h3>Item direkt bearbeiten</h3>${data.inventory.length?`<label class="fkl-mod-inventory-picker"><span>Vorhandenes Item</span><select data-fkl-mod-inventory-select>${inventorySelect}</select></label>`:""}${selected?`<div class="fkl-mod-selected"><span>${weaponVisualHtml(selectedDef,true)}</span><div><b>${rarityDef(selected).name}</b><small>${starText(selected.star)} · ${itemMaxDurability(selected)?`${Math.round(selected.durability)}/${itemMaxDurability(selected)} Haltbarkeit`:"Ohne Haltbarkeit"}</small></div></div><div class="fkl-mod-control-grid"><label><span>Seltenheit</span><select data-fkl-mod-item-rarity>${RARITY_ORDER.map(id=>`<option value="${id}" ${selectedRarity===id?"selected":""}>${RARITIES[id].name}</option>`).join("")}</select></label><label><span>Sterne</span><select data-fkl-mod-item-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(selected.star)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label></div><div class="fkl-mod-item-actions"><button type="button" data-fkl-mod-item-repair>Max. Haltbarkeit</button><button type="button" data-fkl-mod-item-duplicate>Duplizieren</button></div>`:`<p>Dein Inventar ist leer. Über den Item-Geber kannst du direkt einen Gegenstand hinzufügen.</p>`}</section><section class="fkl-panel fkl-mod-grant" style="--grant-color:${grantColor}"><div class="fkl-mod-section-head"><div><small class="fkl-kicker">SHOP / ITEM-GEBER</small><h3>Farbcodierter Item-Geber</h3></div><b>${RARITIES[tools.grantRarity].name}</b></div><div class="fkl-mod-rarity-legend">${rarityLegend}</div><div class="fkl-mod-grant-preview rarity-${tools.grantRarity}" style="--rarity:${grantColor};--rarity-glow:${RARITIES[tools.grantRarity].glow};--rarity-gradient:${RARITIES[tools.grantRarity].gradient||grantColor}"><div>${weaponVisualHtml(grantSelected)}</div><span><small>Ausgewählt</small><b>${escapeHtml(grantSelected.name)}</b><em>${RARITIES[grantSelected.rarity].name} · ${grantSelected.category}</em></span></div><div class="fkl-mod-grant-grid"><label><span>Item aussuchen</span><select data-fkl-mod-grant-item style="border-color:${RARITIES[grantSelected.rarity].color};box-shadow:0 0 0 2px ${RARITIES[grantSelected.rarity].glow}">${catalog.map(def=>`<option value="${def.id}" style="color:${RARITIES[def.rarity].color};background:#071216" ${tools.selectedItemId===def.id?"selected":""}>${def.icon} ${escapeHtml(def.name)} · ${RARITIES[def.rarity].name}</option>`).join("")}</select></label><label><span>Ziel-Seltenheit</span><select data-fkl-mod-grant-rarity style="border-color:${grantColor};color:${grantColor}">${rarityOptions}</select></label><label><span>Sterne</span><select data-fkl-mod-grant-star>${Array.from({length:MAX_STAR+1},(_,i)=>`<option value="${i}" ${Number(tools.grantStar)===i?"selected":""}>${i===0?"Basis":`${i} Sterne`}</option>`).join("")}</select></label><label><span>Anzahl</span><select data-fkl-mod-grant-quantity>${[1,2,5,10].map(v=>`<option value="${v}" ${Number(tools.grantQuantity)===v?"selected":""}>${v}</option>`).join("")}</select></label></div><button class="fkl-btn gold fkl-mod-grant-button" type="button" data-fkl-mod-grant>＋ Ausgewählte Items geben</button></section></div></div>`;
     bindPageHome();
     UI.main.querySelector("[data-fkl-mod-inventory]")?.addEventListener("click",renderInventory);
     UI.main.querySelector("[data-fkl-mod-god]")?.addEventListener("click",()=>{tools.godMode=!tools.godMode;safeSave();renderFightAdminMenu();});
@@ -3068,7 +3236,8 @@ function updateHud() {
     UI.main.querySelector("[data-fkl-mod-item-repair]")?.addEventListener("click",()=>fillFightAdminItemDurability(selected?.uid));
     UI.main.querySelector("[data-fkl-mod-item-duplicate]")?.addEventListener("click",()=>duplicateFightAdminItem(selected?.uid));
     const syncGrant=()=>{tools.selectedItemId=UI.main.querySelector("[data-fkl-mod-grant-item]")?.value||tools.selectedItemId;tools.grantRarity=UI.main.querySelector("[data-fkl-mod-grant-rarity]")?.value||tools.grantRarity;tools.grantStar=Number(UI.main.querySelector("[data-fkl-mod-grant-star]")?.value||0);tools.grantQuantity=Number(UI.main.querySelector("[data-fkl-mod-grant-quantity]")?.value||1);safeSave();};
-    UI.main.querySelectorAll("[data-fkl-mod-grant-item],[data-fkl-mod-grant-rarity],[data-fkl-mod-grant-star],[data-fkl-mod-grant-quantity]").forEach(node=>node.addEventListener("change",syncGrant));
+    UI.main.querySelectorAll("[data-fkl-mod-grant-star],[data-fkl-mod-grant-quantity]").forEach(node=>node.addEventListener("change",syncGrant));
+    UI.main.querySelectorAll("[data-fkl-mod-grant-item],[data-fkl-mod-grant-rarity]").forEach(node=>node.addEventListener("change",()=>{syncGrant();renderFightAdminMenu();}));
     UI.main.querySelector("[data-fkl-mod-grant]")?.addEventListener("click",()=>{syncGrant();grantFightAdminItems();});
   }
 
@@ -3385,10 +3554,10 @@ function updateHud() {
 
   function highTierBeastItem(wave,tier=1){
     const data=ensureState();if(data.inventory.length>=INVENTORY_LIMIT){UI.session.moneyEarned+=1200*tier;return null;}
-    const roll=Math.random(),rarity=wave>=100&&roll<.025?"universe":wave>=65&&roll<.09?"exotic":wave>=40&&roll<.22?"mythic":roll<.52?"legendary":"epic";
+    const rarity=rollFightLootRarity(data.level,Math.max(wave,80),true,.35);
     const allowed=new Set(["weapon","armor","helmet","suit","boots","chip","charm","companion","mount"]);
-    let pool=ITEMS.filter(def=>allowed.has(def.category)&&def.id!=="star-upgrade-core"&&data.level>=requiredLevel({baseId:def.id,rarity,star:0})&&rarityIndex(def.rarity)<=rarityIndex(rarity));
-    if(!pool.length)pool=ITEMS.filter(def=>allowed.has(def.category)&&!["special","mythic","exotic","universe"].includes(def.rarity));
+    let pool=ITEMS.filter(def=>allowed.has(def.category)&&def.id!=="star-upgrade-core"&&def.rarity===rarity&&data.level>=requiredLevel({baseId:def.id,rarity,star:0}));
+    if(!pool.length)pool=ITEMS.filter(def=>allowed.has(def.category)&&def.rarity==="common");
     const def=pick(pool),star=wave>=70&&Math.random()<.08?1:0,item=makeItem(def.id,star,null,rarity);data.inventory.unshift(item);UI.session.lootEarned.push(item);safeSave();toast("Beutebestien-Ausrüstung",`${RARITIES[rarity].name}: ${def.name} ${starText(star)}`);return item;
   }
   function grantStarUpgradeCore(){
