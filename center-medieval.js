@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-05-jkgames-v194-center-polish-owner-world-tools';
+const CENTER_VERSION = '2026-08-05-jkgames-v195-center-survival-movement-stability';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -17,7 +17,10 @@ const ONLINE_QUERY_LIMIT = 32;
 const MAX_REMOTE_PLAYERS = 16;
 const CHARACTER_MODEL_YAW = 0;
 const COLLIDER_CELL_SIZE = 16;
-const PLAYER_COLLIDER_RADIUS = .62;
+const PLAYER_COLLIDER_RADIUS = .56;
+const MIN_WORLD_CLEARANCE = .08;
+const MAX_FLY_HEIGHT = 165;
+const PRIMARY_ACTION_COOLDOWN_MS = 520;
 const DAYS_PER_SEASON = 12;
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
@@ -74,12 +77,13 @@ const SKILLS = Object.freeze({
   agriculture: { name: 'Landwirtschaft', icon: '🌾', text: 'Felder und Bauern erzeugen mehr Nahrung.' },
   crafting: { name: 'Handwerk', icon: '⚒', text: 'Werkzeuge halten länger und Werkstätten produzieren mehr.' }
 });
-const RESOURCE_LABELS = Object.freeze({ wood: 'Holz', logs: 'Stämme', stone: 'Stein', berries: 'Beeren', meat: 'Fleisch', cookedMeat: 'Gebratenes Fleisch', water: 'Wasser', leather: 'Leder', flax: 'Flachs', iron: 'Eisenerz', herbs: 'Kräuter', grain: 'Getreide', medicine: 'Heilmittel', coins: 'Münzen' });
+const RESOURCE_LABELS = Object.freeze({ wood: 'Holz', logs: 'Stämme', stone: 'Stein', berries: 'Beeren', mushrooms: 'Pilze', meat: 'Fleisch', cookedMeat: 'Gebratenes Fleisch', water: 'Wasser', leather: 'Leder', flax: 'Flachs', iron: 'Eisenerz', herbs: 'Kräuter', grain: 'Getreide', medicine: 'Heilmittel', coins: 'Münzen' });
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 const distance2D = (a, b) => Math.hypot((a?.x || 0) - (b?.x || 0), (a?.z || 0) - (b?.z || 0));
+const pointSegmentDistance = (px,pz,ax,az,bx,bz) => { const vx=bx-ax,vz=bz-az,wx=px-ax,wz=pz-az,t=clamp((wx*vx+wz*vz)/Math.max(.0001,vx*vx+vz*vz),0,1); return Math.hypot(px-(ax+vx*t),pz-(az+vz*t)); };
 const makeSessionId = () => { try { return crypto.randomUUID(); } catch { return `center-${Date.now()}-${Math.random().toString(36).slice(2)}`; } };
 const isEditableTarget = (target) => !!target?.closest?.('input,textarea,select,[contenteditable="true"]');
 const isFirebasePermissionError = (error) => {
@@ -147,7 +151,7 @@ function defaultSaveState() {
   return {
     version: 5,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
-    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', shadows: false },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', shadows: false, onlineKoop: false },
     day: 1,
     season: 0,
     time: 8.25,
@@ -155,10 +159,11 @@ function defaultSaveState() {
     weatherUntil: 14,
     weatherRemaining: 5.75,
     needs: { health: 100, hunger: 92, thirst: 90, stamina: 100, warmth: 88 },
-    inventory: { wood: 8, logs: 0, stone: 5, berries: 4, meat: 0, cookedMeat: 0, water: 2, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 120 },
+    inventory: { wood: 0, logs: 0, stone: 0, berries: 0, mushrooms: 0, meat: 0, cookedMeat: 0, water: 1, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 0 },
     tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
     equippedTool: '',
     ownerAppearance: { skin: 'normal', size: 1, heldItem: 'none' },
+    tutorial: { done: false, step: 'sticks', sticks: 0, stones: 0, berries: 0, mushrooms: 0, treeChopped: false },
     xp: 0,
     skillPoints: 0,
     skills: { survival: 0, forestry: 0, mining: 0, hunting: 0, building: 0, diplomacy: 0, agriculture: 0, crafting: 0 },
@@ -188,8 +193,14 @@ function normalizeSaveState(raw) {
   state.world.landmarkDensity = ['low','normal','high'].includes(state.world.landmarkDensity) ? state.world.landmarkDensity : 'normal';
   state.world.spawnAssigned = !!state.world.spawnAssigned;
   state.world.shadows = !!state.world.shadows;
+  state.world.onlineKoop = !!state.world.onlineKoop;
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
+  state.tutorial = { ...base.tutorial, ...(raw.tutorial || {}) };
+  state.tutorial.done = !!state.tutorial.done;
+  state.tutorial.step = String(state.tutorial.step || 'sticks');
+  for (const key of ['sticks','stones','berries','mushrooms']) state.tutorial[key] = Math.max(0, Math.floor(Number(state.tutorial[key]) || 0));
+  state.tutorial.treeChopped = !!state.tutorial.treeChopped;
   state.tools = { ...base.tools, ...(raw.tools || {}) };
   state.equippedTool = RECIPES[raw.equippedTool] ? String(raw.equippedTool) : '';
   state.ownerAppearance = { ...base.ownerAppearance, ...(raw.ownerAppearance || {}) };
@@ -348,6 +359,12 @@ class CenterDynastyGame {
     this.ownerFormObject = null;
     this.ownerItemLight = null;
     this.ownerThrownObjects = [];
+    this.tutorialNodes = [];
+    this.collectingTutorialNode = null;
+    this.actionCooldownUntil = 0;
+    this.warningState = { hunger: false, thirst: false, warmth: false, health: false };
+    this.lastSafePosition = new THREE.Vector3(Number(this.state.position.x||0), terrainHeightAt(Number(this.state.position.x||0),Number(this.state.position.z||0)), Number(this.state.position.z||0));
+    this.runtimeErrorAt = 0;
     this.animatedFireLights = [];
     this.fallStartY = null;
     this.currentRegion = '';
@@ -466,7 +483,7 @@ class CenterDynastyGame {
     overlay.setAttribute('aria-label', 'Center – mittelalterliche Dynastie-Welt');
     overlay.innerHTML = `
       <div class="c3d-stage"><canvas aria-label="Center 3D-Spielwelt" tabindex="0"></canvas></div>
-      <div class="c3d-vignette"></div><div class="c3d-crosshair" aria-hidden="true"></div>
+      <div class="c3d-vignette"></div><div class="mdc-danger-vignette" aria-hidden="true"></div><div class="c3d-crosshair" aria-hidden="true"></div>
       <header class="c3d-topbar mdc-topbar">
         <div class="mdc-world-status"><span data-mdc-season>🌱 Frühling</span><span data-mdc-daytime>Tag 1 · 08:15</span><span data-mdc-weather>☀ Klar</span></div>
         <div class="c3d-top-actions">
@@ -502,7 +519,7 @@ class CenterDynastyGame {
       <div class="c3d-controls-hint mdc-controls-hint" aria-hidden="true"><span><kbd>WASD</kbd> Laufen</span><span><kbd>Shift</kbd> Sprint</span><span><kbd>Space</kbd> Springen</span><span><kbd>E</kbd> Interagieren</span><span><kbd>M</kbd> Center-Menü</span><span><kbd>C</kbd> Herstellen</span></div>
       <div class="c3d-mobile-controls mdc-mobile-controls">
         <div class="c3d-joystick" data-c3d-joystick><span class="c3d-joystick-knob" data-c3d-joystick-knob></span></div>
-        <div class="c3d-mobile-actions"><button type="button" data-c3d-perspective>◉</button><button type="button" data-c3d-jump>↑</button><button type="button" data-c3d-sprint>»</button><button type="button" data-mdc-mobile-menu>☰</button><button type="button" data-mdc-mobile-build>⌂</button></div>
+        <div class="c3d-mobile-actions"><button type="button" data-c3d-attack>⚔</button><button type="button" data-c3d-perspective>◉</button><button type="button" data-c3d-jump>↑</button><button type="button" data-c3d-sprint>»</button><button type="button" data-mdc-mobile-menu>☰</button><button type="button" data-mdc-mobile-build>⌂</button></div>
       </div>
       <div class="c3d-toast" data-c3d-toast></div>
     `;
@@ -555,6 +572,7 @@ class CenterDynastyGame {
     overlay.querySelector('[data-mdc-mobile-build]').addEventListener('click', () => this.toggleManagement('building'));
     overlay.querySelector('[data-c3d-perspective]').addEventListener('click', () => this.togglePerspective());
     overlay.querySelector('[data-c3d-jump]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.requestJump(); });
+    overlay.querySelector('[data-c3d-attack]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.performPrimaryAction(); });
     this.sprintButton.addEventListener('pointerdown', (event) => { event.preventDefault(); this.input.sprint = !this.input.sprint; this.sprintButton.classList.toggle('is-active', this.input.sprint); });
     this.interactButton.addEventListener('click', () => this.buildMode ? this.placeBuilding() : this.activateNearestHotspot());
     overlay.querySelector('[data-mdc-build-rotate]').addEventListener('click', () => this.rotateBuildGhost());
@@ -637,7 +655,8 @@ class CenterDynastyGame {
         this.lookLast = { x: event.clientX, y: event.clientY };
         this.canvas.setPointerCapture?.(event.pointerId);
       } else if (event.button === 0) {
-        this.canvas.requestPointerLock?.();
+        if (document.pointerLockElement === this.canvas) this.performPrimaryAction();
+        else this.canvas.requestPointerLock?.();
       }
     };
     const move = (event) => {
@@ -688,7 +707,8 @@ class CenterDynastyGame {
 
   applyLookDelta(dx, dy, sensitivity) {
     this.yaw -= dx * sensitivity;
-    this.pitch = clamp(this.pitch + dy * sensitivity, -1.05, .62);
+    const vertical = this.firstPerson ? -dy : dy;
+    this.pitch = clamp(this.pitch + vertical * sensitivity, -1.05, .62);
   }
 
   async open() {
@@ -702,7 +722,7 @@ class CenterDynastyGame {
     this.loading.classList.remove('is-hidden');
     this.loading.querySelector('h2').textContent = 'Die Open World entsteht';
     this.setLoading(4, 'Dein persönlicher Spawnpunkt und die ersten Weltregionen werden vorbereitet.');
-    const onlinePreparation = this.prepareMultiplayer();
+    const onlinePreparation = this.state.world?.onlineKoop ? this.prepareMultiplayer() : Promise.resolve(null);
     const started = performance.now();
     try {
       await nextPaint();
@@ -723,8 +743,9 @@ class CenterDynastyGame {
       this.canvas.focus({ preventScroll: true });
       this.toast('Du bist an einem einzigartigen Ort gespawnt. Erkunde Wälder, Wege, Berge und Dörfer.');
       this.startRolePolling();
-      if (prepared) this.connectMultiplayer(prepared).catch(() => {});
-      else onlinePreparation.then((late) => { if (this.opened && late) this.connectMultiplayer(late).catch(() => {}); else if (this.opened) this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1); }).catch(() => this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1));
+      if (this.state.world?.onlineKoop && prepared) this.connectMultiplayer(prepared).catch(() => {});
+      else if (this.state.world?.onlineKoop) onlinePreparation.then((late) => { if (this.opened && late) this.connectMultiplayer(late).catch(() => {}); else if (this.opened) this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1); }).catch(() => this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1));
+      else this.setOnlineUi('offline', 'Center-Koop ist in den Einstellungen ausgeschaltet.', 1);
     } catch (error) {
       console.error('Center-Dynastie konnte nicht gestartet werden', error);
       this.setLoading(100, `Center konnte nicht geladen werden: ${error?.message || error}`);
@@ -768,7 +789,7 @@ class CenterDynastyGame {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
     this.renderer.shadowMap.enabled = !!this.state.world?.shadows;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.buildSkyAndLights();
     await nextPaint();
     this.setLoading(27, 'Die endlose Welt wird in dynamische Regionen aufgeteilt.');
@@ -781,6 +802,7 @@ class CenterDynastyGame {
     this.restoreStateToWorld();
     this.buildWildlife();
     await this.updateChunkStreaming(true);
+    this.buildStarterTutorialNodes();
     await nextPaint();
     this.setLoading(70, 'Wälder, Dörfer, Wege und Berge werden in Sichtweite erzeugt.');
     await this.ensureCorrectPlayerModel();
@@ -1055,6 +1077,7 @@ class CenterDynastyGame {
     nodes.forEach((node) => {
       const radius = node.archetype === 'fallen' ? 2.2 * node.scale : node.archetype === 'giant' ? .95 * node.scale : .63 * node.scale;
       node.collider = this.registerCollider(node.x, node.z, radius, 'resource', chunk.key, node);
+      if(node.archetype==='fallen'){node.collider.shape='segment';node.collider.length=5.4*node.scale;node.collider.yaw=node.yaw;node.collider.radius=.42*node.scale;node.collider.walkable=true;node.collider.height=.92*node.scale;}
       chunk.colliders.push(node.collider);
     });
     const interactive = nodes.filter((node,index)=>['fallen','broken','dead'].includes(node.archetype)||index%Math.max(7,Math.floor(nodes.length/12))===0).slice(0,22);
@@ -1099,23 +1122,24 @@ class CenterDynastyGame {
     const seasonColors=[0x5f8a45,0x5c8b43,0x718044,0x9aa58f];
     const matA=new THREE.MeshStandardMaterial({color:seasonColors[this.state.season]||seasonColors[0],roughness:1,side:THREE.DoubleSide,transparent:true,opacity:.94});
     const matB=matA.clone();matB.color.offsetHSL(.02,-.03,.035);
-    const geo=new THREE.PlaneGeometry(.3,.58);geo.translate(0,.29,0);
-    const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count);
+    const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);
+    const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=new THREE.InstancedMesh(geo,matA.clone(),count);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),q2=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
     for(let i=0;i<count*4&&used<count;i+=1){
       const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
       if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;
-      const yaw=random()*Math.PI*2,sc=.42+random()*.72;
+      const yaw=random()*Math.PI*2,sc=.55+random()*.65;
       q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));
       q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));
       scale.set(sc*(.8+random()*.35),sc,sc);
       const pos=new THREE.Vector3(lx,y+.012,lz);
       matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);
       matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);
+      q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);
       used++;
     }
-    meshA.count=used;meshB.count=used;meshA.instanceMatrix.needsUpdate=true;meshB.instanceMatrix.needsUpdate=true;
-    meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';chunk.group.add(meshA,meshB);
+    meshA.count=used;meshB.count=used;meshC.count=used;meshA.instanceMatrix.needsUpdate=true;meshB.instanceMatrix.needsUpdate=true;meshC.instanceMatrix.needsUpdate=true;
+    meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';meshC.name='grass-clumps-c';chunk.group.add(meshA,meshB,meshC);
     this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
   }
 
@@ -1860,10 +1884,10 @@ class CenterDynastyGame {
       bone.userData.__centerIdleQuaternion=q;
       bone.userData.__centerIdlePosition=bone.userData.__centerBindPosition?.clone?.()||bone.position.clone();
     };
-    setTarget(this.playerBones.upperRight,{x:.12,y:.05,z:1.46});
-    setTarget(this.playerBones.upperLeft,{x:.12,y:-.05,z:-1.46});
-    setTarget(this.playerBones.lowerRight,{x:-.28,y:.03,z:.12});
-    setTarget(this.playerBones.lowerLeft,{x:-.28,y:-.03,z:-.12});
+    setTarget(this.playerBones.upperRight,{x:.04,y:.02,z:.22});
+    setTarget(this.playerBones.upperLeft,{x:.04,y:-.02,z:-.22});
+    setTarget(this.playerBones.lowerRight,{x:-.08,y:.01,z:.04});
+    setTarget(this.playerBones.lowerLeft,{x:-.08,y:-.01,z:-.04});
     setTarget(this.playerBones.shoulderRight,{z:.06});
     setTarget(this.playerBones.shoulderLeft,{z:-.06});
     setTarget(this.playerBones.chest,{x:.01});
@@ -1932,12 +1956,24 @@ class CenterDynastyGame {
       this.applyIdlePose(delta,false);
     }
     const now=performance.now();
-    const airborne=!this.onGround&&!this.ownerFlags.fly;
+    const flying=this.isOwnerActive&&this.ownerFlags.fly;
+    const airborne=!this.onGround&&!flying;
     const isBall=this.isOwnerActive&&this.state.ownerAppearance?.skin==='ball';
-    this.modelPivot.position.y=isBall?0:(airborne?Math.sin(Math.min(1,Math.max(0,(this.player.position.y-(terrainHeightAt(this.player.position.x,this.player.position.z)))/2))*Math.PI)*.08:Math.sin(now*.0016)*.008);
-    this.modelPivot.rotation.x=airborne?-.06:0;
+    this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.002)*.035:airborne?0:Math.sin(now*.0016)*.008);
+    this.modelPivot.rotation.x=0;
+    if(flying)this.applyFlyingPose(delta);
     this.applyActionAnimation(now);
     this.updateHeldItemTransform(now);
+  }
+
+  applyFlyingPose(delta=.016) {
+    if(!this.playerModel)return;
+    const alpha=1-Math.exp(-Math.max(.001,delta)*7);
+    this.applyIdlePose(delta,false);
+    const q=(bone,euler)=>{if(!bone)return;const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;if(!base)return;const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};
+    q(this.playerBones.upperRight,{x:-.2,z:.34});q(this.playerBones.upperLeft,{x:-.2,z:-.34});
+    q(this.playerBones.lowerRight,{x:-.16});q(this.playerBones.lowerLeft,{x:-.16});
+    if(this.playerBones.chest){const base=this.playerBones.chest.userData.__centerIdleQuaternion||this.playerBones.chest.userData.__centerBindQuaternion;if(base)this.playerBones.chest.quaternion.slerp(base,alpha);}
   }
 
   triggerActionAnimation(kind='chop',duration=560) {
@@ -1951,9 +1987,14 @@ class CenterDynastyGame {
     const swing=Math.sin(t*Math.PI);
     const upper=this.playerBones.upperRight,lower=this.playerBones.lowerRight,left=this.playerBones.upperLeft,chest=this.playerBones.chest;
     if(action.kind==='jump'){
-      if(upper){upper.rotateX(-.35*swing);upper.rotateZ(-.58*swing);}
-      if(left){left.rotateX(-.35*swing);left.rotateZ(.58*swing);}
-      if(chest)chest.rotateX(-.08*swing);
+      if(upper){upper.rotateX(-.12*swing);upper.rotateZ(-.16*swing);}
+      if(left){left.rotateX(-.12*swing);left.rotateZ(.16*swing);}
+      if(lower)lower.rotateX(-.08*swing);
+      if(chest)chest.rotateX(.015*swing);
+    }else if(action.kind==='attack'){
+      if(upper){upper.rotateX(-1.35*swing);upper.rotateZ(-.28*swing);}
+      if(lower)lower.rotateX(-.72*swing);
+      if(chest)chest.rotateY(.16*swing);
     }else if(action.kind==='gather'){
       if(upper)upper.rotateX(-.45*swing);
       if(lower)lower.rotateX(-.5*swing);
@@ -2279,7 +2320,7 @@ class CenterDynastyGame {
     const now=Date.now();
     if(!force&&now-this.lastSaveAt<5000) return;
     this.lastSaveAt=now;
-    this.state.version=4;
+    this.state.version=5;
     this.state.position={x:Number(this.player.position.x.toFixed(2)),z:Number(this.player.position.z.toFixed(2)),yaw:Number(this.yaw.toFixed(4)),view:this.firstPerson?'first':'third'};
     this.state.lastSavedAt=now;
     const bridge=window.JKGamesCenterBridge;
@@ -2289,7 +2330,14 @@ class CenterDynastyGame {
 
   togglePerspective() { this.firstPerson=!this.firstPerson; this.applyPerspectiveVisibility(); this.toast(this.firstPerson?'Ego-Perspektive':'Außenperspektive'); }
   applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson); this.overlay.classList.toggle('is-third-person',!this.firstPerson); if(this.playerModel)this.playerModel.visible=!this.firstPerson; if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson; this.applyOwnerAppearance(); }
-  requestJump() { if(this.isOwnerActive&&this.ownerFlags.fly)return;if(this.onGround&&this.state.needs.stamina>8){this.fallStartY=this.player.position.y;this.velocityY=6.25;this.onGround=false;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.triggerActionAnimation('jump',420);} }
+  requestJump() {
+    if(this.isOwnerActive&&this.ownerFlags.fly)return;
+    const god=this.isOwnerActive&&this.ownerFlags.god;
+    if(!this.onGround||(!god&&this.state.needs.stamina<=8))return;
+    this.fallStartY=this.player.position.y;this.velocityY=6.15;this.onGround=false;
+    if(!god)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);
+    this.triggerActionAnimation('jump',500);
+  }
 
   currentInput() {
     const forward=(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+this.input.forward;
@@ -2297,78 +2345,91 @@ class CenterDynastyGame {
     return {forward:clamp(forward,-1,1),right:clamp(right,-1,1),sprint:this.input.sprint||this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')};
   }
 
+  nearbyColliders(x,z) {
+    const found=new Set(),gx=Math.floor(x/COLLIDER_CELL_SIZE),gz=Math.floor(z/COLLIDER_CELL_SIZE);
+    for(let dx=-1;dx<=1;dx+=1)for(let dz=-1;dz<=1;dz+=1){const bucket=this.collisionBuckets.get(`${gx+dx}:${gz+dz}`);if(bucket)for(const collider of bucket)found.add(collider);}
+    return found;
+  }
+
+  colliderDistance(collider,x,z) {
+    if(collider.shape==='segment'){
+      const half=Number(collider.length||0)*.5,dx=Math.sin(Number(collider.yaw||0))*half,dz=Math.cos(Number(collider.yaw||0))*half;
+      return pointSegmentDistance(x,z,collider.x-dx,collider.z-dz,collider.x+dx,collider.z+dz);
+    }
+    return Math.hypot(x-collider.x,z-collider.z);
+  }
+
+  supportHeightAt(x,z,currentY=this.player?.position.y||0) {
+    let support=terrainHeightAt(x,z);
+    for(const collider of this.nearbyColliders(x,z)){
+      if(!collider.walkable||collider.active===false||collider.node?.active===false)continue;
+      if(this.colliderDistance(collider,x,z)>Math.max(.28,collider.radius*.62))continue;
+      const top=terrainHeightAt(collider.x,collider.z)+Number(collider.height||0);
+      if(currentY>=top-1.15&&currentY<=top+1.6)support=Math.max(support,top);
+    }
+    return support;
+  }
+
   collides(x,z,y=this.player?.position.y||0) {
     if(this.isOwnerActive&&this.ownerFlags.noclip)return false;
-    const found=new Set();const gx=Math.floor(x/COLLIDER_CELL_SIZE),gz=Math.floor(z/COLLIDER_CELL_SIZE);
-    for(let dx=-1;dx<=1;dx+=1)for(let dz=-1;dz<=1;dz+=1){const bucket=this.collisionBuckets.get(`${gx+dx}:${gz+dz}`);if(bucket)for(const collider of bucket)found.add(collider);}
-    for(const collider of found){
+    for(const collider of this.nearbyColliders(x,z)){
       if(collider.active===false||collider.node?.active===false)continue;
-      const ground=terrainHeightAt(collider.x,collider.z);
-      if(y>ground+Number(collider.height||4)+.18)continue;
-      if(Math.hypot(x-collider.x,z-collider.z)<collider.radius+PLAYER_COLLIDER_RADIUS)return true;
+      const ground=terrainHeightAt(collider.x,collider.z),top=ground+Number(collider.height||4);
+      if(y>top+.18)continue;
+      if(collider.walkable&&y>=top-.16)continue;
+      if(this.colliderDistance(collider,x,z)<collider.radius+PLAYER_COLLIDER_RADIUS)return true;
     }
     return false;
   }
 
   updateMovement(delta) {
-    const input=this.currentInput();
-    const length=Math.hypot(input.forward,input.right);
-    const moving=length>.05;
-    const owner=this.isOwnerActive,fly=owner&&this.ownerFlags.fly;
+    const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05;
+    const owner=this.isOwnerActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god;
     const inWater=!fly&&this.isInWater(this.player.position.x,this.player.position.z);
-    const sprint=input.sprint&&this.state.needs.stamina>2&&!inWater;
+    const sprint=input.sprint&&(god||this.state.needs.stamina>2)&&!inWater;
     const speedBoost=owner?OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]:1;
-    const speed=(sprint?8.8:5.1)*(inWater?.48:1)*((this.state.needs.health<25&&!this.ownerFlags.god)?.72:1)*speedBoost;
-    if(moving) {
-      const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length);
-      const sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
-      const dx=(r*cos-f*sin)*speed*delta;
-      const dz=(-r*sin-f*cos)*speed*delta;
-      const currentY=this.player.position.y;
-      const nx=clamp(this.player.position.x+dx,this.worldBounds.minX,this.worldBounds.maxX);
-      const nz=clamp(this.player.position.z+dz,this.worldBounds.minZ,this.worldBounds.maxZ);
-      let movedX=this.player.position.x,movedZ=this.player.position.z;
-      if(!this.collides(nx,nz,currentY)){movedX=nx;movedZ=nz;}
-      else{
-        if(!this.collides(nx,this.player.position.z,currentY))movedX=nx;
+    const speed=(sprint?8.8:5.1)*(inWater?.48:1)*((this.state.needs.health<25&&!god)?.72:1)*speedBoost;
+    let movedDistance=0;
+    if(moving){
+      const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length),sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
+      const dx=(r*cos-f*sin)*speed*delta,dz=(-r*sin-f*cos)*speed*delta;
+      const oldX=this.player.position.x,oldZ=this.player.position.z,currentY=this.player.position.y;
+      const nx=clamp(oldX+dx,this.worldBounds.minX,this.worldBounds.maxX),nz=clamp(oldZ+dz,this.worldBounds.minZ,this.worldBounds.maxZ);
+      let movedX=oldX,movedZ=oldZ;
+      if(!this.collides(nx,nz,currentY)){movedX=nx;movedZ=nz;}else{
+        if(!this.collides(nx,oldZ,currentY))movedX=nx;
         if(!this.collides(movedX,nz,currentY))movedZ=nz;
       }
-      const movedDistance=Math.hypot(movedX-this.player.position.x,movedZ-this.player.position.z);
-      this.player.position.x=movedX;this.player.position.z=movedZ;this.state.stats.distance+=movedDistance;
-      const targetYaw=Math.atan2(dx,dz);
-      if(movedDistance>.001)this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*11));
-      if(!fly){if(sprint)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*10.5);else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}
-      if(this.isOwnerActive&&this.state.ownerAppearance?.skin==='ball'&&this.ownerFormObject?.userData?.rollingMesh){const ball=this.ownerFormObject.userData.rollingMesh;ball.rotation.x-=movedDistance*1.4;ball.rotation.z+=movedDistance*.35;ball.position.y=.72;}
-    } else if(!fly)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*6.3);
+      movedDistance=Math.hypot(movedX-oldX,movedZ-oldZ);this.player.position.x=movedX;this.player.position.z=movedZ;this.state.stats.distance+=movedDistance;
+      if(movedDistance>.0005){const targetYaw=Math.atan2(movedX-oldX,movedZ-oldZ);this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*9));}
+      if(!fly&&!god){if(sprint)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*10.5);else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}
+      if(owner&&this.state.ownerAppearance?.skin==='ball'&&this.ownerFormObject?.userData?.rollingMesh){const ball=this.ownerFormObject.userData.rollingMesh;ball.rotation.x-=movedDistance*1.4;ball.rotation.z+=movedDistance*.35;ball.position.y=.72;}
+    }else if(!fly&&!god)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*6.3);
 
+    const terrainFloor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;
     if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
-      const nextY=clamp(this.player.position.y+vertical*speed*delta*.85,-4,180);
+      const minimumY=terrainFloor+.18,maximumY=Math.min(MAX_FLY_HEIGHT,terrainFloor+150);
+      const nextY=clamp(this.player.position.y+vertical*speed*delta*.85,minimumY,maximumY);
       if(this.ownerFlags.noclip||!this.collides(this.player.position.x,this.player.position.z,nextY))this.player.position.y=nextY;
-      this.velocityY=0;this.onGround=false;this.fallStartY=null;this.state.needs.stamina=100;
+      this.player.position.y=Math.max(minimumY,this.player.position.y);this.velocityY=0;this.onGround=false;this.fallStartY=null;if(god)this.state.needs.stamina=100;
+    }else if(this.onGround&&this.velocityY<=0){
+      const ground=this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
+      const amount=1-Math.exp(-delta*22);this.player.position.y+=(ground-this.player.position.y)*amount;
+      if(Math.abs(this.player.position.y-ground)<.006)this.player.position.y=ground;
+      this.velocityY=0;this.onGround=true;this.fallStartY=null;
     }else{
-      const wasGrounded=this.onGround;
-      if(!wasGrounded&&this.fallStartY===null)this.fallStartY=this.player.position.y;
-      this.velocityY-=15.5*delta;
-      this.player.position.y+=this.velocityY*delta;
-      const ground=Math.max(terrainHeightAt(this.player.position.x,this.player.position.z),inWater?WATER_LEVEL-1.05:-999);
-      if(this.player.position.y<=ground){
-        this.player.position.y=ground;this.velocityY=0;this.onGround=true;
-        if(!wasGrounded&&this.fallStartY!==null){
-          const fallDistance=Math.max(0,this.fallStartY-ground);
-          if(fallDistance>4.25&&!this.ownerFlags.god){
-            const damage=Math.min(70,Math.round((fallDistance-4.25)*7.2));
-            this.state.needs.health=Math.max(0,this.state.needs.health-damage);
-            this.toast(`Fallschaden: -${damage} Leben`);
-          }
-        }
+      const wasGrounded=this.onGround;if(!wasGrounded&&this.fallStartY===null)this.fallStartY=this.player.position.y;
+      this.velocityY-=15.5*delta;this.player.position.y+=this.velocityY*delta;
+      const ground=Math.max(this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y),inWater?WATER_LEVEL-1.05:-999);
+      if(this.player.position.y<=ground){this.player.position.y=ground;this.velocityY=0;this.onGround=true;
+        if(!wasGrounded&&this.fallStartY!==null){const fallDistance=Math.max(0,this.fallStartY-ground);if(fallDistance>4.25&&!god){const damage=Math.min(70,Math.round((fallDistance-4.25)*7.2));this.state.needs.health=Math.max(0,this.state.needs.health-damage);this.toast(`Fallschaden: -${damage} Leben`);}}
         this.fallStartY=null;
       }else this.onGround=false;
     }
-    this.walking=moving;
-    this.updatePlayerAnimation(delta,moving,sprint);
-    this.updateCurrentRegion();
-    if(this.buildMode)this.updateBuildGhost();
+    this.ensureValidWorldPosition();
+    if(this.onGround&&!this.collides(this.player.position.x,this.player.position.z,this.player.position.y))this.lastSafePosition.copy(this.player.position);
+    this.walking=moving;this.updatePlayerAnimation(delta,moving&&!(!this.onGround&&!fly),sprint);this.updateCurrentRegion();if(this.buildMode)this.updateBuildGhost();
   }
 
   isInWater(x,z) { const river=Math.abs(x-riverCenter(z))<14.5; const lake=Math.hypot(x-188,(z+185)/.72)<48; return river||lake; }
@@ -2393,9 +2454,11 @@ class CenterDynastyGame {
   }
 
   updateCamera(delta,snap=false) {
-    const head=this.tmpVector.set(this.player.position.x,this.player.position.y+1.65,this.player.position.z);
+    const size=this.isOwnerActive?clamp(Number(this.state.ownerAppearance?.size)||1,.45,2.5):1;
+    const headHeight=1.65*size;
+    const head=this.tmpVector.set(this.player.position.x,this.player.position.y+headHeight,this.player.position.z);
     if(this.firstPerson){this.camera.position.copy(head);this.camera.rotation.set(this.pitch,this.yaw,0);return;}
-    const distance=6.6,height=2.65;
+    const distance=6.6*Math.max(.72,Math.sqrt(size)),height=2.65*Math.max(.7,size*.72);
     const cp=Math.cos(this.pitch),sp=Math.sin(this.pitch),sy=Math.sin(this.yaw),cy=Math.cos(this.yaw);
     const target=this.tmpVector2.set(head.x+sy*cp*distance,head.y+height+sp*distance,head.z+cy*cp*distance);
     const terrainY=terrainHeightAt(target.x,target.z)+.7;
@@ -2459,32 +2522,32 @@ class CenterDynastyGame {
   }
 
   updateNeeds(delta) {
-    const survival=this.state.skills.survival||0;
-    const weather=WEATHER[this.state.weather];
-    const factor=(1-survival*.075)*weather.drain;
-    this.state.needs.hunger=Math.max(0,this.state.needs.hunger-delta*.035*factor);
-    this.state.needs.thirst=Math.max(0,this.state.needs.thirst-delta*.052*factor);
-    const hour=this.state.time;
-    const baseTemp=SEASONS[this.state.season].temp+weather.temp+(hour<6||hour>20?-5:0);
-    const nearFire=this.nearOwnedBuilding('campfire',8)||Math.hypot(this.player.position.x+40,this.player.position.z-177)<8;
-    const warmthTarget=nearFire?100:clamp(70+baseTemp*2.2,0,100);
-    this.state.needs.warmth+=(warmthTarget-this.state.needs.warmth)*Math.min(1,delta*.025);
     const invulnerable=this.isOwnerActive&&this.ownerFlags.god;
-    if(invulnerable)this.state.needs.health=100;
-    else if(this.state.needs.hunger<=0||this.state.needs.thirst<=0||this.state.needs.warmth<8)this.state.needs.health=Math.max(0,this.state.needs.health-delta*.22);
-    else if(this.state.needs.hunger>55&&this.state.needs.thirst>55)this.state.needs.health=Math.min(100,this.state.needs.health+delta*.025);
-    if(this.state.needs.health<=0&&!invulnerable)this.respawnAfterCollapse();
+    if(invulnerable){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.updateSurvivalWarnings();return;}
+    const survival=this.state.skills.survival||0,weather=WEATHER[this.state.weather],factor=(1-survival*.075)*weather.drain;
+    this.state.needs.hunger=Math.max(0,this.state.needs.hunger-delta*.035*factor);this.state.needs.thirst=Math.max(0,this.state.needs.thirst-delta*.052*factor);
+    const hour=this.state.time,baseTemp=SEASONS[this.state.season].temp+weather.temp+(hour<6||hour>20?-5:0),nearFire=this.nearOwnedBuilding('campfire',8)||Math.hypot(this.player.position.x+40,this.player.position.z-177)<8;
+    const warmthTarget=nearFire?100:clamp(70+baseTemp*2.2,0,100);this.state.needs.warmth+=(warmthTarget-this.state.needs.warmth)*Math.min(1,delta*.025);
+    if(this.state.needs.hunger<=0||this.state.needs.thirst<=0||this.state.needs.warmth<8)this.state.needs.health=Math.max(0,this.state.needs.health-delta*.22);else if(this.state.needs.hunger>55&&this.state.needs.thirst>55)this.state.needs.health=Math.min(100,this.state.needs.health+delta*.025);
+    this.updateSurvivalWarnings();if(this.state.needs.health<=0)this.respawnAfterCollapse();
+  }
+
+  updateSurvivalWarnings() {
+    const labels={hunger:'Hunger ist kritisch – iss schnell etwas.',thirst:'Durst ist kritisch – trink schnell etwas.',warmth:'Wärme ist kritisch – suche Feuer oder Schutz.',health:'Dein Leben ist kritisch.'};
+    for(const key of Object.keys(this.warningState)){const low=this.state.needs[key]<=20;if(low&&!this.warningState[key])this.toast(labels[key]);this.warningState[key]=low;}
+    this.overlay?.classList.toggle('is-critical-health',this.state.needs.health<=20);
+    this.overlay?.classList.toggle('is-critical-needs',this.state.needs.hunger<=20||this.state.needs.thirst<=20||this.state.needs.warmth<=20);
   }
 
   nearOwnedBuilding(type,radius) { return this.state.buildings.some((b)=>b.type===type&&Math.hypot(this.player.position.x-b.x,this.player.position.z-b.z)<radius); }
 
   respawnAfterCollapse() {
-    this.toast('Du bist zusammengebrochen und wachst im Lager wieder auf.');
-    const spawnX=Number(this.state.world?.spawnX||this.state.position.x||0),spawnZ=Number(this.state.world?.spawnZ||this.state.position.z||0);
-    this.player.position.set(spawnX,terrainHeightAt(spawnX,spawnZ),spawnZ);
-    this.lastChunkCenter='';this.updateChunkStreaming(true);
-    this.state.needs={health:45,hunger:35,thirst:35,stamina:60,warmth:60};
-    this.state.inventory.coins=Math.max(0,this.state.inventory.coins-20);
+    this.toast('Du bist gestorben. Deine Center-Ausrüstung, Ressourcen und Siedlung gehen verloren.');
+    for(const object of this.ownBuildingObjects.values())object?.removeFromParent?.();this.ownBuildingObjects.clear();
+    const fresh=defaultSaveState(),tutorial={...this.state.tutorial,done:true,step:'done'};
+    this.state.inventory={...fresh.inventory};this.state.tools={...fresh.tools};this.state.equippedTool='';this.state.buildings=[];this.state.settlement={...fresh.settlement,jobs:{...fresh.settlement.jobs}};this.state.family={...fresh.family};this.state.skills={...fresh.skills};this.state.skillPoints=0;this.state.xp=0;this.state.tutorial=tutorial;
+    const spawnX=Number(this.state.world?.spawnX||this.state.position.x||0),spawnZ=Number(this.state.world?.spawnZ||this.state.position.z||0),ground=terrainHeightAt(spawnX,spawnZ);
+    this.player.position.set(spawnX,ground,spawnZ);this.lastSafePosition.copy(this.player.position);this.velocityY=0;this.onGround=true;this.lastChunkCenter='';this.updateChunkStreaming(true);this.state.needs={health:100,hunger:70,thirst:70,stamina:100,warmth:75};this.applyHeldItemVisual();this.renderHud(true);this.saveState(true);
   }
 
   dailySettlementTick() {
@@ -2581,12 +2644,14 @@ class CenterDynastyGame {
   updateHotspots() {
     if(!this.player)return;
     const px=this.player.position.x,pz=this.player.position.z;
+    const groundGap=this.player.position.y-this.supportHeightAt(px,pz,this.player.position.y);
     let nearest=null,best=Infinity;
-    for(const node of this.resourceNodes){
+    if(groundGap<1.65){for(const node of this.tutorialNodes){if(!node.active)continue;const d=Math.hypot(px-node.x,pz-node.z);if(d<3.3&&d<best){best=d;nearest={id:node.id,type:'tutorial-pickup',x:node.x,z:node.z,label:node.label,data:node};}}}
+    if(groundGap<1.65)for(const node of this.resourceNodes){
       if(!node.active)continue;const d=Math.hypot(px-node.x,pz-node.z);if(d<4.1&&d<best){best=d;nearest={id:node.id,type:node.type,x:node.x,z:node.z,label:node.type==='tree'?(node.archetype==='fallen'?'Umgestürzten Baum verwerten':node.archetype==='broken'?'Gebrochenen Baum fällen':'Baum bearbeiten'):node.type==='rock'?'Felsen abbauen':'Beerenstrauch sammeln',data:node};}
     }
-    for(const animal of this.animals){if(!animal.active)continue;const d=Math.hypot(px-animal.x,pz-animal.z);if(d<5&&d<best){best=d;nearest={id:animal.id,type:'animal',x:animal.x,z:animal.z,label:`${animal.type==='deer'?'Rotwild':animal.type==='boar'?'Wildschwein':'Wolf'} jagen`,data:animal};}}
-    for(const hotspot of this.hotspots){if(hotspot.type==='village'&&this.state.visitedVillages?.includes?.(hotspot.data?.village))continue;const d=Math.hypot(px-hotspot.x,pz-hotspot.z);if(d<(hotspot.radius||4)&&d<best){best=d;nearest=hotspot;}}
+    if(groundGap<1.65)for(const animal of this.animals){if(!animal.active)continue;const d=Math.hypot(px-animal.x,pz-animal.z);if(d<5&&d<best){best=d;nearest={id:animal.id,type:'animal',x:animal.x,z:animal.z,label:`${animal.type==='deer'?'Rotwild':animal.type==='boar'?'Wildschwein':'Wolf'} jagen`,data:animal};}}
+    if(groundGap<1.65)for(const hotspot of this.hotspots){if(hotspot.type==='village'&&this.state.visitedVillages?.includes?.(hotspot.data?.village))continue;const d=Math.hypot(px-hotspot.x,pz-hotspot.z);if(d<(hotspot.radius||4)&&d<best){best=d;nearest=hotspot;}}
     if(this.buildMode){nearest={id:'build-place',type:'build-place',label:`${BUILDINGS[this.buildMode].name} errichten`};}
     this.nearestHotspot=nearest;
     this.interactButton.classList.toggle('is-visible',!!nearest);
@@ -2614,6 +2679,7 @@ class CenterDynastyGame {
     const hotspot=this.nearestHotspot;if(!hotspot)return;
     if(this.ownerOnly()&&this.state.ownerAppearance?.heldItem==='staff'&&['tree','rock','bush','animal','npc'].includes(hotspot.type))return this.ownerTelekinesis(hotspot);
     switch(hotspot.type){
+      case 'tutorial-pickup':return this.collectTutorialPickup(hotspot.data);
       case 'tree':return this.harvestTree(hotspot.data);
       case 'rock':return this.harvestRock(hotspot.data);
       case 'bush':return this.harvestBush(hotspot.data);
@@ -2640,6 +2706,69 @@ class CenterDynastyGame {
       case 'build-place':return this.placeBuilding();
       default:return this.openManagement('overview');
     }
+  }
+
+  performPrimaryAction() {
+    if(!this.opened||this.panel?.classList.contains('is-open')||this.ownerPanel?.classList.contains('is-open')||this.buildMode)return;
+    const now=performance.now();if(now<this.actionCooldownUntil)return;this.actionCooldownUntil=now+PRIMARY_ACTION_COOLDOWN_MS;
+    const hotspot=this.nearestHotspot,groundGap=this.player.position.y-this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
+    if(groundGap>1.65){this.toast('In der Luft kannst du keine Ressourcen bearbeiten.');return;}
+    if(this.isOwnerActive&&this.state.ownerAppearance?.heldItem==='staff'&&hotspot&&['tree','rock','bush','animal','npc'].includes(hotspot.type)){this.ownerTelekinesis(hotspot);return;}
+    if(hotspot?.type==='tutorial-pickup'){this.collectTutorialPickup(hotspot.data);return;}
+    if(hotspot?.type==='tree'&&['axe','ironAxe'].includes(this.state.equippedTool)){this.triggerActionAnimation('chop',500);this.harvestTree(hotspot.data);return;}
+    if(hotspot?.type==='rock'&&this.state.equippedTool==='pickaxe'){this.triggerActionAnimation('mine',500);this.harvestRock(hotspot.data);return;}
+    if(hotspot?.type==='bush'){this.triggerActionAnimation('gather',430);this.harvestBush(hotspot.data);return;}
+    if(hotspot?.type==='animal'&&['spear','bow'].includes(this.state.equippedTool)){this.triggerActionAnimation('attack',520);this.huntAnimal(hotspot.data);return;}
+    if(this.state.equippedTool||this.state.ownerAppearance?.heldItem!=='none'){this.triggerActionAnimation('attack',520);return;}
+    this.triggerActionAnimation('gather',380);
+  }
+
+  buildStarterTutorialNodes() {
+    for(const node of this.tutorialNodes)node.group?.removeFromParent?.();this.tutorialNodes.length=0;
+    if(this.state.tutorial?.done||!this.player)return;
+    const sx=Number(this.player.position.x),sz=Number(this.player.position.z);
+    const add=(id,kind,ox,oz,label)=>{const x=sx+ox,z=sz+oz,y=terrainHeightAt(x,z),group=new THREE.Group();let mesh;
+      if(kind==='stick'){mesh=new THREE.Mesh(new THREE.CylinderGeometry(.045,.065,1.05,7),new THREE.MeshStandardMaterial({color:0x81502b,roughness:1}));mesh.rotation.z=Math.PI/2;mesh.rotation.y=(ox+oz)*.2;mesh.position.y=.14;}
+      else if(kind==='stone'){mesh=new THREE.Mesh(new THREE.DodecahedronGeometry(.24,0),new THREE.MeshStandardMaterial({color:0x7b817e,roughness:1,flatShading:true}));mesh.position.y=.2;}
+      else if(kind==='berry'){mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.62,1),new THREE.MeshStandardMaterial({color:0x3f7136,roughness:1,flatShading:true}));mesh.position.y=.55;for(let i=0;i<7;i++){const berry=new THREE.Mesh(new THREE.SphereGeometry(.07,7,5),new THREE.MeshStandardMaterial({color:0xc7352e,roughness:.7}));berry.position.set(Math.sin(i*2.1)*.48,.5+(i%3)*.16,Math.cos(i*1.7)*.4);group.add(berry);}}
+      else {mesh=new THREE.Mesh(new THREE.CylinderGeometry(.045,.065,.24,7),new THREE.MeshStandardMaterial({color:0xe7dfc8,roughness:1}));mesh.position.y=.12;const cap=new THREE.Mesh(new THREE.SphereGeometry(.18,8,5,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:this.state.season===2?0xa94b31:0x9b7654,roughness:1}));cap.position.y=.26;group.add(cap);}
+      group.add(mesh);group.position.set(x,y,z);this.scene.add(group);this.tutorialNodes.push({id:`tutorial-${id}`,kind,x,z,label,group,active:true});};
+    add('stick-1','stick',3.2,1.4,'Trockenen Ast suchen');add('stick-2','stick',-2.7,3.1,'Trockenen Ast suchen');add('stick-3','stick',4.5,-2.4,'Trockenen Ast suchen');add('stone-1','stone',-4.1,-1.6,'Kleinen Stein suchen');add('stone-2','stone',1.2,-4.5,'Kleinen Stein suchen');add('berry','berry',6.4,4.2,'Rote Beeren sammeln');
+    const mushroomCount=this.state.season===2?5:this.state.season===0?2:1;for(let i=0;i<mushroomCount;i++)add(`mushroom-${i}`,'mushroom',-6+i*1.15,5.3+(i%2)*.8,'Pilz sammeln');
+  }
+
+  async collectTutorialPickup(node) {
+    if(!node?.active||node.collecting||this.collectingTutorialNode)return;
+    node.collecting=true;this.collectingTutorialNode=node.id;this.triggerActionAnimation('gather',700);
+    const labels={stick:'Du suchst nach einem brauchbaren Ast …',stone:'Du suchst nach einem passenden Stein …',berry:'Du pflückst die reifen Beeren …',mushroom:'Du prüfst und sammelst den Pilz …'};
+    this.toast(labels[node.kind]||'Du sammelst den Fund …');
+    await wait(node.kind==='stone'?950:node.kind==='stick'?820:700);
+    const stillNear=this.opened&&node.active&&Math.hypot(this.player.position.x-node.x,this.player.position.z-node.z)<3.8&&this.player.position.y-this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y)<1.65;
+    node.collecting=false;this.collectingTutorialNode=null;if(!stillNear){this.toast('Sammeln abgebrochen.');return;}
+    node.active=false;node.group?.removeFromParent?.();
+    if(node.kind==='stick'){this.state.inventory.wood+=1;this.state.tutorial.sticks+=1;this.toast('+1 trockener Ast');}
+    else if(node.kind==='stone'){this.state.inventory.stone+=1;this.state.tutorial.stones+=1;this.toast('+1 kleiner Stein');}
+    else if(node.kind==='berry'){this.state.inventory.berries+=2;this.state.tutorial.berries+=2;this.toast('+2 Beeren');}
+    else {this.state.inventory.mushrooms+=1;this.state.tutorial.mushrooms+=1;this.toast('+1 Pilz');}
+    this.checkTutorialProgress();this.renderHud(true);this.saveState(true);
+  }
+
+  checkTutorialProgress() {
+    const t=this.state.tutorial;if(!t||t.done)return;
+    if(t.step==='sticks'&&t.sticks>=3)t.step='stones';
+    if(t.step==='stones'&&t.stones>=2)t.step='axe';
+    if(t.step==='axe'&&this.state.tools.axe>0)t.step='tree';
+    if(t.step==='tree'&&t.treeChopped)t.step='berries';
+    if(t.step==='berries'&&t.berries>=1)t.step='mushrooms';
+    if(t.step==='mushrooms'&&t.mushrooms>=1){t.done=true;t.step='done';this.state.activeQuest='fire';for(const node of this.tutorialNodes){node.active=false;node.group?.removeFromParent?.();}this.toast('Center-Grundtutorial abgeschlossen. Jetzt kannst du dein erstes Lagerfeuer bauen.');}
+    this.renderHud(true);
+  }
+
+  ensureValidWorldPosition() {
+    if(!this.player)return;const x=this.player.position.x,z=this.player.position.z,ground=terrainHeightAt(x,z);
+    const invalid=!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(this.player.position.y)||this.player.position.y<ground-1||this.player.position.y>MAX_FLY_HEIGHT+80;
+    if(!invalid)return;const safe=this.lastSafePosition?.clone?.()||new THREE.Vector3(Number(this.state.world.spawnX||0),terrainHeightAt(Number(this.state.world.spawnX||0),Number(this.state.world.spawnZ||0)),Number(this.state.world.spawnZ||0));
+    safe.y=Math.max(terrainHeightAt(safe.x,safe.z),safe.y);this.player.position.copy(safe);this.velocityY=0;this.onGround=true;this.ownerFlags.fly=false;this.fallStartY=null;this.snapCamera();this.toast('Sicherheitsrettung: Du wurdest auf festen Boden gesetzt.');
   }
 
   ownerTelekinesis(hotspot) {
@@ -2697,9 +2826,9 @@ class CenterDynastyGame {
   harvestTree(node) {
     const forestry=this.state.skills.forestry||0;
     const axeId=(this.state.tools.ironAxe||0)>0?'ironAxe':'axe';this.state.equippedTool=axeId;this.applyHeldItemVisual();this.triggerActionAnimation('chop',620);
-    if(!this.useTool(axeId,axeId==='ironAxe'?2:4)){this.state.inventory.wood+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.toast('Ohne Axt sammelst du nur einen trockenen Ast.');this.gainXp(1,'Überleben');return;}
+    if(!this.useTool(axeId,axeId==='ironAxe'?2:4)){this.state.inventory.wood+=1;if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);this.toast('Ohne Axt sammelst du nur einen trockenen Ast.');this.gainXp(1,'Überleben');return;}
     const bonus=node?.archetype==='fallen'?2:node?.archetype==='broken'?1:0;const logs=3+Math.floor(forestry/2)+bonus,wood=2+forestry+bonus;
-    this.state.inventory.logs+=logs;this.state.inventory.wood+=wood;this.state.stats.trees+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-9);
+    this.state.inventory.logs+=logs;this.state.inventory.wood+=wood;this.state.stats.trees+=1;if(this.state.tutorial&&!this.state.tutorial.done){this.state.tutorial.treeChopped=true;this.checkTutorialProgress();}if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-9);
     this.harvestNode(node,150000);this.gainXp(8+forestry*2,'Forstwirtschaft');this.toast(`+${logs} Stämme · +${wood} Holz`);this.checkQuestProgress();
   }
 
@@ -2708,7 +2837,7 @@ class CenterDynastyGame {
     this.state.equippedTool='pickaxe';this.applyHeldItemVisual();this.triggerActionAnimation('mine',650);
     if(!this.useTool('pickaxe',5)){this.toast('Du brauchst eine Spitzhacke.');return;}
     const stone=3+mining,iron=Math.random()<.2+mining*.08?1:0;
-    this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.stats.rocks+=1;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-10);
+    this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.stats.rocks+=1;if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-10);
     this.harvestNode(node,180000);this.gainXp(9+mining*2,'Bergbau');this.toast(`+${stone} Stein${iron?' · +1 Eisenerz':''}`);
   }
 
@@ -2726,7 +2855,7 @@ class CenterDynastyGame {
     const usedBow=(this.state.tools.bow||0)>0;
     if(usedBow){this.useTool('bow',5);}else if(!this.useTool('spear',8)){this.toast('Du brauchst einen Jagdspeer oder Jägerbogen.');return;}
     const hunting=this.state.skills.hunting||0;
-    if(animal.type==='wolf'&&Math.random()>.58+hunting*.06){if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.health=Math.max(0,this.state.needs.health-18);this.state.needs.stamina=Math.max(0,this.state.needs.stamina-15);this.toast('Der Wolf verletzt dich und entkommt.');animal.targetX+=30;return;}
+    if(animal.type==='wolf'&&Math.random()>.58+hunting*.06){if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.health=Math.max(0,this.state.needs.health-18);if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-15);this.toast('Der Wolf verletzt dich und entkommt.');animal.targetX+=30;return;}
     const meat=(animal.type==='deer'?4:animal.type==='boar'?5:2)+hunting;
     const leather=(animal.type==='deer'?2:1)+Math.floor(hunting/2);
     this.state.inventory.meat+=meat;this.state.inventory.leather+=leather;this.state.stats.animals+=1;animal.active=false;animal.group.visible=false;animal.respawnAt=Date.now()+180000;
@@ -2776,12 +2905,12 @@ class CenterDynastyGame {
 
   exploreCave(hotspot=null) {
     if(this.state.tools.torch<=0){this.toast('Für die dunkle Höhle brauchst du eine Fackel.');return;}
-    this.useTool('torch',6);const stone=4+Math.floor(Math.random()*5),iron=1+Math.floor(Math.random()*3),coins=Math.random()<.28?8+Math.floor(Math.random()*18):0;this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.inventory.coins+=coins;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-18);this.gainXp(18,'Höhle erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Höhlenfund: +${stone} Stein · +${iron} Eisenerz${coins?` · +${coins} Münzen`:''}`);
+    this.useTool('torch',6);const stone=4+Math.floor(Math.random()*5),iron=1+Math.floor(Math.random()*3),coins=Math.random()<.28?8+Math.floor(Math.random()*18):0;this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.inventory.coins+=coins;if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-18);this.gainXp(18,'Höhle erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Höhlenfund: +${stone} Stein · +${iron} Eisenerz${coins?` · +${coins} Münzen`:''}`);
   }
 
   exploreMine(hotspot=null) {
     if(this.state.tools.pickaxe<=0){this.toast('Für das Bergwerk brauchst du eine Spitzhacke.');return;}
-    this.useTool('pickaxe',9);const mining=this.state.skills.mining||0,stone=6+mining+Math.floor(Math.random()*5),iron=2+Math.floor(Math.random()*(3+mining));this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;this.state.needs.stamina=Math.max(0,this.state.needs.stamina-22);this.gainXp(24+mining*2,'Bergwerk erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Bergwerksfund: +${stone} Stein · +${iron} Eisenerz`);
+    this.useTool('pickaxe',9);const mining=this.state.skills.mining||0,stone=6+mining+Math.floor(Math.random()*5),iron=2+Math.floor(Math.random()*(3+mining));this.state.inventory.stone+=stone;this.state.inventory.iron+=iron;if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.stamina=Math.max(0,this.state.needs.stamina-22);this.gainXp(24+mining*2,'Bergwerk erkundet');if(hotspot?.data?.title)this.discover(hotspot.data.title);this.toast(`Bergwerksfund: +${stone} Stein · +${iron} Eisenerz`);
   }
 
   discoverLandmark(hotspot) {
@@ -2795,7 +2924,7 @@ class CenterDynastyGame {
     const id=String(hotspot?.data?.id||hotspot?.id||'encounter'),last=Number(this.state.encounterHistory[id]||0);
     if(Date.now()-last<120000){this.toast('Dieses Lager wurde bereits durchsucht.');return;}
     this.state.encounterHistory[id]=Date.now();const danger=Math.random();
-    if(danger<.28){const loss=5+Math.floor(Math.random()*10);this.state.needs.health=Math.max(1,this.state.needs.health-loss);this.state.inventory.leather+=1;this.toast(`Ein Wolf überrascht dich: -${loss} Gesundheit · +1 Leder`);}
+    if(danger<.28){const loss=5+Math.floor(Math.random()*10);if(!(this.isOwnerActive&&this.ownerFlags.god))this.state.needs.health=Math.max(1,this.state.needs.health-loss);this.state.inventory.leather+=1;this.toast(`Ein Wolf überrascht dich: -${loss} Gesundheit · +1 Leder`);}
     else{const meat=1+Math.floor(Math.random()*3),coins=8+Math.floor(Math.random()*20),herbs=Math.floor(Math.random()*3);this.state.inventory.meat+=meat;this.state.inventory.coins+=coins;this.state.inventory.herbs+=herbs;this.toast(`Jägerlager: +${meat} Fleisch · +${coins} Münzen${herbs?` · +${herbs} Kräuter`:''}`);}
     this.gainXp(14,'Weltbegegnung');
   }
@@ -2817,6 +2946,7 @@ class CenterDynastyGame {
   useItem(item) {
     if(item==='berries'){if(this.state.inventory.berries<1)return this.toast('Keine Beeren.');this.state.inventory.berries-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+9);}
     if(item==='cookedMeat'){if(this.state.inventory.cookedMeat<1)return this.toast('Kein gebratenes Fleisch.');this.state.inventory.cookedMeat-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+32);this.state.needs.health=Math.min(100,this.state.needs.health+4);}
+    if(item==='mushrooms'){if(this.state.inventory.mushrooms<1)return this.toast('Keine Pilze.');this.state.inventory.mushrooms-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+12);}
     if(item==='water'){if(this.state.inventory.water<1)return this.toast('Kein Wasser.');this.state.inventory.water-=1;this.state.needs.thirst=Math.min(100,this.state.needs.thirst+30);}
     if(item==='medicine'){if(this.state.inventory.medicine<1)return this.toast('Kein Heilmittel.');this.state.inventory.medicine-=1;this.state.needs.health=Math.min(100,this.state.needs.health+45);this.state.needs.warmth=Math.min(100,this.state.needs.warmth+12);}
     this.renderHud(true);this.saveState();
@@ -2843,7 +2973,7 @@ class CenterDynastyGame {
     if(!this.hasCost(recipe.cost)){this.toast('Nicht genügend Rohstoffe.');return;}
     this.payCost(recipe.cost);
     if(recipeId==='cookedMeat')this.state.inventory.cookedMeat+=recipe.amount||1;else if(recipeId==='medicine')this.state.inventory.medicine+=recipe.amount||1;else {this.state.tools[recipeId]=Math.min(recipeId==='ironAxe'?180:120,(this.state.tools[recipeId]||0)+recipe.durability);if(!this.state.equippedTool)this.state.equippedTool=recipeId;this.applyHeldItemVisual();}
-    this.state.stats.crafted+=1;this.gainXp(8,`Herstellung: ${recipe.name}`);this.toast(`${recipe.name} hergestellt.`);this.openManagement('crafting');this.checkQuestProgress();
+    this.state.stats.crafted+=1;if(recipeId==='axe')this.checkTutorialProgress();this.gainXp(8,`Herstellung: ${recipe.name}`);this.toast(`${recipe.name} hergestellt.`);this.openManagement('crafting');this.checkQuestProgress();
   }
 
   hasCost(cost,discount=false) { return Object.entries(cost||{}).every(([key,value])=>(this.state.inventory[key]||0)>=this.adjustCost(value,discount)); }
@@ -2930,7 +3060,7 @@ class CenterDynastyGame {
   }
 
   renderInventoryPanel() {
-    const items=Object.entries(RESOURCE_LABELS).map(([id,name])=>`<article><span>${this.itemIcon(id)}</span><div><b>${name}</b><small>Im Rucksack</small></div><strong>${this.state.inventory[id]||0}</strong>${['berries','cookedMeat','water','medicine'].includes(id)?`<button data-mdc-use="${id}">Benutzen</button>`:''}</article>`).join('');
+    const items=Object.entries(RESOURCE_LABELS).map(([id,name])=>`<article><span>${this.itemIcon(id)}</span><div><b>${name}</b><small>Im Rucksack</small></div><strong>${this.state.inventory[id]||0}</strong>${['berries','mushrooms','cookedMeat','water','medicine'].includes(id)?`<button data-mdc-use="${id}">Benutzen</button>`:''}</article>`).join('');
     const tools=Object.entries(RECIPES).filter(([id])=>!['cookedMeat','medicine'].includes(id)).map(([id,r])=>{const amount=Math.round(this.state.tools[id]||0),equipped=this.state.equippedTool===id;return `<article class="${equipped?'is-equipped':''}"><span>${r.icon}</span><div><b>${r.name}</b><small>${equipped?'In der Hand':'Haltbarkeit'}</small></div><strong>${amount}%</strong><button ${amount>0?'':'disabled'} data-mdc-action="equip-tool" data-tool="${id}">${equipped?'Ablegen':'Ausrüsten'}</button></article>`;}).join('');
     return `<h3 class="mdc-section-title">Rohstoffe</h3><div class="mdc-inventory-list">${items}</div><h3 class="mdc-section-title">Werkzeuge</h3><p class="mdc-note">Ausrüsten zeigt das Werkzeug direkt in der Hand. Mit C öffnest und schließt du dieses Menü.</p><div class="mdc-inventory-list">${tools}</div>`;
   }
@@ -2976,8 +3106,8 @@ class CenterDynastyGame {
   }
 
   renderWorldSettingsPanel() {
-    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',shadows=!!this.state.world?.shadows;
-    return `<div class="mdc-settings-card"><small>GRAFIK</small><h3>Dynamische Schatten</h3><p>Charaktere, Bäume, Gebäude und Gegenstände werfen Schatten entsprechend der Sonnenposition. Standardmäßig ausgeschaltet, weil diese Option mehr Leistung benötigt.</p><div class="mdc-setting-options"><button class="${shadows?'active':''}" data-mdc-action="world-shadows" data-value="${shadows?'off':'on'}">${shadows?'Schatten ausschalten':'Schatten einschalten'}<small>${shadows?'Aktiv':'Aus'}</small></button></div></div>
+    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',shadows=!!this.state.world?.shadows,onlineKoop=!!this.state.world?.onlineKoop;
+    return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Center-Koop (Beta)</h3><p>Ist standardmäßig ausgeschaltet, damit fehlende Firestore-Rechte das Center nicht stören. Nach passenden Firebase-Regeln kann es hier aktiviert werden.</p><div class="mdc-setting-options"><button class="${onlineKoop?'active':''}" data-mdc-action="world-online" data-value="${onlineKoop?'off':'on'}">${onlineKoop?'Koop ausschalten':'Koop einschalten'}<small>${onlineKoop?'Aktiv':'Offline'}</small></button></div></div><div class="mdc-settings-card"><small>GRAFIK</small><h3>Dynamische Schatten</h3><p>Charaktere, Bäume, Gebäude und Gegenstände werfen Schatten entsprechend der Sonnenposition. Standardmäßig ausgeschaltet, weil diese Option mehr Leistung benötigt.</p><div class="mdc-setting-options"><button class="${shadows?'active':''}" data-mdc-action="world-shadows" data-value="${shadows?'off':'on'}">${shadows?'Schatten ausschalten':'Schatten einschalten'}<small>${shadows?'Aktiv':'Aus'}</small></button></div></div>
       <div class="mdc-settings-card"><small>DYNAMISCHES WELT-STREAMING</small><h3>Sichtweite</h3><p>Nur Regionen rund um dich werden geladen. Entfernte Regionen werden automatisch aus dem Speicher entfernt.</p><div class="mdc-setting-options">${[1,2,3,4,5].map((value)=>`<button class="${distance===value?'active':''}" data-mdc-action="world-distance" data-value="${value}">${value===1?'Kurz':value===2?'Mittel':value===3?'Weit':value===4?'Sehr weit':'Extrem'}<small>${(value*CHUNK_SIZE).toLocaleString('de-DE')} m Radius</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>OBJEKTDICHTE</small><h3>Wälder und Landschaft</h3><p>Bestimmt, wie viele Bäume, Felsen und Büsche pro Region erzeugt werden.</p><div class="mdc-setting-options three">${[['low','Niedrig'],['normal','Normal'],['high','Sehr dicht']].map(([id,label])=>`<button class="${density===id?'active':''}" data-mdc-action="world-density" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>ENTDECKUNGEN</small><h3>Höhlen, Ruinen und Lager</h3><p>Bestimmt, wie häufig besondere Orte und zufällige Begegnungen in neuen Regionen entstehen.</p><div class="mdc-setting-options three">${[['low','Selten'],['normal','Normal'],['high','Häufig']].map(([id,label])=>`<button class="${landmarks===id?'active':''}" data-mdc-action="landmark-density" data-value="${id}">${label}</button>`).join('')}</div></div>
@@ -2985,6 +3115,8 @@ class CenterDynastyGame {
   }
 
   currentQuest() {
+    const t=this.state.tutorial;
+    if(t&&!t.done){const tutorial={sticks:{title:'Erste Äste finden',text:'Suche drei trockene Äste in der Nähe deines Startpunkts.',progress:`Äste ${Math.min(3,t.sticks)}/3`},stones:{title:'Kleine Steine suchen',text:'Sammle zwei kleine Steine vom Boden.',progress:`Steine ${Math.min(2,t.stones)}/2`},axe:{title:'Die erste Steinaxt',text:'Öffne mit C die Herstellung und baue aus Ästen und Steinen eine Steinaxt.',progress:this.state.tools.axe>0?'Axt hergestellt':'Steinaxt fehlt'},tree:{title:'Den ersten Baum fällen',text:'Rüste die Steinaxt aus und schlage mit der linken Maustaste auf einen Baum.',progress:t.treeChopped?'Baum gefällt':'Baum 0/1'},berries:{title:'Nahrung aus Sträuchern',text:'Finde einen Strauch mit roten Beeren und sammle ihn.',progress:`Beeren ${Math.min(1,t.berries)}/1`},mushrooms:{title:'Pilze der Jahreszeit',text:'Sammle einen Pilz. Im Herbst wachsen deutlich mehr Pilze.',progress:`Pilze ${Math.min(1,t.mushrooms)}/1`}};return tutorial[t.step]||tutorial.sticks;}
     const built=this.state.buildings.length,res=this.state.settlement.residents;
     const quests={
       tools:{title:'Das erste Werkzeug',text:'Stelle eine Steinaxt her.',done:this.state.tools.axe>0,progress:this.state.tools.axe>0?'Erledigt':'Steinaxt fehlt'},
@@ -3001,13 +3133,14 @@ class CenterDynastyGame {
 
   checkQuestProgress() {
     const order=['tools','fire','house','resident','village','profession','legacy','dynasty'];
+    if(this.state.tutorial&&!this.state.tutorial.done){this.checkTutorialProgress();return;}
     const q=this.currentQuest();if(!q.done)return;
     const id=this.state.activeQuest;
     if(!this.state.completedQuests.includes(id)){this.state.completedQuests.push(id);this.state.inventory.coins+=35;this.state.settlement.reputation+=10;this.gainXp(35,`Aufgabe: ${q.title}`);this.toast(`Aufgabe abgeschlossen: ${q.title} · +35 Münzen`);}
     const index=order.indexOf(id);this.state.activeQuest=order[Math.min(order.length-1,index+1)];this.renderHud(true);if(this.panel.classList.contains('is-open'))this.openManagement(this.panelMode||'overview');
   }
 
-  itemIcon(id){return {wood:'🪵',logs:'▥',stone:'◆',berries:'●',meat:'🍖',cookedMeat:'♨',water:'💧',leather:'▱',flax:'🌾',iron:'⬢',herbs:'🌿',grain:'🌾',medicine:'✚',coins:'◉'}[id]||'·';}
+  itemIcon(id){return {wood:'🪵',logs:'▥',stone:'◆',berries:'●',mushrooms:'🍄',meat:'🍖',cookedMeat:'♨',water:'💧',leather:'▱',flax:'🌾',iron:'⬢',herbs:'🌿',grain:'🌾',medicine:'✚',coins:'◉'}[id]||'·';}
   costText(cost,discount=false){return Object.entries(cost||{}).filter(([,v])=>v>0).map(([k,v])=>`${this.adjustCost(v,discount)} ${RESOURCE_LABELS[k]||k}`).join(' · ')||'Kostenlos';}
 
   handlePanelAction(event) {
@@ -3029,6 +3162,7 @@ class CenterDynastyGame {
     if(action==='world-distance'){this.state.world.renderDistance=Math.floor(clamp(Number(button.dataset.value),MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE));this.applyWorldRenderSettings(true);this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Sichtweite: ${this.state.world.renderDistance} Regionen.`);}
     if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
     if(action==='landmark-density'){const value=button.dataset.value;this.state.world.landmarkDensity=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Besondere Orte: ${this.state.world.landmarkDensity}.`);}
+    if(action==='world-online'){this.state.world.onlineKoop=button.dataset.value==='on';this.saveState(true);if(this.state.world.onlineKoop)this.connectMultiplayer().catch(()=>{});else this.disconnectMultiplayer().catch(()=>{});this.openManagement('settings');this.toast(this.state.world.onlineKoop?'Center-Koop wird versucht.':'Center-Koop ausgeschaltet.');}
     if(action==='world-shadows'){this.state.world.shadows=button.dataset.value==='on';this.applyShadowSettings();this.saveState(true);this.openManagement('settings');this.toast(this.state.world.shadows?'Dynamische Schatten aktiviert.':'Dynamische Schatten deaktiviert.');}
     if(action==='job-plus')this.adjustVillageJob(button.dataset.job,1);
     if(action==='job-minus')this.adjustVillageJob(button.dataset.job,-1);
@@ -3063,10 +3197,10 @@ class CenterDynastyGame {
   renderHud(force=false) {
     const now=performance.now();if(!force&&now-this.lastHudAt<200)return;this.lastHudAt=now;
     const needs=[['health','Leben','♥'],['hunger','Hunger','●'],['thirst','Durst','◆'],['stamina','Ausdauer','⚡'],['warmth','Wärme','♨']];
-    this.needsElement.innerHTML=needs.map(([id,name,icon])=>`<div class="${id}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${clamp(this.state.needs[id],0,100)}%"></b></i></div><strong>${Math.round(this.state.needs[id])}</strong></div>`).join('');
+    this.needsElement.innerHTML=needs.map(([id,name,icon])=>`<div class="${id} ${this.state.needs[id]<=20?'is-low':''}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${clamp(this.state.needs[id],0,100)}%"></b></i></div><strong>${Math.round(this.state.needs[id])}</strong></div>`).join('');
     const q=this.currentQuest();this.questElement.innerHTML=`<small>AUFGABE</small><strong>${q.title}</strong><span>${q.progress}</span>`;
     const equipped=this.state.equippedTool&&RECIPES[this.state.equippedTool]?`<div class="mdc-equipped-tool"><span>${RECIPES[this.state.equippedTool].icon}</span><b>${Math.round(this.state.tools[this.state.equippedTool]||0)}%</b><small>${RECIPES[this.state.equippedTool].name}</small></div>`:'';
-    this.hotbarElement.innerHTML=`${equipped}<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
+    this.hotbarElement.innerHTML=`${equipped}<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="mushrooms"><span>🍄</span><b>${this.state.inventory.mushrooms}</b><small>Pilze</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
     const season=SEASONS[this.state.season],weather=WEATHER[this.state.weather];const hours=Math.floor(this.state.time),minutes=Math.floor((this.state.time-hours)*60);
     this.seasonLabel.textContent=`${season.icon} ${season.name}`;if(this.dayTimeLabel)this.dayTimeLabel.textContent=`Tag ${this.state.day} · ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;this.weatherLabel.textContent=`${weather.icon} ${weather.name}`;
     this.compassLabel.textContent=this.compassDirection();
@@ -3097,7 +3231,7 @@ class CenterDynastyGame {
 
   async connectMultiplayer(prepared=null) {
     if(this.onlineConnected||this.onlineConnecting)return false;this.onlineConnecting=true;this.setOnlineUi('connecting','Koop-Spieler werden geladen …',1);
-    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.verifyLocalOwnerRole();await this.publishPresence(true);const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));this.onlineUnsubscribe?.();this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>this.applyPresenceSnapshot(snapshot).catch(()=>{}),(error)=>{this.onlineConnected=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1+this.remotePlayers.size);if(!isFirebasePermissionError(error))console.warn('Center-Koop wurde unterbrochen',error);});clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch(()=>{}),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch(()=>{}),ONLINE_WRITE_INTERVAL_MS);this.onlineConnected=true;this.onlineConnecting=false;this.setOnlineUi('online','Center-Koop verbunden.',1+this.remotePlayers.size);return true;}catch(error){if(!isFirebasePermissionError(error))console.warn('Center-Koop konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.updateRoleHud();this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}
+    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.verifyLocalOwnerRole();await this.publishPresence(true);const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));this.onlineUnsubscribe?.();this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>this.applyPresenceSnapshot(snapshot).catch(()=>{}),(error)=>{this.onlineConnected=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1+this.remotePlayers.size);if(!isFirebasePermissionError(error))console.warn('Center-Koop wurde unterbrochen',error);});clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch(()=>{}),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch(()=>{}),ONLINE_WRITE_INTERVAL_MS);this.onlineConnected=true;this.onlineConnecting=false;this.setOnlineUi('online','Center-Koop verbunden.',1+this.remotePlayers.size);return true;}catch(error){if(isFirebasePermissionError(error)){this.state.world.onlineKoop=false;this.saveState(true);}else console.warn('Center-Koop konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.updateRoleHud();this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}
   }
 
   async publishPresence(force=false){if(!this.opened||!this.onlineFb||!this.onlineDocRef||!this.player||this.presenceWriteInFlight)return false;const now=Date.now(),payload=this.presencePayload(true),live=payload.cottbus3D,key=`${live.x.toFixed(2)}|${live.y.toFixed(2)}|${live.z.toFixed(2)}|${live.bodyYaw.toFixed(2)}|${live.walking}|${live.vanished}|${live.flying}`;if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;this.presenceWriteInFlight=true;try{await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});this.lastPresenceWriteAt=Date.now();this.lastPresenceKey=key;return true;}finally{this.presenceWriteInFlight=false;}}
@@ -3171,7 +3305,7 @@ class CenterDynastyGame {
       <div class="mdc-owner-status"><span>◆</span><div><small>OWNER AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div>
       <h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">
         ${this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Für andere unsichtbar · selbst transparent')}
-        ${this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Kein Lebensschaden')}
+        ${this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Leben, Hunger, Durst, Ausdauer und Wärme bleiben voll')}
         ${this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen')}
         ${this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter')}
         ${this.ownerToggleButton('cycle-speed',`Geschwindigkeit: ${speedNames[f.speedLevel]}`,f.speedLevel>0,'Normal, schnell oder extrem')}
@@ -3209,7 +3343,7 @@ class CenterDynastyGame {
 
   handleOwnerAction(event) {
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.ownerOnly())return;const action=button.dataset.ownerAction;
-    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'&&this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'&&this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='cycle-speed'){this.ownerFlags.speedLevel=(this.ownerFlags.speedLevel+1)%OWNER_SPEED_LEVELS.length;this.renderOwnerMenu();return;}
     if(action.startsWith('skin-')){this.state.ownerAppearance.skin=action.replace('skin-','');this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-item'){this.state.ownerAppearance.heldItem=button.dataset.ownerItem||'none';this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();return;}
@@ -3239,7 +3373,7 @@ class CenterDynastyGame {
 
   startLoop() {
     cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);};
+    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
     this.raf=requestAnimationFrame(frame);
   }
 

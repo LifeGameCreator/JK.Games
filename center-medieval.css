@@ -127,3 +127,14 @@
 .mdc-owner-character label{display:grid;grid-template-columns:auto minmax(100px,1fr) auto;align-items:center;gap:10px;color:#d7c9a5;font-size:9px;font-weight:800}.mdc-owner-character input{width:100%}
 .mdc-panel-open .mdc-minimap,.is-owner-panel-open .mdc-minimap{z-index:10;filter:brightness(.72) drop-shadow(0 8px 20px #0008)}
 @media(max-width:720px){.mdc-owner-character label{grid-template-columns:1fr auto}.mdc-owner-character input{grid-column:1/-1}.mdc-owner-actions.three{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* V195 · Stabilität, Warnungen und Survival-Tutorial */
+.mdc-danger-vignette{position:absolute;inset:0;z-index:18;pointer-events:none;opacity:0;transition:opacity .3s ease;background:radial-gradient(circle at center,transparent 48%,rgba(180,0,0,.22) 78%,rgba(130,0,0,.55) 100%)}
+.mdc-overlay.is-critical-health .mdc-danger-vignette{opacity:1;animation:mdcDangerPulse 1.45s ease-in-out infinite}
+.mdc-overlay.is-critical-needs:not(.is-critical-health) .mdc-danger-vignette{opacity:.28}
+@keyframes mdcDangerPulse{0%,100%{filter:brightness(.85)}50%{filter:brightness(1.35)}}
+.mdc-needs>div.hunger.is-low,.mdc-needs>div.thirst.is-low,.mdc-needs>div.warmth.is-low{border-color:#dc9a43;background:rgba(113,64,18,.78)}
+.mdc-needs>div.health.is-low{border-color:#df5757;background:rgba(104,20,20,.84)}
+.c3d-mobile-actions [data-c3d-attack]{background:linear-gradient(145deg,#d19c46,#61401c);color:#fff3cd}
+.mdc-tutorial-note{padding:10px;border:1px solid rgba(229,188,82,.25);border-radius:12px;background:rgba(229,188,82,.07)}
