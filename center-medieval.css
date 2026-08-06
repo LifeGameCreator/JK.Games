@@ -154,3 +154,9 @@
 .mdc-exit-confirm [data-mdc-exit-leave]{background:linear-gradient(180deg,#9e493f,#652b28);border-color:#db7468}
 .mdc-overlay.is-exit-confirm-open .mdc-minimap,.mdc-overlay.is-exit-confirm-open .mdc-needs,.mdc-overlay.is-exit-confirm-open .mdc-quest-card{filter:blur(2px);opacity:.32}
 @media(max-width:720px){.mdc-exit-confirm>div>div{grid-template-columns:1fr}.mdc-exit-confirm h2{font-size:20px}}
+
+/* V200 Owner Aura und Galaxy-Admin-Stab */
+.mdc-owner-actions button[data-owner-action="skin-oaura"]{position:relative;overflow:hidden;border-color:#a34dff88;background:radial-gradient(circle at 25% 25%,#c34cff55,transparent 38%),radial-gradient(circle at 78% 70%,#ff315f3d,transparent 42%),linear-gradient(135deg,#160729,#3b0d66 48%,#19051f);color:#f4ddff;text-shadow:0 0 9px #c451ff;box-shadow:inset 0 0 18px #8e2cff38,0 0 16px #872cff24}
+.mdc-owner-actions button[data-owner-action="skin-oaura"]:before{content:"✦";position:absolute;left:8px;top:5px;color:#ff6383;filter:drop-shadow(0 0 5px #ff315f);animation:mdcAuraSpark 1.4s ease-in-out infinite}
+.mdc-owner-actions button[data-owner-item="staff"]{border-color:#8d48ff88;background:linear-gradient(135deg,#08020f,#31105c 48%,#781b61);color:#eadbff;box-shadow:inset 0 0 14px #8b3dff30,0 0 12px #ff315f1f}
+@keyframes mdcAuraSpark{0%,100%{transform:scale(.75) rotate(0);opacity:.55}50%{transform:scale(1.25) rotate(90deg);opacity:1}}

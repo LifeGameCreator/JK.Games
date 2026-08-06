@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-05-jkgames-v197-center-items-flight-graphics-exit-fix';
+const CENTER_VERSION = '2026-08-06-jkgames-v200-owner-aura-galaxy-staff-item-rotation';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -211,7 +211,8 @@ function normalizeSaveState(raw) {
   state.tools = { ...base.tools, ...(raw.tools || {}) };
   state.equippedTool = RECIPES[raw.equippedTool] ? String(raw.equippedTool) : '';
   state.ownerAppearance = { ...base.ownerAppearance, ...(raw.ownerAppearance || {}) };
-  state.ownerAppearance.skin = ['normal','ball','crystal','shadow','bush','tree','rock','grass'].includes(state.ownerAppearance.skin) ? state.ownerAppearance.skin : 'normal';
+  state.ownerAppearance.skin = state.ownerAppearance.skin === 'shadow' ? 'oaura' : state.ownerAppearance.skin;
+  state.ownerAppearance.skin = ['normal','ball','crystal','oaura','bush','tree','rock','grass'].includes(state.ownerAppearance.skin) ? state.ownerAppearance.skin : 'normal';
   state.ownerAppearance.size = clamp(Number(state.ownerAppearance.size) || 1, .45, 2.5);
   state.ownerAppearance.heldItem = ['none','sword','axe','staff','torch','hammer'].includes(state.ownerAppearance.heldItem) ? state.ownerAppearance.heldItem : 'none';
   state.skills = { ...base.skills, ...(raw.skills || {}) };
@@ -354,6 +355,7 @@ class CenterDynastyGame {
     this.input = { forward: 0, right: 0, sprint: false };
     this.player = null;
     this.modelPivot = null;
+    this.flightVisualPivot = null;
     this.playerModel = null;
     this.playerMixer = null;
     this.playerAction = null;
@@ -362,12 +364,18 @@ class CenterDynastyGame {
     this.idleStartedAt = performance.now();
     this.playerBones = {};
     this.actionAnimation = null;
+    this.nextPunchSide = 'right';
+    this.sprintLockedUntilRelease = false;
+    this.npcModelTemplate = null;
+    this.npcModelPromise = null;
     this.ownerHeldObject = null;
     this.ownerFormObject = null;
     this.ownerItemLight = null;
     this.ownerThrownObjects = [];
     this.flightEffects = null;
     this.flightVerticalVelocity = 0;
+    this.flightInputMagnitude = 0;
+    this.flightLean = 0;
     this.tutorialNodes = [];
     this.collectingTutorialNode = null;
     this.actionCooldownUntil = 0;
@@ -436,11 +444,14 @@ class CenterDynastyGame {
     this.ownerVerificationChecked = false;
     this.ownerVerifiedByFirebase = false;
     this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, freezeTime: false };
+    this.ownerAura = null;
     this.ownerPanel = null;
     this.ownerPanelBody = null;
     this.ownerMenuButton = null;
     this.tmpVector = new THREE.Vector3();
     this.tmpVector2 = new THREE.Vector3();
+    this.tmpQuaternion = new THREE.Quaternion();
+    this.tmpQuaternion2 = new THREE.Quaternion();
     this.tmpBox = new THREE.Box3();
     this.worldBounds = { minX: -WORLD_HALF + 8, maxX: WORLD_HALF - 8, minZ: -WORLD_HALF + 8, maxZ: WORLD_HALF - 8 };
     this.chunks = new Map();
@@ -600,7 +611,12 @@ class CenterDynastyGame {
     overlay.querySelector('[data-c3d-perspective]').addEventListener('click', () => this.togglePerspective());
     overlay.querySelector('[data-c3d-jump]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.requestJump(); });
     overlay.querySelector('[data-c3d-attack]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.performPrimaryAction(); });
-    this.sprintButton.addEventListener('pointerdown', (event) => { event.preventDefault(); this.input.sprint = !this.input.sprint; this.sprintButton.classList.toggle('is-active', this.input.sprint); });
+    this.sprintButton.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      if(this.sprintLockedUntilRelease||this.state.needs.stamina<=2){this.input.sprint=false;this.sprintButton.classList.remove('is-active');this.toast('Ausdauer erschöpft. Sprint erneut aktivieren, sobald sie sich erholt hat.');return;}
+      this.input.sprint = !this.input.sprint;
+      this.sprintButton.classList.toggle('is-active', this.input.sprint);
+    });
     this.interactButton.addEventListener('click', () => this.buildMode ? this.placeBuilding() : this.activateNearestHotspot());
     overlay.querySelector('[data-mdc-build-rotate]').addEventListener('click', () => this.rotateBuildGhost());
     overlay.querySelector('[data-mdc-build-place]').addEventListener('click', () => this.placeBuilding());
@@ -670,7 +686,10 @@ class CenterDynastyGame {
         else this.openExitConfirmation();
       }
     }, true);
-    document.addEventListener('keyup', (event) => this.keys.delete(event.code), true);
+    document.addEventListener('keyup', (event) => {
+      this.keys.delete(event.code);
+      if(event.code==='ShiftLeft'||event.code==='ShiftRight')this.releaseSprintLockIfReady();
+    }, true);
     window.addEventListener('pagehide', () => { this.saveState(true); this.disconnectMultiplayer().catch(() => {}); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.opened) this.saveState(true); });
   }
@@ -851,6 +870,7 @@ class CenterDynastyGame {
     this.buildSkyAndLights();
     await nextPaint();
     this.setLoading(27, 'Die endlose Welt wird in dynamische Regionen aufgeteilt.');
+    await this.prepareNpcWhiteTemplate();
     this.initializeStreamingWorld();
     this.buildWater();
     await nextPaint();
@@ -1226,20 +1246,59 @@ class CenterDynastyGame {
     this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
   }
 
+  async prepareNpcWhiteTemplate() {
+    if(this.npcModelTemplate)return this.npcModelTemplate;
+    if(this.npcModelPromise)return this.npcModelPromise;
+    this.npcModelPromise=(async()=>{
+      try{
+        const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS.owner);
+        const root=cloneSkeleton(gltf.scene);
+        root.updateMatrixWorld(true);
+        const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);
+        root.scale.multiplyScalar(1.72/height);root.updateMatrixWorld(true);
+        const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());
+        root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y;root.rotation.y=CHARACTER_MODEL_YAW;
+        root.traverse((object)=>{
+          if(!object.isMesh)return;
+          const originals=Array.isArray(object.material)?object.material:[object.material];
+          const whites=originals.map((material)=>{
+            const next=material?.clone?.()||new THREE.MeshStandardMaterial();
+            next.map=null;next.normalMap=null;next.roughnessMap=null;next.metalnessMap=null;
+            next.color?.set?.(0xf2f4f3);next.emissive?.set?.(0x000000);next.emissiveIntensity=0;
+            next.roughness=.78;next.metalness=0;next.transparent=false;next.opacity=1;next.depthWrite=true;
+            return next;
+          });
+          object.material=Array.isArray(object.material)?whites:whites[0];object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;
+        });
+        this.npcModelTemplate=root;return root;
+      }catch(error){console.warn('Weißes Dorf-NPC-Modell konnte nicht vorbereitet werden',error);return null;}
+    })();
+    return this.npcModelPromise;
+  }
+
+  makeWhiteNpcCharacter(index=0) {
+    if(this.npcModelTemplate){
+      const model=cloneSkeleton(this.npcModelTemplate);
+      model.rotation.y=CHARACTER_MODEL_YAW;
+      const bones=[];
+      model.traverse((object)=>{if(object.isBone)bones.push(object);if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});
+      const find=(pattern)=>bones.find((bone)=>pattern.test(bone.name||''));
+      const rotate=(bone,euler)=>{if(!bone)return;bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));};
+      rotate(find(/(?:a r m_up_R|upperarm.*r|right.*upperarm)/i),{z:1.42});
+      rotate(find(/(?:a r m_up_L|upperarm.*l|left.*upperarm)/i),{z:-1.42});
+      rotate(find(/(?:a r m_dawn_R|forearm.*r|right.*forearm)/i),{x:-.08});
+      rotate(find(/(?:a r m_dawn_L|forearm.*l|left.*forearm)/i),{x:-.08});
+      return model;
+    }
+    return this.makeFallbackCharacter('npcwhite',index);
+  }
+
   createVillageNpcPlaceholder(chunk,lx,lz,worldX,worldZ,index=0) {
     const holder=new THREE.Group();
     holder.position.set(lx,terrainHeightAt(worldX,worldZ),lz);
-    holder.rotation.y=(index*.83)% (Math.PI*2);
-    const white=new THREE.MeshStandardMaterial({color:0xe9edec,roughness:.76});
-    const accent=new THREE.MeshStandardMaterial({color:index%3===0?0xd8e1df:0xf0f2ef,roughness:.82});
-    const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.82,5,9),white);body.position.y=1.02;body.castShadow=!!this.state.world?.shadows;holder.add(body);
-    const head=new THREE.Mesh(new THREE.SphereGeometry(.25,14,10),accent);head.position.y=1.87;head.castShadow=!!this.state.world?.shadows;holder.add(head);
-    const arms=[],legs=[];
-    for(const sx of [-1,1]){
-      const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.075,.58,4,8),white);arm.position.set(sx*.37,1.05,0);arm.rotation.z=sx*.08;holder.add(arm);arms.push(arm);
-      const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.095,.64,4,8),white);leg.position.set(sx*.16,.34,0);holder.add(leg);legs.push(leg);
-    }
-    holder.userData.npcLimbs={arms,legs};holder.userData.chunkOriginX=chunk.originX;holder.userData.chunkOriginZ=chunk.originZ;
+    holder.rotation.y=(index*.83)%(Math.PI*2);
+    const model=this.makeWhiteNpcCharacter(index);holder.add(model);
+    holder.userData.npcModel=model;holder.userData.chunkOriginX=chunk.originX;holder.userData.chunkOriginZ=chunk.originZ;
     chunk.group.add(holder);
     return holder;
   }
@@ -1840,7 +1899,7 @@ class CenterDynastyGame {
   }
 
   createNpc(name,x,z,village,index) {
-    const group=this.makeFallbackCharacter('npcwhite', index%3);
+    const group=this.makeWhiteNpcCharacter(index%3);
     group.scale.setScalar(.95);
     group.position.set(x,terrainHeightAt(x,z),z);
     this.scene.add(group);
@@ -1913,6 +1972,9 @@ class CenterDynastyGame {
   buildPlayerRoot() {
     this.player=new THREE.Group();
     this.modelPivot=new THREE.Group();
+    this.flightVisualPivot=new THREE.Group();
+    this.flightVisualPivot.name='center-flight-visual-pivot';
+    this.modelPivot.add(this.flightVisualPivot);
     this.player.add(this.modelPivot);
     this.scene.add(this.player);
   }
@@ -1958,9 +2020,13 @@ class CenterDynastyGame {
       upperLegRight:find(/(?:thigh.*r|upperleg.*r|right.*thigh|leg_up_R)/i),
       lowerLegRight:find(/(?:calf.*r|lowerleg.*r|right.*calf|leg_dawn_R)/i),
       footRight:find(/(?:foot.*r|right.*foot|ankle.*r)/i),
+      toeRight:find(/(?:toe.*r|right.*toe)/i),
       upperLegLeft:find(/(?:thigh.*l|upperleg.*l|left.*thigh|leg_up_L)/i),
       lowerLegLeft:find(/(?:calf.*l|lowerleg.*l|left.*calf|leg_dawn_L)/i),
-      footLeft:find(/(?:foot.*l|left.*foot|ankle.*l)/i)
+      footLeft:find(/(?:foot.*l|left.*foot|ankle.*l)/i),
+      toeLeft:find(/(?:toe.*l|left.*toe)/i),
+      fingersRight:all.filter((object)=>object?.isBone&&/(?:finger|thumb|index|middle|ring|little).*[_ .-]R(?:_|\.|$)/i.test(object.name||'')&&!/^Tgt\.|^control\./i.test(object.name||'')),
+      fingersLeft:all.filter((object)=>object?.isBone&&/(?:finger|thumb|index|middle|ring|little).*[_ .-]L(?:_|\.|$)/i.test(object.name||'')&&!/^Tgt\.|^control\./i.test(object.name||''))
     };
     this.prepareIdlePoseTargets();
   }
@@ -1973,12 +2039,12 @@ class CenterDynastyGame {
       bone.userData.__centerIdleQuaternion=q;
       bone.userData.__centerIdlePosition=bone.userData.__centerBindPosition?.clone?.()||bone.position.clone();
     };
-    setTarget(this.playerBones.upperRight,{x:.03,y:.02,z:1.02});
-    setTarget(this.playerBones.upperLeft,{x:.03,y:-.02,z:-1.02});
-    setTarget(this.playerBones.lowerRight,{x:-.12,y:.01,z:.03});
-    setTarget(this.playerBones.lowerLeft,{x:-.12,y:-.01,z:-.03});
-    setTarget(this.playerBones.shoulderRight,{z:.1});
-    setTarget(this.playerBones.shoulderLeft,{z:-.1});
+    setTarget(this.playerBones.upperRight,{x:.035,y:.015,z:1.43});
+    setTarget(this.playerBones.upperLeft,{x:.035,y:-.015,z:-1.43});
+    setTarget(this.playerBones.lowerRight,{x:-.08,y:.01,z:.025});
+    setTarget(this.playerBones.lowerLeft,{x:-.08,y:-.01,z:-.025});
+    setTarget(this.playerBones.shoulderRight,{z:.025});
+    setTarget(this.playerBones.shoulderLeft,{z:-.025});
     setTarget(this.playerBones.chest,{x:.01});
     setTarget(this.playerBones.neck,{x:.01});
     setTarget(this.playerBones.head,{x:.01});
@@ -2019,8 +2085,9 @@ class CenterDynastyGame {
   }
 
   updatePlayerAnimation(delta,moving,sprint) {
+    const flying=this.isOwnerActive&&this.ownerFlags.fly;
     if(this.playerMixer&&this.playerAction){
-      if(moving){
+      if(moving&&!flying){
         if(!this.playerActionWasMoving){
           this.playerAction.paused=false;
           this.playerAction.enabled=true;
@@ -2041,33 +2108,47 @@ class CenterDynastyGame {
         }
         this.applyIdlePose(delta,false);
       }
-    }else if(!moving){
+    }else if(!moving||flying){
       this.applyIdlePose(delta,false);
     }
     const now=performance.now();
-    const flying=this.isOwnerActive&&this.ownerFlags.fly;
     const airborne=!this.onGround&&!flying;
     const isBall=this.isOwnerActive&&this.state.ownerAppearance?.skin==='ball';
-    this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.002)*.035:airborne?0:Math.sin(now*.0016)*.008);
-    const flightTilt=flying?-1.02:0;
-    this.modelPivot.rotation.x+=(flightTilt-this.modelPivot.rotation.x)*(1-Math.exp(-delta*(flying?5.8:8.5)));
-    if(flying)this.applyFlyingPose(delta);
+    this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.0022)*.045:airborne?0:Math.sin(now*.0016)*.008);
+    this.modelPivot.rotation.x+=(0-this.modelPivot.rotation.x)*(1-Math.exp(-delta*10));
+    const movementLean=flying?clamp(this.flightInputMagnitude,0,1):0;
+    const targetLean=flying?-(.10+movementLean*.42+(sprint?.10:0)):0;
+    this.flightLean+=(targetLean-this.flightLean)*(1-Math.exp(-delta*(flying?5.2:8.5)));
+    if(this.flightVisualPivot)this.flightVisualPivot.rotation.x=this.flightLean;
+    if(flying)this.applyFlyingPose(delta,moving,sprint);
     this.updateFlightEffects(delta,moving,sprint);
     this.applyActionAnimation(now);
     this.updateHeldItemTransform(now);
+    this.updateOwnerAura(delta,now);
   }
 
-  applyFlyingPose(delta=.016) {
+  applyFlyingPose(delta=.016,moving=false,sprint=false) {
     if(!this.playerModel)return;
-    const alpha=1-Math.exp(-Math.max(.001,delta)*6.2);
+    const alpha=1-Math.exp(-Math.max(.001,delta)*6.8);
     this.applyIdlePose(delta,false);
     const q=(bone,euler)=>{if(!bone)return;const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;if(!base)return;const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};
-    q(this.playerBones.upperRight,{x:.22,z:.04});q(this.playerBones.upperLeft,{x:.22,z:-.04});
-    q(this.playerBones.lowerRight,{x:-.12});q(this.playerBones.lowerLeft,{x:-.12});
-    q(this.playerBones.upperLegRight,{x:.16});q(this.playerBones.lowerLegRight,{x:-.12});
-    q(this.playerBones.upperLegLeft,{x:.46});q(this.playerBones.lowerLegLeft,{x:-.78});
-    q(this.playerBones.footLeft,{x:.2});q(this.playerBones.footRight,{x:.08});
-    if(this.playerBones.chest){const base=this.playerBones.chest.userData.__centerIdleQuaternion||this.playerBones.chest.userData.__centerBindQuaternion;if(base)this.playerBones.chest.quaternion.slerp(base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-.08,0,0))),alpha);}
+    const now=performance.now();
+    const hover=Math.sin(now*.0024)*.035;
+    const motion=clamp(this.flightInputMagnitude,0,1);
+    q(this.playerBones.upperRight,{x:.10+motion*.05,z:.018});
+    q(this.playerBones.upperLeft,{x:.10+motion*.05,z:-.018});
+    q(this.playerBones.lowerRight,{x:-.06-motion*.03});
+    q(this.playerBones.lowerLeft,{x:-.06-motion*.03});
+    q(this.playerBones.upperLegRight,{x:-.30-hover});
+    q(this.playerBones.lowerLegRight,{x:.76+hover*.8});
+    q(this.playerBones.footRight,{x:-.12});
+    q(this.playerBones.upperLegLeft,{x:.12+motion*.08});
+    q(this.playerBones.lowerLegLeft,{x:-.08-motion*.05});
+    q(this.playerBones.footLeft,{x:.04});
+    const headPitch=clamp(-this.flightLean*.72-this.pitch*.22,-.18,.58);
+    q(this.playerBones.chest,{x:-.035-motion*.045});
+    q(this.playerBones.neck,{x:headPitch*.42});
+    q(this.playerBones.head,{x:headPitch*.58});
   }
 
   ensureFlightEffects() {
@@ -2075,16 +2156,18 @@ class CenterDynastyGame {
     const root=new THREE.Group();root.name='owner-flight-boot-flames';
     const flameMaterial=new THREE.MeshBasicMaterial({color:0xffb13b,transparent:true,opacity:.86,depthWrite:false,blending:THREE.AdditiveBlending});
     const coreMaterial=new THREE.MeshBasicMaterial({color:0xdff8ff,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending});
-    const makeFlame=(foot,fallbackX)=>{
+    const makeFlame=(toe,foot,fallbackX)=>{
       const holder=new THREE.Group();
-      const outer=new THREE.Mesh(new THREE.ConeGeometry(.075,.42,8),flameMaterial.clone());outer.rotation.z=Math.PI;outer.position.y=-.2;holder.add(outer);
-      const core=new THREE.Mesh(new THREE.ConeGeometry(.035,.25,7),coreMaterial.clone());core.rotation.z=Math.PI;core.position.y=-.12;holder.add(core);
+      holder.name='flight-thruster-ball-of-foot';
+      const outer=new THREE.Mesh(new THREE.ConeGeometry(.075,.42,8),flameMaterial.clone());outer.rotation.z=Math.PI;outer.position.y=-.23;holder.add(outer);
+      const core=new THREE.Mesh(new THREE.ConeGeometry(.035,.25,7),coreMaterial.clone());core.rotation.z=Math.PI;core.position.y=-.14;holder.add(core);
       holder.userData.outer=outer;holder.userData.core=core;
-      if(foot){foot.add(holder);holder.position.set(0,-.08,.02);}else{root.add(holder);holder.position.set(fallbackX,.08,.02);}
+      const anchor=toe||foot;
+      if(anchor){anchor.add(holder);holder.position.set(0,-.018,toe?0:(-.13));holder.userData.worldDown=true;}else{root.add(holder);holder.position.set(fallbackX,.08,-.12);}
       return holder;
     };
     this.modelPivot.add(root);
-    const left=makeFlame(this.playerBones.footLeft,-.14),right=makeFlame(this.playerBones.footRight,.14);
+    const left=makeFlame(this.playerBones.toeLeft,this.playerBones.footLeft,-.14),right=makeFlame(this.playerBones.toeRight,this.playerBones.footRight,.14);
     this.flightEffects={root,left,right};
     root.visible=false;
   }
@@ -2092,15 +2175,19 @@ class CenterDynastyGame {
   updateFlightEffects(delta,moving,sprint) {
     this.ensureFlightEffects();
     if(!this.flightEffects)return;
-    const flying=this.isOwnerActive&&this.ownerFlags.fly&&['normal','shadow'].includes(this.state.ownerAppearance?.skin||'normal');
+    const flying=this.isOwnerActive&&this.ownerFlags.fly&&!this.ownerFlags.vanish&&['normal','oaura'].includes(this.state.ownerAppearance?.skin||'normal');
     this.flightEffects.root.visible=flying;
     for(const holder of [this.flightEffects.left,this.flightEffects.right])holder.visible=flying;
     if(!flying)return;
     const speedLevel=Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1));
     const inputBoost=moving?.22:0;
-    const strength=.78+speedLevel*.32+(sprint?.22:0)+inputBoost+Math.min(.28,Math.abs(this.flightVerticalVelocity)*.035);
+    const strength=.72+speedLevel*.32+(sprint?.24:0)+inputBoost+Math.min(.30,Math.abs(this.flightVerticalVelocity)*.035);
     const pulse=1+Math.sin(performance.now()*.018)*.08;
     for(const holder of [this.flightEffects.left,this.flightEffects.right]){
+      if(holder.userData.worldDown&&holder.parent){
+        holder.parent.getWorldQuaternion(this.tmpQuaternion);
+        holder.quaternion.copy(this.tmpQuaternion).invert();
+      }
       holder.userData.outer.scale.set(.88+strength*.14,strength*pulse,1);
       holder.userData.core.scale.set(.8+strength*.1,strength*.82*pulse,1);
     }
@@ -2110,31 +2197,104 @@ class CenterDynastyGame {
     this.actionAnimation={kind,start:performance.now(),duration};
   }
 
+  curlFingers(side='right',amount=1) {
+    const list=side==='left'?this.playerBones.fingersLeft:this.playerBones.fingersRight;
+    for(const finger of list||[])finger.rotateX(-.72*amount);
+  }
+
   applyActionAnimation(now=performance.now()) {
     const action=this.actionAnimation;
     if(!action)return;
     const t=clamp((now-action.start)/action.duration,0,1);
-    const swing=Math.sin(t*Math.PI);
-    const upper=this.playerBones.upperRight,lower=this.playerBones.lowerRight,left=this.playerBones.upperLeft,chest=this.playerBones.chest;
+    const swing=Math.sin(t*Math.PI),strike=Math.sin(Math.min(1,t*1.35)*Math.PI);
+    const rightUpper=this.playerBones.upperRight,rightLower=this.playerBones.lowerRight,leftUpper=this.playerBones.upperLeft,leftLower=this.playerBones.lowerLeft,chest=this.playerBones.chest;
     if(action.kind==='jump'){
-      if(upper){upper.rotateX(-.12*swing);upper.rotateZ(-.16*swing);}
-      if(left){left.rotateX(-.12*swing);left.rotateZ(.16*swing);}
-      if(lower)lower.rotateX(-.08*swing);
-      if(chest)chest.rotateX(.015*swing);
-    }else if(action.kind==='attack'){
-      if(upper){upper.rotateX(-1.35*swing);upper.rotateZ(-.28*swing);}
-      if(lower)lower.rotateX(-.72*swing);
+      if(rightUpper){rightUpper.rotateX(-.12*swing);rightUpper.rotateZ(-.12*swing);}
+      if(leftUpper){leftUpper.rotateX(-.12*swing);leftUpper.rotateZ(.12*swing);}
+      if(rightLower)rightLower.rotateX(-.08*swing);if(leftLower)leftLower.rotateX(-.08*swing);
+      if(this.playerBones.upperLegRight)this.playerBones.upperLegRight.rotateX(-.62*swing);
+      if(this.playerBones.lowerLegRight)this.playerBones.lowerLegRight.rotateX(1.08*swing);
+      if(this.playerBones.upperLegLeft)this.playerBones.upperLegLeft.rotateX(-.48*swing);
+      if(this.playerBones.lowerLegLeft)this.playerBones.lowerLegLeft.rotateX(.92*swing);
+      if(chest)chest.rotateX(.025*swing);
+    }else if(action.kind==='punch-right'||action.kind==='punch-left'){
+      const left=action.kind==='punch-left',upper=left?leftUpper:rightUpper,lower=left?leftLower:rightLower;
+      if(upper){upper.rotateX(-1.1*strike);upper.rotateZ((left?.18:-.18)*strike);}
+      if(lower)lower.rotateX(-.48*strike);
+      if(chest)chest.rotateY((left?.13:-.13)*strike);
+      this.curlFingers(left?'left':'right',swing);
+    }else if(action.kind==='weapon-attack'||action.kind==='attack'){
+      if(rightUpper){rightUpper.rotateX(-1.35*swing);rightUpper.rotateZ(-.28*swing);}
+      if(rightLower)rightLower.rotateX(-.72*swing);
       if(chest)chest.rotateY(.16*swing);
+      this.curlFingers('right',swing);
     }else if(action.kind==='gather'){
-      if(upper)upper.rotateX(-.45*swing);
-      if(lower)lower.rotateX(-.5*swing);
+      if(rightUpper)rightUpper.rotateX(-.45*swing);
+      if(rightLower)rightLower.rotateX(-.5*swing);
     }else{
-      if(upper)upper.rotateX(-1.15*swing);
-      if(upper)upper.rotateZ(-.42*swing);
-      if(lower)lower.rotateX(-.55*swing);
+      if(rightUpper){rightUpper.rotateX(-1.15*swing);rightUpper.rotateZ(-.42*swing);}
+      if(rightLower)rightLower.rotateX(-.55*swing);
       if(chest)chest.rotateY((action.kind==='mine'?.22:.14)*swing);
+      this.curlFingers('right',swing);
     }
     if(t>=1){this.actionAnimation=null;if(!this.walking)this.applyIdlePose(.08,false);}
+  }
+
+  createGalaxyTexture(width=128,height=256) {
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    const gradient=ctx.createLinearGradient(0,0,width,height);
+    gradient.addColorStop(0,'#05020f');gradient.addColorStop(.22,'#31115f');gradient.addColorStop(.48,'#8c1e9a');gradient.addColorStop(.68,'#25116f');gradient.addColorStop(1,'#02040f');
+    ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);
+    const nebula=ctx.createRadialGradient(width*.34,height*.42,2,width*.34,height*.42,width*.62);
+    nebula.addColorStop(0,'rgba(255,80,188,.72)');nebula.addColorStop(.34,'rgba(112,35,255,.42)');nebula.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=nebula;ctx.fillRect(0,0,width,height);
+    const nebula2=ctx.createRadialGradient(width*.78,height*.72,1,width*.78,height*.72,width*.48);
+    nebula2.addColorStop(0,'rgba(255,52,62,.58)');nebula2.addColorStop(.38,'rgba(92,42,255,.32)');nebula2.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=nebula2;ctx.fillRect(0,0,width,height);
+    const rnd=seededRandom(20060806);
+    for(let i=0;i<260;i+=1){const x=rnd()*width,y=rnd()*height,r=rnd()<.08?1.5+rnd()*1.8:.35+rnd()*.8;ctx.beginPath();ctx.fillStyle=rnd()<.18?'rgba(255,99,128,.95)':rnd()<.52?'rgba(209,169,255,.98)':'rgba(255,255,255,.96)';ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.needsUpdate=true;return texture;
+  }
+
+  createGalaxyAuraGroup(compact=false) {
+    const root=new THREE.Group();root.name=compact?'remote-owner-aura':'owner-o-aura';root.userData.compact=compact;
+    const particleCount=compact?70:150;
+    const positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*4);
+    const palette=[new THREE.Color(0xb84cff),new THREE.Color(0x6e3bff),new THREE.Color(0xff345f),new THREE.Color(0xff8ad8),new THREE.Color(0xbbe7ff)];
+    const rnd=seededRandom(compact?9941:22006);
+    for(let i=0;i<particleCount;i+=1){const radius=.48+rnd()*.78,angle=rnd()*Math.PI*2,height=.04+rnd()*2.12;positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=height;positions[i*3+2]=Math.sin(angle)*radius;const c=palette[Math.floor(rnd()*palette.length)];colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;seeds[i*4]=radius;seeds[i*4+1]=angle;seeds[i*4+2]=height;seeds[i*4+3]=.45+rnd()*1.1;}
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+    const material=new THREE.PointsMaterial({size:compact?.045:.058,vertexColors:true,transparent:true,opacity:.96,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true});
+    const points=new THREE.Points(geometry,material);points.name='o-aura-galaxy-particles';points.frustumCulled=false;root.add(points);
+    const ringMat1=new THREE.MeshBasicMaterial({color:0xa63dff,transparent:true,opacity:.42,depthWrite:false,blending:THREE.AdditiveBlending});
+    const ringMat2=new THREE.MeshBasicMaterial({color:0xff315f,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending});
+    const ring1=new THREE.Mesh(new THREE.TorusGeometry(.83,.018,8,72),ringMat1);ring1.position.y=.82;ring1.rotation.x=Math.PI/2;root.add(ring1);
+    const ring2=new THREE.Mesh(new THREE.TorusGeometry(1.02,.012,8,72),ringMat2);ring2.position.y=1.38;ring2.rotation.x=Math.PI/2.35;root.add(ring2);
+    const shell=new THREE.Mesh(new THREE.SphereGeometry(.77,20,14),new THREE.MeshBasicMaterial({color:0x6d18d6,transparent:true,opacity:.075,depthWrite:false,side:THREE.BackSide,blending:THREE.AdditiveBlending}));shell.position.y=1.08;shell.scale.set(1,1.42,1);root.add(shell);
+    const purpleLight=new THREE.PointLight(0x8737ff,compact?1.15:2.25,compact?5:8,2);purpleLight.position.set(0,1.15,.15);root.add(purpleLight);
+    const redLight=new THREE.PointLight(0xff274d,compact?.55:1.05,compact?3.5:5.5,2);redLight.position.set(.25,1.0,-.2);root.add(redLight);
+    root.userData.points=points;root.userData.seeds=seeds;root.userData.ring1=ring1;root.userData.ring2=ring2;root.userData.shell=shell;root.userData.purpleLight=purpleLight;root.userData.redLight=redLight;root.visible=false;return root;
+  }
+
+  animateGalaxyAura(aura,delta=.016,now=performance.now()) {
+    if(!aura?.visible)return;
+    const points=aura.userData.points,seeds=aura.userData.seeds;
+    if(points&&seeds){const arr=points.geometry.attributes.position.array;for(let i=0;i<seeds.length/4;i+=1){const radius=seeds[i*4],baseAngle=seeds[i*4+1],baseHeight=seeds[i*4+2],speed=seeds[i*4+3];const angle=baseAngle+now*.00042*speed;const rise=(baseHeight+now*.00019*speed)%2.18;const pulse=1+Math.sin(now*.0021+baseAngle*3)*.11;arr[i*3]=Math.cos(angle)*radius*pulse;arr[i*3+1]=.03+rise;arr[i*3+2]=Math.sin(angle)*radius*pulse;}points.geometry.attributes.position.needsUpdate=true;points.rotation.y+=delta*.14;points.material.opacity=.78+Math.sin(now*.004)*.16;}
+    if(aura.userData.ring1){aura.userData.ring1.rotation.z+=delta*.52;aura.userData.ring1.scale.setScalar(1+Math.sin(now*.0028)*.055);}
+    if(aura.userData.ring2){aura.userData.ring2.rotation.y-=delta*.38;aura.userData.ring2.rotation.z-=delta*.24;}
+    if(aura.userData.shell){const pulse=1+Math.sin(now*.0034)*.035;aura.userData.shell.scale.set(pulse,pulse*1.42,pulse);aura.userData.shell.material.opacity=.055+Math.sin(now*.003)*.025;}
+    if(aura.userData.purpleLight)aura.userData.purpleLight.intensity=(aura.userData.compact?1.05:2.1)+Math.sin(now*.006)*.45;
+    if(aura.userData.redLight)aura.userData.redLight.intensity=(aura.userData.compact?.48:.9)+Math.sin(now*.0053+1.4)*.28;
+  }
+
+  ensureOwnerAura() {
+    if(this.ownerAura||!this.modelPivot)return this.ownerAura;
+    this.ownerAura=this.createGalaxyAuraGroup(false);this.modelPivot.add(this.ownerAura);return this.ownerAura;
+  }
+
+  updateOwnerAura(delta=.016,now=performance.now()) {
+    const aura=this.ensureOwnerAura();if(!aura)return;
+    const active=this.isOwnerActive&&this.state.ownerAppearance?.skin==='oaura'&&!this.ownerFlags.vanish&&!this.firstPerson;
+    aura.visible=active;if(active)this.animateGalaxyAura(aura,delta,now);
   }
 
   createHeldItemMesh(kind='none') {
@@ -2171,16 +2331,20 @@ class CenterDynastyGame {
       const face=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.28,12),steel);face.rotation.z=Math.PI/2;face.position.set(.4,.88,0);group.add(face);
       group.rotation.set(.05,0,-2.52);
     }else if(kind==='staff'){
-      const black=new THREE.MeshStandardMaterial({color:0x080a11,roughness:.38,metalness:.5});
-      addCylinder(.045,.065,2.15,black,-.12);
-      const ring1=new THREE.Mesh(new THREE.TorusGeometry(.2,.035,8,24),darkSteel);ring1.position.y=1.02;ring1.rotation.x=Math.PI/2;group.add(ring1);
-      const crystalMat=new THREE.MeshStandardMaterial({color:0x9beaff,emissive:0x2f6dff,emissiveIntensity:2.4,metalness:.15,roughness:.12,transparent:true,opacity:.94});
-      const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.25,1),crystalMat);crystal.position.y=1.28;group.add(crystal);group.userData.crystal=crystal;
-      const glow=new THREE.PointLight(0x5d83ff,2.8,12,2);glow.position.y=1.28;group.add(glow);
-      const lightningGeo=new THREE.BufferGeometry();
-      lightningGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6*2*3),3));
-      const lightning=new THREE.LineSegments(lightningGeo,new THREE.LineBasicMaterial({color:0xbdefff,transparent:true,opacity:.92,blending:THREE.AdditiveBlending}));
-      lightning.position.y=1.28;group.add(lightning);group.userData.lightning=lightning;
+      const galaxyTexture=this.createGalaxyTexture();
+      const galaxyMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x35105f,emissiveIntensity:1.45,roughness:.22,metalness:.68});
+      const shaft=addCylinder(.052,.072,2.2,galaxyMat,-.12);shaft.userData.galaxyTexture=galaxyTexture;
+      const blackMetal=new THREE.MeshStandardMaterial({color:0x080510,emissive:0x26064a,emissiveIntensity:.65,roughness:.28,metalness:.82});
+      const ring1=new THREE.Mesh(new THREE.TorusGeometry(.22,.038,10,32),blackMetal);ring1.position.y=1.0;ring1.rotation.x=Math.PI/2;group.add(ring1);
+      const ring2=new THREE.Mesh(new THREE.TorusGeometry(.31,.018,8,40),new THREE.MeshBasicMaterial({color:0xff315f,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending}));ring2.position.y=1.32;ring2.rotation.x=Math.PI/2.4;group.add(ring2);group.userData.accentRing=ring2;
+      const crystalMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,color:0xc79bff,emissive:0x8a22ff,emissiveIntensity:3.3,metalness:.28,roughness:.08,transparent:true,opacity:.97});
+      const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.31,2),crystalMat);crystal.position.y=1.35;group.add(crystal);group.userData.crystal=crystal;
+      const crystalShell=new THREE.Mesh(new THREE.OctahedronGeometry(.38,1),new THREE.MeshBasicMaterial({color:0xa84cff,transparent:true,opacity:.16,depthWrite:false,blending:THREE.AdditiveBlending,wireframe:true}));crystalShell.position.copy(crystal.position);group.add(crystalShell);group.userData.crystalShell=crystalShell;
+      const glow=new THREE.PointLight(0x9a3dff,5.4,18,2);glow.position.y=1.35;group.add(glow);group.userData.light=glow;
+      const redGlow=new THREE.PointLight(0xff244c,2.1,9,2);redGlow.position.set(.12,1.32,.08);group.add(redGlow);group.userData.redLight=redGlow;
+      const makeLightning=(segments,color,opacity)=>{const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segments*2*3),3));const line=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false,blending:THREE.AdditiveBlending}));line.position.y=1.35;group.add(line);return line;};
+      group.userData.lightning=makeLightning(11,0xc85cff,.98);group.userData.redLightning=makeLightning(5,0xff315f,.9);
+      const pCount=34,pPos=new Float32Array(pCount*3);for(let i=0;i<pCount;i+=1){const a=i/pCount*Math.PI*2,r=.22+(i%5)*.026;pPos[i*3]=Math.cos(a)*r;pPos[i*3+1]=(i%7-3)*.045;pPos[i*3+2]=Math.sin(a)*r;}const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));const sparkles=new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xe5c8ff,size:.035,transparent:true,opacity:.94,depthWrite:false,blending:THREE.AdditiveBlending}));sparkles.position.y=1.35;group.add(sparkles);group.userData.sparkles=sparkles;
       group.rotation.set(.03,0,-.18);
     }else if(kind==='torch'){
       addCylinder(.055,.075,1.05,wood,.18);
@@ -2263,7 +2427,7 @@ class CenterDynastyGame {
     this.ownerHeldObject=null;
     this.ownerItemLight=null;
     const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'};
-    const formAllowsItems=!this.isOwnerActive||['normal','shadow'].includes(appearance.skin);
+    const formAllowsItems=!this.isOwnerActive||['normal','oaura'].includes(appearance.skin);
     if(!formAllowsItems)return;
     const ownerKind=this.isOwnerActive?appearance.heldItem:'none';
     const toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'hammer':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'staff':'none';
@@ -2278,8 +2442,12 @@ class CenterDynastyGame {
     if(hand){
       hand.attach(mesh);
       mesh.userData.fixedToHand=true;
-      mesh.position.y-=.018;
+      // Nach dem Bone-Attach die aktuelle Haltung um exakt 90° korrigieren und leicht aus dem Körper schieben.
+      mesh.rotateY(Math.PI/2);
+      mesh.position.y-=.024;
+      mesh.position.z+=mesh.userData.kind==='staff'?.10:.065;
     }
+    this.applyOwnerVisualState();
   }
 
   updateHeldItemTransform(now=performance.now(),instant=false) {
@@ -2297,8 +2465,8 @@ class CenterDynastyGame {
       const lightning=item.userData.lightning;
       if(lightning){
         const arr=lightning.geometry.attributes.position.array;
-        for(let i=0;i<6;i+=1){
-          const a=now*.003+i*Math.PI*2/6;
+        for(let i=0;i<arr.length/6;i+=1){
+          const a=now*.003+i*Math.PI*2/Math.max(1,arr.length/6);
           const radius=.24+(i%2)*.08;
           arr[i*6]=Math.cos(a)*radius;arr[i*6+1]=Math.sin(a*1.7)*.12;arr[i*6+2]=Math.sin(a)*radius;
           arr[i*6+3]=Math.cos(a+.7)*radius*.35;arr[i*6+4]=Math.sin(a*1.3+.5)*.08;arr[i*6+5]=Math.sin(a+.7)*radius*.35;
@@ -2306,7 +2474,17 @@ class CenterDynastyGame {
         lightning.geometry.attributes.position.needsUpdate=true;
         lightning.rotation.y=now*.0018;
       }
-      if(item.userData.crystal)item.userData.crystal.rotation.y=now*.0012;
+      const redLightning=item.userData.redLightning;
+      if(redLightning){
+        const arr=redLightning.geometry.attributes.position.array;
+        for(let i=0;i<arr.length/6;i+=1){const a=now*.0046+i*1.37,r=.17+(i%3)*.055;arr[i*6]=Math.cos(a)*r;arr[i*6+1]=Math.sin(a*1.9)*.08;arr[i*6+2]=Math.sin(a)*r;arr[i*6+3]=Math.cos(a+.9)*r*.3;arr[i*6+4]=Math.sin(a*1.2+.8)*.055;arr[i*6+5]=Math.sin(a+.9)*r*.3;}redLightning.geometry.attributes.position.needsUpdate=true;redLightning.rotation.y=-now*.0024;redLightning.material.opacity=.62+Math.sin(now*.021)*.3;
+      }
+      if(item.userData.crystal){item.userData.crystal.rotation.y=now*.0018;item.userData.crystal.rotation.x=Math.sin(now*.0013)*.14;item.userData.crystal.material.emissiveIntensity=2.9+Math.sin(now*.009)*.9;}
+      if(item.userData.crystalShell){item.userData.crystalShell.rotation.y=-now*.0022;item.userData.crystalShell.rotation.z=now*.0015;item.userData.crystalShell.material.opacity=.1+Math.sin(now*.007)*.07;}
+      if(item.userData.accentRing){item.userData.accentRing.rotation.z=now*.0024;item.userData.accentRing.rotation.y=-now*.0017;}
+      if(item.userData.sparkles){item.userData.sparkles.rotation.y=now*.0028;item.userData.sparkles.rotation.x=Math.sin(now*.0014)*.35;}
+      if(item.userData.light)item.userData.light.intensity=4.6+Math.sin(now*.013)*1.5;
+      if(item.userData.redLight)item.userData.redLight.intensity=1.5+Math.sin(now*.017+1.2)*.8;
     }
     if(kind==='torch'&&item.userData.flame){
       item.userData.flame.scale.y=.82+Math.sin(now*.018)*.18;
@@ -2323,21 +2501,23 @@ class CenterDynastyGame {
     this.ownerFormObject?.removeFromParent?.();
     this.ownerFormObject=null;
     const skin=this.isOwnerActive?appearance.skin:'normal';
-    this.setShadowCharacterMode(skin==='shadow');
-    this.playerModel.visible=!this.firstPerson&&['normal','shadow'].includes(skin);
-    if(this.isOwnerActive&&!['normal','shadow'].includes(skin)){
+    this.setShadowCharacterMode(skin==='oaura');
+    this.playerModel.visible=!this.firstPerson&&['normal','oaura'].includes(skin);
+    if(this.isOwnerActive&&!['normal','oaura'].includes(skin)){
       const form=this.createOwnerForm(skin);
       this.modelPivot.add(form);this.ownerFormObject=form;
       form.visible=!this.firstPerson;
     }
+    this.ensureOwnerAura();
     this.applyHeldItemVisual();
     this.applyOwnerVisualState();
+    this.updateOwnerAura(.016,performance.now());
   }
 
   applyOwnerVisualState() {
     if(!this.playerModel)return;
     const appearance=this.state.ownerAppearance||{skin:'normal'};
-    const shadowMode=this.isOwnerActive&&appearance.skin==='shadow';
+    const auraMode=this.isOwnerActive&&appearance.skin==='oaura';
     const vanished=this.isOwnerActive&&this.ownerFlags.vanish;
     this.playerModel.traverse((object)=>{
       if(!object.isMesh)return;
@@ -2346,10 +2526,10 @@ class CenterDynastyGame {
         if(!material)continue;
         this.cacheOriginalMaterial(material);
         const original=material.userData.__centerOriginalMaterial;
-        const opacity=vanished?.24:shadowMode?.58:(original.opacity??1);
-        material.transparent=vanished||shadowMode||!!original.transparent||opacity<1;
+        const opacity=vanished?.24:auraMode?.72:(original.opacity??1);
+        material.transparent=vanished||auraMode||!!original.transparent||opacity<1;
         material.opacity=opacity;
-        material.depthWrite=!(vanished||shadowMode)&&original.depthWrite!==false;
+        material.depthWrite=!(vanished||auraMode)&&original.depthWrite!==false;
         material.needsUpdate=true;
       }
     });
@@ -2358,6 +2538,13 @@ class CenterDynastyGame {
       const mats=Array.isArray(object.material)?object.material:[object.material];
       for(const mat of mats){if(!mat)continue;mat.transparent=vanished||mat.transparent;mat.opacity=vanished?.24:(mat.userData.__formOpacity??mat.opacity??1);mat.depthWrite=!vanished;mat.needsUpdate=true;}
     });
+    if(this.ownerAura)this.ownerAura.visible=this.isOwnerActive&&appearance.skin==='oaura'&&!vanished&&!this.firstPerson;
+    if(this.ownerHeldObject)this.ownerHeldObject.traverse((object)=>{
+      if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}
+      if(!object.isMesh&&!object.isLine&&!object.isLineSegments)return;
+      const mats=Array.isArray(object.material)?object.material:[object.material];
+      for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?.24:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;material.needsUpdate=true;}
+    });
   }
 
   async ensureCorrectPlayerModel() {
@@ -2365,7 +2552,9 @@ class CenterDynastyGame {
     const player=bridgeSnapshot();
     const skin=role.isOwner?'owner':player.gender;
     if(this.playerSkin===skin&&this.playerModel) { this.updateRoleHud(); return; }
-    this.modelPivot.clear(); this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerFormObject=null;this.flightEffects=null;
+    this.modelPivot.clear();
+    this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);
+    this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerFormObject=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
     try {
       const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);
       const root=gltf.scene;
@@ -2375,9 +2564,9 @@ class CenterDynastyGame {
       const scaled=new THREE.Box3().setFromObject(root); const center=scaled.getCenter(new THREE.Vector3());
       root.position.x-=center.x; root.position.z-=center.z; root.position.y-=scaled.min.y-.035; root.rotation.y=CHARACTER_MODEL_YAW;
       root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});
-      this.playerModel=root; this.modelPivot.add(root);
+      this.playerModel=root; this.flightVisualPivot.add(root);
       this.cachePlayerBones(root);const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.resetLocomotionToIdle(true);}
-    } catch(error) { console.warn('Center-Charaktermodell konnte nicht geladen werden',error); this.playerModel=this.makeFallbackCharacter(skin); this.modelPivot.add(this.playerModel); }
+    } catch(error) { console.warn('Center-Charaktermodell konnte nicht geladen werden',error); this.playerModel=this.makeFallbackCharacter(skin); this.flightVisualPivot.add(this.playerModel); }
     this.playerSkin=skin; this.updateRoleHud(); this.applyPerspectiveVisibility(); this.applyOwnerAppearance();
   }
 
@@ -2469,13 +2658,26 @@ class CenterDynastyGame {
     if(!this.onGround||(!god&&this.state.needs.stamina<=8))return;
     this.fallStartY=this.player.position.y;this.velocityY=6.15;this.onGround=false;
     if(!god)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-5);
-    this.triggerActionAnimation('jump',500);
+    this.triggerActionAnimation('jump',780);
+  }
+
+  exhaustSprint() {
+    this.sprintLockedUntilRelease=true;
+    this.input.sprint=false;
+    this.sprintButton?.classList.remove('is-active');
+  }
+
+  releaseSprintLockIfReady() {
+    if(this.keys.has('ShiftLeft')||this.keys.has('ShiftRight'))return;
+    this.sprintLockedUntilRelease=false;
   }
 
   currentInput() {
     const forward=(this.keys.has('KeyW')||this.keys.has('ArrowUp')?1:0)-(this.keys.has('KeyS')||this.keys.has('ArrowDown')?1:0)+this.input.forward;
     const right=(this.keys.has('KeyD')||this.keys.has('ArrowRight')?1:0)-(this.keys.has('KeyA')||this.keys.has('ArrowLeft')?1:0)+this.input.right;
-    return {forward:clamp(forward,-1,1),right:clamp(right,-1,1),sprint:this.input.sprint||this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')};
+    const keyboardSprint=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight');
+    if(!keyboardSprint&&!this.input.sprint)this.releaseSprintLockIfReady();
+    return {forward:clamp(forward,-1,1),right:clamp(right,-1,1),sprint:!this.sprintLockedUntilRelease&&(this.input.sprint||keyboardSprint)};
   }
 
   nearbyColliders(x,z) {
@@ -2534,11 +2736,16 @@ class CenterDynastyGame {
         if(!this.collides(movedX,nz,currentY))movedZ=nz;
       }
       movedDistance=Math.hypot(movedX-oldX,movedZ-oldZ);this.player.position.x=movedX;this.player.position.z=movedZ;this.state.stats.distance+=movedDistance;
-      if(movedDistance>.0005){const targetYaw=Math.atan2(movedX-oldX,movedZ-oldZ);this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*9));}
-      if(!fly&&!god){if(sprint)this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*10.5);else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}
+      if(movedDistance>.0005&&!fly){const targetYaw=Math.atan2(movedX-oldX,movedZ-oldZ);this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*9));}
+      if(!fly&&!god){if(sprint){this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*10.5);if(this.state.needs.stamina<=.05)this.exhaustSprint();}else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}
       if(owner&&this.state.ownerAppearance?.skin==='ball'&&this.ownerFormObject?.userData?.rollingMesh){const ball=this.ownerFormObject.userData.rollingMesh;ball.rotation.x-=movedDistance*1.4;ball.rotation.z+=movedDistance*.35;ball.position.y=.72;}
     }else if(!fly&&!god)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*6.3);
 
+    this.flightInputMagnitude=fly?clamp(length,0,1):0;
+    if(fly){
+      const lookYaw=this.yaw+Math.PI;
+      this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,lookYaw,Math.min(1,delta*10));
+    }
     const terrainFloor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;
     if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
@@ -2609,8 +2816,7 @@ class CenterDynastyGame {
     const speed=this.isOwnerActive&&this.ownerFlags.freezeTime?0:WORLD_TIME_HOURS_PER_MINUTE;
     this.state.time+=delta*speed/60;
     if(this.state.time>=24){this.state.time-=24;this.state.day+=1;this.dailySettlementTick();if((this.state.day-1)%DAYS_PER_SEASON===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name} hat begonnen.`);}}
-    this.state.weatherRemaining=Math.max(0,Number(this.state.weatherRemaining||0)-delta*speed/60);
-    if(this.state.weatherRemaining<=0)this.chooseWeather();
+    if(speed>0){this.state.weatherRemaining=Math.max(0,Number(this.state.weatherRemaining||0)-delta*speed/60);if(this.state.weatherRemaining<=0)this.chooseWeather();}
     const solarAngle=((this.state.time-6)/24)*Math.PI*2;
     const moonAngle=((this.state.time-18)/24)*Math.PI*2;
     const sunAltitude=Math.sin(solarAngle);
@@ -2774,6 +2980,7 @@ class CenterDynastyGame {
       npc.group.position.set(npc.x-ox,terrainHeightAt(npc.x,npc.z),npc.z-oz);npc.group.rotation.y=Math.atan2(dx,dz);
       const limbs=npc.group.userData.npcLimbs,walk=Math.min(1,d/2),phase=now*.006+(npc.name.length||0);
       if(limbs){limbs.arms?.forEach((arm,i)=>arm.rotation.x=Math.sin(phase+i*Math.PI)*.42*walk);limbs.legs?.forEach((leg,i)=>leg.rotation.x=Math.sin(phase+i*Math.PI)*.5*walk);}
+      else if(npc.group.userData.npcModel){const model=npc.group.userData.npcModel;model.position.y=Math.abs(Math.sin(phase))*0.018*walk;model.rotation.z=Math.sin(phase)*.012*walk;}
       const hotspot=this.hotspots.find((h)=>h.id===npc.id);if(hotspot){hotspot.x=npc.x;hotspot.z=npc.z;}
     }
   }
@@ -2855,9 +3062,9 @@ class CenterDynastyGame {
     if(hotspot?.type==='tree'&&['axe','ironAxe'].includes(this.state.equippedTool)){this.triggerActionAnimation('chop',500);this.harvestTree(hotspot.data);return;}
     if(hotspot?.type==='rock'&&this.state.equippedTool==='pickaxe'){this.triggerActionAnimation('mine',500);this.harvestRock(hotspot.data);return;}
     if(hotspot?.type==='bush'){this.triggerActionAnimation('gather',430);this.harvestBush(hotspot.data);return;}
-    if(hotspot?.type==='animal'&&['spear','bow'].includes(this.state.equippedTool)){this.triggerActionAnimation('attack',520);this.huntAnimal(hotspot.data);return;}
-    if(this.state.equippedTool||this.state.ownerAppearance?.heldItem!=='none'){this.triggerActionAnimation('attack',520);return;}
-    this.triggerActionAnimation('gather',380);
+    if(hotspot?.type==='animal'&&['spear','bow'].includes(this.state.equippedTool)){this.triggerActionAnimation('weapon-attack',520);this.huntAnimal(hotspot.data);return;}
+    if(this.state.equippedTool||this.state.ownerAppearance?.heldItem!=='none'){this.triggerActionAnimation('weapon-attack',520);return;}
+    const side=this.nextPunchSide;this.nextPunchSide=side==='right'?'left':'right';this.triggerActionAnimation(`punch-${side}`,430);
   }
 
   buildStarterTutorialNodes() {
@@ -3400,17 +3607,27 @@ class CenterDynastyGame {
   async upsertRemotePlayer(uid,profile,live){
     let remote=this.remotePlayers.get(uid);const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
     if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · KOOP`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
+    remote.appearanceSkin=live.appearanceSkin==='shadow'?'oaura':String(live.appearanceSkin||'normal');
     remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=Number(live.y||terrainHeightAt(remote.targetX,Number(live.z||0)));remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=Number(live.updatedAtMs||Date.now());
     const skin=await this.verifiedRemoteSkin(uid,live);if(remote.skin!==skin)await this.installRemoteModel(remote,skin);
-    remote.group.visible=!remote.vanished||roleSnapshot().isOwner;remote.group.traverse((object)=>{if(!object.isMesh&&!object.isSprite)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=remote.vanished;mat.opacity=remote.vanished?.3:1;mat.depthWrite=!remote.vanished;mat.needsUpdate=true;}});
+    this.applyRemoteOwnerAura(remote);
+    remote.group.visible=!remote.vanished||roleSnapshot().isOwner;
+    remote.model?.traverse?.((object)=>{if(!object.isMesh)return;const aura=remote.appearanceSkin==='oaura'&&remote.skin==='owner';const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=remote.vanished||aura;mat.opacity=remote.vanished?.3:aura?.74:1;mat.depthWrite=!(remote.vanished||aura);mat.needsUpdate=true;}});
   }
 
   async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
 
-  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.pivot.add(this.makeFallbackCharacter(skin));}remote.skin=skin;}
+  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.aura=null;try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
+
+  applyRemoteOwnerAura(remote) {
+    if(!remote?.model)return;
+    const active=remote.skin==='owner'&&remote.appearanceSkin==='oaura'&&!remote.vanished;
+    remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(mat.userData.__remoteAuraColor===undefined){mat.userData.__remoteAuraColor=mat.color?.getHex?.();mat.userData.__remoteAuraEmissive=mat.emissive?.getHex?.();mat.userData.__remoteAuraIntensity=mat.emissiveIntensity;}if(active){mat.color?.set?.(0x3b1268);mat.emissive?.set?.(0x6f1ac7);mat.emissiveIntensity=1.15;mat.transparent=true;mat.opacity=.74;}else{if(mat.userData.__remoteAuraColor!==undefined)mat.color?.setHex?.(mat.userData.__remoteAuraColor);if(mat.userData.__remoteAuraEmissive!==undefined)mat.emissive?.setHex?.(mat.userData.__remoteAuraEmissive);if(mat.userData.__remoteAuraIntensity!==undefined)mat.emissiveIntensity=mat.userData.__remoteAuraIntensity;mat.transparent=false;mat.opacity=1;}mat.needsUpdate=true;}});
+    if(active&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=active;
+  }
 
   updateRemotePlayers(delta){
-    const now=Date.now();for(const [uid,remote] of this.remotePlayers){if(now-remote.lastSeenAt>ONLINE_STALE_MS){this.removeRemotePlayer(uid);continue;}const amount=1-Math.exp(-delta*7);remote.group.position.x+=(remote.targetX-remote.group.position.x)*amount;remote.group.position.z+=(remote.targetZ-remote.group.position.z)*amount;const targetY=remote.flying?remote.targetY:terrainHeightAt(remote.group.position.x,remote.group.position.z);remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));if(remote.mixer&&remote.action){if(remote.walking){remote.action.paused=false;remote.mixer.timeScale=1;remote.mixer.update(delta);remote.wasWalking=true;}else if(remote.wasWalking){remote.action.reset();remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);remote.wasWalking=false;}}}
+    const now=Date.now();for(const [uid,remote] of this.remotePlayers){if(now-remote.lastSeenAt>ONLINE_STALE_MS){this.removeRemotePlayer(uid);continue;}const amount=1-Math.exp(-delta*7);remote.group.position.x+=(remote.targetX-remote.group.position.x)*amount;remote.group.position.z+=(remote.targetZ-remote.group.position.z)*amount;const targetY=remote.flying?remote.targetY:terrainHeightAt(remote.group.position.x,remote.group.position.z);remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));if(remote.aura?.visible)this.animateGalaxyAura(remote.aura,delta,now);if(remote.mixer&&remote.action){if(remote.walking){remote.action.paused=false;remote.mixer.timeScale=1;remote.mixer.update(delta);remote.wasWalking=true;}else if(remote.wasWalking){remote.action.reset();remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);remote.wasWalking=false;}}}
   }
 
   removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.mixer?.stopAllAction?.();this.remotePlayers.delete(uid);}
@@ -3460,10 +3677,10 @@ class CenterDynastyGame {
       <h3>Charakter</h3>
       <div class="mdc-owner-character">
         <label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>
-        <div class="mdc-owner-actions three">${[['normal','Normal'],['shadow','Schatten'],['ball','Rollender Ball'],['crystal','Kristall'],['bush','Busch'],['tree','Baum'],['rock','Stein'],['grass','Grasbüschel']].map(([id,label])=>`<button class="${appearance.skin===id?'active':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div>
+        <div class="mdc-owner-actions three">${[['normal','Normal'],['oaura','O.Aura'],['ball','Rollender Ball'],['crystal','Kristall'],['bush','Busch'],['tree','Baum'],['rock','Stein'],['grass','Grasbüschel']].map(([id,label])=>`<button class="${appearance.skin===id?'active':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div>
       </div>
       <h3>Admin-Items</h3>
-      <div class="mdc-owner-actions three">${[['none','Leer'],['sword','Owner-Schwert'],['axe','Admin-Axt'],['staff','Weltenstab'],['torch','Ewige Fackel'],['hammer','Bauhammer']].map(([id,label])=>`<button class="${appearance.heldItem===id?'active':''}" data-owner-action="admin-item" data-owner-item="${id}">${label}</button>`).join('')}</div>
+      <div class="mdc-owner-actions three">${[['none','Leer'],['sword','Owner-Schwert'],['axe','Admin-Axt'],['staff','Galaxy-Admin-Stab'],['torch','Ewige Fackel'],['hammer','Bauhammer']].map(([id,label])=>`<button class="${appearance.heldItem===id?'active':''}" data-owner-action="admin-item" data-owner-item="${id}">${label}</button>`).join('')}</div>
       <h3>Welt und Zeit</h3><div class="mdc-owner-actions three"><button data-owner-action="time-day">☀ Tag</button><button data-owner-action="time-night">☾ Nacht</button><button data-owner-action="weather-clear">Klar</button><button data-owner-action="weather-rain">Regen</button><button data-owner-action="weather-snow">Schnee</button><button data-owner-action="season-next">Jahreszeit +</button></div>
       <h3>Ressourcen und Fortschritt</h3><div class="mdc-owner-grant"><select data-owner-resource>${Object.entries(RESOURCE_LABELS).map(([id,name])=>`<option value="${id}">${escapeHtml(name)}</option>`).join('')}</select><input data-owner-amount type="number" min="1" max="9999" value="100"><button data-owner-action="grant-resource">Hinzufügen</button></div>
       <div class="mdc-owner-actions"><button data-owner-action="grant-all">Alle Ressourcen +100</button><button data-owner-action="grant-tools">Alle Werkzeuge 100 %</button><button data-owner-action="grant-skills">Skills und XP</button><button data-owner-action="respawn-resources">Ressourcen regenerieren</button></div>
@@ -3488,9 +3705,9 @@ class CenterDynastyGame {
 
   handleOwnerAction(event) {
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.ownerOnly())return;const action=button.dataset.ownerAction;
-    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'){this.flightVerticalVelocity=0;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);}else{this.modelPivot.rotation.x=0;}}if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'};const key=map[action];this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,terrainHeightAt(this.player.position.x,this.player.position.z)+2);this.modelPivot.rotation.x=0;}else{this.flightLean=0;if(this.flightVisualPivot)this.flightVisualPivot.rotation.x=0;this.modelPivot.rotation.x=0;}}if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='cycle-speed'){this.ownerFlags.speedLevel=(this.ownerFlags.speedLevel+1)%OWNER_SPEED_LEVELS.length;this.renderOwnerMenu();return;}
-    if(action.startsWith('skin-')){this.state.ownerAppearance.skin=action.replace('skin-','');this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action.startsWith('skin-')){this.state.ownerAppearance.skin=action.replace('skin-','')==='shadow'?'oaura':action.replace('skin-','');this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-item'){this.state.ownerAppearance.heldItem=button.dataset.ownerItem||'none';this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();return;}
     if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
