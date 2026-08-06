@@ -10616,10 +10616,11 @@ function renderBank() {
       ${card("Trading Call aktivieren", "Schaltet Trading Calls frei: Geld bei kleineren Banken anlegen, mit Gewinn- oder Verlustrisiko. Kosten: 10.000 €.", state.tradingEnabled ? "Aktiv" : "10.000 €", "trading-enable", state.tradingEnabled || !state.exchangeEnabled || state.bank < 10000, "bank-feature")}
     </div>
   `;
-  els.bankActions.innerHTML = systemAccounts + adminPanel + digitalBankPanel;
+  els.bankActions.innerHTML = systemAccounts + adminPanel + digitalBankPanel + (window.JKCoinApp?.bankPanelHtml?.() || "");
   els.bankActions.querySelectorAll('[data-kind="system-account"]:not(:disabled)').forEach((button) => button.addEventListener("click", () => openAdminAccountDialog(button.dataset.index)));
   els.bankActions.querySelectorAll('[data-kind="admin-transfer"]:not(:disabled)').forEach((button) => button.addEventListener("click", () => openAdminAccountDialog("staatskasse")));
   els.bankActions.querySelectorAll('[data-kind="bank-feature"]:not(:disabled)').forEach((button) => button.addEventListener("click", () => activateBankFeature(button.dataset.index)));
+  window.JKCoinApp?.bindBank?.(els.bankActions);
 
   els.investmentList.innerHTML = `
     <div class="shop-section">
@@ -16894,6 +16895,7 @@ function deviceAppsFor(item) {
     { id: "phone", min: 1, sim: true, label: "Telefon", icon: "☎", text: "" },
     { id: "sms", min: 1, sim: true, label: "SMS", icon: "✉", text: "SMS und Nachrichten zwischen echten JK.Games-Spielern." },
     { id: "bank", min: 1, data: true, label: "Bank", icon: "€", text: `Konto ${euro.format(state.bank)} · Bar ${euro.format(state.cash)} · Schulden ${euro.format(state.debt)}.` },
+    { id: "jkcoin", min: 0, data: false, label: "JK/Coin", icon: "JK", text: "Premium-Währung, Lucky Boxes, Sammlerstücke, Spiel-Extras und Kontobewegungen." },
     { id: "shop", min: 0, label: "Shop", icon: "□", text: "Eigenständiger Online-Shop für Kleidung, Geräte, Haushalt und Verbrauchsartikel." },
     { id: "fobile", min: 1, data: true, label: "Fobile.de", icon: "F", text: "Fahrzeugmarkt für Autos, Motorboote, Yachten und weitere Fahrzeuge." },
     { id: "world", min: 1, data: true, label: "Stadtkarte", icon: "⌖", text: `Aktuell: ${state.worldLocation || state.homeCity}. Fernreisen starten am Flughafen der lokalen Karte.` },
@@ -16910,7 +16912,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL, City.KL, Match.KL, Fight.KL und Dungeon.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar." });
   }
   return apps.map((app) => {
     const missingTier = tier < app.min;
@@ -17043,7 +17045,7 @@ function openDeviceAppDirect(item, appId) {
     addFeed(`Business wird ab Level 5 freigeschaltet. Aktuell bist du Level ${state.level || 0}.`);
     return openDeviceInterface(item, "business", false);
   }
-  if (appId === "settings" || appId === "notes" || appId === "phone" || appId === "sms" || appId === "business" || appId === "finder" || appId === "finster" || appId === "appstore" || appId === "topgames") return openDeviceInterface(item, appId);
+  if (appId === "settings" || appId === "notes" || appId === "phone" || appId === "sms" || appId === "business" || appId === "finder" || appId === "finster" || appId === "appstore" || appId === "topgames" || appId === "jkcoin") return openDeviceInterface(item, appId);
   if (appId === "bank") {
     if (!state.onlineBanking) return openDeviceInterface(item, appId);
     els.dialog.close();
@@ -17223,6 +17225,10 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     // V152: Dungeon.KL übernimmt dasselbe Smartphone wie Top Games.
     els.dialog.close();
     window.DungeonKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-money-kl]")?.addEventListener("click", () => {
+    els.dialog.close();
+    window.MoneyKL?.open?.(item);
   });
   shell.querySelector("[data-device-open-games]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19192,15 +19198,17 @@ function phoneSettingsViewHtml() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL und Dungeon.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
         <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
+        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Baue dein 16×16- oder 32×32-Money-Imperium mit 100 Maker-Stufen und Online-Topliste.</small></button>
       </div>
     </div>`;
+  if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;
   if (appId === "settings") return phoneSettingsViewHtml();
   if (appId === "bank") {
     return deviceBankViewHtml();

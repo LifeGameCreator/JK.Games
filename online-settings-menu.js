@@ -37,6 +37,7 @@
     { id: "staff", label: "Teamverwaltung", short: "Team", icon: "🛡", permission: "staff.manage" },
     { id: "weed", label: "Weed Business", short: "Weed", icon: "🌿", ownerOnly: true },
     { id: "mrdn", label: "MRDN.KL", short: "Spiel", icon: "🎲", ownerOnly: true },
+    { id: "jkcoins", label: "JK Coins", short: "Coins", icon: "◈", ownerOnly: true },
     { id: "owner", label: "Owner-Codes", short: "Owner", icon: "◆", ownerOnly: true }
   ];
 
@@ -689,6 +690,11 @@
     if (activePanel === "staff") return renderStaffPanel();
     if (activePanel === "weed") return renderWeedPanel();
     if (activePanel === "mrdn") return renderMrdnPanel();
+    if (activePanel === "jkcoins") {
+      target.innerHTML = `<div class="online-mod-loading"><i></i><p>Lade JK/Coin-Zentrale …</p></div>`;
+      runtime().then(fb => window.JKCoinApp?.renderOwnerPanel?.(target,{fb,currentUser,roleData})).catch(error => target.innerHTML = `<p class="online-mod-message error">${esc(error?.message||error)}</p>`);
+      return;
+    }
     if (activePanel === "owner") return renderOwnerPanel();
     return renderHomePanel();
   }

@@ -34,7 +34,7 @@ const S = {
   player:null, mixer:null, action:null, world:null, segments:[], objects:[],
   spawnTimer:0, elapsed:0, loadingToken:0, resizeHandler:null, keyHandler:null,
   pointerStart:null, lastTap:0, dpr:1, lowPower:false, characterRig:null, characterTime:0,
-  score:0, boardTokens:3, activeBoosts:{magnet:0,jetpack:0,sneakers:0,multiplier:0},
+  score:0, boardTokens:3, jkCoinExtras:{galaxyTrail:false}, activeBoosts:{magnet:0,jetpack:0,sneakers:0,multiplier:0},
   hoverboard:0, hoverCooldown:0, boardMesh:null, boostFx:null,
   quality:'ultra', weatherMode:'sunny', weatherClock:0, weatherDuration:24, weatherBlend:0,
   rain:null, clouds:null, cloudMaterial:null, sun:null, hemi:null, fill:null, loadingProgress:0, onTrain:null, impactFx:[], pauseCountdown:false, jetRig:null,
@@ -52,10 +52,11 @@ function loadSave(){
     for(const id of ['maleStreet','femaleStreet']) if(!S.owned.includes(id)) S.owned.push(id);
     S.outfit=OUTFITS[d.outfit]&&S.owned.includes(d.outfit)?d.outfit:'maleStreet';
     S.boardTokens=Math.max(0,Number(d.boardTokens??3));
+    S.jkCoinExtras={galaxyTrail:!!d.jkCoinExtras?.galaxyTrail};
     S.quality=['low','medium','high','ultra'].includes(d.quality)?d.quality:'ultra';
   }catch{S.wallet=0;S.best=0;S.owned=['maleStreet','femaleStreet'];S.outfit='maleStreet'}
 }
-function save(){try{localStorage.setItem(STORAGE,JSON.stringify({wallet:S.wallet,best:S.best,owned:S.owned,outfit:S.outfit,boardTokens:S.boardTokens,quality:S.quality}))}catch{}}
+function save(){try{localStorage.setItem(STORAGE,JSON.stringify({wallet:S.wallet,best:S.best,owned:S.owned,outfit:S.outfit,boardTokens:S.boardTokens,quality:S.quality,jkCoinExtras:S.jkCoinExtras}))}catch{}}
 
 function queueSave(){S.saveDirty=true}
 function cachedTexture(key,factory){if(S.resources.textures.has(key))return S.resources.textures.get(key);const value=factory();S.resources.textures.set(key,value);return value}
@@ -595,4 +596,11 @@ function returnToTopGames(){
     else openHub();
   });
 }
-window.RunnerKL={open,close,openHub,returnToTopGames};
+function grantJkCoinPurchase(kind,amount=1){
+  loadSave(); amount=Math.max(1,Math.floor(Number(amount)||1));
+  if(kind==="hoverboard") S.boardTokens+=amount;
+  else if(kind==="galaxyTrail") S.jkCoinExtras.galaxyTrail=true;
+  else return false;
+  save(); updateHud(); return true;
+}
+window.RunnerKL={open,close,openHub,returnToTopGames,grantJkCoinPurchase};

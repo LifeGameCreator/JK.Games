@@ -61,6 +61,11 @@
     { id: 'hat', icon: '🎩', name: 'Zylinder' }
   ];
 
+  const CITY_JKCOIN_KEY = "jk-games-city-kl-jkcoin-v1";
+  function cityJkCoinUnlocks(){try{return JSON.parse(localStorage.getItem(CITY_JKCOIN_KEY)||"{}")}catch{return {}}}
+  function applyCityJkCoinTokens(){const x=cityJkCoinUnlocks();if(x.founder&&!TOKENS.some(t=>t.id==="founder"))TOKENS.push({id:"founder",icon:"👑",name:"Exklusiver Gründer"});if(x.galaxyMogul&&!TOKENS.some(t=>t.id==="galaxyMogul"))TOKENS.push({id:"galaxyMogul",icon:"🌌",name:"Galaxy-Mogul"});}
+  applyCityJkCoinTokens();
+
   const BOT_PROFILES = [
     { id: 'nina', name: 'Nina', token: '🐆', color: '#ff75ba', style: 'balanced' },
     { id: 'rico', name: 'Rico', token: '🚙', color: '#4eb6ff', style: 'aggressive' },
@@ -1509,5 +1514,16 @@
     });
   }
 
-  window.CityKL = Object.freeze({ open, close, returnToTopGames });
+  function grantJkCoinPurchase(kind, amount = 1) {
+    const unlocks = cityJkCoinUnlocks();
+    if (kind === "founder") unlocks.founder = true;
+    else if (kind === "galaxyMogul") unlocks.galaxyMogul = true;
+    else return false;
+    try { localStorage.setItem(CITY_JKCOIN_KEY, JSON.stringify(unlocks)); } catch {}
+    applyCityJkCoinTokens();
+    if (C.overlay && !C.game) renderLanding();
+    return true;
+  }
+
+  window.CityKL = Object.freeze({ open, close, returnToTopGames, grantJkCoinPurchase });
 })();

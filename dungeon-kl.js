@@ -540,7 +540,7 @@
     if(!root.characters.length)root.characters.push(createCharacterData(0));
     if(!root.characters.some(c=>c.id===root.activeCharacterId))root.activeCharacterId=root.characters[0].id;return root;
   }
-  function ensureState(){const root=ensureDungeonRoot();if(!root)return null;const data=root.characters.find(c=>c.id===root.activeCharacterId)||root.characters[0];storeBackup({activeCharacterId:root.activeCharacterId,character:data});return data;}
+  function ensureState(){const root=ensureDungeonRoot();if(!root)return null;const data=root.characters.find(c=>c.id===root.activeCharacterId)||root.characters[0];data.jkCoin ||= {reviveSeals:0,lootBoostUntil:0,nexusKeys:0};data.jkCoin.reviveSeals=Math.max(0,Math.floor(Number(data.jkCoin.reviveSeals)||0));data.jkCoin.lootBoostUntil=Math.max(0,Number(data.jkCoin.lootBoostUntil)||0);data.jkCoin.nexusKeys=Math.max(0,Math.floor(Number(data.jkCoin.nexusKeys)||0));storeBackup({activeCharacterId:root.activeCharacterId,character:data});return data;}
   function selectCharacter(id){const root=ensureDungeonRoot();if(!root?.characters.some(c=>c.id===id))return false;root.activeCharacterId=id;safeSave();updateHead();return true;}
   function deleteCharacter(id){const root=ensureDungeonRoot();if(!root)return;if(!confirm("Diesen Dungeon.KL-Charakter mit Level, Inventar und Fortschritt endgültig löschen?"))return;root.characters=root.characters.filter(c=>c.id!==id);if(!root.characters.length)root.characters.push(createCharacterData(0));root.activeCharacterId=root.characters[0].id;safeSave();renderCharacterSelect();}
   function equippedItem(slot,data=ensureState()) { return data?.inventory?.find(item => item.uid === data.equipped?.[slot]) || null; }
@@ -1540,11 +1540,11 @@
   function rollDamage(base, crit, source=null) { const safeBase=Math.max(1,finite(base,finite(source?.damage,1))),safeCrit=clamp(finite(crit,finite(source?.crit,.05)),0,.8),boost=finite(source?.buffs?.damageBoost,0)>0?1.28:1;return Math.max(1,Math.round(safeBase*boost*rand(.88,1.12)*(Math.random()<safeCrit?1.75:1))); }
   function nearestEnemy(s,p,max=Infinity){let best=null,bestD=max;for(const e of s.enemies){if(e.dead||!lineWalkable(s,p,e,7))continue;const d=distance(p,e);if(d<bestD){bestD=d;best=e;}}return best;}
   function spawnGroundLoot(s,enemy){
-    if(!s||!enemy)return;const d=ensureState(),baseLevel=Math.max(d.level,s.dungeon.level+s.room),drops=[];
-    if(enemy.boss||Math.random()<.38)drops.push({type:"gold",amount:Math.round((enemy.boss?90:12)+baseLevel*(enemy.boss?7:1.8)+rand(0,enemy.boss?120:35))});
-    if(enemy.boss||Math.random()<.16){const bonus=enemy.boss?22:2,rarity=rarityForLevel(baseLevel,bonus),item=createItem(clamp(baseLevel+Math.floor(rand(-2,4)),1,MAX_LEVEL),rarity,pick(SLOT_KEYS),d.classId);drops.push({type:"item",item});}
-    if(enemy.boss||Math.random()<(d.profession?.id?.16:.08)){const key=pick(Object.keys(MATERIALS));drops.push({type:"material",material:key,amount:enemy.boss?Math.floor(rand(3,7)):1});}
-    if(d.profession?.id==="companion"&&(enemy.boss||Math.random()<.055)){const species=pick(Object.keys(COMPANION_SPECIES)),role=pick(["tank","dps","healer"]),rarity=rarityForLevel(baseLevel,enemy.boss?12:0);drops.push({type:"pet",pet:{species,role,rarity,name:COMPANION_SPECIES[species].name}});}
+    if(!s||!enemy)return;const d=ensureState(),baseLevel=Math.max(d.level,s.dungeon.level+s.room),drops=[],jkLootBoost=Number(d.jkCoin?.lootBoostUntil||0)>Date.now(),chanceMult=jkLootBoost?1.65:1;
+    if(enemy.boss||Math.random()<Math.min(.92,.38*chanceMult))drops.push({type:"gold",amount:Math.round(((enemy.boss?90:12)+baseLevel*(enemy.boss?7:1.8)+rand(0,enemy.boss?120:35))*(jkLootBoost?1.35:1))});
+    if(enemy.boss||Math.random()<Math.min(.72,.16*chanceMult)){const bonus=(enemy.boss?22:2)+(jkLootBoost?5:0),rarity=rarityForLevel(baseLevel,bonus),item=createItem(clamp(baseLevel+Math.floor(rand(-2,4)),1,MAX_LEVEL),rarity,pick(SLOT_KEYS),d.classId);drops.push({type:"item",item});}
+    if(enemy.boss||Math.random()<Math.min(.7,(d.profession?.id?.16:.08)*chanceMult)){const key=pick(Object.keys(MATERIALS));drops.push({type:"material",material:key,amount:(enemy.boss?Math.floor(rand(3,7)):1)+(jkLootBoost?1:0)});}
+    if(d.profession?.id==="companion"&&(enemy.boss||Math.random()<Math.min(.35,.055*chanceMult))){const species=pick(Object.keys(COMPANION_SPECIES)),role=pick(["tank","dps","healer"]),rarity=rarityForLevel(baseLevel,(enemy.boss?12:0)+(jkLootBoost?4:0));drops.push({type:"pet",pet:{species,role,rarity,name:COMPANION_SPECIES[species].name}});}
     drops.forEach((drop,index)=>s.groundLoot.push({id:uid(),x:enemy.x+(index-(drops.length-1)/2)*34,y:enemy.y+18+index*5,createdAt:Date.now(),...drop}));
   }
   function pickupGroundLoot(s,loot){if(!s||!loot||s.pickedGroundLootIds?.has(loot.id))return false;s.pickedGroundLootIds ||= new Set();s.pickedGroundLootIds.add(loot.id);const d=ensureState();if(loot.type==="gold"){d.gold+=Math.max(1,Math.round(loot.amount||1));s.texts.push({x:loot.x,y:loot.y-20,text:`+${Math.round(loot.amount||1)} Gold`,color:"#ffd45f",life:1.1});pushCombatLog(s,`${Math.round(loot.amount||1)} Gold aufgenommen`);}else if(loot.item){addItem({...loot.item,uid:uid(),acquiredAt:Date.now()},true);pushCombatLog(s,`${loot.item.name} aufgenommen`);}else if(loot.type==="material"&&MATERIALS[loot.material]){addMaterial(d,loot.material,loot.amount||1);s.texts.push({x:loot.x,y:loot.y-20,text:`+${loot.amount||1} ${MATERIALS[loot.material].name}`,color:"#83f3bf",life:1.1});pushCombatLog(s,`${MATERIALS[loot.material].name} aufgenommen`);}else if(loot.type==="pet"&&loot.pet){const pet=addCompanionCopy(d,loot.pet);s.texts.push({x:loot.x,y:loot.y-20,text:`${pet.name} gefunden`,color:RARITIES[pet.rarity].color,life:1.1});pushCombatLog(s,`${pet.name} · Begleiterkopie aufgenommen`);}safeSave();updateHead();return true;}
@@ -1636,7 +1636,11 @@
     p.healthSeq=(Number(p.healthSeq)||0)+1;p.hitSeq=(Number(p.hitSeq)||0)+1;
     p.lastHitAmount=Math.max(0,dealt);p.lastHitSource=String(source?.name||"Gegner");
     s.texts.push({x:p.x,y:p.y-35,text:dealt>0?`-${dealt}`:"BLOCK",color:dealt>0?"#ff647a":"#8deaff",life:.8});
-    if(p.hp<=0){p.hp=0;p.dead=true;p.downedAt=Date.now();if(p.local&&!p.isPet)ensureState().stats.deaths++;showMessage(p.isPet?`${p.name} wurde besiegt`:`${p.name} ist gefallen`,2200);}
+    if(p.hp<=0){
+      const data=p.local&&!p.isPet?ensureState():null;
+      if(data?.jkCoin?.reviveSeals>0){data.jkCoin.reviveSeals-=1;p.hp=Math.max(1,p.maxHp*.55);p.dead=false;p.shield=Math.max(p.shield,p.maxHp*.15);safeSave();showMessage("JK/COIN-WIEDERBELEBUNGS-SIEGEL",2400);}
+      else{p.hp=0;p.dead=true;p.downedAt=Date.now();if(p.local&&!p.isPet)ensureState().stats.deaths++;showMessage(p.isPet?`${p.name} wurde besiegt`:`${p.name} ist gefallen`,2200);}
+    }
     // Schaden sofort in den nächsten Host-Weltsnapshot drücken.
     if(s.online&&s.host)s.networkLastWorld=0;
     return dealt;
@@ -2051,7 +2055,16 @@
     stick.addEventListener("pointerup",end,{passive:false});stick.addEventListener("pointercancel",end,{passive:false});stick.addEventListener("lostpointercapture",end);
   }
 
-  window.DungeonKL = Object.freeze({ version: VERSION, open, close, returnToTopGames });
+  function grantJkCoinPurchase(kind,amount=1){
+    const data=ensureState();if(!data)return false;amount=Math.max(1,Math.floor(Number(amount)||1));
+    if(kind==="revive")data.jkCoin.reviveSeals+=amount;
+    else if(kind==="lootBoost")data.jkCoin.lootBoostUntil=Math.max(Date.now(),data.jkCoin.lootBoostUntil)+amount*30*60*1000;
+    else if(kind==="nexusKey")data.jkCoin.nexusKeys+=amount;
+    else return false;
+    safeSave();toast("JK/Coin-Inhalt erhalten",kind==="revive"?`${amount} Wiederbelebungs-Siegel`:kind==="lootBoost"?"Beute-Segen aktiviert":`${amount} Nexus-Schlüssel`);return true;
+  }
+
+  window.DungeonKL = Object.freeze({ version: VERSION, open, close, returnToTopGames, grantJkCoinPurchase });
 
   window.addEventListener("pagehide",()=>{const p=UI.party;if(!p?.host||!UI.session?.online)return;try{p.fb.updateDoc(p.ref,{status:"closed",closedReason:"Der Host hat die Verbindung beendet.",closedAtMs:Date.now(),updatedAtMs:Date.now()}).catch(()=>{});}catch{}});
 })();

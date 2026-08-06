@@ -253,6 +253,9 @@
     const backup = wkReadBackup();
     const chosen = backup && Number(backup.updatedAtMs || 0) > Number(saveState.updatedAtMs || 0) ? backup : saveState;
     state.weedKL = chosen;
+    state.weedKL.jkCoin ||= { galaxyGrowLights:0, premiumSupplyCrates:0 };
+    state.weedKL.jkCoin.galaxyGrowLights=Math.max(0,Math.floor(Number(state.weedKL.jkCoin.galaxyGrowLights)||0));
+    state.weedKL.jkCoin.premiumSupplyCrates=Math.max(0,Math.floor(Number(state.weedKL.jkCoin.premiumSupplyCrates)||0));
     return state.weedKL;
   }
 
@@ -1394,11 +1397,20 @@
     return { ok: true, message: "Weed-Business-Testaktion ausgeführt.", snapshot: wkAdminSnapshot() };
   }
 
+  function wkGrantJkCoinPurchase(kind, amount = 1) {
+    const data = wkState(); if (!data) return false; amount = Math.max(1, Math.floor(Number(amount) || 1));
+    if (kind === "growLight") { data.jkCoin.galaxyGrowLights += amount; data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), amount)); }
+    else if (kind === "supplyCrate") { data.jkCoin.premiumSupplyCrates += amount; data.seeds.basic = Number(data.seeds.basic || 0) + amount * 8; data.supplies.pot = Number(data.supplies.pot || 0) + amount * 5; data.supplies.soil = Number(data.supplies.soil || 0) + amount * 5; data.supplies.water = Number(data.supplies.water || 0) + amount * 20; }
+    else return false;
+    wkPersist(); if (wkRuntime.overlay?.classList.contains("show")) wkRender(); return true;
+  }
+
   window.WeedKL = {
     open: wkOpen,
     close: wkClose,
     suspend: wkClose,
     version: WK_VERSION,
+    grantJkCoinPurchase: wkGrantJkCoinPurchase,
     canAccess: wkHasAccess,
     accessRole: wkAccessRole,
     summary: () => wkGuarded(() => {

@@ -1,0 +1,396 @@
+(() => {
+  "use strict";
+
+  const VERSION = "2026-08-06-money-kl-v207";
+  const LEADERBOARD_COLLECTION = "playerProfiles";
+  const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
+  const MAKER_NAMES = [
+    "Noob-Maker","Taschengeld-Sammler","Pfandjäger","Zeitungsbote","Flohmarkt-Händler","Snack-Verkäufer","Straßenkünstler","Kiosk-Helfer","Pizza-Kurier","Mini-Streamer",
+    "Money-Maker","Garage-Händler","Online-Verkäufer","Content-Creator","Influencer","Affiliate-Profi","App-Entwickler","Krypto-Scout","E-Commerce-Star","Social-Media-Agentur",
+    "Startup-Gründer","Immobilien-Makler","Autohaus-Chef","Hotel-Betreiber","Restaurant-Kette","Logistik-Unternehmer","Software-Firma","Medien-Unternehmer","Finanzberater","Produktionsleiter",
+    "Industrie-Chef","Tech-Investor","Immobilien-Hai","Öl-Unternehmer","Energie-Mogul","Mode-Imperium","Filmproduzent","Musik-Mogul","Sportinvestor","Casino-Besitzer",
+    "Bankier","Börsenhai","Konzernchef","Globaler Investor","Luxusmarken-König","Minenbesitzer","Reederei-Chef","Fluglinien-Mogul","Pharma-Tycoon","Daten-Mogul",
+    "Millionär","Multi-Millionär","Hundertfach-Millionär","Milliardär","Multi-Milliardär","Zehnfach-Milliardär","Hundertfach-Milliardär","Billionär","Multi-Billionär","Zehnfach-Billionär",
+    "Trillionär","Multi-Trillionär","Quadrillionär","Quintillionär","Sextillionär","Septillionär","Oktillionär","Nonillionär","Dezillionär","Undezillionär",
+    "Welten-Investor","Mond-Konzern","Mars-Mogul","Asteroiden-Miner","Sonnenenergie-König","Planeten-Bankier","Galaxie-Händler","Sternen-Milliardär","Kosmos-Tycoon","Nebula-Investor",
+    "Quasar-Magnat","Pulsar-Bank","Schwarzes-Loch-Fonds","Dimensionen-Händler","Zeitlinien-Investor","Multiversum-Mogul","Realitäten-König","Unendlichkeits-Bankier","Omega-Tycoon","Alpha-Imperator",
+    "JK-Money-Legende","JK-Coin-Architekt","Cash-Universum","Reichtums-Titan","Kapital-Gott","Money-Overlord","Dollar-Dominator","Imperium-Prime","Endlos-Milliardär","Money.KL-Champion"
+  ];
+  const ICONS = ["N","€","$","M","I","B","◆","◉","∞","★"];
+  const COLORS = ["#63ffc1","#7fd3ff","#c894ff","#ffd766","#ff8da1","#6ef1ee","#a7ff7d","#ff9e5f","#d8e2ff","#f3a8ff"];
+
+  const UI = { overlay: null, leftOpen: false, rightOpen: false, view: "board", selectedMaker: 0, selectedCell: "", tick: 0, leaderboard: [], onlineStatus: "", sourceDevice: "", toastTimer: 0 };
+  const number = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 });
+  const compact = new Intl.NumberFormat("de-DE", { notation: "compact", maximumFractionDigits: 2 });
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
+
+  function appState() { try { return typeof state !== "undefined" ? state : null; } catch { return null; } }
+  function persist() { try { if (typeof save === "function") save(); } catch (error) { console.warn("Money.KL speichern", error); } }
+  function feed(text) { try { if (typeof addFeed === "function") addFeed(text); } catch {} }
+  function makerBase(index) {
+    if (index === 0) return 1;
+    return Math.max(2, Math.round(Math.pow(10, index * 0.122)));
+  }
+  function makerLevelIncome(index, level = 1) {
+    const multipliers = [1, 3, 8, 25, 100];
+    return Math.round(makerBase(index) * multipliers[clamp(level, 1, 5) - 1]);
+  }
+  function makerCost(index) {
+    if (index === 0) return 0;
+    const base = makerBase(index);
+    return Math.max(20, Math.round(base * (55 + index * 1.8)));
+  }
+  function makerUpgradeCost(index, level) {
+    return Math.max(10, Math.round(makerCost(index) * (0.55 + level * level * 0.62)));
+  }
+  const MAKERS = MAKER_NAMES.map((name, index) => ({
+    id: `maker-${index + 1}`,
+    index,
+    name,
+    icon: ICONS[index % ICONS.length],
+    color: COLORS[index % COLORS.length],
+    income: makerBase(index),
+    cost: makerCost(index)
+  }));
+
+  function defaultState() {
+    const starterCell = `${Math.floor(16 / 2)}:${Math.floor(16 / 2)}`;
+    return {
+      version: VERSION,
+      dollars: 0,
+      lifetimeEarned: 0,
+      boardSize: 16,
+      unlocked32: false,
+      cells: { [starterCell]: { makerId: "maker-1", level: 1, stored: 0, placedAt: Date.now() } },
+      selectedMakerId: "maker-1",
+      lastTickAt: Date.now(),
+      boosts: { doubleUntil: 0, autoCollectUntil: 0 },
+      stats: { collected: 0, upgrades: 0, placements: 1, clicks: 0 },
+      leaderboardUpdatedAt: 0,
+      tutorialSeen: false
+    };
+  }
+  function ensureState() {
+    const root = appState();
+    if (!root) return null;
+    const base = defaultState();
+    root.moneyKl ||= base;
+    const data = root.moneyKl;
+    data.version = VERSION;
+    data.dollars = Math.max(0, Number(data.dollars || 0));
+    data.lifetimeEarned = Math.max(0, Number(data.lifetimeEarned || 0));
+    data.boardSize = data.unlocked32 ? 32 : 16;
+    data.unlocked32 = data.unlocked32 === true;
+    data.cells = data.cells && typeof data.cells === "object" ? data.cells : base.cells;
+    data.boosts = { ...base.boosts, ...(data.boosts || {}) };
+    data.stats = { ...base.stats, ...(data.stats || {}) };
+    data.lastTickAt = Number(data.lastTickAt || Date.now());
+    data.selectedMakerId = MAKERS.some(m => m.id === data.selectedMakerId) ? data.selectedMakerId : "maker-1";
+    updateAccrual(data);
+    return data;
+  }
+  function cellIncome(cell) {
+    const maker = MAKERS.find(m => m.id === cell?.makerId);
+    if (!maker) return 0;
+    return makerLevelIncome(maker.index, cell.level || 1);
+  }
+  function productionMultiplier(data) { return Number(data.boosts.doubleUntil || 0) > Date.now() ? 2 : 1; }
+  function totalPerSecond(data = ensureState()) {
+    if (!data) return 0;
+    return Object.values(data.cells).reduce((sum, cell) => sum + cellIncome(cell), 0) * productionMultiplier(data);
+  }
+  function updateAccrual(data = ensureState()) {
+    if (!data) return;
+    const now = Date.now();
+    const elapsedMs = Math.min(MAX_OFFLINE_MS, Math.max(0, now - Number(data.lastTickAt || now)));
+    if (elapsedMs < 50) return;
+    const seconds = elapsedMs / 1000;
+    const mult = productionMultiplier(data);
+    Object.values(data.cells).forEach(cell => {
+      cell.stored = Math.max(0, Number(cell.stored || 0) + cellIncome(cell) * seconds * mult);
+    });
+    data.lastTickAt = now;
+    if (Number(data.boosts.autoCollectUntil || 0) > now) collectAll(false, data);
+  }
+  function collectAll(show = true, data = ensureState()) {
+    if (!data) return 0;
+    updateAccrualNoRecursion(data);
+    let amount = 0;
+    Object.values(data.cells).forEach(cell => { amount += Math.max(0, Number(cell.stored || 0)); cell.stored = 0; });
+    amount = Math.floor(amount * 100) / 100;
+    if (amount > 0) {
+      data.dollars += amount;
+      data.lifetimeEarned += amount;
+      data.stats.collected += amount;
+      if (show) toast(`+${formatDollar(amount)} eingesammelt`);
+      persist();
+    }
+    return amount;
+  }
+  function updateAccrualNoRecursion(data) {
+    const now = Date.now();
+    const elapsedMs = Math.min(MAX_OFFLINE_MS, Math.max(0, now - Number(data.lastTickAt || now)));
+    if (elapsedMs < 50) return;
+    const seconds = elapsedMs / 1000;
+    const mult = productionMultiplier(data);
+    Object.values(data.cells).forEach(cell => { cell.stored = Math.max(0, Number(cell.stored || 0) + cellIncome(cell) * seconds * mult); });
+    data.lastTickAt = now;
+  }
+  function formatDollar(value) {
+    const n = Math.max(0, Number(value) || 0);
+    return n >= 1e6 ? `$${compact.format(n)}` : `$${number.format(n)}`;
+  }
+  function netWorth(data = ensureState()) {
+    if (!data) return 0;
+    const asset = Object.values(data.cells).reduce((sum, cell) => {
+      const maker = MAKERS.find(m => m.id === cell.makerId);
+      if (!maker) return sum;
+      let value = maker.cost;
+      for (let l = 1; l < Number(cell.level || 1); l += 1) value += makerUpgradeCost(maker.index, l);
+      return sum + value + Number(cell.stored || 0);
+    }, 0);
+    return Math.floor(data.dollars + asset);
+  }
+  function selectedMaker(data = ensureState()) { return MAKERS.find(m => m.id === data?.selectedMakerId) || MAKERS[0]; }
+  function selectedCell(data = ensureState()) { return UI.selectedCell ? data?.cells?.[UI.selectedCell] || null : null; }
+
+  function payMainEuros(amount, label) {
+    const root = appState();
+    const price = Math.max(0, Math.round(Number(amount) || 0));
+    if (!root || !price) return false;
+    try {
+      if (typeof pay === "function") {
+        if (!pay(price, false, { target: "treasury", taxRate: .19, awardXp: false })) return false;
+      } else {
+        let remaining = price;
+        const bank = Math.min(remaining, Math.max(0, Number(root.bank || 0)));
+        root.bank -= bank; remaining -= bank;
+        const cash = Math.min(remaining, Math.max(0, Number(root.cash || 0)));
+        root.cash -= cash; remaining -= cash;
+        if (remaining > 0) return false;
+      }
+      feed(`Money.KL: ${label} für ${price.toLocaleString("de-DE")} € gekauft.`);
+      persist();
+      return true;
+    } catch { return false; }
+  }
+
+  function placeOrCollect(key) {
+    const data = ensureState();
+    if (!data) return;
+    updateAccrual(data);
+    const existing = data.cells[key];
+    if (existing) {
+      UI.selectedCell = key;
+      if (Number(existing.stored || 0) >= .01) {
+        const amount = Math.floor(Number(existing.stored || 0) * 100) / 100;
+        existing.stored = 0;
+        data.dollars += amount;
+        data.lifetimeEarned += amount;
+        data.stats.collected += amount;
+        data.stats.clicks += 1;
+        toast(`+${formatDollar(amount)} von ${MAKERS.find(m => m.id === existing.makerId)?.name || "Maker"}`);
+        persist();
+      }
+      render();
+      return;
+    }
+    const maker = selectedMaker(data);
+    if (data.dollars < maker.cost) return toast(`Dir fehlen ${formatDollar(maker.cost - data.dollars)} für ${maker.name}.`);
+    data.dollars -= maker.cost;
+    data.cells[key] = { makerId: maker.id, level: 1, stored: 0, placedAt: Date.now() };
+    data.stats.placements += 1;
+    UI.selectedCell = key;
+    persist();
+    toast(`${maker.name} platziert · +${formatDollar(makerLevelIncome(maker.index, 1))}/s`);
+    render();
+  }
+  function upgradeSelected() {
+    const data = ensureState();
+    const cell = selectedCell(data);
+    if (!cell) return toast("Wähle zuerst einen platzierten Maker aus.");
+    const maker = MAKERS.find(m => m.id === cell.makerId);
+    const level = clamp(cell.level, 1, 5);
+    if (level >= 5) return toast("Dieser Maker ist bereits Level 5.");
+    const cost = makerUpgradeCost(maker.index, level);
+    if (data.dollars < cost) return toast(`Dir fehlen ${formatDollar(cost - data.dollars)} für das Upgrade.`);
+    data.dollars -= cost;
+    cell.level = level + 1;
+    data.stats.upgrades += 1;
+    persist();
+    toast(`${maker.name} ist jetzt Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s`);
+    render();
+  }
+  function removeSelected() {
+    const data = ensureState();
+    const cell = selectedCell(data);
+    if (!cell) return;
+    const maker = MAKERS.find(m => m.id === cell.makerId);
+    if (!confirm(`${maker?.name || "Maker"} wirklich entfernen? Du erhältst 35 % des Kaufwerts zurück.`)) return;
+    let paid = maker?.cost || 0;
+    for (let l = 1; l < Number(cell.level || 1); l += 1) paid += makerUpgradeCost(maker.index, l);
+    data.dollars += Math.floor(paid * .35);
+    delete data.cells[UI.selectedCell];
+    UI.selectedCell = "";
+    persist(); render();
+  }
+  function unlockBoard32() {
+    const data = ensureState();
+    if (data.unlocked32) return;
+    if (data.dollars < 1_000_000_000) return toast("Das 32×32-Feld kostet $1 Milliarde.");
+    if (!confirm("32×32-Feld für $1 Milliarde freischalten?")) return;
+    data.dollars -= 1_000_000_000;
+    data.unlocked32 = true;
+    data.boardSize = 32;
+    persist();
+    toast("32×32-Feld freigeschaltet!");
+    render();
+  }
+  function buyPowerUp(type) {
+    const data = ensureState();
+    const now = Date.now();
+    if (type === "double") {
+      if (!payMainEuros(25000, "2× Produktion für 15 Minuten")) return toast("Nicht genug Euro auf Konto oder bar.");
+      data.boosts.doubleUntil = Math.max(now, Number(data.boosts.doubleUntil || 0)) + 15 * 60 * 1000;
+    } else if (type === "auto") {
+      if (!payMainEuros(10000, "Auto-Collector für 30 Minuten")) return toast("Nicht genug Euro auf Konto oder bar.");
+      data.boosts.autoCollectUntil = Math.max(now, Number(data.boosts.autoCollectUntil || 0)) + 30 * 60 * 1000;
+    } else if (type === "instant") {
+      if (!payMainEuros(50000, "10 Minuten Sofortproduktion")) return toast("Nicht genug Euro auf Konto oder bar.");
+      const amount = totalPerSecond(data) * 600;
+      data.dollars += amount; data.lifetimeEarned += amount;
+    }
+    persist(); render(); toast("Power-Up aktiviert.");
+  }
+
+  function boardHtml(data) {
+    const size = data.boardSize;
+    let html = "";
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const key = `${x}:${y}`;
+        const cell = data.cells[key];
+        if (!cell) html += `<button class="money-kl-cell" data-money-cell="${key}" title="${esc(selectedMaker(data).name)} hier platzieren"><i>＋</i></button>`;
+        else {
+          const maker = MAKERS.find(m => m.id === cell.makerId) || MAKERS[0];
+          html += `<button class="money-kl-cell occupied ${Number(cell.stored || 0) >= .01 ? "has-money" : ""}" style="--maker-color:${maker.color}" data-money-cell="${key}" title="${esc(maker.name)} · Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s"><i>${maker.icon}</i><em>L${cell.level}</em><b>${Number(cell.stored || 0) >= 1 ? compact.format(cell.stored) : ""}</b></button>`;
+        }
+      }
+    }
+    return html;
+  }
+  function makersHtml(data) {
+    return MAKERS.map(maker => {
+      const locked = maker.index > 0 && data.lifetimeEarned < maker.cost * .15;
+      return `<button class="money-kl-maker ${data.selectedMakerId === maker.id ? "active" : ""} ${locked ? "locked" : ""}" data-money-maker="${maker.id}" ${locked ? "disabled" : ""}><i style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</i><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerLevelIncome(maker.index,1))}/s · Level 5: ${formatDollar(makerLevelIncome(maker.index,5))}/s</small></span><em>${maker.cost ? formatDollar(maker.cost) : "START"}</em></button>`;
+    }).join("");
+  }
+  function detailHtml(data) {
+    const cell = selectedCell(data);
+    if (!cell) {
+      const maker = selectedMaker(data);
+      return `<div class="money-kl-detail"><div class="money-kl-detail-icon" style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</div><h3>${esc(maker.name)}</h3><p>Wähle ein freies Feld. Der Maker startet auf Level 1 und kann bis Level 5 verbessert werden.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>LEVEL 1</small><b>${formatDollar(makerLevelIncome(maker.index,1))}/s</b></div><div class="money-kl-stat"><small>LEVEL 5</small><b>${formatDollar(makerLevelIncome(maker.index,5))}/s</b></div></div></div>`;
+    }
+    const maker = MAKERS.find(m => m.id === cell.makerId) || MAKERS[0];
+    const level = clamp(cell.level,1,5);
+    const cost = level < 5 ? makerUpgradeCost(maker.index, level) : 0;
+    return `<div class="money-kl-detail"><div class="money-kl-detail-icon" style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/5</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < 5 ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>Entfernen · 35 % Rückgabe</button></div></div>`;
+  }
+  function leaderboardHtml() {
+    if (!UI.leaderboard.length) return `<p style="color:#91b3a8">${esc(UI.onlineStatus || "Noch keine Online-Einträge geladen.")}</p>`;
+    const ownUid = window.LifeBuilderFirebaseCore?.getRuntime?.()?.auth?.currentUser?.uid || "";
+    return `<div class="money-kl-leader">${UI.leaderboard.map((row,index) => `<article class="${row.uid === ownUid ? "you" : ""}"><b>${index+1}.</b><span><b>${esc(row.displayName || "Spieler")}</b><small>${formatDollar(row.perSecond || 0)}/s · ${row.boardSize || 16}×${row.boardSize || 16}</small></span><strong>${formatDollar(row.netWorth || 0)}</strong></article>`).join("")}</div>`;
+  }
+  function leftPanelHtml(data) {
+    return `<aside class="money-kl-panel left ${UI.leftOpen ? "open" : ""}"><small>MONEY.KL</small><h2>Steuerung</h2><div class="money-kl-menu"><button class="${UI.view === "board" ? "active" : ""}" data-money-view="board">Spielfeld <span>${data.boardSize}×${data.boardSize}</span></button><button class="${UI.view === "makers" ? "active" : ""}" data-money-view="makers">100 Maker <span>Shop</span></button><button class="${UI.view === "boosts" ? "active" : ""}" data-money-view="boosts">Power-Ups <span>€</span></button><button class="${UI.view === "leader" ? "active" : ""}" data-money-view="leader">Topliste <span>Firebase</span></button></div>${UI.view === "makers" ? `<div class="money-kl-shop">${makersHtml(data)}</div>` : UI.view === "boosts" ? `<div class="money-kl-actions"><button class="money-kl-button primary" data-money-power="auto">Auto-Collector 30 Min. · 10.000 €</button><button class="money-kl-button primary" data-money-power="double">2× Produktion 15 Min. · 25.000 €</button><button class="money-kl-button gold" data-money-power="instant">10 Min. Sofortertrag · 50.000 €</button></div>` : UI.view === "leader" ? `<button class="money-kl-button" data-money-refresh-leader>Topliste aktualisieren</button>${leaderboardHtml()}` : `<p style="color:#91b3a8">Wähle einen Maker und tippe danach auf ein freies Feld. Tippe auf einen belegten Platz, um Geld einzusammeln oder ihn zu verbessern.</p><button class="money-kl-button primary" data-money-collect-all>Alles einsammeln</button>${!data.unlocked32 ? `<button class="money-kl-button gold" data-money-unlock32>32×32 freischalten · $1 Mrd.</button>` : ""}`}</aside>`;
+  }
+  function rightPanelHtml(data) {
+    return `<aside class="money-kl-panel right ${UI.rightOpen ? "open" : ""}"><small>DEIN IMPERIUM</small><h2>Statistik</h2><div class="money-kl-stats"><div class="money-kl-stat"><small>PLATZIERT</small><b>${Object.keys(data.cells).length}/${data.boardSize*data.boardSize}</b></div><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(totalPerSecond(data))}</b></div><div class="money-kl-stat"><small>NETTOWERT</small><b>${formatDollar(netWorth(data))}</b></div><div class="money-kl-stat"><small>GESAMT VERDIENT</small><b>${formatDollar(data.lifetimeEarned)}</b></div></div>${detailHtml(data)}<div class="money-kl-detail"><small>AKTIVE BOOSTS</small><p>2× Produktion: ${data.boosts.doubleUntil > Date.now() ? `${Math.ceil((data.boosts.doubleUntil-Date.now())/60000)} Min.` : "Aus"}<br>Auto-Collector: ${data.boosts.autoCollectUntil > Date.now() ? `${Math.ceil((data.boosts.autoCollectUntil-Date.now())/60000)} Min.` : "Aus"}</p></div></aside>`;
+  }
+  function render() {
+    const data = ensureState();
+    if (!data || !UI.overlay) return;
+    updateAccrual(data);
+    UI.overlay.innerHTML = `<div class="money-kl-shell"><header class="money-kl-top"><div class="money-kl-brand"><small>JK.GAMES · IDLE EMPIRE</small><h1>Money.KL</h1></div><div class="money-kl-balance"><small>DEINE SPIEL-DOLLAR</small><b>${formatDollar(data.dollars)}</b></div><div class="money-kl-top-actions"><button data-money-toggle-left>☰ <span>Menü</span></button><button data-money-toggle-right>▤ <span>Stats</span></button><button data-money-exit>×</button></div></header><main class="money-kl-layout">${leftPanelHtml(data)}<section class="money-kl-center"><div class="money-kl-board-toolbar"><div><span class="money-kl-chip">${data.boardSize}×${data.boardSize} Feld</span><span class="money-kl-chip">${Object.keys(data.cells).length} Maker</span><span class="money-kl-chip">${formatDollar(totalPerSecond(data))}/s</span></div><b>${esc(selectedMaker(data).name)}</b></div><div class="money-kl-board-scroll"><div class="money-kl-board" style="--size:${data.boardSize}">${boardHtml(data)}</div></div></section>${rightPanelHtml(data)}</main></div>`;
+    bind();
+  }
+  function bind() {
+    const root = UI.overlay;
+    root.querySelector("[data-money-toggle-left]")?.addEventListener("click", () => { UI.leftOpen = !UI.leftOpen; render(); });
+    root.querySelector("[data-money-toggle-right]")?.addEventListener("click", () => { UI.rightOpen = !UI.rightOpen; render(); });
+    root.querySelector("[data-money-exit]")?.addEventListener("click", requestExit);
+    root.querySelectorAll("[data-money-view]").forEach(btn => btn.addEventListener("click", () => { UI.view = btn.dataset.moneyView; UI.leftOpen = true; if (UI.view === "leader") loadLeaderboard(true); render(); }));
+    root.querySelectorAll("[data-money-maker]").forEach(btn => btn.addEventListener("click", () => { const data=ensureState(); data.selectedMakerId=btn.dataset.moneyMaker; persist(); UI.view="board"; if (matchMedia("(max-width:900px)").matches) UI.leftOpen=false; render(); }));
+    root.querySelectorAll("[data-money-cell]").forEach(btn => btn.addEventListener("click", () => placeOrCollect(btn.dataset.moneyCell)));
+    root.querySelector("[data-money-upgrade]")?.addEventListener("click", upgradeSelected);
+    root.querySelector("[data-money-remove]")?.addEventListener("click", removeSelected);
+    root.querySelector("[data-money-collect-all]")?.addEventListener("click", () => { collectAll(true); render(); });
+    root.querySelector("[data-money-unlock32]")?.addEventListener("click", unlockBoard32);
+    root.querySelectorAll("[data-money-power]").forEach(btn => btn.addEventListener("click", () => buyPowerUp(btn.dataset.moneyPower)));
+    root.querySelector("[data-money-refresh-leader]")?.addEventListener("click", () => loadLeaderboard(true));
+  }
+  function requestExit() {
+    const modal = document.createElement("div");
+    modal.className = "money-kl-modal";
+    modal.innerHTML = `<div class="money-kl-modal-card"><small>MONEY.KL</small><h2>Spiel wirklich verlassen?</h2><p>Dein Imperium produziert offline bis zu acht Stunden weiter.</p><div class="money-kl-actions"><button class="money-kl-button primary" data-money-stay>Weiterspielen</button><button class="money-kl-button danger" data-money-confirm-exit>Spiel beenden</button></div></div>`;
+    UI.overlay.append(modal);
+    modal.querySelector("[data-money-stay]").onclick = () => modal.remove();
+    modal.querySelector("[data-money-confirm-exit]").onclick = () => close(true);
+  }
+  function onKey(event) { if (event.key === "Escape") { event.preventDefault(); requestExit(); } }
+  function toast(text) {
+    let el = document.querySelector(".money-kl-toast");
+    if (!el) { el = document.createElement("div"); el.className = "money-kl-toast"; document.body.append(el); }
+    el.textContent = text;
+    clearTimeout(UI.toastTimer); requestAnimationFrame(() => el.classList.add("show"));
+    UI.toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+  }
+  async function runtime() {
+    const core = window.LifeBuilderFirebaseCore;
+    if (!core?.load) throw new Error("Firebase ist nicht geladen.");
+    return core.load();
+  }
+  async function publishLeaderboard() {
+    const data = ensureState();
+    if (!data) return;
+    try {
+      const fb = await runtime();
+      const user = await window.LifeBuilderFirebaseCore.waitForAuth?.(6000) || fb.auth.currentUser;
+      if (!user) throw new Error("Bitte zuerst anmelden.");
+      const displayName = `${appState()?.firstName || "Spieler"} ${appState()?.lastName || ""}`.trim();
+      const payload = { uid:user.uid, displayName, moneyKlNetWorth:netWorth(data), moneyKlPerSecond:totalPerSecond(data), moneyKlLifetimeEarned:Math.floor(data.lifetimeEarned), moneyKlBoardSize:data.boardSize, moneyKlPlaced:Object.keys(data.cells).length, moneyKlUpdatedAtMs:Date.now() };
+      await fb.setDoc(fb.doc(fb.db, LEADERBOARD_COLLECTION, user.uid), payload, { merge:true });
+      data.leaderboardUpdatedAt = Date.now(); persist();
+    } catch (error) { UI.onlineStatus = `Online-Topliste nicht verfügbar: ${String(error?.message || error).replace(/^FirebaseError:\s*/i,"")}`; }
+  }
+  async function loadLeaderboard(force=false) {
+    if (!force && UI.leaderboard.length) return;
+    UI.onlineStatus = "Topliste wird geladen …"; render();
+    try {
+      await publishLeaderboard();
+      const fb = await runtime();
+      const q = fb.query(fb.collection(fb.db, LEADERBOARD_COLLECTION), fb.orderBy("moneyKlNetWorth","desc"), fb.limit(50));
+      const snap = await fb.getDocs(q);
+      UI.leaderboard = snap.docs.map(d => ({ id:d.id, ...d.data(), netWorth:Number(d.data().moneyKlNetWorth||0), perSecond:Number(d.data().moneyKlPerSecond||0), lifetimeEarned:Number(d.data().moneyKlLifetimeEarned||0), boardSize:Number(d.data().moneyKlBoardSize||16), placed:Number(d.data().moneyKlPlaced||0), updatedAtMs:Number(d.data().moneyKlUpdatedAtMs||0) })).filter(row=>row.netWorth>0);
+      UI.onlineStatus = UI.leaderboard.length ? "" : "Noch keine Einträge.";
+    } catch (error) { UI.onlineStatus = `Firebase-Topliste konnte nicht geladen werden: ${String(error?.message || error).replace(/^FirebaseError:\s*/i,"")}`; }
+    if (UI.overlay) render();
+  }
+  function open(sourceDevice="") {
+    if (UI.overlay) return;
+    UI.sourceDevice = sourceDevice || "";
+    ensureState();
+    const el = document.createElement("div"); el.className = "money-kl-overlay"; document.body.append(el); UI.overlay = el;
+    document.body.classList.add("money-kl-open"); document.addEventListener("keydown", onKey);
+    render(); loadLeaderboard(false);
+    UI.tick = window.setInterval(() => { const data=ensureState(); updateAccrual(data); if (UI.overlay) render(); if (Date.now()-Number(data.leaderboardUpdatedAt||0)>15000) publishLeaderboard(); }, 1000);
+  }
+  function close(returnPhone=false) {
+    const data = ensureState(); updateAccrual(data); collectAll(false,data); publishLeaderboard(); persist();
+    clearInterval(UI.tick); UI.tick=0; document.removeEventListener("keydown",onKey); UI.overlay?.remove(); UI.overlay=null; document.body.classList.remove("money-kl-open");
+    if (returnPhone) window.setTimeout(() => window.JKGamesOpenTopGames?.(UI.sourceDevice),80);
+  }
+
+  window.MoneyKL = Object.freeze({ version:VERSION, open, close, definitions:MAKERS, getState:ensureState, leaderboard:loadLeaderboard });
+})();

@@ -1311,5 +1311,17 @@
   function playClearTone(combo) { playTone(420 + Math.min(combo, 6) * 85, .1, .04); }
   function playWinSound() { [520,660,780,1040].forEach((frequency, index) => setTimer(() => playTone(frequency,.18,.045), index * 95)); }
 
-  window.MatchKL = Object.freeze({ open, close, returnToTopGames });
+  function grantJkCoinPurchase(kind, amount = 1) {
+    if (!M.save) loadSave();
+    amount = Math.max(1, Math.floor(Number(amount) || 1));
+    if (kind === "lives") { M.save.lives = MAX_LIVES; M.save.lifeAnchor = Date.now(); }
+    else if (kind === "coins") M.save.coins += amount;
+    else if (kind === "boosterSet") { ["hammer","bomb","moves"].forEach(id => M.save.boosters[id] = (M.save.boosters[id] || 0) + amount); }
+    else return false;
+    save();
+    if (M.overlay) { updateHud(); toast("JK/Coin-Kauf erhalten", "Die Inhalte wurden Match.KL gutgeschrieben."); }
+    return true;
+  }
+
+  window.MatchKL = Object.freeze({ open, close, returnToTopGames, grantJkCoinPurchase });
 })();

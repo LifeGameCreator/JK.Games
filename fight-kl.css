@@ -662,3 +662,13 @@ body.fight-kl-open{overflow:hidden!important}
  .fight-kl-modal .fkl-head{height:calc(66px + env(safe-area-inset-top,0px));min-height:calc(66px + env(safe-area-inset-top,0px));padding-top:calc(8px + env(safe-area-inset-top,0px))!important}
  .fight-kl-modal .fkl-main{height:calc(100dvh - 66px - env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
 }
+
+/* V208: transparente Stern-Balance-Hilfe im Itemdetail. */
+.fkl-star-balance-note{
+  display:block;
+  margin:-2px 0 10px;
+  color:var(--fkl-muted,#9eb0b6);
+  font-size:11px;
+  font-weight:750;
+  letter-spacing:.02em;
+}
