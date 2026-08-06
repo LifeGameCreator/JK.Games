@@ -1,15 +1,15 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-06-jkcoin-v207";
+  const VERSION = "2026-08-06-jkcoin-v209";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const TOTAL_COLLECTIBLES = 6470;
   const PACKS = [
-    { id:"pack-100", eur:0.99, coins:100, bonus:0 },
+    { id:"pack-100", eur:1.99, coins:100, bonus:0 },
     { id:"pack-600", eur:4.99, coins:600, bonus:19 },
-    { id:"pack-1200", eur:9.99, coins:1200, bonus:19 },
-    { id:"pack-3000", eur:24.99, coins:3000, bonus:19 },
+    { id:"pack-1350", eur:9.99, coins:1350, bonus:35 },
+    { id:"pack-4000", eur:24.99, coins:4000, bonus:60 },
     { id:"pack-8000", eur:49.99, coins:8000, bonus:58 }
   ];
   const RARITIES = [

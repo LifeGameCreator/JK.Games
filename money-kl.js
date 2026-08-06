@@ -1,9 +1,14 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-06-money-kl-v207";
+  const VERSION = "2026-08-06-money-kl-v210";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
+  const BOARD_TIERS = Object.freeze([
+    { size: 8, price: 0, label: "Startfläche", description: "64 Bauplätze · sofort verfügbar" },
+    { size: 16, price: 1_000_000_000, label: "Großstadtfläche", description: "256 Bauplätze · ab $1 Milliarde" },
+    { size: 32, price: 1_000_000_000_000, label: "Imperiumsfläche", description: "1.024 Bauplätze · ab $1 Billion" }
+  ]);
   const MAKER_NAMES = [
     "Noob-Maker","Taschengeld-Sammler","Pfandjäger","Zeitungsbote","Flohmarkt-Händler","Snack-Verkäufer","Straßenkünstler","Kiosk-Helfer","Pizza-Kurier","Mini-Streamer",
     "Money-Maker","Garage-Händler","Online-Verkäufer","Content-Creator","Influencer","Affiliate-Profi","App-Entwickler","Krypto-Scout","E-Commerce-Star","Social-Media-Agentur",
@@ -18,12 +23,26 @@
   ];
   const ICONS = ["N","€","$","M","I","B","◆","◉","∞","★"];
   const COLORS = ["#63ffc1","#7fd3ff","#c894ff","#ffd766","#ff8da1","#6ef1ee","#a7ff7d","#ff9e5f","#d8e2ff","#f3a8ff"];
+  const AVATARS = ["🧒","🧺","🛒","🎭","📦","💻","📈","🏢","💎","👑","🚀","🌌"] ;
 
   const UI = { overlay: null, leftOpen: false, rightOpen: false, view: "board", selectedMaker: 0, selectedCell: "", tick: 0, leaderboard: [], onlineStatus: "", sourceDevice: "", toastTimer: 0 };
   const number = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 });
-  const compact = new Intl.NumberFormat("de-DE", { notation: "compact", maximumFractionDigits: 2 });
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
+  const SHORT_SUFFIXES = ["", "K", "M", "MI", "B", "BA", "T", "TA", "Q", "QA", "QU", "QI", "S", "SA", "O", "OA", "N", "NA", "D", "DA", "UD", "DD", "TD", "QD", "QID", "SD", "SPD", "OD", "ND", "VG"];
+  function formatShortNumber(value) {
+    const n = Math.max(0, Number(value) || 0);
+    if (!Number.isFinite(n)) return "∞";
+    if (n < 1000) return number.format(n);
+    const tier = Math.min(SHORT_SUFFIXES.length - 1, Math.max(1, Math.floor(Math.log10(n) / 3)));
+    const scaled = n / Math.pow(1000, tier);
+    const maximumFractionDigits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+    return `${scaled.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits })} ${SHORT_SUFFIXES[tier]}`;
+  }
+
+  function makerAvatar(index) {
+    return AVATARS[Math.min(AVATARS.length - 1, Math.floor(Math.max(0, index) / 9))] || "💼";
+  }
 
   function appState() { try { return typeof state !== "undefined" ? state : null; } catch { return null; } }
   function persist() { try { if (typeof save === "function") save(); } catch (error) { console.warn("Money.KL speichern", error); } }
@@ -55,12 +74,13 @@
   }));
 
   function defaultState() {
-    const starterCell = `${Math.floor(16 / 2)}:${Math.floor(16 / 2)}`;
+    const starterCell = `${Math.floor(8 / 2)}:${Math.floor(8 / 2)}`;
     return {
       version: VERSION,
       dollars: 0,
       lifetimeEarned: 0,
-      boardSize: 16,
+      boardSize: 8,
+      unlocked16: false,
       unlocked32: false,
       cells: { [starterCell]: { makerId: "maker-1", level: 1, stored: 0, placedAt: Date.now() } },
       selectedMakerId: "maker-1",
@@ -77,12 +97,22 @@
     const base = defaultState();
     root.moneyKl ||= base;
     const data = root.moneyKl;
+    const previousVersion = String(data.version || "");
+    const previousBoardSize = Number(data.boardSize || 0);
+    data.cells = data.cells && typeof data.cells === "object" ? data.cells : base.cells;
+    let largestCoordinate = 0;
+    Object.keys(data.cells).forEach(key => {
+      const [x, y] = String(key).split(":").map(Number);
+      if (Number.isFinite(x)) largestCoordinate = Math.max(largestCoordinate, x);
+      if (Number.isFinite(y)) largestCoordinate = Math.max(largestCoordinate, y);
+    });
+    const isLegacySave = previousVersion && previousVersion !== VERSION;
+    data.unlocked32 = data.unlocked32 === true || previousBoardSize >= 32 || largestCoordinate >= 16;
+    data.unlocked16 = data.unlocked16 === true || data.unlocked32 || (isLegacySave && previousBoardSize >= 16) || largestCoordinate >= 8;
+    data.boardSize = data.unlocked32 ? 32 : data.unlocked16 ? 16 : 8;
     data.version = VERSION;
     data.dollars = Math.max(0, Number(data.dollars || 0));
     data.lifetimeEarned = Math.max(0, Number(data.lifetimeEarned || 0));
-    data.boardSize = data.unlocked32 ? 32 : 16;
-    data.unlocked32 = data.unlocked32 === true;
-    data.cells = data.cells && typeof data.cells === "object" ? data.cells : base.cells;
     data.boosts = { ...base.boosts, ...(data.boosts || {}) };
     data.stats = { ...base.stats, ...(data.stats || {}) };
     data.lastTickAt = Number(data.lastTickAt || Date.now());
@@ -138,8 +168,7 @@
     data.lastTickAt = now;
   }
   function formatDollar(value) {
-    const n = Math.max(0, Number(value) || 0);
-    return n >= 1e6 ? `$${compact.format(n)}` : `$${number.format(n)}`;
+    return `$${formatShortNumber(value)}`;
   }
   function netWorth(data = ensureState()) {
     if (!data) return 0;
@@ -227,24 +256,31 @@
     const cell = selectedCell(data);
     if (!cell) return;
     const maker = MAKERS.find(m => m.id === cell.makerId);
-    if (!confirm(`${maker?.name || "Maker"} wirklich entfernen? Du erhältst 35 % des Kaufwerts zurück.`)) return;
     let paid = maker?.cost || 0;
     for (let l = 1; l < Number(cell.level || 1); l += 1) paid += makerUpgradeCost(maker.index, l);
     data.dollars += Math.floor(paid * .35);
     delete data.cells[UI.selectedCell];
     UI.selectedCell = "";
-    persist(); render();
-  }
-  function unlockBoard32() {
-    const data = ensureState();
-    if (data.unlocked32) return;
-    if (data.dollars < 1_000_000_000) return toast("Das 32×32-Feld kostet $1 Milliarde.");
-    if (!confirm("32×32-Feld für $1 Milliarde freischalten?")) return;
-    data.dollars -= 1_000_000_000;
-    data.unlocked32 = true;
-    data.boardSize = 32;
     persist();
-    toast("32×32-Feld freigeschaltet!");
+    toast(`${maker?.name || "Maker"} zurückgegeben · ${formatDollar(Math.floor(paid * .35))} erhalten`);
+    render();
+  }
+  function unlockBoard(size) {
+    const data = ensureState();
+    const tier = BOARD_TIERS.find(entry => entry.size === Number(size));
+    if (!data || !tier || tier.size === 8) return;
+    if (tier.size === 16 && data.unlocked16) return;
+    if (tier.size === 32 && data.unlocked32) return;
+    if (tier.size === 32 && !data.unlocked16) return toast("Schalte zuerst das 16×16-Feld frei.");
+    if (data.dollars < tier.price) return toast(`Das ${tier.size}×${tier.size}-Feld kostet ${formatDollar(tier.price)}.`);
+    if (!confirm(`${tier.size}×${tier.size}-Feld für ${formatDollar(tier.price)} freischalten?`)) return;
+    data.dollars -= tier.price;
+    if (tier.size === 16) data.unlocked16 = true;
+    if (tier.size === 32) { data.unlocked16 = true; data.unlocked32 = true; }
+    data.boardSize = tier.size;
+    UI.selectedCell = "";
+    persist();
+    toast(`${tier.size}×${tier.size}-Feld freigeschaltet!`);
     render();
   }
   function buyPowerUp(type) {
@@ -264,6 +300,29 @@
     persist(); render(); toast("Power-Up aktiviert.");
   }
 
+  function makerVisualType(index) {
+    if (index < 10) return "worker";
+    if (index < 20) return "stall";
+    if (index < 35) return "shop";
+    if (index < 50) return "office";
+    if (index < 70) return "tower";
+    if (index < 85) return "space";
+    return "cosmic";
+  }
+  function makerModelHtml(maker, level = 1, compact = false) {
+    const type = makerVisualType(maker.index);
+    const safeLevel = clamp(level, 1, 5);
+    return `<span class="money-kl-model type-${type} ${compact ? "compact" : ""}" style="--maker-color:${maker.color};--maker-level:${safeLevel}"><span class="model-shadow"></span><span class="model-base"></span><span class="model-body"></span><span class="model-roof"></span><span class="model-head"></span><span class="model-accent"></span><span class="model-sign">${esc(maker.icon)}</span></span>`;
+  }
+  function fieldProgressHtml(data) {
+    return `<div class="money-kl-field-tiers">${BOARD_TIERS.map(tier => {
+      const unlocked = tier.size === 8 || (tier.size === 16 ? data.unlocked16 : data.unlocked32);
+      const current = data.boardSize === tier.size;
+      const canBuy = !unlocked && (tier.size !== 32 || data.unlocked16);
+      return `<article class="money-kl-field-tier ${unlocked ? "unlocked" : "locked"} ${current ? "current" : ""}"><div class="field-tier-preview size-${tier.size}"><span></span><span></span><span></span><span></span></div><div><small>${tier.label}</small><b>${tier.size}×${tier.size}</b><p>${tier.description}</p></div>${current ? `<strong>AKTIV</strong>` : unlocked ? `<strong>FREI</strong>` : canBuy ? `<button class="money-kl-button gold" data-money-unlock="${tier.size}">${formatDollar(tier.price)}</button>` : `<strong>16×16 zuerst</strong>`}</article>`;
+    }).join("")}</div>`;
+  }
+
   function boardHtml(data) {
     const size = data.boardSize;
     let html = "";
@@ -271,10 +330,12 @@
       for (let x = 0; x < size; x += 1) {
         const key = `${x}:${y}`;
         const cell = data.cells[key];
-        if (!cell) html += `<button class="money-kl-cell" data-money-cell="${key}" title="${esc(selectedMaker(data).name)} hier platzieren"><i>＋</i></button>`;
-        else {
+        const district = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 ? "district-b" : "district-a";
+        if (!cell) {
+          html += `<button class="money-kl-cell empty ${district}" data-money-cell="${key}" title="${esc(selectedMaker(data).name)} hier platzieren"><span class="money-kl-plot"><span class="plot-ground"></span><span class="plot-lines"></span><span class="plot-add">＋</span></span></button>`;
+        } else {
           const maker = MAKERS.find(m => m.id === cell.makerId) || MAKERS[0];
-          html += `<button class="money-kl-cell occupied ${Number(cell.stored || 0) >= .01 ? "has-money" : ""}" style="--maker-color:${maker.color}" data-money-cell="${key}" title="${esc(maker.name)} · Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s"><i>${maker.icon}</i><em>L${cell.level}</em><b>${Number(cell.stored || 0) >= 1 ? compact.format(cell.stored) : ""}</b></button>`;
+          html += `<button class="money-kl-cell occupied ${district} ${Number(cell.stored || 0) >= .01 ? "has-money" : ""}" style="--maker-color:${maker.color}" data-money-cell="${key}" title="${esc(maker.name)} · Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s"><span class="money-kl-plot"><span class="plot-ground"></span><span class="plot-lines"></span>${makerModelHtml(maker, cell.level)}</span><em>L${cell.level}</em><b>${Number(cell.stored || 0) >= 1 ? formatShortNumber(cell.stored) : ""}</b><span class="money-kl-cell-name">${esc(maker.name)}</span></button>`;
         }
       }
     }
@@ -283,37 +344,91 @@
   function makersHtml(data) {
     return MAKERS.map(maker => {
       const locked = maker.index > 0 && data.lifetimeEarned < maker.cost * .15;
-      return `<button class="money-kl-maker ${data.selectedMakerId === maker.id ? "active" : ""} ${locked ? "locked" : ""}" data-money-maker="${maker.id}" ${locked ? "disabled" : ""}><i style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</i><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerLevelIncome(maker.index,1))}/s · Level 5: ${formatDollar(makerLevelIncome(maker.index,5))}/s</small></span><em>${maker.cost ? formatDollar(maker.cost) : "START"}</em></button>`;
+      return `<button class="money-kl-maker ${data.selectedMakerId === maker.id ? "active" : ""} ${locked ? "locked" : ""}" data-money-maker="${maker.id}" ${locked ? "disabled" : ""}><span class="money-kl-maker-preview">${makerModelHtml(maker, 1, true)}</span><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerLevelIncome(maker.index,1))}/s · Level 5: ${formatDollar(makerLevelIncome(maker.index,5))}/s</small></span><em>${maker.cost ? formatDollar(maker.cost) : "START"}</em></button>`;
     }).join("");
   }
   function detailHtml(data) {
     const cell = selectedCell(data);
     if (!cell) {
       const maker = selectedMaker(data);
-      return `<div class="money-kl-detail"><div class="money-kl-detail-icon" style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</div><h3>${esc(maker.name)}</h3><p>Wähle ein freies Feld. Der Maker startet auf Level 1 und kann bis Level 5 verbessert werden.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>LEVEL 1</small><b>${formatDollar(makerLevelIncome(maker.index,1))}/s</b></div><div class="money-kl-stat"><small>LEVEL 5</small><b>${formatDollar(makerLevelIncome(maker.index,5))}/s</b></div></div></div>`;
+      return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, cell ? cell.level : 1, true)}</div><h3>${esc(maker.name)}</h3><p>Wähle ein freies Feld. Der Maker startet auf Level 1 und kann bis Level 5 verbessert werden.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>LEVEL 1</small><b>${formatDollar(makerLevelIncome(maker.index,1))}/s</b></div><div class="money-kl-stat"><small>LEVEL 5</small><b>${formatDollar(makerLevelIncome(maker.index,5))}/s</b></div></div></div>`;
     }
     const maker = MAKERS.find(m => m.id === cell.makerId) || MAKERS[0];
     const level = clamp(cell.level,1,5);
     const cost = level < 5 ? makerUpgradeCost(maker.index, level) : 0;
-    return `<div class="money-kl-detail"><div class="money-kl-detail-icon" style="background:linear-gradient(135deg,${maker.color},#10231d)">${maker.icon}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/5</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < 5 ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>Entfernen · 35 % Rückgabe</button></div></div>`;
+    return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, cell ? cell.level : 1, true)}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/5</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-selected-pps>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b data-money-live-selected-stored>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < 5 ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>Rückgabe · 35 %</button></div></div>`;
   }
   function leaderboardHtml() {
     if (!UI.leaderboard.length) return `<p style="color:#91b3a8">${esc(UI.onlineStatus || "Noch keine Online-Einträge geladen.")}</p>`;
     const ownUid = window.LifeBuilderFirebaseCore?.getRuntime?.()?.auth?.currentUser?.uid || "";
-    return `<div class="money-kl-leader">${UI.leaderboard.map((row,index) => `<article class="${row.uid === ownUid ? "you" : ""}"><b>${index+1}.</b><span><b>${esc(row.displayName || "Spieler")}</b><small>${formatDollar(row.perSecond || 0)}/s · ${row.boardSize || 16}×${row.boardSize || 16}</small></span><strong>${formatDollar(row.netWorth || 0)}</strong></article>`).join("")}</div>`;
+    return `<div class="money-kl-leader">${UI.leaderboard.map((row,index) => `<article class="${row.uid === ownUid ? "you" : ""}"><b>${index+1}.</b><span><b>${esc(row.displayName || "Spieler")}</b><small>${formatDollar(row.perSecond || 0)}/s · ${row.boardSize || 8}×${row.boardSize || 8}</small></span><strong>${formatDollar(row.netWorth || 0)}</strong></article>`).join("")}</div>`;
   }
   function leftPanelHtml(data) {
-    return `<aside class="money-kl-panel left ${UI.leftOpen ? "open" : ""}"><small>MONEY.KL</small><h2>Steuerung</h2><div class="money-kl-menu"><button class="${UI.view === "board" ? "active" : ""}" data-money-view="board">Spielfeld <span>${data.boardSize}×${data.boardSize}</span></button><button class="${UI.view === "makers" ? "active" : ""}" data-money-view="makers">100 Maker <span>Shop</span></button><button class="${UI.view === "boosts" ? "active" : ""}" data-money-view="boosts">Power-Ups <span>€</span></button><button class="${UI.view === "leader" ? "active" : ""}" data-money-view="leader">Topliste <span>Firebase</span></button></div>${UI.view === "makers" ? `<div class="money-kl-shop">${makersHtml(data)}</div>` : UI.view === "boosts" ? `<div class="money-kl-actions"><button class="money-kl-button primary" data-money-power="auto">Auto-Collector 30 Min. · 10.000 €</button><button class="money-kl-button primary" data-money-power="double">2× Produktion 15 Min. · 25.000 €</button><button class="money-kl-button gold" data-money-power="instant">10 Min. Sofortertrag · 50.000 €</button></div>` : UI.view === "leader" ? `<button class="money-kl-button" data-money-refresh-leader>Topliste aktualisieren</button>${leaderboardHtml()}` : `<p style="color:#91b3a8">Wähle einen Maker und tippe danach auf ein freies Feld. Tippe auf einen belegten Platz, um Geld einzusammeln oder ihn zu verbessern.</p><button class="money-kl-button primary" data-money-collect-all>Alles einsammeln</button>${!data.unlocked32 ? `<button class="money-kl-button gold" data-money-unlock32>32×32 freischalten · $1 Mrd.</button>` : ""}`}</aside>`;
+    const nextUnlock = !data.unlocked16 ? 16 : !data.unlocked32 ? 32 : 0;
+    return `<aside class="money-kl-panel left ${UI.leftOpen ? "open" : ""}"><small>MONEY.KL</small><h2>Steuerung</h2><div class="money-kl-menu"><button class="${UI.view === "board" ? "active" : ""}" data-money-view="board">Spielfeld <span>${data.boardSize}×${data.boardSize}</span></button><button class="${UI.view === "makers" ? "active" : ""}" data-money-view="makers">100 Maker <span>Shop</span></button><button class="${UI.view === "boosts" ? "active" : ""}" data-money-view="boosts">Power-Ups <span>€</span></button><button class="${UI.view === "leader" ? "active" : ""}" data-money-view="leader">Topliste <span>Firebase</span></button></div>${UI.view === "makers" ? `<div class="money-kl-shop">${makersHtml(data)}</div>` : UI.view === "boosts" ? `<div class="money-kl-actions"><button class="money-kl-button primary" data-money-power="auto">Auto-Collector 30 Min. · 10.000 €</button><button class="money-kl-button primary" data-money-power="double">2× Produktion 15 Min. · 25.000 €</button><button class="money-kl-button gold" data-money-power="instant">10 Min. Sofortertrag · 50.000 €</button></div>` : UI.view === "leader" ? `<button class="money-kl-button" data-money-refresh-leader>Topliste aktualisieren</button>${leaderboardHtml()}` : `<p class="money-kl-help">Wähle einen Maker und tippe auf ein freies Grundstück. Belegte Grundstücke sammeln Dollar und lassen sich bis Level 5 ausbauen.</p><button class="money-kl-button primary" data-money-collect-all>Alles einsammeln</button><h3 class="money-kl-field-title">Feld-Ausbau</h3>${fieldProgressHtml(data)}${nextUnlock ? `<p class="money-kl-next-goal">Nächstes Ziel: ${nextUnlock}×${nextUnlock} für ${formatDollar(BOARD_TIERS.find(t => t.size === nextUnlock).price)}</p>` : `<p class="money-kl-next-goal complete">Maximale Fläche erreicht</p>`}`}</aside>`;
   }
   function rightPanelHtml(data) {
-    return `<aside class="money-kl-panel right ${UI.rightOpen ? "open" : ""}"><small>DEIN IMPERIUM</small><h2>Statistik</h2><div class="money-kl-stats"><div class="money-kl-stat"><small>PLATZIERT</small><b>${Object.keys(data.cells).length}/${data.boardSize*data.boardSize}</b></div><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(totalPerSecond(data))}</b></div><div class="money-kl-stat"><small>NETTOWERT</small><b>${formatDollar(netWorth(data))}</b></div><div class="money-kl-stat"><small>GESAMT VERDIENT</small><b>${formatDollar(data.lifetimeEarned)}</b></div></div>${detailHtml(data)}<div class="money-kl-detail"><small>AKTIVE BOOSTS</small><p>2× Produktion: ${data.boosts.doubleUntil > Date.now() ? `${Math.ceil((data.boosts.doubleUntil-Date.now())/60000)} Min.` : "Aus"}<br>Auto-Collector: ${data.boosts.autoCollectUntil > Date.now() ? `${Math.ceil((data.boosts.autoCollectUntil-Date.now())/60000)} Min.` : "Aus"}</p></div></aside>`;
+    return `<aside class="money-kl-panel right ${UI.rightOpen ? "open" : ""}"><small>DEIN IMPERIUM</small><h2>Statistik</h2><div class="money-kl-stats"><div class="money-kl-stat"><small>PLATZIERT</small><b data-money-live-placed>${Object.keys(data.cells).length}/${data.boardSize*data.boardSize}</b></div><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-pps>${formatDollar(totalPerSecond(data))}</b></div><div class="money-kl-stat"><small>NETTOWERT</small><b data-money-live-networth>${formatDollar(netWorth(data))}</b></div><div class="money-kl-stat"><small>GESAMT VERDIENT</small><b data-money-live-lifetime>${formatDollar(data.lifetimeEarned)}</b></div></div>${detailHtml(data)}<div class="money-kl-detail"><small>AKTIVE BOOSTS</small><p data-money-live-boosts>2× Produktion: ${data.boosts.doubleUntil > Date.now() ? `${Math.ceil((data.boosts.doubleUntil-Date.now())/60000)} Min.` : "Aus"}<br>Auto-Collector: ${data.boosts.autoCollectUntil > Date.now() ? `${Math.ceil((data.boosts.autoCollectUntil-Date.now())/60000)} Min.` : "Aus"}</p></div></aside>`;
   }
+  function captureScrollState() {
+    if (!UI.overlay) return null;
+    const left = UI.overlay.querySelector(".money-kl-panel.left");
+    const right = UI.overlay.querySelector(".money-kl-panel.right");
+    const board = UI.overlay.querySelector(".money-kl-board-scroll");
+    return {
+      leftTop: left?.scrollTop || 0,
+      rightTop: right?.scrollTop || 0,
+      boardTop: board?.scrollTop || 0,
+      boardLeft: board?.scrollLeft || 0
+    };
+  }
+  function restoreScrollState(saved) {
+    if (!saved || !UI.overlay) return;
+    const left = UI.overlay.querySelector(".money-kl-panel.left");
+    const right = UI.overlay.querySelector(".money-kl-panel.right");
+    const board = UI.overlay.querySelector(".money-kl-board-scroll");
+    if (left) left.scrollTop = saved.leftTop;
+    if (right) right.scrollTop = saved.rightTop;
+    if (board) { board.scrollTop = saved.boardTop; board.scrollLeft = saved.boardLeft; }
+  }
+  function refreshDynamicValues() {
+    const data = ensureState();
+    if (!data || !UI.overlay) return;
+    const setText = (selector, value) => {
+      const node = UI.overlay.querySelector(selector);
+      if (node && node.textContent !== String(value)) node.textContent = String(value);
+    };
+    setText("[data-money-live-balance]", formatDollar(data.dollars));
+    setText("[data-money-live-toolbar-pps]", `${formatDollar(totalPerSecond(data))}/s`);
+    setText("[data-money-live-placed]", `${Object.keys(data.cells).length}/${data.boardSize * data.boardSize}`);
+    setText("[data-money-live-pps]", formatDollar(totalPerSecond(data)));
+    setText("[data-money-live-networth]", formatDollar(netWorth(data)));
+    setText("[data-money-live-lifetime]", formatDollar(data.lifetimeEarned));
+    const selected = selectedCell(data);
+    if (selected) {
+      setText("[data-money-live-selected-pps]", formatDollar(cellIncome(selected)));
+      setText("[data-money-live-selected-stored]", formatDollar(selected.stored || 0));
+    }
+    const boosts = UI.overlay.querySelector("[data-money-live-boosts]");
+    if (boosts) boosts.innerHTML = `2× Produktion: ${data.boosts.doubleUntil > Date.now() ? `${Math.ceil((data.boosts.doubleUntil-Date.now())/60000)} Min.` : "Aus"}<br>Auto-Collector: ${data.boosts.autoCollectUntil > Date.now() ? `${Math.ceil((data.boosts.autoCollectUntil-Date.now())/60000)} Min.` : "Aus"}`;
+    UI.overlay.querySelectorAll("[data-money-cell]").forEach(button => {
+      const cell = data.cells[button.dataset.moneyCell];
+      if (!cell) return;
+      const stored = Math.max(0, Number(cell.stored || 0));
+      button.classList.toggle("has-money", stored >= .01);
+      const badge = button.querySelector("b");
+      if (badge) badge.textContent = stored >= 1 ? formatShortNumber(stored) : "";
+    });
+  }
+
   function render() {
     const data = ensureState();
     if (!data || !UI.overlay) return;
     updateAccrual(data);
-    UI.overlay.innerHTML = `<div class="money-kl-shell"><header class="money-kl-top"><div class="money-kl-brand"><small>JK.GAMES · IDLE EMPIRE</small><h1>Money.KL</h1></div><div class="money-kl-balance"><small>DEINE SPIEL-DOLLAR</small><b>${formatDollar(data.dollars)}</b></div><div class="money-kl-top-actions"><button data-money-toggle-left>☰ <span>Menü</span></button><button data-money-toggle-right>▤ <span>Stats</span></button><button data-money-exit>×</button></div></header><main class="money-kl-layout">${leftPanelHtml(data)}<section class="money-kl-center"><div class="money-kl-board-toolbar"><div><span class="money-kl-chip">${data.boardSize}×${data.boardSize} Feld</span><span class="money-kl-chip">${Object.keys(data.cells).length} Maker</span><span class="money-kl-chip">${formatDollar(totalPerSecond(data))}/s</span></div><b>${esc(selectedMaker(data).name)}</b></div><div class="money-kl-board-scroll"><div class="money-kl-board" style="--size:${data.boardSize}">${boardHtml(data)}</div></div></section>${rightPanelHtml(data)}</main></div>`;
+    const savedScroll = captureScrollState();
+    UI.overlay.innerHTML = `<div class="money-kl-shell"><header class="money-kl-top"><div class="money-kl-brand"><small>JK.GAMES · IDLE EMPIRE</small><h1>Money.KL</h1></div><div class="money-kl-balance"><small>DEINE SPIEL-DOLLAR</small><b data-money-live-balance>${formatDollar(data.dollars)}</b></div><div class="money-kl-top-actions"><button data-money-toggle-left>☰ <span>Menü</span></button><button data-money-toggle-right>▤ <span>Stats</span></button><button data-money-exit>×</button></div></header><main class="money-kl-layout">${leftPanelHtml(data)}<section class="money-kl-center"><div class="money-kl-board-toolbar"><div><span class="money-kl-chip field">${data.boardSize}×${data.boardSize} · ${BOARD_TIERS.find(t => t.size === data.boardSize)?.label || "Feld"}</span><span class="money-kl-chip">${Object.keys(data.cells).length} Maker</span><span class="money-kl-chip" data-money-live-toolbar-pps>${formatDollar(totalPerSecond(data))}/s</span></div><b>${esc(selectedMaker(data).name)}</b></div><div class="money-kl-board-scroll"><div class="money-kl-world size-${data.boardSize}"><div class="money-kl-skyline" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div><div class="money-kl-board size-${data.boardSize}" style="--size:${data.boardSize}">${boardHtml(data)}</div></div></div></section>${rightPanelHtml(data)}</main></div>`;
     bind();
+    restoreScrollState(savedScroll);
   }
   function bind() {
     const root = UI.overlay;
@@ -326,11 +441,12 @@
     root.querySelector("[data-money-upgrade]")?.addEventListener("click", upgradeSelected);
     root.querySelector("[data-money-remove]")?.addEventListener("click", removeSelected);
     root.querySelector("[data-money-collect-all]")?.addEventListener("click", () => { collectAll(true); render(); });
-    root.querySelector("[data-money-unlock32]")?.addEventListener("click", unlockBoard32);
+    root.querySelectorAll("[data-money-unlock]").forEach(btn => btn.addEventListener("click", () => unlockBoard(Number(btn.dataset.moneyUnlock))));
     root.querySelectorAll("[data-money-power]").forEach(btn => btn.addEventListener("click", () => buyPowerUp(btn.dataset.moneyPower)));
     root.querySelector("[data-money-refresh-leader]")?.addEventListener("click", () => loadLeaderboard(true));
   }
   function requestExit() {
+    if (!UI.overlay || UI.overlay.querySelector(".money-kl-modal")) return;
     const modal = document.createElement("div");
     modal.className = "money-kl-modal";
     modal.innerHTML = `<div class="money-kl-modal-card"><small>MONEY.KL</small><h2>Spiel wirklich verlassen?</h2><p>Dein Imperium produziert offline bis zu acht Stunden weiter.</p><div class="money-kl-actions"><button class="money-kl-button primary" data-money-stay>Weiterspielen</button><button class="money-kl-button danger" data-money-confirm-exit>Spiel beenden</button></div></div>`;
@@ -372,7 +488,7 @@
       const fb = await runtime();
       const q = fb.query(fb.collection(fb.db, LEADERBOARD_COLLECTION), fb.orderBy("moneyKlNetWorth","desc"), fb.limit(50));
       const snap = await fb.getDocs(q);
-      UI.leaderboard = snap.docs.map(d => ({ id:d.id, ...d.data(), netWorth:Number(d.data().moneyKlNetWorth||0), perSecond:Number(d.data().moneyKlPerSecond||0), lifetimeEarned:Number(d.data().moneyKlLifetimeEarned||0), boardSize:Number(d.data().moneyKlBoardSize||16), placed:Number(d.data().moneyKlPlaced||0), updatedAtMs:Number(d.data().moneyKlUpdatedAtMs||0) })).filter(row=>row.netWorth>0);
+      UI.leaderboard = snap.docs.map(d => ({ id:d.id, ...d.data(), netWorth:Number(d.data().moneyKlNetWorth||0), perSecond:Number(d.data().moneyKlPerSecond||0), lifetimeEarned:Number(d.data().moneyKlLifetimeEarned||0), boardSize:Number(d.data().moneyKlBoardSize||8), placed:Number(d.data().moneyKlPlaced||0), updatedAtMs:Number(d.data().moneyKlUpdatedAtMs||0) })).filter(row=>row.netWorth>0);
       UI.onlineStatus = UI.leaderboard.length ? "" : "Noch keine Einträge.";
     } catch (error) { UI.onlineStatus = `Firebase-Topliste konnte nicht geladen werden: ${String(error?.message || error).replace(/^FirebaseError:\s*/i,"")}`; }
     if (UI.overlay) render();
@@ -384,7 +500,7 @@
     const el = document.createElement("div"); el.className = "money-kl-overlay"; document.body.append(el); UI.overlay = el;
     document.body.classList.add("money-kl-open"); document.addEventListener("keydown", onKey);
     render(); loadLeaderboard(false);
-    UI.tick = window.setInterval(() => { const data=ensureState(); updateAccrual(data); if (UI.overlay) render(); if (Date.now()-Number(data.leaderboardUpdatedAt||0)>15000) publishLeaderboard(); }, 1000);
+    UI.tick = window.setInterval(() => { const data=ensureState(); updateAccrual(data); if (UI.overlay) refreshDynamicValues(); if (Date.now()-Number(data.leaderboardUpdatedAt||0)>15000) publishLeaderboard(); }, 1000);
   }
   function close(returnPhone=false) {
     const data = ensureState(); updateAccrual(data); collectAll(false,data); publishLeaderboard(); persist();

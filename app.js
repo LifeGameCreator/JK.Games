@@ -19205,7 +19205,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
-        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Baue dein 16×16- oder 32×32-Money-Imperium mit 100 Maker-Stufen und Online-Topliste.</small></button>
+        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte auf 8×8, erweitere auf 16×16 und baue später dein 32×32-Money-Imperium mit 100 Maker-Stufen und Online-Topliste.</small></button>
       </div>
     </div>`;
   if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;
