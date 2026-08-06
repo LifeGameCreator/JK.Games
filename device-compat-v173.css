@@ -74,3 +74,68 @@
 /* Dungeon-Namensfeld */
 .dkl-name-hint{display:block;margin:-5px 0 8px;color:#8fa9ae;font-size:10px;line-height:1.35}
 .dkl-mod-page input[data-dkl-mod-name],.dkl-character-name{width:100%;min-height:44px}
+
+
+/* V213 – alle Spiele unter Dynamic Island / Notch und über Home-Indikator halten. */
+:root{
+  --jkg-game-safe-top:max(12px,calc(env(safe-area-inset-top,0px) + 7px));
+  --jkg-game-safe-right:max(8px,env(safe-area-inset-right,0px));
+  --jkg-game-safe-bottom:max(10px,calc(env(safe-area-inset-bottom,0px) + 6px));
+  --jkg-game-safe-left:max(8px,env(safe-area-inset-left,0px));
+}
+@media(max-width:900px){
+  .city-kl-topbar,
+  .mkl-appbar,
+  .fkl-head,
+  .fkl-page-head,
+  .dkl-head,
+  .dkl-page-head,
+  .money-kl-top,
+  .runner-kl-top,
+  .arena-kl-head,
+  .bh-header,
+  .wk-header,
+  .mdc-topbar{
+    box-sizing:border-box!important;
+    padding-top:var(--jkg-game-safe-top)!important;
+    padding-right:var(--jkg-game-safe-right)!important;
+    padding-left:var(--jkg-game-safe-left)!important;
+  }
+  .city-kl-overlay,
+  .match-kl-overlay,
+  .fkl-modal,
+  .dkl-modal,
+  .money-kl-overlay,
+  .runner-kl-overlay,
+  .arena-kl-modal,
+  .bh-overlay,
+  .wk-overlay,
+  .mdc-overlay{
+    box-sizing:border-box!important;
+  }
+  .city-kl-topbar button,
+  .mkl-appbar button,
+  .fkl-head-actions button,
+  .fkl-page-head button,
+  .dkl-head-actions button,
+  .dkl-page-head button,
+  .money-kl-top-actions button,
+  .runner-kl-top button,
+  .arena-kl-head-actions button,
+  .bh-header button,
+  .wk-header button,
+  .mdc-topbar button{
+    min-width:44px!important;
+    min-height:44px!important;
+    touch-action:manipulation!important;
+  }
+  .fkl-modal,.dkl-modal,.arena-kl-modal,.bh-overlay{
+    padding-bottom:var(--jkg-game-safe-bottom)!important;
+  }
+}
+@media(max-width:900px) and (orientation:landscape){
+  .city-kl-topbar,.mkl-appbar,.fkl-head,.dkl-head,.money-kl-top,.runner-kl-top,.arena-kl-head,.bh-header,.wk-header,.mdc-topbar{
+    padding-right:max(12px,calc(env(safe-area-inset-right,0px) + 8px))!important;
+    padding-left:max(12px,calc(env(safe-area-inset-left,0px) + 8px))!important;
+  }
+}

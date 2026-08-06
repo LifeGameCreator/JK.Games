@@ -353,3 +353,10 @@
   .c82-slot-buttons .start,.c82-slot-buttons .auto { grid-column:span 2; }
   .c82-number-grid button,.c82-outside-grid button { min-height:42px;font-size:11px; }
 }
+
+/* V212 · exklusive JK/Coin Casino-Designs */
+.c82-shell.jkc-casino-galaxy{background:radial-gradient(circle at 18% 12%,#a657ff42,transparent 34%),radial-gradient(circle at 83% 20%,#2ee9ff30,transparent 32%),linear-gradient(145deg,#120b27,#071421 62%,#17102b);box-shadow:inset 0 0 90px #8c4dff22}
+.c82-shell.jkc-casino-galaxy::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,#fff 0 1px,transparent 1.6px);background-size:31px 31px;opacity:.13}
+.c82-shell.jkc-casino-neon-cards .c82-card{filter:drop-shadow(0 0 8px #67ecff);border-color:#9d6cff!important}
+.c82-shell.jkc-casino-cosmic-wheel .c82-wheel{box-shadow:0 0 34px #a362ff,0 0 70px #49e5ff55!important;filter:saturate(1.25)}
+.c82-shell.jkc-casino-galaxy-slots .c82-slot-machine{box-shadow:0 0 32px #a766ff77!important;background:radial-gradient(circle at 50% 0,#985dff45,transparent 45%),#0d1525!important}

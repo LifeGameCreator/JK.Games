@@ -20378,6 +20378,7 @@ body.phone-v65-open {
 .beginner-phone-tutorial-progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .beginner-phone-tutorial-progress span { font-size: 12px; font-weight: 900; letter-spacing: .08em; color: #ffd75d; }
 .beginner-phone-tutorial-progress button { border: 0; background: rgba(255,255,255,.09); color: #e9edf2; border-radius: 999px; padding: 7px 11px; font-weight: 800; cursor: pointer; pointer-events: auto; }
+.beginner-phone-tutorial-required { border: 1px solid rgba(255,215,93,.45); background: rgba(255,215,93,.12); color: #ffe58f; border-radius: 999px; padding: 7px 11px; font-size: 10px; font-weight: 950; letter-spacing: .08em; white-space: nowrap; }
 .beginner-phone-tutorial > small { display: block; color: #8fdcff; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
 .beginner-phone-tutorial h3 { margin: 4px 0 5px; color: #fff; font-size: clamp(18px, 3.6vw, 24px); }
 .beginner-phone-tutorial p { margin: 0; color: #d9e1e9; line-height: 1.45; font-size: 14px; }

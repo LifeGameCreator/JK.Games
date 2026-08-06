@@ -1401,6 +1401,10 @@
     const data = wkState(); if (!data) return false; amount = Math.max(1, Math.floor(Number(amount) || 1));
     if (kind === "growLight") { data.jkCoin.galaxyGrowLights += amount; data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), amount)); }
     else if (kind === "supplyCrate") { data.jkCoin.premiumSupplyCrates += amount; data.seeds.basic = Number(data.seeds.basic || 0) + amount * 8; data.supplies.pot = Number(data.supplies.pot || 0) + amount * 5; data.supplies.soil = Number(data.supplies.soil || 0) + amount * 5; data.supplies.water = Number(data.supplies.water || 0) + amount * 20; }
+    else if (kind === "seedPack") { for (const key of Object.keys(data.seeds || {})) data.seeds[key] = Number(data.seeds[key] || 0) + amount * 6; data.seeds.basic = Number(data.seeds.basic || 0) + amount * 20; }
+    else if (kind === "waterPack") data.supplies.water = Number(data.supplies.water || 0) + amount;
+    else if (kind === "soilPack") { data.supplies.soil = Number(data.supplies.soil || 0) + amount; data.supplies.pot = Number(data.supplies.pot || 0) + amount; }
+    else if (kind === "galaxyBusinessPack") { data.jkCoin.galaxyGrowLights += amount; data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), 2)); data.seeds.basic = Number(data.seeds.basic || 0) + amount * 30; data.supplies.pot = Number(data.supplies.pot || 0) + amount * 20; data.supplies.soil = Number(data.supplies.soil || 0) + amount * 20; data.supplies.water = Number(data.supplies.water || 0) + amount * 100; }
     else return false;
     wkPersist(); if (wkRuntime.overlay?.classList.contains("show")) wkRender(); return true;
   }

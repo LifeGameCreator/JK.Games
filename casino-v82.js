@@ -196,6 +196,7 @@
     const root = state.casinoV82 ||= {};
     root.version = VERSION;
     root.info ||= "";
+    root.jkCoin ||= {galaxyTable:false,neonCards:false,cosmicWheel:false,galaxySlots:false};
     root.stakes ||= {};
     root.stakes.blackjack = clamp(root.stakes.blackjack || 5_000, vipMinCents(), vipLimitCents());
     root.stakes.poker = clamp(root.stakes.poker || 10_000, vipMinCents(), vipLimitCents());
@@ -1019,14 +1020,14 @@
 
   /* ----------------------------- Render / Events ----------------------------- */
   function renderGame(gameName) {
-    ensureState();
+    const saved=ensureState();
     tick();
-    if (gameName === "blackjack") return blackjackRender();
-    if (gameName === "poker") return pokerRender();
-    if (gameName === "slots") return slotRender();
-    if (gameName === "highlow") return highlowRender();
-    return rouletteRender();
+    let markup=gameName === "blackjack"?blackjackRender():gameName === "poker"?pokerRender():gameName === "slots"?slotRender():gameName === "highlow"?highlowRender():rouletteRender();
+    const classes=[saved.jkCoin.galaxyTable?"jkc-casino-galaxy":"",saved.jkCoin.neonCards?"jkc-casino-neon-cards":"",saved.jkCoin.cosmicWheel?"jkc-casino-cosmic-wheel":"",saved.jkCoin.galaxySlots?"jkc-casino-galaxy-slots":""].filter(Boolean).join(" ");
+    if(classes)markup=markup.replace('class="c82-shell','class="c82-shell '+classes);
+    return markup;
   }
+  function grantJkCoinPurchase(kind,amount=1){const saved=ensureState();if(!saved)return false;if(!["galaxyTable","neonCards","cosmicWheel","galaxySlots"].includes(kind))return false;saved.jkCoin[kind]=true;saveGame();refresh();return true;}
   function setStake(game, cents) {
     const root = ensureState();
     root.stakes[game] = clamp(Math.round(cents), vipMinCents(), vipLimitCents());
@@ -1111,6 +1112,7 @@
     bind,
     tick,
     leave,
-    ensureState
+    ensureState,
+    grantJkCoinPurchase
   });
 })();

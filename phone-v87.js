@@ -2069,7 +2069,42 @@
     window.JKGamesPhonePurchaseContextV68 = null;
     if (!paid) window.JKGamesBankLedgerContextV68 = "";
     context?.onResult?.({ paid, message: paid ? "" : "Kauf nicht ausgeführt. Prüfe Guthaben, Freischaltung und Inventarplatz." });
-    if (context && paid) {
+    const replacementDialogActive = !!(paid && context && els.dialog?.open && els.dialog.classList.contains("device-replacement-dialog"));
+    if (replacementDialogActive) {
+      // Der Verkauf des alten Smartphones/Computers darf nicht durch das
+      // automatische Neurendern des Handy-Shops überdeckt werden. Der Dialog
+      // bleibt stehen, bis bewusst „Verkaufen“ oder „Behalten“ gewählt wurde.
+      const returnToPhoneShop = (message) => {
+        window.setTimeout(() => {
+          const marketItem = ownedPhoneItem() || context.item;
+          if (!marketItem) return;
+          openDeviceInterface(marketItem, context.appId, false);
+          window.requestAnimationFrame?.(() => {
+            const marketList = els.dialog?.querySelector?.(`.phone-market-app-v68[data-phone-market-mode="${context.appId}"] .phone-market-list-v68`);
+            if (marketList) marketList.scrollTop = Number(context.listScroll || 0);
+            showPhoneMarketNoticeV184(context.appId, message);
+          });
+        }, 0);
+      };
+      const sellButton = els.dialog.querySelector(".device-replacement-dialog .primary-button") || els.dialog.querySelector(".primary-button");
+      const keepButton = els.dialog.querySelector(".device-replacement-dialog .mini-button") || els.dialog.querySelector(".mini-button");
+      if (sellButton && !sellButton.dataset.phoneReplacementReturnV211) {
+        sellButton.dataset.phoneReplacementReturnV211 = "1";
+        const originalSell = sellButton.onclick;
+        sellButton.onclick = (event) => {
+          originalSell?.call(sellButton, event);
+          returnToPhoneShop("Altes Gerät verkauft · neues Smartphone ist aktiv");
+        };
+      }
+      if (keepButton && !keepButton.dataset.phoneReplacementReturnV211) {
+        keepButton.dataset.phoneReplacementReturnV211 = "1";
+        const originalKeep = keepButton.onclick;
+        keepButton.onclick = (event) => {
+          originalKeep?.call(keepButton, event);
+          returnToPhoneShop("Altes Gerät behalten · neues Smartphone ist aktiv");
+        };
+      }
+    } else if (context && paid) {
       const marketItem = context.item || ownedPhoneItem();
       window.setTimeout(() => {
         if (!els.dialog?.open) openDeviceInterface(marketItem, context.appId, false);

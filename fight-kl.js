@@ -3845,10 +3845,10 @@ function updateHud() {
 
   function grantJkCoinPurchase(kind,amount=1){
     const data=ensureState(); if(!data)return false; amount=Math.max(1,Math.floor(Number(amount)||1));
-    if(kind==="wave50"){data.unlockedWaveStart=Math.max(Number(data.unlockedWaveStart||1),50);data.selectedStartWave=Math.max(Number(data.selectedStartWave||1),50);}
+    if(kind==="wave25"||kind==="wave50"||kind==="wave80"){const wave=kind==="wave80"?80:kind==="wave50"?50:25;data.unlockedWaveStart=Math.max(Number(data.unlockedWaveStart||1),wave);data.selectedStartWave=Math.max(Number(data.selectedStartWave||1),wave);}
     else if(kind==="godmode"){data.jkCoinGodmodeTokens+=amount;if(data.jkCoinGodmodeTokens===amount)data.jkCoinGodmodeArmed=false;}
     else if(kind==="star"){for(let i=0;i<amount&&data.inventory.length<INVENTORY_LIMIT;i++)data.inventory.push(makeItem("star-upgrade-core",0,null,"universe"));}
-    else if(kind==="galaxyItem"){const defs=[...ITEM_MAP.values()].filter(def=>def.rarity==="galaxy"&&def.category!=="starupgrade");for(let i=0;i<amount&&data.inventory.length<INVENTORY_LIMIT;i++){const def=defs[Math.floor(Math.random()*defs.length)];if(def)data.inventory.push(makeItem(def.id,0,null,"galaxy"));}}
+    else if(["legendaryItem","universeItem","blackholeItem","galaxyItem","galaxyWeapon","galaxyArmor"].includes(kind)){const rarity=kind==="legendaryItem"?"legendary":kind==="universeItem"?"universe":kind==="blackholeItem"?"blackhole":"galaxy";const armorCats=new Set(["armor","helmet","suit","boots"]);const defs=[...ITEM_MAP.values()].filter(def=>def.rarity===rarity&&def.category!=="starupgrade"&&(kind!=="galaxyWeapon"||def.category==="weapon")&&(kind!=="galaxyArmor"||armorCats.has(def.category)));for(let i=0;i<amount&&data.inventory.length<INVENTORY_LIMIT;i++){const def=defs[Math.floor(Math.random()*defs.length)];if(def)data.inventory.push(makeItem(def.id,0,null,rarity));}}
     else return false;
     safeSave();if(UI.overlay){updateHead();if(UI.view==="inventory")drawInventory();toast("JK/Coin-Inhalt erhalten","Der Kauf wurde Fight.KL gutgeschrieben.");}return true;
   }

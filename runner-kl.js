@@ -34,7 +34,7 @@ const S = {
   player:null, mixer:null, action:null, world:null, segments:[], objects:[],
   spawnTimer:0, elapsed:0, loadingToken:0, resizeHandler:null, keyHandler:null,
   pointerStart:null, lastTap:0, dpr:1, lowPower:false, characterRig:null, characterTime:0,
-  score:0, boardTokens:3, jkCoinExtras:{galaxyTrail:false}, activeBoosts:{magnet:0,jetpack:0,sneakers:0,multiplier:0},
+  score:0, boardTokens:3, jkCoinExtras:{galaxyTrail:false,magnetStarts:0,jetpackStarts:0,sneakersStarts:0,multiplierStarts:0}, activeBoosts:{magnet:0,jetpack:0,sneakers:0,multiplier:0},
   hoverboard:0, hoverCooldown:0, boardMesh:null, boostFx:null,
   quality:'ultra', weatherMode:'sunny', weatherClock:0, weatherDuration:24, weatherBlend:0,
   rain:null, clouds:null, cloudMaterial:null, sun:null, hemi:null, fill:null, loadingProgress:0, onTrain:null, impactFx:[], pauseCountdown:false, jetRig:null,
@@ -52,7 +52,7 @@ function loadSave(){
     for(const id of ['maleStreet','femaleStreet']) if(!S.owned.includes(id)) S.owned.push(id);
     S.outfit=OUTFITS[d.outfit]&&S.owned.includes(d.outfit)?d.outfit:'maleStreet';
     S.boardTokens=Math.max(0,Number(d.boardTokens??3));
-    S.jkCoinExtras={galaxyTrail:!!d.jkCoinExtras?.galaxyTrail};
+    S.jkCoinExtras={galaxyTrail:!!d.jkCoinExtras?.galaxyTrail,magnetStarts:Math.max(0,Number(d.jkCoinExtras?.magnetStarts)||0),jetpackStarts:Math.max(0,Number(d.jkCoinExtras?.jetpackStarts)||0),sneakersStarts:Math.max(0,Number(d.jkCoinExtras?.sneakersStarts)||0),multiplierStarts:Math.max(0,Number(d.jkCoinExtras?.multiplierStarts)||0)};
     S.quality=['low','medium','high','ultra'].includes(d.quality)?d.quality:'ultra';
   }catch{S.wallet=0;S.best=0;S.owned=['maleStreet','femaleStreet'];S.outfit='maleStreet'}
 }
@@ -476,7 +476,7 @@ function spawnRow(){
 }
 function clearObjects(){for(const o of S.objects)releaseObject(o);S.objects=[]}
 
-function resetGame(){clearObjects();S.running=true;S.paused=false;const pb=S.overlay?.querySelector('[data-rkl-pause]');if(pb)pb.textContent='Ⅱ';S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.effectiveSpeed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.9;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};S.hoverboard=0;S.hoverCooldown=0;S.onTrain=null;S.pauseCountdown=false;S.hudClock=0;S.saveClock=0;S.perfTime=0;S.perfFrames=0;S.worldIndex=0;S.worldTheme=WORLD_THEMES[0];S.nextTramDistance=120;S.runStartedAt=Date.now();clearJetpackRig();if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}applyWorldTheme(0,false);hideCard();updateHud();if(S.action){S.action.paused=false;S.action.reset().play()}beginRemoteRun()}
+function resetGame(){clearObjects();S.running=true;S.paused=false;const pb=S.overlay?.querySelector('[data-rkl-pause]');if(pb)pb.textContent='Ⅱ';S.gameOver=false;S.lane=1;S.targetX=0;S.y=0;S.vy=0;S.slide=0;S.speed=12;S.effectiveSpeed=12;S.distance=0;S.score=0;S.runCoins=0;S.spawnTimer=.9;S.elapsed=0;S.activeBoosts={magnet:0,jetpack:0,sneakers:0,multiplier:0};for(const [key,field,duration] of [["magnet","magnetStarts",60],["jetpack","jetpackStarts",25],["sneakers","sneakersStarts",60],["multiplier","multiplierStarts",90]]){if(Number(S.jkCoinExtras?.[field]||0)>0){S.activeBoosts[key]=duration;S.jkCoinExtras[field]=Math.max(0,Number(S.jkCoinExtras[field]||0)-1);}}save();S.hoverboard=0;S.hoverCooldown=0;S.onTrain=null;S.pauseCountdown=false;S.hudClock=0;S.saveClock=0;S.perfTime=0;S.perfFrames=0;S.worldIndex=0;S.worldTheme=WORLD_THEMES[0];S.nextTramDistance=120;S.runStartedAt=Date.now();clearJetpackRig();if(S.boardMesh){S.player?.remove(S.boardMesh);S.boardMesh=null}applyWorldTheme(0,false);hideCard();updateHud();if(S.action){S.action.paused=false;S.action.reset().play()}beginRemoteRun()}
 function input(kind){if(!S.running||S.paused||S.gameOver)return;if(kind==='left')S.lane=Math.max(0,S.lane-1);if(kind==='right')S.lane=Math.min(2,S.lane+1);S.targetX=(S.lane-1)*2.6;if(kind==='up'&&(S.y<=.01||S.onTrain)){S.vy=S.activeBoosts.sneakers>0?10.8:8.7;S.onTrain=null}if(kind==='down'&&S.y<.2){S.slide=.72}}
 function update(dt){
   if(!S.running||S.paused||S.gameOver)return;S.elapsed+=dt;S.hudClock+=dt;S.saveClock+=dt;
@@ -600,6 +600,11 @@ function grantJkCoinPurchase(kind,amount=1){
   loadSave(); amount=Math.max(1,Math.floor(Number(amount)||1));
   if(kind==="hoverboard") S.boardTokens+=amount;
   else if(kind==="galaxyTrail") S.jkCoinExtras.galaxyTrail=true;
+  else if(kind==="runnerCoins") S.wallet+=amount;
+  else if(kind==="magnetStart") S.jkCoinExtras.magnetStarts+=amount;
+  else if(kind==="jetpackStart") S.jkCoinExtras.jetpackStarts+=amount;
+  else if(kind==="sneakersStart") S.jkCoinExtras.sneakersStarts+=amount;
+  else if(kind==="multiplierStart") S.jkCoinExtras.multiplierStarts+=amount;
   else return false;
   save(); updateHud(); return true;
 }

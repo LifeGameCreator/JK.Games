@@ -389,3 +389,76 @@
   .money-kl-maker>em{grid-column:2;justify-self:start}
   .money-kl-maker-preview{width:54px;height:52px}
 }
+
+
+/* V213 – kleine Feldprogression, echter Hauptcharakter und kompakte iPhone-Darstellung */
+.money-kl-active-character{
+  display:grid;
+  grid-template-columns:52px minmax(0,1fr);
+  align-items:center;
+  gap:9px;
+  min-width:0;
+  padding:8px 10px;
+  border:1px solid rgba(111,255,202,.24);
+  border-radius:14px;
+  background:linear-gradient(145deg,rgba(20,55,45,.9),rgba(7,25,20,.95));
+  box-shadow:inset 0 0 20px rgba(72,255,185,.05);
+}
+.money-kl-panel.left>.money-kl-active-character{margin-bottom:12px}
+.money-kl-board-toolbar>.money-kl-active-character{grid-template-columns:42px minmax(0,1fr);padding:5px 8px;min-width:190px}
+.money-kl-character-portrait{display:grid;place-items:center;width:48px;height:52px;overflow:hidden;border-radius:11px;background:radial-gradient(circle at 50% 10%,rgba(106,255,201,.22),transparent 58%),#081c16}
+.money-kl-board-toolbar .money-kl-character-portrait{width:38px;height:40px}
+.money-kl-character-portrait .avatar-card{width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;overflow:hidden!important}
+.money-kl-character-portrait .avatar-svg{width:100%!important;height:100%!important;max-height:none!important;transform:scale(1.42) translateY(9%)!important;transform-origin:center center}
+.money-kl-character-fallback{font-size:28px}
+.money-kl-active-character span{min-width:0}
+.money-kl-active-character small{display:block;color:#6fffc4;font-size:7px;font-weight:950;letter-spacing:.09em}
+.money-kl-active-character b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#effff9;font-size:11px}
+.money-kl-active-character em{display:block;color:#91b8ac;font-size:8px;font-style:normal}
+.money-kl-chip.maker{color:#dffdf2}
+
+.money-kl-board.size-2{grid-template-columns:repeat(2,112px);grid-auto-rows:112px;gap:13px;padding:24px}
+.money-kl-board.size-4{grid-template-columns:repeat(4,88px);grid-auto-rows:88px;gap:10px;padding:22px}
+.money-kl-board.size-8{grid-template-columns:repeat(8,64px);grid-auto-rows:64px;gap:7px;padding:18px}
+.money-kl-board.size-16{grid-template-columns:repeat(16,48px);grid-auto-rows:48px;gap:5px;padding:16px}
+.money-kl-board.size-32{grid-template-columns:repeat(32,38px);grid-auto-rows:38px;gap:4px;padding:13px}
+.field-tier-preview.size-2{background:linear-gradient(145deg,#21513d,#0b281e)}
+.field-tier-preview.size-4{background:linear-gradient(145deg,#245b43,#0d2d22)}
+.field-tier-preview.size-8{background:linear-gradient(145deg,#28664b,#0f3427)}
+.money-kl-world.size-2::after{content:"START BLOCK"}
+.money-kl-world.size-4::after{content:"MONEY QUARTER"}
+.money-kl-world.size-8::after{content:"MONEY DISTRICT"}
+.money-kl-world.size-16::after{content:"MONEY CITY"}
+.money-kl-world.size-32::after{content:"MONEY EMPIRE"}
+
+@media(max-width:900px){
+  .money-kl-top{padding-top:max(14px,calc(env(safe-area-inset-top) + 8px));padding-right:max(10px,env(safe-area-inset-right));padding-left:max(10px,env(safe-area-inset-left))}
+  .money-kl-layout{padding-right:max(8px,env(safe-area-inset-right));padding-bottom:max(8px,env(safe-area-inset-bottom));padding-left:max(8px,env(safe-area-inset-left))}
+  .money-kl-panel.left,.money-kl-panel.right{top:calc(112px + env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom))}
+  .money-kl-board-toolbar{min-height:76px;align-items:center}
+  .money-kl-board-scroll{inset:77px 0 0;padding:10px}
+  .money-kl-world{padding:54px 18px 30px;border-radius:16px}
+  .money-kl-board.size-2{grid-template-columns:repeat(2,min(34vw,118px));grid-auto-rows:min(34vw,118px);gap:10px;padding:15px}
+  .money-kl-board.size-4{grid-template-columns:repeat(4,64px);grid-auto-rows:64px;gap:7px;padding:14px}
+  .money-kl-board.size-8{grid-template-columns:repeat(8,46px);grid-auto-rows:46px;gap:5px;padding:12px}
+  .money-kl-board.size-16{grid-template-columns:repeat(16,37px);grid-auto-rows:37px;gap:4px;padding:10px}
+  .money-kl-board.size-32{grid-template-columns:repeat(32,31px);grid-auto-rows:31px;gap:3px;padding:9px}
+  .money-kl-cell-name{display:none}
+  .money-kl-model .model-sign{width:15px;height:15px;font-size:8px}
+}
+@media(max-width:560px){
+  .money-kl-top{grid-template-columns:minmax(0,1fr) auto;gap:7px}
+  .money-kl-brand h1{font-size:20px}
+  .money-kl-balance{padding:6px 10px;border-radius:12px}
+  .money-kl-balance b{font-size:21px}
+  .money-kl-board-toolbar{display:grid;grid-template-columns:1fr;gap:7px;padding:8px 9px;min-height:112px}
+  .money-kl-board-toolbar>.money-kl-active-character{grid-row:1;min-width:0;width:100%;grid-template-columns:36px minmax(0,1fr)}
+  .money-kl-board-toolbar>div{grid-row:2;display:flex;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;scrollbar-width:none}
+  .money-kl-board-toolbar>div::-webkit-scrollbar{display:none}
+  .money-kl-board-scroll{inset:113px 0 0}
+  .money-kl-board.size-2{grid-template-columns:repeat(2,min(36vw,122px));grid-auto-rows:min(36vw,122px)}
+  .money-kl-board.size-4{grid-template-columns:repeat(4,58px);grid-auto-rows:58px}
+  .money-kl-board.size-8{grid-template-columns:repeat(8,43px);grid-auto-rows:43px}
+  .money-kl-board.size-16{grid-template-columns:repeat(16,35px);grid-auto-rows:35px}
+  .money-kl-board.size-32{grid-template-columns:repeat(32,29px);grid-auto-rows:29px}
+}

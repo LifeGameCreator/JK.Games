@@ -63,7 +63,9 @@
 
   const CITY_JKCOIN_KEY = "jk-games-city-kl-jkcoin-v1";
   function cityJkCoinUnlocks(){try{return JSON.parse(localStorage.getItem(CITY_JKCOIN_KEY)||"{}")}catch{return {}}}
-  function applyCityJkCoinTokens(){const x=cityJkCoinUnlocks();if(x.founder&&!TOKENS.some(t=>t.id==="founder"))TOKENS.push({id:"founder",icon:"👑",name:"Exklusiver Gründer"});if(x.galaxyMogul&&!TOKENS.some(t=>t.id==="galaxyMogul"))TOKENS.push({id:"galaxyMogul",icon:"🌌",name:"Galaxy-Mogul"});}
+  function applyCityJkCoinTokens(){const x=cityJkCoinUnlocks();const extras=[
+    ["founder","👑","Exklusiver Gründer"],["galaxyMogul","🌌","Galaxy-Mogul"],["neonMayor","✨","Neon-Bürgermeister"],["cyberArchitect","🏙️","Cyber-Architekt"],["goldTycoon","💰","Gold-Tycoon"],["starInvestor","🌠","Sternen-Investor"],["crownCar","🚘","Kronen-Limousine"],["quantumTrain","🚄","Quanten-Zug"]
+  ];for(const [id,icon,name] of extras)if(x[id]&&!TOKENS.some(t=>t.id===id))TOKENS.push({id,icon,name});}
   applyCityJkCoinTokens();
 
   const BOT_PROFILES = [
@@ -1516,8 +1518,7 @@
 
   function grantJkCoinPurchase(kind, amount = 1) {
     const unlocks = cityJkCoinUnlocks();
-    if (kind === "founder") unlocks.founder = true;
-    else if (kind === "galaxyMogul") unlocks.galaxyMogul = true;
+    if (["founder","galaxyMogul","neonMayor","cyberArchitect","goldTycoon","starInvestor","crownCar","quantumTrain"].includes(kind)) unlocks[kind] = true;
     else return false;
     try { localStorage.setItem(CITY_JKCOIN_KEY, JSON.stringify(unlocks)); } catch {}
     applyCityJkCoinTokens();

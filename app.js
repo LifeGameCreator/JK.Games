@@ -5207,7 +5207,7 @@ function completeWorldTravelIfReady() {
 }
 
 
-const BEGINNER_PHONE_TUTORIAL_VERSION = 1;
+const BEGINNER_PHONE_TUTORIAL_VERSION = 2;
 const BEGINNER_PHONE_TUTORIAL_STEPS = ["buy-basic", "buy-sim", "buy-credit", "use-sim", "use-credit", "open-phone", "open-shop", "buy-upgrade"];
 let beginnerPhoneTutorialTimer = null;
 let beginnerPhoneTutorialLastStep = "";
@@ -5221,8 +5221,33 @@ function beginnerPhoneTutorialState() {
   return data;
 }
 
+function ensureRequiredBeginnerPhoneTutorial() {
+  if (!state || !state.introDone) return beginnerPhoneTutorialState();
+  const current = beginnerPhoneTutorialState();
+  if (current?.status === "completed") {
+    if (current.version !== BEGINNER_PHONE_TUTORIAL_VERSION) {
+      current.version = BEGINNER_PHONE_TUTORIAL_VERSION;
+      current.updatedAtMs = Date.now();
+      save();
+    }
+    return current;
+  }
+  if (!current || current.version !== BEGINNER_PHONE_TUTORIAL_VERSION || current.status !== "active") {
+    state.beginnerPhoneTutorial = {
+      version: BEGINNER_PHONE_TUTORIAL_VERSION,
+      status: "active",
+      step: "buy-basic",
+      startedAtMs: Number(current?.startedAtMs || Date.now()),
+      updatedAtMs: Date.now(),
+      required: true
+    };
+    save();
+  }
+  return state.beginnerPhoneTutorial;
+}
+
 function beginnerPhoneTutorialActive() {
-  const data = beginnerPhoneTutorialState();
+  const data = ensureRequiredBeginnerPhoneTutorial();
   return !!data && data.version === BEGINNER_PHONE_TUTORIAL_VERSION && data.status === "active";
 }
 
@@ -5241,14 +5266,11 @@ function beginBeginnerPhoneTutorial() {
 
 function skipBeginnerPhoneTutorial() {
   if (!state) return;
-  state.beginnerPhoneTutorial = {
-    version: BEGINNER_PHONE_TUTORIAL_VERSION,
-    status: "skipped",
-    step: "done",
-    updatedAtMs: Date.now()
-  };
-  clearBeginnerPhoneTutorialUi();
-  save();
+  // Die Smartphone-Einrichtung ist bewusst verpflichtend. Ältere Spielstände,
+  // die das Tutorial als „skipped“ gespeichert haben, werden ab V211 wieder
+  // in den geführten Ablauf übernommen.
+  beginBeginnerPhoneTutorial();
+  addFeed("Die Smartphone-Einrichtung kann nicht übersprungen werden. Sie stellt sicher, dass Handy, SIM und Guthaben bei allen Spielern korrekt eingerichtet sind.");
 }
 
 function completeBeginnerPhoneTutorial() {
@@ -5328,11 +5350,7 @@ function ensureBeginnerPhoneTutorialCoach() {
   coach = document.createElement("aside");
   coach.className = "beginner-phone-tutorial";
   coach.dataset.beginnerPhoneTutorial = "1";
-  coach.innerHTML = `<div class="beginner-phone-tutorial-progress"><span data-beginner-progress></span><button type="button" data-beginner-skip>Überspringen</button></div><small data-beginner-kicker>ERSTE SCHRITTE</small><h3 data-beginner-title></h3><p data-beginner-text></p>`;
-  coach.querySelector("[data-beginner-skip]")?.addEventListener("click", () => {
-    if (!confirm("Möchtest du die geführte Smartphone-Einrichtung wirklich überspringen? Du kannst die einzelnen Schritte danach selbst erledigen.")) return;
-    skipBeginnerPhoneTutorial();
-  });
+  coach.innerHTML = `<div class="beginner-phone-tutorial-progress"><span data-beginner-progress></span><b class="beginner-phone-tutorial-required">PFLICHT-EINRICHTUNG</b></div><small data-beginner-kicker>ERSTE SCHRITTE</small><h3 data-beginner-title></h3><p data-beginner-text></p>`;
   host.appendChild(coach);
   return coach;
 }
@@ -5505,19 +5523,19 @@ function showIntroSkipConfirmation(index) {
   clearDialogDynamic();
   els.dialog.classList.add("intro-dialog");
   els.dialogTitle.textContent = "Tutorial wirklich überspringen?";
-  els.dialogText.textContent = "Das Starttutorial führt dich Schritt für Schritt zum ersten Handy, zur SIM-Karte, zum Guthaben, ins Inventar und anschließend zum Online-Shop. Möchtest du es wirklich komplett überspringen?";
+  els.dialogText.textContent = "Du überspringst nur die allgemeinen Erklärseiten. Die geführte Smartphone-Einrichtung mit Basic Phone, SIM-Karte, Guthaben, Inventar und Online-Shop startet danach trotzdem, damit jeder Spieler dieselbe funktionierende Grundausstattung besitzt.";
   const continueButton = document.createElement("button");
   continueButton.className = "primary-button";
   continueButton.textContent = "Tutorial fortsetzen";
   continueButton.onclick = () => showIntroStep(index);
   const skipButton = document.createElement("button");
   skipButton.className = "mini-button danger";
-  skipButton.textContent = "Wirklich überspringen";
+  skipButton.textContent = "Erklärseiten überspringen";
   skipButton.onclick = () => {
     state.introDone = true;
-    skipBeginnerPhoneTutorial();
     save();
     els.dialog.close();
+    beginBeginnerPhoneTutorial();
   };
   els.dialog.append(continueButton, skipButton);
   if (!els.dialog.open) els.dialog.showModal();
