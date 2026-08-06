@@ -199,7 +199,8 @@
       let db;
       try {
         db = dbMod.initializeFirestore(app, {
-          experimentalAutoDetectLongPolling: true,
+          experimentalForceLongPolling: true,
+          experimentalLongPollingOptions: { timeoutSeconds: 30 },
           useFetchStreams: false
         }, FIRESTORE_DATABASE_ID);
       } catch {

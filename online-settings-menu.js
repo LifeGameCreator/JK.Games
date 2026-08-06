@@ -176,7 +176,7 @@
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
       const auth = authMod.getAuth(app);
       let db;
-      try { db = dbMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true, useFetchStreams: false }, DB_ID); }
+      try { db = dbMod.initializeFirestore(app, { experimentalForceLongPolling: true, experimentalLongPollingOptions: { timeoutSeconds: 30 }, useFetchStreams: false }, DB_ID); }
       catch { db = dbMod.getFirestore(app, DB_ID); }
       const functions = fnMod.getFunctions(app, REGION);
       return { ...authMod, ...dbMod, ...fnMod, app, auth, db, functions };

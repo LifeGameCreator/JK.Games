@@ -1,4 +1,4 @@
-/* JK.Games V194 · Center – Charakter, Welt, Licht, Owner-Tools und Koop-Fallback */
+/* JK.Games V205 · Center – persistenter Online-Modus und Spieler-Praesenz */
 .mdc-overlay{--mdc-gold:#d8b86b;--mdc-green:#6e9b62;--mdc-ink:#10150f;--mdc-panel:#172019f2;--mdc-border:#d7bd7b33;background:#151b13;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .mdc-overlay .c3d-vignette{background:radial-gradient(circle at center,transparent 48%,rgba(7,10,7,.44) 100%),linear-gradient(180deg,rgba(5,8,5,.2),transparent 24%,transparent 74%,rgba(5,8,5,.35));pointer-events:none}
 .mdc-overlay .c3d-brand-mark{background:linear-gradient(145deg,#d6bd78,#7e6330);color:#16150f;box-shadow:0 0 0 1px #fff5 inset,0 7px 18px #0007}

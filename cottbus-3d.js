@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const C3D_VERSION = '2026-07-27-zentrale-online-v73-full-audio-fix';
+const C3D_VERSION = '2026-08-06-zentrale-v204-pointerlock-firestore-transport-fix';
 const ONLINE_MAP_ID = 'spremberger-strasse-v1';
 const ONLINE_WRITE_INTERVAL_MS = 1200;
 const ONLINE_HEARTBEAT_MS = 10000;
@@ -20,6 +20,20 @@ const MODEL_PATHS = Object.freeze({
   female: `${ASSET_ROOT}player-female.glb`,
   owner: `${ASSET_ROOT}player-owner.glb`
 });
+
+const installJkPointerLockGuard = () => {
+  if (window.__jkPointerLockGuardInstalled) return;
+  window.__jkPointerLockGuardInstalled = true;
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    const name = String(reason?.name || '');
+    const message = String(reason?.message || reason || '');
+    if (name === 'SecurityError' && /pointer\s*lock/i.test(message) && /immediately|exited|acquired/i.test(message)) {
+      event.preventDefault();
+    }
+  });
+};
+installJkPointerLockGuard();
 
 const MOBILE_QUERY = '(max-width: 820px), (pointer: coarse)';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
@@ -247,6 +261,8 @@ class Cottbus3DGame {
     this.nearestHotspot = null;
     this.lookPointerId = null;
     this.lookLast = { x: 0, y: 0 };
+    this.pointerLockBlockedUntil = 0;
+    this.pointerLockRequestInFlight = false;
     this.joystickPointerId = null;
     this.joystickCenter = { x: 0, y: 0 };
     this.resizeObserver = null;
@@ -431,8 +447,14 @@ class Cottbus3DGame {
     }, { passive: false });
     document.addEventListener('keyup', (event) => this.keys.delete(event.code));
     document.addEventListener('pointerlockchange', () => {
+      this.pointerLockRequestInFlight = false;
       this.overlay.classList.toggle('is-pointer-locked', document.pointerLockElement === this.canvas);
       if (document.pointerLockElement === this.canvas) this.toast('Maussteuerung aktiv · Esc löst die Maus.');
+      else if (this.opened) this.pointerLockBlockedUntil = performance.now() + 1800;
+    });
+    document.addEventListener('pointerlockerror', () => {
+      this.pointerLockRequestInFlight = false;
+      this.pointerLockBlockedUntil = performance.now() + 2200;
     });
     document.addEventListener('mousemove', (event) => {
       if (!this.opened || document.pointerLockElement !== this.canvas) return;
@@ -440,11 +462,33 @@ class Cottbus3DGame {
     });
   }
 
+  safeRequestPointerLock() {
+    if (!this.opened || this.isMobile || !this.firstPerson || !this.canvas || document.pointerLockElement === this.canvas || this.pointerLockRequestInFlight) return;
+    if (this.panel?.classList.contains('is-open') || performance.now() < this.pointerLockBlockedUntil) return;
+    if (!document.hasFocus() || document.visibilityState !== 'visible') return;
+    this.pointerLockRequestInFlight = true;
+    let request;
+    try {
+      request = this.canvas.requestPointerLock?.();
+    } catch (error) {
+      this.pointerLockRequestInFlight = false;
+      this.pointerLockBlockedUntil = performance.now() + 2200;
+      if (String(error?.name || '') !== 'SecurityError') console.warn('Pointer-Lock konnte nicht aktiviert werden', error);
+      return;
+    }
+    Promise.resolve(request).catch((error) => {
+      this.pointerLockBlockedUntil = performance.now() + 2200;
+      if (String(error?.name || '') !== 'SecurityError') console.warn('Pointer-Lock konnte nicht aktiviert werden', error);
+    }).finally(() => {
+      this.pointerLockRequestInFlight = false;
+    });
+  }
+
   bindLookControls() {
     this.canvas.addEventListener('pointerdown', (event) => {
       if (!this.opened || event.button !== 0) return;
       if (!this.isMobile && this.firstPerson && document.pointerLockElement !== this.canvas) {
-        (()=>{try{const lock=this.canvas.requestPointerLock?.();lock?.catch?.(()=>{});}catch{}})();
+        this.safeRequestPointerLock();
         return;
       }
       this.lookPointerId = event.pointerId;
@@ -469,7 +513,7 @@ class Cottbus3DGame {
     this.canvas.addEventListener('pointercancel', release);
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     this.canvas.addEventListener('dblclick', () => {
-      if (!this.isMobile) (()=>{try{const lock=this.canvas.requestPointerLock?.();lock?.catch?.(()=>{});}catch{}})();
+      if (!this.isMobile) this.safeRequestPointerLock();
     });
   }
 
@@ -1521,7 +1565,8 @@ class Cottbus3DGame {
       this.onlineUnsubscribe = fb.onSnapshot(q, (snapshot) => {
         this.applyPresenceSnapshot(snapshot).catch((error) => console.warn('Zentrale Spieleranzeige', error));
       }, (error) => {
-        console.warn('Zentrale Firebase-Liveverbindung', error);
+        window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(900, 'cottbus-listen-error');
+        if (String(error?.code || '').toLowerCase() !== 'unavailable') console.warn('Zentrale Firebase-Liveverbindung', error);
         this.onlineConnected = false;
         this.setOnlineUi('offline', 'Live-Verbindung unterbrochen. Es wird erneut versucht.', 1 + this.remotePlayers.size);
       });

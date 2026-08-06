@@ -20,6 +20,9 @@
   let status = "idle";
   let lastError = "";
   let reconnectTimer = 0;
+  let firestoreRecoveryTimer = 0;
+  let firestoreRecovering = false;
+  let lastFirestoreRecoveryAt = 0;
 
   function emit(next, error = "") {
     status = next;
@@ -57,7 +60,8 @@
     let db;
     try {
       db = dbMod.initializeFirestore(app, {
-        experimentalAutoDetectLongPolling: true,
+        experimentalForceLongPolling: true,
+        experimentalLongPollingOptions: { timeoutSeconds: 30 },
         useFetchStreams: false
       }, DATABASE_ID);
     } catch {
@@ -134,15 +138,44 @@
     reconnectTimer = window.setTimeout(() => reconnect({ force: false }).catch(() => {}), Math.max(100, Number(delay) || 800));
   }
 
-  window.addEventListener("online", () => scheduleReconnect(250));
+  async function recoverFirestore(reason = 'transport') {
+    if (!runtime?.db || navigator.onLine === false || document.visibilityState !== 'visible' || firestoreRecovering) return false;
+    const now = Date.now();
+    if (now - lastFirestoreRecoveryAt < 15000) return false;
+    lastFirestoreRecoveryAt = now;
+    firestoreRecovering = true;
+    try {
+      await runtime.disableNetwork(runtime.db).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 320));
+      await runtime.enableNetwork(runtime.db);
+      emit('ready');
+      window.dispatchEvent(new CustomEvent('lifebuilder-firestore-recovered', { detail: { reason } }));
+      return true;
+    } catch (error) {
+      emit('error', error?.message || error);
+      return false;
+    } finally {
+      firestoreRecovering = false;
+    }
+  }
+
+  function scheduleFirestoreRecovery(delay = 900, reason = 'network-resume') {
+    clearTimeout(firestoreRecoveryTimer);
+    firestoreRecoveryTimer = window.setTimeout(() => recoverFirestore(reason).catch(() => {}), Math.max(250, Number(delay) || 900));
+  }
+
+  window.addEventListener("online", () => { scheduleReconnect(250); scheduleFirestoreRecovery(800, "online"); });
   window.addEventListener("offline", () => emit("offline", "Keine Internetverbindung."));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine !== false) scheduleFirestoreRecovery(1200, "tab-visible"); });
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-07-30-v101",
+    version: "2026-08-06-v204-firestore-transport",
     load,
     waitForAuth,
     reconnect,
     scheduleReconnect,
+    recoverFirestore,
+    scheduleFirestoreRecovery,
     withTimeout,
     getRuntime: () => runtime,
     getStatus: () => status,

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-06-jkgames-v203-staff-roles-owner-galaxy-set-animation-pointerlock';
+const CENTER_VERSION = '2026-08-06-jkgames-v205-center-online-persistent-presence';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -44,6 +44,20 @@ function canonicalStaffRole(value='') {
   return 'player';
 }
 function staffCapabilities(role='player') { return STAFF_CAPABILITY_MATRIX[canonicalStaffRole(role)] || Object.freeze({ menu:false, forms:Object.freeze(['normal']), items:Object.freeze(['none']) }); }
+const installJkPointerLockGuard = () => {
+  if (window.__jkPointerLockGuardInstalled) return;
+  window.__jkPointerLockGuardInstalled = true;
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    const name = String(reason?.name || '');
+    const message = String(reason?.message || reason || '');
+    if (name === 'SecurityError' && /pointer\s*lock/i.test(message) && /immediately|exited|acquired/i.test(message)) {
+      event.preventDefault();
+    }
+  });
+};
+installJkPointerLockGuard();
+
 const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
 const ASSET_ROOT = './assets/cottbus/';
 const MODEL_PATHS = Object.freeze({
@@ -173,7 +187,7 @@ function defaultSaveState() {
   return {
     version: 5,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
-    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineKoop: false },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
     day: 1,
     season: 0,
     time: 8.25,
@@ -218,7 +232,8 @@ function normalizeSaveState(raw) {
   state.world.controlsHint = ['auto','always','hidden'].includes(state.world.controlsHint) ? state.world.controlsHint : 'auto';
   state.world.spawnAssigned = !!state.world.spawnAssigned;
   state.world.shadows = state.world.shadowMode !== 'off';
-  state.world.onlineKoop = !!state.world.onlineKoop;
+  state.world.onlineEnabled = !!(raw.world?.onlineEnabled ?? raw.world?.onlineKoop ?? state.world.onlineEnabled);
+  delete state.world.onlineKoop;
   state.needs = { ...base.needs, ...(raw.needs || {}) };
   state.inventory = { ...base.inventory, ...(raw.inventory || {}) };
   state.tutorial = { ...base.tutorial, ...(raw.tutorial || {}) };
@@ -460,6 +475,9 @@ class CenterDynastyGame {
     this.onlineUnsubscribe = null;
     this.onlineHeartbeatTimer = 0;
     this.onlinePublishTimer = 0;
+    this.onlineRetryTimer = 0;
+    this.onlineRetryAttempt = 0;
+    this.onlineCompatibilityMode = false;
     this.onlineConnected = false;
     this.onlineConnecting = false;
     this.onlineSessionId = makeSessionId();
@@ -507,6 +525,8 @@ class CenterDynastyGame {
     this.state.world.shadowMode = SHADOW_MODES.includes(this.state.world.shadowMode) ? this.state.world.shadowMode : (this.state.world.graphicsQuality === 'high' ? 'character' : this.state.world.graphicsQuality === 'ultra' ? 'world' : 'off');
     this.state.world.controlsHint = ['auto','always','hidden'].includes(this.state.world.controlsHint) ? this.state.world.controlsHint : 'auto';
     this.state.world.shadows = this.state.world.shadowMode !== 'off';
+    this.state.world.onlineEnabled = !!(this.state.world.onlineEnabled ?? this.state.world.onlineKoop);
+    delete this.state.world.onlineKoop;
     const needsSpawn = !this.state.world.spawnAssigned;
     if (Number(this.state.version || 0) < 5) this.state.version = 5;
     if (!needsSpawn) return;
@@ -558,7 +578,7 @@ class CenterDynastyGame {
           <div class="mdc-loading-scene"><i class="mountain one"></i><i class="mountain two"></i><i class="hut"></i><i class="tree a"></i><i class="tree b"></i><i class="tree c"></i></div>
           <span class="c3d-loading-emblem">JK</span><small>JK.GAMES · CENTER ONLINE</small>
           <h2>Das Grenztal entsteht</h2><p data-c3d-loading-text>Berge, Dörfer und Wälder werden vorbereitet.</p>
-          <div class="c3d-loading-online"><i></i><span data-c3d-online-status>Firebase-Koop wird vorbereitet …</span></div>
+          <div class="c3d-loading-online"><i></i><span data-c3d-online-status>Online-Verbindung wird vorbereitet …</span></div>
           <div class="c3d-loading-bar"><span data-c3d-loading-bar></span></div>
         </div>
       </div>
@@ -724,24 +744,35 @@ class CenterDynastyGame {
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.opened) this.saveState(true); });
     document.addEventListener('pointerlockchange', () => {
       this.pointerLockRequestInFlight = false;
-      if (this.opened && document.pointerLockElement !== this.canvas) this.pointerLockBlockedUntil = performance.now() + 720;
+      if (this.opened && document.pointerLockElement !== this.canvas) this.pointerLockBlockedUntil = performance.now() + 1800;
     });
     document.addEventListener('pointerlockerror', () => {
       this.pointerLockRequestInFlight = false;
-      this.pointerLockBlockedUntil = performance.now() + 900;
+      this.pointerLockBlockedUntil = performance.now() + 2200;
     });
   }
 
   safeRequestPointerLock() {
-    if(!this.opened||this.isMobile||!this.canvas||document.pointerLockElement===this.canvas||this.pointerLockRequestInFlight)return;
-    if(this.panel?.classList.contains('is-open')||this.ownerPanel?.classList.contains('is-open')||this.exitConfirm&&!this.exitConfirm.hidden)return;
-    if(performance.now()<this.pointerLockBlockedUntil)return;
-    this.pointerLockRequestInFlight=true;
-    try{
-      const request=this.canvas.requestPointerLock?.();
-      if(request&&typeof request.then==='function')request.catch((error)=>{if(String(error?.name||'')!=='SecurityError')console.warn('Pointer-Lock konnte nicht aktiviert werden',error);}).finally(()=>{this.pointerLockRequestInFlight=false;});
-      else setTimeout(()=>{this.pointerLockRequestInFlight=false;},500);
-    }catch(error){this.pointerLockRequestInFlight=false;this.pointerLockBlockedUntil=performance.now()+900;if(String(error?.name||'')!=='SecurityError')console.warn('Pointer-Lock konnte nicht aktiviert werden',error);}
+    if (!this.opened || this.isMobile || !this.canvas || document.pointerLockElement === this.canvas || this.pointerLockRequestInFlight) return;
+    if (this.panel?.classList.contains('is-open') || this.ownerPanel?.classList.contains('is-open') || (this.exitConfirm && !this.exitConfirm.hidden)) return;
+    if (performance.now() < this.pointerLockBlockedUntil) return;
+    if (!document.hasFocus() || document.visibilityState !== 'visible') return;
+    this.pointerLockRequestInFlight = true;
+    let request;
+    try {
+      request = this.canvas.requestPointerLock?.();
+    } catch (error) {
+      this.pointerLockRequestInFlight = false;
+      this.pointerLockBlockedUntil = performance.now() + 2200;
+      if (String(error?.name || '') !== 'SecurityError') console.warn('Pointer-Lock konnte nicht aktiviert werden', error);
+      return;
+    }
+    Promise.resolve(request).catch((error) => {
+      this.pointerLockBlockedUntil = performance.now() + 2200;
+      if (String(error?.name || '') !== 'SecurityError') console.warn('Pointer-Lock konnte nicht aktiviert werden', error);
+    }).finally(() => {
+      this.pointerLockRequestInFlight = false;
+    });
   }
 
   bindLookControls() {
@@ -846,7 +877,7 @@ class CenterDynastyGame {
     this.loading.classList.remove('is-hidden');
     this.loading.querySelector('h2').textContent = 'Die Open World entsteht';
     this.setLoading(4, 'Dein persönlicher Spawnpunkt und die ersten Weltregionen werden vorbereitet.');
-    const onlinePreparation = this.state.world?.onlineKoop ? this.prepareMultiplayer() : Promise.resolve(null);
+    const onlinePreparation = this.state.world?.onlineEnabled ? this.prepareMultiplayer() : Promise.resolve(null);
     const started = performance.now();
     try {
       await nextPaint();
@@ -854,7 +885,7 @@ class CenterDynastyGame {
       else await this.ensureCorrectPlayerModel();
       this.restoreStateToWorld();
       this.resize();
-      this.setLoading(94, 'Bewohner und Koop-Spieler werden verbunden.');
+      this.setLoading(94, 'Bewohner und Online-Spieler werden verbunden.');
       const prepared = await Promise.race([onlinePreparation, wait(2200).then(() => null)]);
       await wait(Math.max(0, 2500 - (performance.now() - started)));
       this.setLoading(100, 'Deine Open World ist bereit.');
@@ -868,9 +899,9 @@ class CenterDynastyGame {
       this.canvas.focus({ preventScroll: true });
       this.toast('Du bist an einem einzigartigen Ort gespawnt. Erkunde Wälder, Wege, Berge und Dörfer.');
       this.startRolePolling();
-      if (this.state.world?.onlineKoop && prepared) this.connectMultiplayer(prepared).catch(() => {});
-      else if (this.state.world?.onlineKoop) onlinePreparation.then((late) => { if (this.opened && late) this.connectMultiplayer(late).catch(() => {}); else if (this.opened) this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1); }).catch(() => this.setOnlineUi('offline', 'Offline-Welt aktiv.', 1));
-      else this.setOnlineUi('offline', 'Center-Koop ist in den Einstellungen ausgeschaltet.', 1);
+      if (this.state.world?.onlineEnabled && prepared) this.connectMultiplayer(prepared).catch(() => {});
+      else if (this.state.world?.onlineEnabled) onlinePreparation.then((late) => { if (this.opened && late) this.connectMultiplayer(late).catch(() => {}); else if (this.opened) this.scheduleOnlineReconnect('Online ist aktiviert. Firebase wird noch vorbereitet.',3500); }).catch(() => this.scheduleOnlineReconnect('Online ist aktiviert. Firebase wird erneut vorbereitet.',3500));
+      else this.setOnlineUi('offline', 'Online ist in den Einstellungen ausgeschaltet.', 1);
     } catch (error) {
       console.error('Center-Dynastie konnte nicht gestartet werden', error);
       this.setLoading(100, `Center konnte nicht geladen werden: ${error?.message || error}`);
@@ -3474,11 +3505,11 @@ class CenterDynastyGame {
   }
 
   renderWorldSettingsPanel() {
-    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',onlineKoop=!!this.state.world?.onlineKoop;
+    const distance=this.state.world?.renderDistance||2,density=this.state.world?.density||'normal',landmarks=this.state.world?.landmarkDensity||'normal',onlineEnabled=!!this.state.world?.onlineEnabled;
     const quality=GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality)?this.state.world.graphicsQuality:'medium';
     const shadowMode=SHADOW_MODES.includes(this.state.world?.shadowMode)?this.state.world.shadowMode:'off';
     const controls=this.state.world?.controlsHint||'auto';
-    return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Center-Koop (Beta)</h3><p>Ist standardmäßig ausgeschaltet, damit fehlende Firestore-Rechte das Center nicht stören. Nach passenden Firebase-Regeln kann es hier aktiviert werden.</p><div class="mdc-setting-options"><button class="${onlineKoop?'active':''}" data-mdc-action="world-online" data-value="${onlineKoop?'off':'on'}">${onlineKoop?'Koop ausschalten':'Koop einschalten'}<small>${onlineKoop?'Aktiv':'Offline'}</small></button></div></div>
+    return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Online-Modus</h3><p>Wenn Online aktiviert ist, siehst du andere Spieler im Center, die Online ebenfalls eingeschaltet haben. Die Einstellung bleibt aktiv und verbindet sich bei einer kurzen Unterbrechung automatisch neu.</p><div class="mdc-setting-options"><button class="${onlineEnabled?'active':''}" data-mdc-action="world-online" data-value="${onlineEnabled?'off':'on'}">${onlineEnabled?'Online ausschalten':'Online einschalten'}<small>${onlineEnabled?'Aktiviert':'Ausgeschaltet'}</small></button></div></div>
       <div class="mdc-settings-card"><small>GRAFIKQUALITÄT</small><h3>Darstellung und Leistung</h3><p>Mittel läuft ohne dynamische Schatten. Hoch aktiviert den Charakterschatten. Ultra aktiviert vollständige Welt- und Objektschatten sowie die höchste Auflösung.</p><div class="mdc-setting-options">${[['low','Niedrig'],['medium','Mittel'],['high','Hoch'],['ultra','Ultra']].map(([id,label])=>`<button class="${quality===id?'active':''}" data-mdc-action="world-quality" data-value="${id}">${label}<small>${id==='low'?'Maximale Leistung':id==='medium'?'Ausgewogen':id==='high'?'Charakterschatten':'Welt-Schatten'}</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>SCHATTEN</small><h3>Schattenmodus</h3><p>Der Modus kann unabhängig von der Grafikstufe angepasst werden.</p><div class="mdc-setting-options three">${[['off','Aus'],['character','Nur Charakter'],['world','Gesamte Welt']].map(([id,label])=>`<button class="${shadowMode===id?'active':''}" data-mdc-action="world-shadow-mode" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>STEUERUNGSHILFE</small><h3>Tastenanzeige</h3><p>Standardmäßig wird die Tastenhilfe beim Betreten nur einige Sekunden eingeblendet.</p><div class="mdc-setting-options three">${[['auto','Kurz beim Start'],['always','Immer anzeigen'],['hidden','Ausblenden']].map(([id,label])=>`<button class="${controls===id?'active':''}" data-mdc-action="world-controls" data-value="${id}">${label}</button>`).join('')}</div></div>
@@ -3537,7 +3568,19 @@ class CenterDynastyGame {
     if(action==='world-distance'){this.state.world.renderDistance=Math.floor(clamp(Number(button.dataset.value),MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE));this.applyWorldRenderSettings(true);this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Sichtweite: ${this.state.world.renderDistance} Regionen.`);}
     if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
     if(action==='landmark-density'){const value=button.dataset.value;this.state.world.landmarkDensity=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Besondere Orte: ${this.state.world.landmarkDensity}.`);}
-    if(action==='world-online'){this.state.world.onlineKoop=button.dataset.value==='on';this.saveState(true);if(this.state.world.onlineKoop)this.connectMultiplayer().catch(()=>{});else this.disconnectMultiplayer().catch(()=>{});this.openManagement('settings');this.toast(this.state.world.onlineKoop?'Center-Koop wird versucht.':'Center-Koop ausgeschaltet.');}
+    if(action==='world-online'){
+      const enabled=button.dataset.value==='on';
+      this.state.world.onlineEnabled=enabled;
+      this.saveState(true);
+      if(enabled){
+        this.onlineRetryAttempt=0;
+        this.connectMultiplayer().catch(()=>this.scheduleOnlineReconnect('Online-Verbindung wird erneut versucht.'));
+      }else{
+        this.disconnectMultiplayer(true).catch(()=>{});
+      }
+      this.openManagement('settings');
+      this.toast(enabled?'Online ist aktiviert. Spieler werden verbunden.':'Online ausgeschaltet.');
+    }
     if(action==='world-quality'){const value=button.dataset.value;this.state.world.graphicsQuality=GRAPHICS_QUALITIES.includes(value)?value:'medium';this.state.world.shadowMode=value==='ultra'?'world':value==='high'?'character':'off';this.applyGraphicsQuality();this.saveState(true);this.openManagement('settings');this.toast(`Grafikqualität: ${value==='low'?'Niedrig':value==='medium'?'Mittel':value==='high'?'Hoch':'Ultra'}.`);}
     if(action==='world-shadow-mode'){const value=button.dataset.value;this.state.world.shadowMode=SHADOW_MODES.includes(value)?value:'off';this.applyShadowSettings();this.saveState(true);this.openManagement('settings');this.toast(value==='off'?'Schatten ausgeschaltet.':value==='character'?'Nur Charakterschatten aktiv.':'Vollständige Weltschatten aktiv.');}
     if(action==='world-controls'){const value=button.dataset.value;this.state.world.controlsHint=['auto','always','hidden'].includes(value)?value:'auto';this.scheduleControlsHint(value==='always');if(value==='hidden')this.controlsHintElement?.classList.add('is-hidden');this.saveState(true);this.openManagement('settings');}
@@ -3599,21 +3642,203 @@ class CenterDynastyGame {
   setOnlineUi(state,text,count=1){const cls=state==='online'?'is-online':state==='offline'?'is-offline':'is-connecting';for(const el of [this.onlineCard,this.loadingOnline]){if(!el)continue;el.classList.remove('is-connecting','is-online','is-offline');el.classList.add(cls);}if(this.onlineCount)this.onlineCount.textContent=String(Math.min(4,Math.max(1,Math.floor(count||1))));if(this.onlineStatus)this.onlineStatus.textContent=text||'';}
   toast(message){clearTimeout(this.toastTimer);this.toastElement.textContent=message;this.toastElement.classList.add('show');this.toastTimer=setTimeout(()=>this.toastElement.classList.remove('show'),2800);}
 
-  presencePayload(online=true) {
+  presencePayload(online=true, compatibility=this.onlineCompatibilityMode) {
     const player=bridgeSnapshot();
-    return {cottbus3D:{online:!!online,mapId:ONLINE_MAP_ID,mode:'center',sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),y:Number((this.player?.position.y||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,view:this.firstPerson?'first':'third',gender:player.gender,firstName:player.firstName.slice(0,30),lastName:player.lastName.slice(0,30),level:player.level,slot:player.slot,staffRole:this.activeStaffRole,ownerClaim:!!this.isOwnerActive,vanished:!!(this.isStaffActive&&this.ownerFlags.vanish),flying:!!(this.isStaffActive&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,appearanceSkin:this.isStaffActive?this.state.ownerAppearance.skin:'normal',appearanceSize:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,heldItem:this.isStaffActive?this.state.ownerAppearance.heldItem:'none',ownerCape:!!(this.isOwnerActive&&this.state.ownerAppearance.cape),ownerHat:!!(this.isOwnerActive&&this.state.ownerAppearance.hat),updatedAtMs:Date.now(),version:CENTER_VERSION}};
+    const vanished=!!(this.isStaffActive&&this.ownerFlags.vanish);
+    const base={
+      online:!!online&&!vanished,
+      mapId:ONLINE_MAP_ID,
+      sessionId:this.onlineSessionId,
+      x:Number((this.player?.position.x||0).toFixed(3)),
+      z:Number((this.player?.position.z||0).toFixed(3)),
+      yaw:Number(this.yaw.toFixed(4)),
+      bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),
+      walking:!!this.walking,
+      view:this.firstPerson?'first':'third',
+      gender:player.gender,
+      firstName:player.firstName.slice(0,30),
+      lastName:player.lastName.slice(0,30),
+      level:player.level,
+      slot:player.slot,
+      ownerClaim:!!this.isOwnerActive,
+      updatedAtMs:Date.now(),
+      version:CENTER_VERSION
+    };
+    if(compatibility)return {cottbus3D:base};
+    return {cottbus3D:{
+      ...base,
+      mode:'center',
+      y:Number((this.player?.position.y||0).toFixed(3)),
+      staffRole:this.activeStaffRole,
+      vanished,
+      flying:!!(this.isStaffActive&&this.ownerFlags.fly),
+      season:this.state.season,
+      day:this.state.day,
+      appearanceSkin:this.isStaffActive?this.state.ownerAppearance.skin:'normal',
+      appearanceSize:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,
+      heldItem:this.isStaffActive?this.state.ownerAppearance.heldItem:'none',
+      ownerCape:!!(this.isOwnerActive&&this.state.ownerAppearance.cape),
+      ownerHat:!!(this.isOwnerActive&&this.state.ownerAppearance.hat)
+    }};
   }
 
-  async prepareMultiplayer(){const core=window.LifeBuilderFirebaseCore;if(!core?.load)return null;try{const fb=await core.load();const user=await core.waitForAuth?.(5200);return user?.uid?{fb,user}:null;}catch(error){if(!isFirebasePermissionError(error))console.warn('Center Firebase-Vorbereitung',error);return null;}}
+  async prepareMultiplayer(){
+    const core=window.LifeBuilderFirebaseCore;
+    if(!core?.load)return null;
+    try{
+      const fb=await core.load();
+      const user=await core.waitForAuth?.(7000);
+      return user?.uid?{fb,user}:null;
+    }catch(error){
+      if(!isFirebasePermissionError(error))console.warn('Center Firebase-Vorbereitung',error);
+      return null;
+    }
+  }
+
+  clearOnlineReconnect(){
+    clearTimeout(this.onlineRetryTimer);
+    this.onlineRetryTimer=0;
+  }
+
+  scheduleOnlineReconnect(message='Online-Verbindung wird wiederhergestellt.', delay=0){
+    if(!this.opened||!this.state.world?.onlineEnabled||this.onlineConnected||this.onlineConnecting)return;
+    this.clearOnlineReconnect();
+    this.onlineRetryAttempt=Math.min(8,(this.onlineRetryAttempt||0)+1);
+    const waitMs=delay>0?delay:Math.min(15000,1800+this.onlineRetryAttempt*1200);
+    this.setOnlineUi('connecting',`${message} Neuer Versuch in ${Math.ceil(waitMs/1000)} s.`,1+this.remotePlayers.size);
+    this.onlineRetryTimer=setTimeout(()=>{
+      this.onlineRetryTimer=0;
+      if(this.opened&&this.state.world?.onlineEnabled)this.connectMultiplayer().catch(()=>{});
+    },waitMs);
+  }
+
+  handleOnlineListenerError(error){
+    window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(900,'center-online-listen-error');
+    this.onlineConnected=false;
+    this.onlineConnecting=false;
+    clearInterval(this.onlineHeartbeatTimer);
+    clearInterval(this.onlinePublishTimer);
+    this.onlineHeartbeatTimer=0;
+    this.onlinePublishTimer=0;
+    try{this.onlineUnsubscribe?.();}catch{}
+    this.onlineUnsubscribe=null;
+    const permission=isFirebasePermissionError(error);
+    if(permission&&!this.onlineCompatibilityMode)this.onlineCompatibilityMode=true;
+    if(!permission)console.warn('Center-Online-Verbindung wurde unterbrochen',error);
+    this.scheduleOnlineReconnect(permission?'Online bleibt aktiviert. Firebase-Zugriff wird erneut geprüft.':'Online bleibt aktiviert. Verbindung wurde kurz unterbrochen.');
+  }
 
   async connectMultiplayer(prepared=null) {
-    if(this.onlineConnected||this.onlineConnecting)return false;this.onlineConnecting=true;this.setOnlineUi('connecting','Koop-Spieler werden geladen …',1);
-    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.verifyLocalOwnerRole();await this.publishPresence(true);const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));this.onlineUnsubscribe?.();this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>this.applyPresenceSnapshot(snapshot).catch(()=>{}),(error)=>{this.onlineConnected=false;this.setOnlineUi('offline','Offline-Welt aktiv.',1+this.remotePlayers.size);if(!isFirebasePermissionError(error))console.warn('Center-Koop wurde unterbrochen',error);});clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch(()=>{}),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch(()=>{}),ONLINE_WRITE_INTERVAL_MS);this.onlineConnected=true;this.onlineConnecting=false;this.setOnlineUi('online','Center-Koop verbunden.',1+this.remotePlayers.size);return true;}catch(error){if(isFirebasePermissionError(error)){this.state.world.onlineKoop=false;this.saveState(true);}else console.warn('Center-Koop konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.updateRoleHud();this.setOnlineUi('offline','Offline-Welt aktiv.',1);return false;}
+    if(!this.state.world?.onlineEnabled)return false;
+    if(this.onlineConnected)return true;
+    if(this.onlineConnecting)return false;
+    this.clearOnlineReconnect();
+    this.onlineConnecting=true;
+    this.setOnlineUi('connecting','Online-Spieler werden geladen …',1+this.remotePlayers.size);
+    try{
+      const resolved=prepared||await this.prepareMultiplayer();
+      const fb=resolved?.fb,user=resolved?.user;
+      if(!fb||!user?.uid){
+        this.onlineConnecting=false;
+        this.scheduleOnlineReconnect('Online ist aktiviert. Anmeldung wird noch geladen.',3500);
+        return false;
+      }
+      this.onlineFb=fb;
+      this.onlineUser=user;
+      this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);
+      await this.verifyLocalOwnerRole();
+      await this.publishPresence(true);
+      const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));
+      try{this.onlineUnsubscribe?.();}catch{}
+      this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>{
+        this.onlineConnected=true;
+        this.onlineRetryAttempt=0;
+        this.applyPresenceSnapshot(snapshot).catch(()=>{});
+      },(error)=>this.handleOnlineListenerError(error));
+      clearInterval(this.onlineHeartbeatTimer);
+      clearInterval(this.onlinePublishTimer);
+      this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_HEARTBEAT_MS);
+      this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_WRITE_INTERVAL_MS);
+      this.onlineConnected=true;
+      this.onlineConnecting=false;
+      this.onlineRetryAttempt=0;
+      this.setOnlineUi('online','Online verbunden.',1+this.remotePlayers.size);
+      return true;
+    }catch(error){
+      const permission=isFirebasePermissionError(error);
+      if(permission&&!this.onlineCompatibilityMode){
+        this.onlineCompatibilityMode=true;
+        this.onlineConnecting=false;
+        this.setOnlineUi('connecting','Online bleibt aktiviert. Kompatibler Verbindungsmodus wird gestartet.',1+this.remotePlayers.size);
+        this.scheduleOnlineReconnect('Kompatibler Online-Modus wird verbunden.',650);
+        return false;
+      }
+      if(!permission)console.warn('Center-Online-Verbindung konnte nicht gestartet werden',error);
+      this.onlineConnected=false;
+      this.onlineConnecting=false;
+      this.ownerVerificationChecked=false;
+      this.ownerVerifiedByFirebase=false;
+      this.updateRoleHud();
+      this.scheduleOnlineReconnect(permission?'Online bleibt aktiviert. Firebase-Berechtigung wird erneut geprüft.':'Online bleibt aktiviert. Verbindung wird erneut hergestellt.');
+      return false;
+    }
   }
 
-  async publishPresence(force=false){if(!this.opened||!this.onlineFb||!this.onlineDocRef||!this.player||this.presenceWriteInFlight)return false;const now=Date.now(),payload=this.presencePayload(true),live=payload.cottbus3D,key=`${live.x.toFixed(2)}|${live.y.toFixed(2)}|${live.z.toFixed(2)}|${live.bodyYaw.toFixed(2)}|${live.walking}|${live.vanished}|${live.flying}`;if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;this.presenceWriteInFlight=true;try{await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});this.lastPresenceWriteAt=Date.now();this.lastPresenceKey=key;return true;}finally{this.presenceWriteInFlight=false;}}
+  async publishPresence(force=false){
+    if(!this.opened||!this.state.world?.onlineEnabled||!this.onlineFb||!this.onlineDocRef||!this.player||this.presenceWriteInFlight)return false;
+    const now=Date.now();
+    let payload=this.presencePayload(true);
+    let live=payload.cottbus3D;
+    let key=`${Number(live.x||0).toFixed(2)}|${Number(live.y||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}|${!!live.vanished}|${!!live.flying}`;
+    if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;
+    this.presenceWriteInFlight=true;
+    try{
+      try{
+        await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});
+      }catch(error){
+        if(!this.onlineCompatibilityMode&&isFirebasePermissionError(error)){
+          this.onlineCompatibilityMode=true;
+          payload=this.presencePayload(true,true);
+          live=payload.cottbus3D;
+          key=`${Number(live.x||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}`;
+          await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});
+        }else throw error;
+      }
+      this.lastPresenceWriteAt=Date.now();
+      this.lastPresenceKey=key;
+      return true;
+    }finally{
+      this.presenceWriteInFlight=false;
+    }
+  }
 
-  async disconnectMultiplayer(){clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);this.onlineHeartbeatTimer=0;this.onlinePublishTimer=0;try{this.onlineUnsubscribe?.();}catch{}this.onlineUnsubscribe=null;const fb=this.onlineFb,ref=this.onlineDocRef;this.onlineConnected=false;this.onlineConnecting=false;for(const uid of [...this.remotePlayers.keys()])this.removeRemotePlayer(uid);if(fb&&ref){const payload=this.presencePayload(false);payload.cottbus3D.leftAtMs=Date.now();try{await fb.setDoc(ref,payload,{merge:true});}catch{}}this.onlineFb=null;this.onlineUser=null;this.onlineDocRef=null;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.verifiedStaffRole='player';this.updateRoleHud();this.lastPresenceKey='';}
+  async disconnectMultiplayer(userInitiated=false){
+    if(userInitiated)this.clearOnlineReconnect();
+    clearInterval(this.onlineHeartbeatTimer);
+    clearInterval(this.onlinePublishTimer);
+    this.onlineHeartbeatTimer=0;
+    this.onlinePublishTimer=0;
+    try{this.onlineUnsubscribe?.();}catch{}
+    this.onlineUnsubscribe=null;
+    const fb=this.onlineFb,ref=this.onlineDocRef;
+    this.onlineConnected=false;
+    this.onlineConnecting=false;
+    for(const uid of [...this.remotePlayers.keys()])this.removeRemotePlayer(uid);
+    if(fb&&ref){
+      const payload=this.presencePayload(false,this.onlineCompatibilityMode);
+      payload.cottbus3D.leftAtMs=Date.now();
+      try{await fb.setDoc(ref,payload,{merge:true});}catch{}
+    }
+    this.onlineFb=null;
+    this.onlineUser=null;
+    this.onlineDocRef=null;
+    this.ownerVerificationChecked=false;
+    this.ownerVerifiedByFirebase=false;
+    this.verifiedStaffRole='player';
+    this.updateRoleHud();
+    this.lastPresenceKey='';
+    this.setOnlineUi('offline',userInitiated?'Online ausgeschaltet.':'Online-Verbindung beendet.',1);
+  }
 
   async applyPresenceSnapshot(snapshot){
     if(!this.opened)return;const active=new Set(),ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=roleSnapshot().isOwner;
@@ -3631,7 +3856,7 @@ class CenterDynastyGame {
 
   async upsertRemotePlayer(uid,profile,live){
     let remote=this.remotePlayers.get(uid);const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
-    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · KOOP`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
+    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
     remote.appearanceSkin=live.appearanceSkin==='shadow'?'oaura':String(live.appearanceSkin||'normal');remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
     remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=Number(live.y||terrainHeightAt(remote.targetX,Number(live.z||0)));remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=Number(live.updatedAtMs||Date.now());
     const skin=await this.verifiedRemoteSkin(uid,live);if(remote.skin!==skin)await this.installRemoteModel(remote,skin);
