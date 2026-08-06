@@ -1984,6 +1984,10 @@
       }, { passive: false });
 
       tabs.addEventListener("pointerdown", (event) => {
+        // Touch nutzt bewusst das native horizontale Browser-Scrolling. Würden
+        // wir den Finger hier per Pointer-Capture übernehmen, kann ein normales
+        // Antippen einer Kategorie als Drag enden und der Click wird verschluckt.
+        if (event.pointerType === "touch") return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
         pointerId = event.pointerId;
         startX = event.clientX;
@@ -1995,7 +1999,7 @@
       tabs.addEventListener("pointermove", (event) => {
         if (pointerId !== event.pointerId) return;
         const distance = event.clientX - startX;
-        if (Math.abs(distance) > 5) {
+        if (Math.abs(distance) > 9) {
           dragged = true;
           tabs.classList.add("dragging");
         }

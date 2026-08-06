@@ -1581,6 +1581,7 @@
   scroll-behavior: smooth;
   scroll-snap-type: x proximity;
   touch-action: pan-x pinch-zoom;
+  -webkit-overflow-scrolling: touch;
   cursor: grab;
 }
 .phone-market-tabs-shell-v196 .phone-market-tabs-v68.dragging {
@@ -1591,6 +1592,8 @@
 .phone-market-tabs-shell-v196 .phone-market-tabs-v68 button {
   scroll-snap-align: center;
   touch-action: manipulation;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: rgba(102, 174, 255, .22);
 }
 .phone-market-tabs-arrow-v196 {
   display: grid;
