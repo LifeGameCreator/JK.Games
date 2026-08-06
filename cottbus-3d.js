@@ -444,7 +444,7 @@ class Cottbus3DGame {
     this.canvas.addEventListener('pointerdown', (event) => {
       if (!this.opened || event.button !== 0) return;
       if (!this.isMobile && this.firstPerson && document.pointerLockElement !== this.canvas) {
-        this.canvas.requestPointerLock?.();
+        (()=>{try{const lock=this.canvas.requestPointerLock?.();lock?.catch?.(()=>{});}catch{}})();
         return;
       }
       this.lookPointerId = event.pointerId;
@@ -469,7 +469,7 @@ class Cottbus3DGame {
     this.canvas.addEventListener('pointercancel', release);
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     this.canvas.addEventListener('dblclick', () => {
-      if (!this.isMobile) this.canvas.requestPointerLock?.();
+      if (!this.isMobile) (()=>{try{const lock=this.canvas.requestPointerLock?.();lock?.catch?.(()=>{});}catch{}})();
     });
   }
 
