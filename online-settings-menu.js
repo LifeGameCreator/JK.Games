@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-04-settings-menu-role-visibility-v186";
+  const VERSION = "2026-08-07-settings-menu-firestore-recovery-v233";
   const DB_ID = "gamekl";
   const REGION = "europe-west3";
   const SESSION_KEY = "lifebuilder-2026-online-mod-session";
@@ -93,6 +93,8 @@
   let moneyFraudAlerts = [];
   let moneyApprovalUnsubscribe = null;
   let pendingMoneyApprovalCount = 0;
+  let roleRetryTimer = null;
+  let moneyApprovalRetryTimer = null;
   const MONEY_APPROVAL_COLLECTION = "moneyApprovalRequests";
   const MONEY_FRAUD_COLLECTION = "moneyFraudAlerts";
   const MONEY_APPROVAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -186,6 +188,48 @@
       throw error;
     });
     return runtimePromise;
+  }
+
+  function settingsFirestoreErrorText(error) {
+    return `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+  }
+
+  function isSettingsTargetCollision(error) {
+    if (window.LifeBuilderFirebaseCore?.isTargetCollisionError?.(error)) return true;
+    const text = settingsFirestoreErrorText(error);
+    return text.includes("target id already exists") || (text.includes("already-exists") && text.includes("target"));
+  }
+
+  function isSettingsOfflineError(error) {
+    const text = settingsFirestoreErrorText(error);
+    return text.includes("client is offline") || text.includes("unavailable") || text.includes("network-request-failed");
+  }
+
+  function scheduleRoleListenerRetry(user, error, delay = 1800) {
+    clearTimeout(roleRetryTimer);
+    if (!user?.uid || navigator.onLine === false) return;
+    const recover = isSettingsOfflineError(error);
+    if (recover) window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(600, "settings-role-offline");
+    roleRetryTimer = setTimeout(() => {
+      roleRetryTimer = null;
+      if (!currentUser || currentUser.uid !== user.uid) return;
+      listenRole(user, false).catch((retryError) => {
+        if (!isSettingsTargetCollision(retryError) && !isSettingsOfflineError(retryError)) console.warn("Team-Rolle Wiederverbindung", retryError);
+      });
+    }, Math.max(700, Number(delay) || 1800));
+  }
+
+  function scheduleMoneyApprovalRetry(error, delay = 1800) {
+    clearTimeout(moneyApprovalRetryTimer);
+    if (!currentUser?.uid || roleData?.role !== "owner" || navigator.onLine === false) return;
+    if (isSettingsOfflineError(error)) window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(600, "money-approval-offline");
+    moneyApprovalRetryTimer = setTimeout(() => {
+      moneyApprovalRetryTimer = null;
+      if (!currentUser?.uid || roleData?.role !== "owner") return;
+      startMoneyApprovalListener().catch((retryError) => {
+        if (!isSettingsTargetCollision(retryError) && !isSettingsOfflineError(retryError)) console.warn("Geldfreigabe-Listener Wiederverbindung", retryError);
+      });
+    }, Math.max(700, Number(delay) || 1800));
   }
 
   async function callFunction(name, data = {}) {
@@ -1527,6 +1571,8 @@
   function stopMoneyApprovalListener() {
     try { moneyApprovalUnsubscribe?.(); } catch {}
     moneyApprovalUnsubscribe = null;
+    clearTimeout(moneyApprovalRetryTimer);
+    moneyApprovalRetryTimer = null;
     pendingMoneyApprovalCount = 0;
   }
 
@@ -1542,7 +1588,13 @@
       updateSettingsEntry();
       if (pendingMoneyApprovalCount > previous && overlay?.classList.contains("show")) toast("Neue Admin-Geldfreigabe wartet auf deine Stimme.");
       if (activePanel === "governance" && overlay?.classList.contains("show")) renderGovernancePanel().catch(() => {});
-    }, (error) => console.warn("Geldfreigabe-Benachrichtigungen", error));
+    }, (error) => {
+      moneyApprovalUnsubscribe = null;
+      if (isSettingsTargetCollision(error)) { scheduleMoneyApprovalRetry(error, 1600); return; }
+      if (isSettingsOfflineError(error)) { scheduleMoneyApprovalRetry(error, 2200); return; }
+      console.warn("Geldfreigabe-Benachrichtigungen", error);
+      scheduleMoneyApprovalRetry(error, 5000);
+    });
   }
 
   async function renderTicketsPanel() {
@@ -2313,8 +2365,14 @@
     } catch (error) { console.warn("Staff-Kontext", error); toast(error.message, "error"); }
   }
 
-  async function listenRole(user) {
-    roleUnsubscribe?.(); roleUnsubscribe = null; stopMoneyApprovalListener(); roleData = null; selectedPlayer = null; selectedPlayerUid = ""; selectedPlayerSlotIndex = 0; sessionStorage.removeItem(SESSION_KEY); updateSettingsEntry();
+  async function listenRole(user, resetContext = true) {
+    try { roleUnsubscribe?.(); } catch {}
+    roleUnsubscribe = null;
+    clearTimeout(roleRetryTimer);
+    roleRetryTimer = null;
+    if (resetContext) {
+      stopMoneyApprovalListener(); roleData = null; selectedPlayer = null; selectedPlayerUid = ""; selectedPlayerSlotIndex = 0; sessionStorage.removeItem(SESSION_KEY); updateSettingsEntry();
+    }
     if (!user) return;
     const fb = await runtime();
     roleUnsubscribe = fb.onSnapshot(fb.doc(fb.db, "staffRoles", user.uid), (snapshot) => {
@@ -2323,7 +2381,13 @@
       saveBrowserSession(); updateSettingsEntry();
       startMoneyApprovalListener().catch((error) => console.warn("Geldfreigabe-Listener", error));
       if (!roleData?.active && overlay?.classList.contains("show")) closeModMenu();
-    }, (error) => console.warn("Team-Rolle konnte nicht geladen werden", error));
+    }, (error) => {
+      roleUnsubscribe = null;
+      if (isSettingsTargetCollision(error)) { scheduleRoleListenerRetry(user, error, 1600); return; }
+      if (isSettingsOfflineError(error)) { scheduleRoleListenerRetry(user, error, 2200); return; }
+      console.warn("Team-Rolle konnte nicht geladen werden", error);
+      scheduleRoleListenerRetry(user, error, 5000);
+    });
   }
 
   async function initialize() {

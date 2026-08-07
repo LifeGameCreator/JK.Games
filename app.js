@@ -13917,26 +13917,44 @@ function isPhoneFirestoreOfflineError(error) {
     || text.includes("failed-precondition") && text.includes("offline");
 }
 
+function isPhoneFirestoreTargetCollision(error) {
+  const core = window.LifeBuilderFirebaseCore;
+  if (core?.isTargetCollisionError?.(error)) return true;
+  const text = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+  return text.includes("target id already exists") || (text.includes("already-exists") && text.includes("target"));
+}
+
 async function recoverPhoneFirestoreTransport(fb, reason = "phone-firestore", waitMs = 650) {
   if (!fb?.db || navigator.onLine === false) return false;
   const core = window.LifeBuilderFirebaseCore;
-  try { await core?.reconnect?.({ force: false }); } catch {}
-  try { await fb.enableNetwork?.(fb.db); } catch {}
-  try { await core?.recoverFirestore?.(reason); } catch {}
-  await new Promise((resolve) => window.setTimeout(resolve, Math.max(350, Number(waitMs) || 650)));
+  // V233: genau EIN zentraler Network-Recovery. Die alte Folge aus reconnect,
+  // enableNetwork UND disable/enable hat Snapshot-Listener kollidieren lassen.
+  try {
+    if (core?.ensureFirestoreOnline) await core.ensureFirestoreOnline(reason, { force: false });
+    else if (core?.reconnect) await core.reconnect({ force: false });
+    else if (typeof fb.enableNetwork === "function") await fb.enableNetwork(fb.db);
+  } catch (error) {
+    if (!isPhoneFirestoreTargetCollision(error)) throw error;
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, Math.max(250, Number(waitMs) || 650)));
   return navigator.onLine !== false;
+}
+
+function schedulePhoneListenerRestart(delay = 1800) {
+  if (navigator.onLine === false) return;
+  clearTimeout(phoneRealtimeRecoveryTimer);
+  phoneRealtimeRecoveryTimer = window.setTimeout(() => {
+    phoneRealtimeRecoveryTimer = null;
+    ensurePhoneBackgroundRealtime().catch((error) => {
+      if (!isPhoneFirestoreOfflineError(error) && !isPhoneFirestoreTargetCollision(error)) console.warn("Telefon/SMS Listener-Neustart", error);
+    });
+  }, Math.max(700, Number(delay) || 1800));
 }
 
 function schedulePhoneRealtimeRecovery(delay = 2200, reason = "phone-realtime") {
   if (navigator.onLine === false) return;
-  clearTimeout(phoneRealtimeRecoveryTimer);
   window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(Math.min(1200, Math.max(350, Number(delay) / 2 || 700)), reason);
-  phoneRealtimeRecoveryTimer = window.setTimeout(() => {
-    phoneRealtimeRecoveryTimer = null;
-    ensurePhoneBackgroundRealtime().catch((error) => {
-      if (!isPhoneFirestoreOfflineError(error)) console.warn("Telefon/SMS Wiederverbindung", error);
-    });
-  }, Math.max(700, Number(delay) || 2200));
+  schedulePhoneListenerRestart(delay);
 }
 
 async function phoneFirestoreRequestWithRecovery(factory, label = "Telefon-Firebase", attempts = 5) {
@@ -14220,7 +14238,19 @@ async function startSmsListener(number) {
     state.phoneMessages[conversationId] = messages;
     saveRemoteRealtimeState();
     if (els.dialog?.open && els.dialog.querySelector(".device-shell") && state.phoneActiveContact === other) refreshDeviceApp("sms");
-  }, (error) => addFeed(`SMS-Verbindung getrennt: ${error.message || error}`));
+  }, (error) => {
+    phoneSmsUnsubscribe = null;
+    if (isPhoneFirestoreTargetCollision(error)) {
+      schedulePhoneListenerRestart(1600);
+      return;
+    }
+    if (isPhoneFirestoreOfflineError(error)) {
+      schedulePhoneRealtimeRecovery(2200, "sms-thread-offline");
+      return;
+    }
+    addFeed(`SMS-Verbindung getrennt: ${error.message || error}`);
+    window.setTimeout(() => startSmsListener(other).catch(() => {}), 4000);
+  });
 }
 
 async function startGlobalSmsListener() {
@@ -14263,6 +14293,10 @@ async function startGlobalSmsListener() {
     if (added.length) saveRemoteRealtimeState();
   }, (error) => {
     phoneGlobalSmsUnsubscribe = null;
+    if (isPhoneFirestoreTargetCollision(error)) {
+      schedulePhoneListenerRestart(1600);
+      return;
+    }
     if (isPhoneFirestoreOfflineError(error)) {
       schedulePhoneRealtimeRecovery(2200, "sms-listener-offline");
       return;
@@ -14298,7 +14332,8 @@ async function ensurePhoneBackgroundRealtime() {
   phoneBackgroundStarting = (async () => {
     try {
       const fb = await loadFirebasePhoneRuntime();
-      await recoverPhoneFirestoreTransport(fb, "phone-background-start", 450);
+      const coreStatus = String(window.LifeBuilderFirebaseCore?.getStatus?.() || "ready");
+      if (["offline", "error"].includes(coreStatus)) await recoverPhoneFirestoreTransport(fb, "phone-background-start", 450);
       const registration = await registerPhoneOnline();
       const key = `${registration?.ownerUid || ""}:${registration?.number || ""}:${selectedSlot}`;
       if (!registration?.ownerUid || !registration?.number) return false;
@@ -14346,6 +14381,10 @@ async function startIncomingCallListener() {
     }, (error) => {
       phoneIncomingUnsubscribe = null;
       stopPhoneRingtone();
+      if (isPhoneFirestoreTargetCollision(error)) {
+        schedulePhoneListenerRestart(1600);
+        return;
+      }
       if (isPhoneFirestoreOfflineError(error)) {
         schedulePhoneRealtimeRecovery(2200, "call-listener-offline");
         return;
@@ -32725,7 +32764,10 @@ function stabilizeMobileCharacterScroll(section = "") {
     try {
       const core = window.LifeBuilderFirebaseCore;
       const status = String(core?.getStatus?.() || "idle");
-      if (force || ["error", "offline"].includes(status)) await core?.reconnect?.({ force }).catch(() => {});
+      if (force || ["error", "offline"].includes(status)) {
+        if (core?.ensureFirestoreOnline) await core.ensureFirestoreOnline("visible-area-recovery", { force: false }).catch(() => {});
+        else await core?.reconnect?.({ force: false }).catch(() => {});
+      }
       if (typeof state !== "undefined" && state) {
         ensurePhoneBackgroundRealtime().catch((error) => {
           if (isPhoneFirestoreOfflineError(error)) {
@@ -33346,6 +33388,10 @@ function stabilizeMobileCharacterScroll(section = "") {
       if (els.dialog?.open && els.dialog.querySelector(".ios-messages-app")) refreshDeviceApp("sms", ownedPhoneItem());
     }, (error) => {
       phoneGlobalSmsUnsubscribe = null;
+      if (isPhoneFirestoreTargetCollision(error)) {
+        schedulePhoneListenerRestart(1600);
+        return;
+      }
       if (isPhoneFirestoreOfflineError(error)) {
         schedulePhoneRealtimeRecovery(2200, "sms-v50-offline");
         return;
@@ -33403,6 +33449,10 @@ function stabilizeMobileCharacterScroll(section = "") {
     }, (error) => {
       phoneIncomingUnsubscribe = null;
       stopPhoneRingtone();
+      if (isPhoneFirestoreTargetCollision(error)) {
+        schedulePhoneListenerRestart(1600);
+        return;
+      }
       if (isPhoneFirestoreOfflineError(error)) {
         schedulePhoneRealtimeRecovery(2200, "call-v50-offline");
         return;

@@ -1,5 +1,5 @@
 (() => {
-  const ONLINE_VERSION = "2026-08-04-network-account-reset-active-v180";
+  const ONLINE_VERSION = "2026-08-07-v233-firestore-listener-recovery";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
@@ -51,6 +51,8 @@
   let databaseVerificationPromise = null;
   let databaseConnectionError = "";
   let databaseRetryTimer = null;
+  let cloudHydrationRetryTimer = null;
+  const serviceRestartTimers = new Map();
   let onlineServicesUid = "";
   let playerSyncInFlight = false;
   let playerSyncDirty = false;
@@ -246,6 +248,109 @@
     return raw || "Die Live-Datenbank konnte nicht verbunden werden.";
   }
 
+  function firestoreErrorText(error) {
+    return `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+  }
+
+  function isFirestoreTargetCollision(error) {
+    if (window.LifeBuilderFirebaseCore?.isTargetCollisionError?.(error)) return true;
+    const text = firestoreErrorText(error);
+    return text.includes("target id already exists") || (text.includes("already-exists") && text.includes("target"));
+  }
+
+  function isFirestoreOfflineError(error) {
+    const text = firestoreErrorText(error);
+    return text.includes("client is offline")
+      || text.includes("failed to get document because the client is offline")
+      || text.includes("unavailable")
+      || text.includes("network-request-failed")
+      || text.includes("database-timeout");
+  }
+
+  function waitOnlineRetry(delay = 500) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(100, Number(delay) || 500)));
+  }
+
+  async function recoverOnlineFirestore(reason = "online-events") {
+    if (navigator.onLine === false) return false;
+    const core = window.LifeBuilderFirebaseCore;
+    try {
+      if (core?.ensureFirestoreOnline) return !!(await core.ensureFirestoreOnline(reason, { force: false }));
+      if (core?.reconnect) return !!(await core.reconnect({ force: false }));
+    } catch (error) {
+      if (!isFirestoreTargetCollision(error)) return false;
+    }
+    return true;
+  }
+
+  function scheduleCloudHydrationRetry(user = onlineUser, delay = 900) {
+    clearTimeout(cloudHydrationRetryTimer);
+    cloudHydrationRetryTimer = null;
+    if (!hostedOnlineMode || !user?.uid || navigator.onLine === false) return;
+    if (cloudSaveReadyUid === user.uid && window.__lifeBuilderCloudReady === true) return;
+    const expectedUid = String(user.uid);
+    cloudHydrationRetryTimer = setTimeout(async () => {
+      cloudHydrationRetryTimer = null;
+      if (!onlineUser || String(onlineUser.uid) !== expectedUid) return;
+      if (cloudSaveReadyUid === expectedUid && window.__lifeBuilderCloudReady === true) return;
+      try {
+        await recoverOnlineFirestore("cloud-slot-retry");
+        const fb = await loadOnlineFirebase();
+        await verifyOnlineDatabase(fb, onlineUser, true);
+        await hydrateCloudSlots(onlineUser);
+      } catch (error) {
+        if (isFirestoreOfflineError(error) || isFirestoreTargetCollision(error)) {
+          window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(700, "cloud-slot-retry");
+          scheduleCloudHydrationRetry(onlineUser, Math.min(15000, Math.max(1200, Number(delay) * 1.8)));
+          return;
+        }
+        console.warn("Cloud-Spielstände konnten nicht geladen werden", error);
+      }
+    }, Math.max(250, Number(delay) || 900));
+  }
+
+  function handleCloudHydrationFailure(error, user = onlineUser) {
+    if (isFirestoreOfflineError(error) || isFirestoreTargetCollision(error)) {
+      databaseConnectionError = databaseErrorText(error);
+      updateOnlineStatusBadge();
+      updateAuthOverlayState();
+      window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(500, "cloud-slots-offline");
+      scheduleCloudHydrationRetry(user, 700);
+      return;
+    }
+    console.warn("Cloud-Spielstände konnten nicht geladen werden", error);
+  }
+
+  function scheduleServiceRestart(key, starter, delay = 1800, recoverNetwork = false) {
+    const previous = serviceRestartTimers.get(key);
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(async () => {
+      serviceRestartTimers.delete(key);
+      if (!onlineUser || navigator.onLine === false) return;
+      if (recoverNetwork) await recoverOnlineFirestore(`${key}-listener`).catch(() => {});
+      Promise.resolve().then(starter).catch((error) => {
+        if (isFirestoreOfflineError(error) || isFirestoreTargetCollision(error)) scheduleServiceRestart(key, starter, 2600, isFirestoreOfflineError(error));
+        else console.warn(`${key} listener restart`, error);
+      });
+    }, Math.max(700, Number(delay) || 1800));
+    serviceRestartTimers.set(key, timer);
+  }
+
+  function handleServiceListenerError(key, error, clearListener, starter) {
+    try { clearListener?.(); } catch {}
+    if (isFirestoreTargetCollision(error)) {
+      scheduleServiceRestart(key, starter, 1600, false);
+      return;
+    }
+    if (isFirestoreOfflineError(error)) {
+      window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(600, `${key}-offline`);
+      scheduleServiceRestart(key, starter, 2200, true);
+      return;
+    }
+    console.warn(`${key} listener`, error);
+    scheduleServiceRestart(key, starter, 5000, false);
+  }
+
   async function verifyOnlineDatabase(fb = null, user = onlineUser, force = false) {
     if (!user) throw new Error("Bitte zuerst anmelden.");
     if (!force && databaseReadyUid === user.uid) return true;
@@ -327,7 +432,7 @@
         startOnlineServices();
         // Cloud-Spielstände werden im Hintergrund geladen. Eine langsame oder
         // blockierte Schreiboperation darf den sichtbaren Spielstart nicht festhalten.
-        hydrateCloudSlots(onlineUser).catch((error) => console.warn("Cloud-Spielstände konnten noch nicht geladen werden", error));
+        hydrateCloudSlots(onlineUser).catch((error) => handleCloudHydrationFailure(error, onlineUser));
       } catch (error) {
         databaseConnectionError = databaseErrorText(error);
         updateOnlineStatusBadge();
@@ -661,7 +766,7 @@
           // Nicht mehr auf den kompletten Cloud-Abgleich warten. Der Slot-Bildschirm
           // öffnet sofort und wird nach dem Laden automatisch neu gerendert.
           hydrateCloudSlots(credentials.user).catch((error) => {
-            console.warn("Cloud-Spielstände konnten noch nicht geladen werden", error);
+            handleCloudHydrationFailure(error, credentials.user);
           });
         } catch (databaseError) {
           databaseConnectionError = databaseErrorText(databaseError);
@@ -1017,8 +1122,19 @@
   async function readCloudSlotFromServer(slotIndex) {
     const fb = await loadOnlineFirebase();
     const ref = cloudSlotRef(fb, onlineUser.uid, slotIndex);
-    const reader = typeof fb.getDocFromServer === "function" ? fb.getDocFromServer(ref) : fb.getDoc(ref);
-    return withDatabaseTimeout(reader, DATABASE_VERIFY_TIMEOUT_MS);
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const reader = typeof fb.getDocFromServer === "function" ? fb.getDocFromServer(ref) : fb.getDoc(ref);
+        return await withDatabaseTimeout(reader, DATABASE_VERIFY_TIMEOUT_MS);
+      } catch (error) {
+        lastError = error;
+        if ((!isFirestoreOfflineError(error) && !isFirestoreTargetCollision(error)) || attempt >= 2 || navigator.onLine === false) throw error;
+        await recoverOnlineFirestore(`cloud-slot-${slotIndex}-attempt-${attempt + 1}`);
+        await waitOnlineRetry(450 + attempt * 550);
+      }
+    }
+    throw lastError || new Error("Cloud-Spielstand konnte nicht gelesen werden.");
   }
 
   async function resolveCloudRevisionConflict(slotIndex, localState) {
@@ -1340,6 +1456,9 @@
         persistLocalSlotsAfterCloudLoad();
         cloudSaveReadyUid = hydrationUid;
         window.__lifeBuilderCloudReady = true;
+        clearTimeout(cloudHydrationRetryTimer);
+        cloudHydrationRetryTimer = null;
+        databaseConnectionError = "";
         showCloudConflictRecovery();
       } finally {
         window.__lifeBuilderCloudHydrating = false;
@@ -1737,7 +1856,7 @@
     commandsUnsubscribe?.();
     commandsUnsubscribe = fb.onSnapshot(fb.collection(fb.db, "playerCommands", onlineUser.uid, "queue"), (snapshot) => {
       snapshot.docs.forEach((docSnap) => applyPlayerCommand(fb, docSnap));
-    }, (error) => console.warn("Admin command listener", error));
+    }, (error) => handleServiceListenerError("Admin command", error, () => { commandsUnsubscribe = null; }, () => startCommandListener()));
   }
 
   function eventIsActive(eventData = currentEvent) {
@@ -1800,7 +1919,7 @@
     participantUnsubscribe = fb.onSnapshot(ref, (snapshot) => {
       currentParticipant = snapshot.exists() ? snapshot.data() : null;
       refreshOpenEventApp();
-    });
+    }, (error) => handleServiceListenerError("Event participant", error, () => { participantUnsubscribe = null; }, () => loadOwnParticipant()));
   }
 
   async function startEventListener() {
@@ -1810,7 +1929,7 @@
       currentEvent = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
       loadOwnParticipant().catch(() => {});
       refreshOpenEventApp();
-    }, (error) => console.warn("Event listener", error));
+    }, (error) => handleServiceListenerError("Event", error, () => { eventUnsubscribe = null; }, () => startEventListener()));
   }
 
   function refreshOpenEventApp() {
@@ -1913,7 +2032,7 @@
     if (!onlineUser) return;
     const fb = await loadOnlineFirebase();
     moderationUnsubscribe?.();
-    moderationUnsubscribe = fb.onSnapshot(fb.doc(fb.db, "moderation", onlineUser.uid), (snapshot) => renderModerationState(snapshot.exists() ? snapshot.data() : {}), (error) => console.warn("Moderation listener", error));
+    moderationUnsubscribe = fb.onSnapshot(fb.doc(fb.db, "moderation", onlineUser.uid), (snapshot) => renderModerationState(snapshot.exists() ? snapshot.data() : {}), (error) => handleServiceListenerError("Moderation", error, () => { moderationUnsubscribe = null; }, () => startModerationListener()));
   }
 
   function startOnlineServices() {
@@ -1939,6 +2058,8 @@
     eventUnsubscribe?.(); eventUnsubscribe = null;
     participantUnsubscribe?.(); participantUnsubscribe = null;
     moderationUnsubscribe?.(); moderationUnsubscribe = null;
+    serviceRestartTimers.forEach((timer) => clearTimeout(timer));
+    serviceRestartTimers.clear();
     onlineServicesUid = "";
     if (clearCurrent) {
       currentEvent = null;
@@ -2113,7 +2234,7 @@
       // Firestore-Abgleich und Online-Synchronisierung laufen danach im Hintergrund.
       setSetupView("slots");
       if (databaseReadyUid === user.uid) {
-        hydrateCloudSlots(user).catch((error) => console.warn("Cloud-Spielstände konnten noch nicht geladen werden", error));
+        hydrateCloudSlots(user).catch((error) => handleCloudHydrationFailure(error, user));
         syncPlayerOnline(true).catch(() => {});
       } else {
         scheduleDatabaseRetry(user, 0);
@@ -2131,7 +2252,13 @@
       setPlayerOffline().catch(() => {});
     }
   });
-  window.addEventListener("online", () => scheduleDatabaseRetry(onlineUser, 100));
+  window.addEventListener("online", () => {
+    scheduleDatabaseRetry(onlineUser, 100);
+    scheduleCloudHydrationRetry(onlineUser, 450);
+  });
+  window.addEventListener("lifebuilder-firestore-recovered", () => {
+    if (onlineUser && (cloudSaveReadyUid !== onlineUser.uid || window.__lifeBuilderCloudReady !== true)) scheduleCloudHydrationRetry(onlineUser, 180);
+  });
   window.addEventListener("pagehide", () => {
     if (cloudSaveDirty) runCloudSave().catch(() => {});
     setPlayerOffline().catch(() => {});
