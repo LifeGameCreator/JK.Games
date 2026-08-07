@@ -17140,8 +17140,8 @@ const phoneAppStoreCatalog = [
     label: "Casino",
     icon: "●",
     minTier: 2,
-    status: "locked",
-    description: "Die Casino-App wird noch gemeinsam überarbeitet und ist deshalb derzeit gesperrt."
+    status: "available",
+    description: "Die Spielhalle ist jetzt als Handy-App verfügbar. Installieren und direkt vom Smartphone aus öffnen."
   }
 ];
 
@@ -17223,7 +17223,7 @@ function phoneAppStoreHtml(item) {
           `;
         }).join("")}
       </div>
-      <p class="device-hint">Top Games, Finder.KL und Finster.KL erscheinen nach dem Download als eigene Apps unten im Handy. Die Casino-App bleibt bis zum nächsten Ausbau gesperrt.</p>
+      <p class="device-hint">Top Games, Finder.KL, Finster.KL und Casino erscheinen nach dem Download als eigene Apps unten im Handy.</p>
     </div>
   `;
 }
@@ -17295,6 +17295,9 @@ function deviceAppsFor(item) {
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
     apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar." });
+  }
+  if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
+    apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
   }
   return apps.map((app) => {
     const missingTier = tier < app.min;
@@ -17455,6 +17458,22 @@ function openDeviceAppDirect(item, appId) {
   }
   if (appId === "invest" || appId === "trading") {
     return openDeviceInterface(item, appId, false);
+  }
+  if (appId === "onlinecasino") {
+    if (!canOpenMainTab("casino")) {
+      renderFeed();
+      return openDeviceInterface(item, "onlinecasino", false);
+    }
+    if (!state.casinoArrival) {
+      if (!confirm("Möchten Sie das Casino betreten?")) return;
+      state.casinoReturnLocation = state.location || ((state.worldLocation || state.homeCity) === state.homeCity ? "home" : "world");
+      state.homeDashboardActive = false;
+      state.location = "casino-lounge";
+      save();
+    }
+    if (els.dialog?.open) { clearDialogDynamic(); els.dialog.close(); }
+    openMainTabFromShortcut("casino");
+    return;
   }
   openDeviceInterface(item, appId);
 }
@@ -31903,8 +31922,8 @@ render();
   const dailyBasePhoneAppStoreHtml = phoneAppStoreHtml;
   phoneAppStoreHtml = function dailyAppsPhoneAppStoreHtml(item) {
     return dailyBasePhoneAppStoreHtml(item).replace(
-      /<p class="device-hint">Finder\.KL[\s\S]*?<\/p>/,
-      `<p class="device-hint">Finder.KL, Finster.KL, Event, Tägliche Geschenke und Tägliche Quests schließen nach dem Download direkt hinter dem App Store an. Die Casino-App bleibt bis zum nächsten Ausbau gesperrt.</p>`
+      /<p class="device-hint">Top Games, Finder\.KL[\s\S]*?<\/p>/,
+      `<p class="device-hint">Top Games, Finder.KL, Finster.KL, Casino, Tägliche Geschenke und Tägliche Quests erscheinen nach dem Download als eigene Apps unten im Handy.</p>`
     );
   };
 

@@ -20453,3 +20453,21 @@ body.gfx-minimum .jk-exclusive-card,
 body.gfx-minimum .wardrobe-card.jk-exclusive-wardrobe-card {
   box-shadow: none !important;
 }
+
+/* V235: Hype ersetzt den alten Casino-Schnellzugriff im Hauptdashboard. */
+.dashboard-shortcut.hype {
+  background:
+    radial-gradient(circle at 50% 28%, rgba(255, 111, 66, .30), transparent 38%),
+    linear-gradient(180deg, rgba(55, 24, 17, .97), rgba(18, 12, 11, .98));
+  border-color: rgba(255, 128, 79, .36);
+}
+.dashboard-shortcut.hype b {
+  color: #ff8b57;
+  font-size: 1.42rem;
+  text-shadow: 0 0 14px rgba(255, 91, 44, .48);
+}
+.dashboard-shortcut.hype:hover,
+.dashboard-shortcut.hype:focus-visible {
+  border-color: rgba(255, 153, 105, .72);
+  box-shadow: 0 0 0 2px rgba(255, 111, 66, .10), 0 10px 24px rgba(0,0,0,.22);
+}

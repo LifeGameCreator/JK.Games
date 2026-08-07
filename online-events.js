@@ -2125,8 +2125,8 @@
   const basePhoneAppStoreHtml = phoneAppStoreHtml;
   phoneAppStoreHtml = function patchedPhoneAppStoreHtml(item) {
     return basePhoneAppStoreHtml(item).replace(
-      "Finder.KL und Finster.KL erscheinen nach dem Download als eigene Apps unten im Handy. Die Casino-App bleibt bis zum nächsten Ausbau gesperrt.",
-      "Finder.KL, Finster.KL und Event erscheinen nach dem Download als eigene Apps unten im Handy. Die Casino-App bleibt bis zum nächsten Ausbau gesperrt."
+      /<p class="device-hint">Top Games, Finder\.KL[\s\S]*?<\/p>/,
+      `<p class="device-hint">Top Games, Finder.KL, Finster.KL, Casino, Event, Tägliche Geschenke und Tägliche Quests erscheinen nach dem Download als eigene Apps unten im Handy.</p>`
     );
   };
 
