@@ -58,3 +58,19 @@
   .jkc-ingame-card{width:100%;max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));border-radius:16px}
   .jkc-ingame-head p{display:block}
 }
+
+
+/* JK.Games V222 · Fight-Levelhinweise, Lucky-Box-Reveal und Owner-Bereinigung */
+.jkc-fight-level-note{margin:9px 0 2px;border:1px solid rgba(255,211,106,.35);border-radius:11px;background:rgba(255,191,64,.08);color:#ffe08a;padding:8px 9px;font-size:10px;font-weight:900;line-height:1.4}
+.jkc-reveal-card{overflow:hidden;text-align:center;background:radial-gradient(circle at 50% 0,rgba(151,87,255,.23),transparent 38%),linear-gradient(155deg,#12172a,#08131e 70%,#171127)}
+.jkc-reveal-card>h2{margin:5px 0 12px}.jkc-reveal-stage{min-height:245px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.1);border-radius:18px;background:radial-gradient(circle at 50% 50%,rgba(103,228,255,.1),transparent 45%),#070f19;padding:18px;overflow:hidden;position:relative}
+.jkc-box-burst{font-size:70px;filter:drop-shadow(0 0 28px rgba(184,102,255,.65));animation:jkcBoxPulse .52s ease-in-out infinite alternate}.jkc-reveal-stage>b{color:#b9c8d4;font-size:12px}
+.jkc-reveal-reward{width:min(390px,100%);min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;border:1px solid rgba(150,103,255,.55);border-radius:20px;background:radial-gradient(circle at 50% 10%,rgba(124,224,255,.18),transparent 44%),linear-gradient(145deg,#15192d,#0b1521);box-shadow:0 18px 48px rgba(0,0,0,.48),0 0 32px rgba(133,80,255,.22);opacity:0;transform:scale(.72) translateY(24px);transition:opacity .25s ease,transform .34s cubic-bezier(.2,.9,.2,1.18)}
+.jkc-reveal-reward.show{opacity:1;transform:scale(1) translateY(0)}.jkc-reveal-reward.leave{opacity:0;transform:scale(1.08) translateY(-28px)}
+.jkc-reveal-reward>span{width:62px;height:62px;border-radius:19px;display:grid;place-items:center;background:linear-gradient(145deg,#bb70ff,#4e66ff 58%,#4fe6ff);font-size:23px;font-weight:1000;color:#fff;box-shadow:0 0 26px rgba(137,92,255,.5)}
+.jkc-reveal-reward>small{color:#7cecff;font-size:9px;font-weight:1000;letter-spacing:.14em}.jkc-reveal-reward>b{font-size:22px;line-height:1.12;color:#fff;max-width:94%;overflow-wrap:anywhere}.jkc-reveal-reward>em{font-size:12px;color:#a9bbc8;font-style:normal}
+.jkc-reveal-xp>span{background:linear-gradient(145deg,#66f0b7,#2a9b8c)}.jkc-reveal-money>span{background:linear-gradient(145deg,#ffe487,#bf8c21);color:#221600}.jkc-reveal-special>span{background:linear-gradient(145deg,#ff8cd9,#815cff)}
+.jkc-reveal-done{display:grid;place-items:center;gap:8px}.jkc-reveal-done>span{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#163b31;border:1px solid #65ffc1;color:#7bffd0;font-size:30px;font-weight:1000}.jkc-reveal-done>b{font-size:22px}.jkc-reveal-done>small{color:#91a4b3}.jkc-reveal-summary{margin-top:12px;text-align:left;max-height:250px;overflow:auto}.jkc-reveal-summary[hidden],.jkc-reveal-card [hidden]{display:none!important}
+@keyframes jkcBoxPulse{from{transform:scale(.92) rotate(-2deg)}to{transform:scale(1.06) rotate(2deg)}}
+@media(max-width:560px){.jkc-reveal-stage{min-height:215px;padding:12px}.jkc-reveal-reward{min-height:155px}.jkc-reveal-reward>b{font-size:18px}.jkc-reveal-card{padding:14px}}
+@media(prefers-reduced-motion:reduce){.jkc-box-burst{animation:none}.jkc-reveal-reward{transition-duration:.01ms}}

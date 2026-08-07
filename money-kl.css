@@ -462,3 +462,73 @@
   .money-kl-board.size-16{grid-template-columns:repeat(16,35px);grid-auto-rows:35px}
   .money-kl-board.size-32{grid-template-columns:repeat(32,29px);grid-auto-rows:29px}
 }
+
+/* V220 – 2/4/6/8/10-Felder, 200 normale Maker und JK-Maker-Bereich */
+.money-kl-board.size-6{grid-template-columns:repeat(6,74px);grid-auto-rows:74px;gap:8px;padding:20px}
+.money-kl-board.size-8{grid-template-columns:repeat(8,62px);grid-auto-rows:62px;gap:7px;padding:18px}
+.money-kl-board.size-10{grid-template-columns:repeat(10,52px);grid-auto-rows:52px;gap:6px;padding:17px}
+.field-tier-preview.size-6{background:linear-gradient(145deg,#266148,#0e3125)}
+.field-tier-preview.size-8{background:linear-gradient(145deg,#2a6950,#10382a)}
+.field-tier-preview.size-10{background:linear-gradient(145deg,#30745a,#123d30);box-shadow:inset 0 0 0 1px rgba(128,255,210,.24),0 0 16px rgba(78,255,184,.12)}
+.money-kl-world.size-6::after{content:"MONEY DISTRICT"}
+.money-kl-world.size-8::after{content:"MONEY CITY"}
+.money-kl-world.size-10::after{content:"MONEY EMPIRE"}
+.money-kl-maker.jk-premium{border-color:rgba(190,126,255,.42);background:linear-gradient(145deg,#151329,#0b1d1b 58%,#2e1d43)}
+.money-kl-maker.jk-premium.active{border-color:#d39aff;box-shadow:0 0 0 2px rgba(179,107,255,.2),0 0 24px rgba(145,78,255,.12)}
+.money-kl-cell.jk-premium .money-kl-plot{box-shadow:inset 0 0 18px rgba(190,115,255,.18)}
+.money-kl-jk-note{margin-top:12px;padding:12px;border:1px solid rgba(187,126,255,.32);border-radius:14px;background:linear-gradient(145deg,rgba(39,24,64,.8),rgba(8,29,24,.95))}
+.money-kl-jk-note>b{display:block;color:#e3c5ff;font-size:13px}
+.money-kl-jk-note>p{margin:6px 0 10px;color:#a9c7bd;font-size:10px;line-height:1.5}
+.money-kl-jk-note>small{margin-top:12px;color:#bfa0e8}
+.money-kl-premium-copy{color:#d1a8ff!important;font-size:10px!important;font-weight:800}
+.money-kl-boost-price-list{display:grid;gap:6px;margin:8px 0 12px}
+.money-kl-boost-price-list span{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(0,0,0,.16);color:#a8c7bd;font-size:9px}
+.money-kl-boost-price-list b{color:#ffe58a;white-space:nowrap}
+
+@media(max-width:900px){
+  .money-kl-board.size-6{grid-template-columns:repeat(6,54px);grid-auto-rows:54px;gap:6px;padding:13px}
+  .money-kl-board.size-8{grid-template-columns:repeat(8,46px);grid-auto-rows:46px;gap:5px;padding:12px}
+  .money-kl-board.size-10{grid-template-columns:repeat(10,40px);grid-auto-rows:40px;gap:4px;padding:11px}
+}
+@media(max-width:560px){
+  .money-kl-board.size-6{grid-template-columns:repeat(6,48px);grid-auto-rows:48px;gap:5px;padding:11px}
+  .money-kl-board.size-8{grid-template-columns:repeat(8,42px);grid-auto-rows:42px;gap:4px;padding:10px}
+  .money-kl-board.size-10{grid-template-columns:repeat(10,36px);grid-auto-rows:36px;gap:3px;padding:9px}
+  .money-kl-boost-price-list span{align-items:flex-start;flex-direction:column}
+}
+
+/* JK.Games V221 · Money.KL Drag, Mehrfachauswahl & Performance */
+.money-kl-board{touch-action:none;user-select:none;-webkit-user-select:none}
+.money-kl-cell{touch-action:none;-webkit-tap-highlight-color:transparent}
+.money-kl-cell.selected .money-kl-plot,
+.money-kl-cell.selection-preview .money-kl-plot{outline:3px solid #ffe57d;outline-offset:-2px;box-shadow:0 0 0 3px #0b1915,0 0 22px #ffe57d77,inset 0 0 18px #ffe57d22}
+.money-kl-cell.selected::before{content:"✓";position:absolute;z-index:8;left:4px;bottom:4px;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;background:#ffe57d;color:#181306;font-size:10px;font-weight:1000;box-shadow:0 2px 8px #0008}
+.money-kl-cell.dragging{opacity:.56;transform:scale(.94)!important;filter:brightness(1.15)!important;z-index:8}
+.money-kl-cell.drop-target .money-kl-plot{outline:3px dashed #78ffd0;outline-offset:-3px;filter:brightness(1.18)}
+.money-kl-selection-box{position:fixed;z-index:110008;pointer-events:none;border:2px solid #ffe57d;border-radius:8px;background:#ffe57d1c;box-shadow:0 0 20px #ffe57d4a}
+.money-kl-chip.selected{border-color:#ffe57d;background:#332c12;color:#fff2ad}
+.money-kl-clear-field{width:100%;margin-top:8px}
+.money-kl-multi-detail>small{color:#ffe57d}
+.money-kl-multi-detail .money-kl-stats{grid-template-columns:1fr 1fr}
+.money-kl-model-lite{position:absolute;left:12%;right:12%;bottom:10%;height:76%;display:grid;place-items:center;border-radius:8px 8px 5px 5px;background:linear-gradient(150deg,color-mix(in srgb,var(--maker-color) 82%,#fff),color-mix(in srgb,var(--maker-color) 48%,#071712));box-shadow:0 5px 10px #0007,0 0 calc(3px * var(--maker-level)) color-mix(in srgb,var(--maker-color) 42%,transparent);transform:translateZ(0)}
+.money-kl-model-lite::before{content:"";position:absolute;left:17%;right:17%;top:-12%;height:18%;border-radius:5px 5px 2px 2px;background:color-mix(in srgb,var(--maker-color) 68%,#fff)}
+.money-kl-model-lite::after{content:"";position:absolute;left:14%;right:14%;bottom:10%;height:34%;background:repeating-linear-gradient(90deg,#ffffff99 0 8%,transparent 8% 22%);opacity:.55}
+.money-kl-model-lite i{position:relative;z-index:2;display:grid;place-items:center;min-width:18px;height:18px;padding:0 3px;border-radius:6px;background:#06110ddd;color:#fff;font-style:normal;font-size:8px;font-weight:1000;box-shadow:0 1px 5px #0009}
+.money-kl-center.performance-lite .money-kl-cell{transition:none}
+.money-kl-center.performance-lite .money-kl-cell:hover,.money-kl-center.performance-lite .money-kl-cell:focus-visible{transform:none;filter:brightness(1.08)}
+.money-kl-center.performance-lite .money-kl-world::after{filter:none;opacity:.45}
+.money-kl-center.performance-lite .money-kl-skyline{opacity:.34}
+.money-kl-center.performance-lite .money-kl-cell-name{display:none}
+.money-kl-center.performance-lite .money-kl-model-lite{will-change:auto}
+@media(max-width:900px){
+  .money-kl-selection-box{z-index:110009}
+  .money-kl-cell.selected::before{width:14px;height:14px;font-size:8px;left:2px;bottom:2px}
+  .money-kl-multi-detail .money-kl-stats{grid-template-columns:1fr 1fr}
+}
+@media(prefers-reduced-motion:reduce){
+  .money-kl-cell,.money-kl-model,.money-kl-model-lite{transition:none!important;animation:none!important}
+}
+.money-kl-board{contain:layout paint style}
+.money-kl-center.performance-lite .money-kl-cell{contain:layout paint style;box-shadow:none}
+.money-kl-center.performance-lite .plot-lines{display:none}
+.money-kl-center.performance-lite .money-kl-cell.has-money::after{filter:none}

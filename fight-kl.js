@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260806-fight-kl-v208-star-balance";
+  const VERSION = "20260807-fight-kl-v222-current-leaderboard";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -11,6 +11,8 @@
   const WORLD_H = 1400;
   const SCORE_FUNCTION = "fightKlSubmitScore";
   const LEADERBOARD_FUNCTION = "fightKlGetLeaderboard";
+  const LEADERBOARD_COLLECTION = "fightKlLeaderboardV222";
+  const LEADERBOARD_SEASON = "v222";
   const DUEL_JOIN_FUNCTION = "fightKlJoinDuel";
   const DUEL_GET_FUNCTION = "fightKlGetDuel";
   const DUEL_ACTION_FUNCTION = "fightKlDuelAction";
@@ -1215,6 +1217,7 @@ function aggregateLoadoutStats() {
     window.addEventListener("keyup", onKeyUp);
     updateHead();
     renderDashboard();
+    syncCurrentFightLeaderboard().catch(()=>{});
     if (!data.tutorialDone) setTimeout(showTutorial, 220);
   }
   function close(returnPhone = false) {
@@ -1776,7 +1779,7 @@ function dailyShopItems(category = UI.shopCategory) {
 
   async function renderLeaderboard() {
     if (!UI.main) return;
-    UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Online-Rangliste", "Die besten Fight.KL-Läufe aus Firebase – sortiert nach höchster Welle.", `<button class="fkl-btn" type="button" data-fkl-refresh>↻ Aktualisieren</button>`)}<div class="fkl-online-state" data-fkl-online-state>Firebase-Verbindung wird geprüft …</div><section class="fkl-panel fkl-board"><div class="fkl-leader-list" data-fkl-leader-list><div style="padding:30px;text-align:center;color:var(--fkl-muted)">Rangliste wird geladen …</div></div></section></div>`;
+    UI.main.innerHTML = `<div class="fkl-page">${pageHeader("Online-Rangliste", "Aktuelle Fight.KL-Rangliste – der alte Ranglistenstand wurde zurückgesetzt und wird nicht mehr verwendet.", `<button class="fkl-btn" type="button" data-fkl-refresh>↻ Aktualisieren</button>`)}<div class="fkl-online-state" data-fkl-online-state>Online-Rangliste wird verbunden …</div><section class="fkl-panel fkl-board"><div class="fkl-leader-list" data-fkl-leader-list><div style="padding:30px;text-align:center;color:var(--fkl-muted)">Rangliste wird geladen …</div></div></section></div>`;
     bindPageHome(); UI.main.querySelector("[data-fkl-refresh]").addEventListener("click", loadLeaderboard);
     await loadLeaderboard();
   }
@@ -1789,28 +1792,44 @@ function dailyShopItems(category = UI.shopCategory) {
     const result = await core.withTimeout(callable(payload), 15000, name);
     return result.data;
   }
+  async function currentLeaderboardRuntime(){
+    const core=window.LifeBuilderFirebaseCore;if(!core?.load)throw new Error("Firebase-Laufzeit fehlt.");
+    const fb=await core.load(),user=await core.waitForAuth(8500);if(!user)throw new Error("Melde dich mit deinem JK.Games-Konto an.");
+    return {core,fb,user};
+  }
+  async function syncCurrentFightLeaderboard(runtimeData=null){
+    const data=ensureState();if(!data)return false;
+    const runtimeInfo=runtimeData||await currentLeaderboardRuntime(),{fb,user}=runtimeInfo;
+    const payload={uid:user.uid,season:LEADERBOARD_SEASON,name:String(playerName()||"JK.Games-Spieler").slice(0,60),bestWave:Math.max(0,Math.floor(Number(data.bestWave)||0)),bestScore:Math.max(0,Math.floor(Number(data.bestScore)||0)),level:clamp(Math.floor(Number(data.level)||1),1,MAX_LEVEL),power:Math.max(0,Math.floor(Number(powerScore())||0)),updatedAtMs:Date.now()};
+    await fb.setDoc(fb.doc(fb.db,LEADERBOARD_COLLECTION,user.uid),payload,{merge:false});return true;
+  }
   async function loadLeaderboard() {
     const stateNode = UI.main?.querySelector("[data-fkl-online-state]"); const list = UI.main?.querySelector("[data-fkl-leader-list]"); if (!list) return;
     if (UI.leaderLoading) return; UI.leaderLoading = true;
     try {
-      if (stateNode) stateNode.textContent = "Firebase wird verbunden …";
-      const result = await firebaseCallable(LEADERBOARD_FUNCTION, { limit: 50 });
-      UI.leaderCache = Array.isArray(result?.entries) ? result.entries : [];
-      if (stateNode) stateNode.textContent = `Online · ${UI.leaderCache.length} Scores geladen`;
-      list.innerHTML = UI.leaderCache.length ? UI.leaderCache.map((entry, index) => `<article class="fkl-leader-row ${entry.me ? "me" : ""}"><span class="fkl-leader-rank">#${index + 1}</span><b>${escapeHtml(entry.name || "JK.Games-Spieler")}</b><span>Welle <b>${Number(entry.bestWave || 0)}</b></span><span>Score <b>${NUMBER.format(entry.bestScore || 0)}</b></span><span>LV <b>${Number(entry.level || 1)}</b></span></article>`).join("") : `<div style="padding:30px;text-align:center;color:var(--fkl-muted)">Noch keine Online-Scores vorhanden.</div>`;
+      if (stateNode) stateNode.textContent = "Aktuelle Rangliste wird synchronisiert …";
+      const runtimeInfo=await currentLeaderboardRuntime();
+      await syncCurrentFightLeaderboard(runtimeInfo);
+      const {fb,user}=runtimeInfo;
+      const snap=await fb.getDocs(fb.query(fb.collection(fb.db,LEADERBOARD_COLLECTION),fb.orderBy("bestWave","desc"),fb.limit(100)));
+      UI.leaderCache=snap.docs.map(doc=>({id:doc.id,...doc.data(),me:doc.id===user.uid})).filter(entry=>entry.season===LEADERBOARD_SEASON).sort((a,b)=>Number(b.bestWave||0)-Number(a.bestWave||0)||Number(b.bestScore||0)-Number(a.bestScore||0)||Number(b.power||0)-Number(a.power||0)).slice(0,50);
+      if (stateNode) stateNode.textContent = `Online · ${UI.leaderCache.length} aktuelle Fight.KL-Spieler geladen`;
+      list.innerHTML = UI.leaderCache.length ? UI.leaderCache.map((entry, index) => `<article class="fkl-leader-row ${entry.me ? "me" : ""}"><span class="fkl-leader-rank">#${index + 1}</span><b>${escapeHtml(entry.name || "JK.Games-Spieler")}</b><span>Welle <b>${Number(entry.bestWave || 0)}</b></span><span>Score <b>${NUMBER.format(entry.bestScore || 0)}</b></span><span>LV <b>${Number(entry.level || 1)}</b></span><span>Power <b>${NUMBER.format(entry.power || 0)}</b></span></article>`).join("") : `<div style="padding:30px;text-align:center;color:var(--fkl-muted)">Die neue Fight.KL-Rangliste ist noch leer.</div>`;
     } catch (error) {
-      if (stateNode) stateNode.textContent = `Offline/Backend nicht bereit: ${error.message || error}`;
-      const data = ensureState(); list.innerHTML = `<article class="fkl-leader-row me"><span class="fkl-leader-rank">LOKAL</span><b>${escapeHtml(playerName())}</b><span>Welle <b>${data.bestWave}</b></span><span>Score <b>${NUMBER.format(data.bestScore)}</b></span><span>LV <b>${data.level}</b></span></article>`;
+      if (stateNode) stateNode.textContent = `Online-Rangliste nicht erreichbar: ${error.message || error}`;
+      const data = ensureState(); list.innerHTML = `<article class="fkl-leader-row me"><span class="fkl-leader-rank">LOKAL</span><b>${escapeHtml(playerName())}</b><span>Welle <b>${data.bestWave}</b></span><span>Score <b>${NUMBER.format(data.bestScore)}</b></span><span>LV <b>${data.level}</b></span><span>Power <b>${NUMBER.format(powerScore())}</b></span></article>`;
     } finally { UI.leaderLoading = false; }
   }
   async function submitScore(run) {
     const data = ensureState();
     try {
       data.online.status = "Wird synchronisiert"; safeSave();
+      const directSync=syncCurrentFightLeaderboard().catch(()=>false);
       const result = await firebaseCallable(SCORE_FUNCTION, {
         score: Math.floor(run.score), wave: Math.floor(run.wave), kills: Math.floor(run.kills), durationMs: Math.floor(run.durationMs), level: data.level, power: powerScore(), name: playerName()
-      });
-      data.online.status = "Synchronisiert"; data.online.lastSync = Date.now(); safeSave();
+      }).catch(()=>null);
+      const directOk=await directSync;
+      data.online.status = directOk ? "Synchronisiert" : (result ? "Backend synchronisiert" : "Offline"); data.online.lastSync = directOk||result?Date.now():Number(data.online.lastSync||0); safeSave();
       return result;
     } catch (error) { data.online.status = `Offline: ${error.message || error}`; safeSave(); return null; }
   }
@@ -2431,7 +2450,7 @@ function damagePlayerV116(amount, source) {
   if (damage > 0) p.hp -= damage;
   const jkData = ensureState();
   if (p.hp > 0 && p.hp <= p.maxHp * .10 && jkData?.jkCoinGodmodeArmed === true && Number(jkData?.jkCoinGodmodeTokens || 0) > 0 && Number(jkData?.jkCoinGodmodeUntil || 0) <= Date.now()) {
-    jkData.jkCoinGodmodeTokens -= 1; jkData.jkCoinGodmodeArmed = false; jkData.jkCoinGodmodeUntil = Date.now() + 60000; p.godMode = true; p.hp = Math.max(p.hp, p.maxHp * .10); safeSave(); showCombatMessage("JK/COIN GODMODE · 60 SEKUNDEN");
+    jkData.jkCoinGodmodeTokens -= 1; jkData.jkCoinGodmodeArmed = false; jkData.jkCoinGodmodeUntil = Date.now() + 30000; p.godMode = true; p.hp = Math.max(p.hp, p.maxHp * .10); safeSave(); showCombatMessage("JK/COIN GODMODE · 30 SEKUNDEN");
   }
   p.hitFlash = .2; if (damage > 0) addDamageText(p.x, p.y - 34, `-${Math.round(damage)}`, "#ff6670", 22); spawnParticles(p.x, p.y, "#ff4f61", 10, 180); playSound(75, .08, "sawtooth", .025);
   if (p.armorItem?.durability > 0 && damage > 0) p.armorItem.durability = Math.max(0, p.armorItem.durability - damage * .11);
@@ -2891,7 +2910,7 @@ function updateHud() {
     const filter=`<section class="fkl-panel fkl-inventory-toolbar"><div class="fkl-inventory-tabs">${categories.map(([id,label])=>`<button class="${UI.inventoryCategory===id?"active":""}" type="button" data-fkl-inv-cat="${id}">${label}</button>`).join("")}</div>${rarityFilter}<label class="fkl-search"><span>⌕</span><input type="search" value="${escapeHtml(UI.inventorySearch)}" placeholder="Item, Seltenheit oder Effekt suchen" data-fkl-inv-search></label><select data-fkl-inv-sort><option value="rarity" ${UI.inventorySort==="rarity"?"selected":""}>Seltenheit</option><option value="power" ${UI.inventorySort==="power"?"selected":""}>Power</option><option value="new" ${UI.inventorySort==="new"?"selected":""}>Neu erhalten</option><option value="name" ${UI.inventorySort==="name"?"selected":""}>Name</option></select><div class="fkl-inv-count"><b>${list.length}</b><small>angezeigt</small></div></section>`;
     const rarityCounts=Object.fromEntries(RARITY_ORDER.map(id=>[id,data.inventory.filter(item=>rarityKey(item)===id).length]));
     const bulkDelete=`<section class="fkl-panel fkl-bulk-delete"><div><small class="fkl-kicker">INVENTAR VERKAUFEN</small><h3>Mehrere Items sofort verkaufen</h3><p>Wähle eine Seltenheit. Du erhältst die Summe aller 30-%-Verkaufswerte; das letzte Item bleibt geschützt.</p></div><div class="fkl-bulk-delete-actions">${RARITY_ORDER.map(id=>`<button type="button" data-fkl-bulk-delete="${id}" style="--bulk-color:${RARITIES[id].color}" ${rarityCounts[id]===0?"disabled":""}><span>${RARITIES[id].name}</span><b>${rarityCounts[id]}</b></button>`).join("")}<button class="all" type="button" data-fkl-bulk-delete="all" ${data.inventory.length<=1?"disabled":""}><span>Alle Seltenheiten</span><b>${data.inventory.length}</b></button></div></section>`;
-    const jkCoinTactical=`<section class="fkl-panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-color:rgba(241,124,255,.38);background:linear-gradient(135deg,rgba(80,20,110,.22),rgba(9,25,32,.92))"><div><small class="fkl-kicker">JK/COIN · TAKTISCHES ITEM</small><h3 style="margin:4px 0">1-Minute-Godmode</h3><p style="margin:0;color:var(--fkl-muted)">${data.jkCoinGodmodeTokens} Token vorhanden · Nach Aktivierung löst ein Token automatisch bei 10 % Leben aus.</p></div><button class="fkl-btn ${data.jkCoinGodmodeArmed?"gold":"primary"}" type="button" data-fkl-jk-godmode ${data.jkCoinGodmodeTokens<=0?"disabled":""}>${data.jkCoinGodmodeArmed?"✓ Godmode bereit":"Godmode-Token aktivieren"}</button></section>`;
+    const jkCoinTactical=`<section class="fkl-panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-color:rgba(241,124,255,.38);background:linear-gradient(135deg,rgba(80,20,110,.22),rgba(9,25,32,.92))"><div><small class="fkl-kicker">JK/COIN · TAKTISCHES ITEM</small><h3 style="margin:4px 0">30-Sekunden-Godmode</h3><p style="margin:0;color:var(--fkl-muted)">${data.jkCoinGodmodeTokens} Token vorhanden · Nach Aktivierung löst ein Token automatisch bei 10 % Leben aus.</p></div><button class="fkl-btn ${data.jkCoinGodmodeArmed?"gold":"primary"}" type="button" data-fkl-jk-godmode ${data.jkCoinGodmodeTokens<=0?"disabled":""}>${data.jkCoinGodmodeArmed?"✓ Godmode bereit":"Godmode-Token aktivieren"}</button></section>`;
     UI.main.innerHTML=`<div class="fkl-page fkl-inventory-page">${pageHeader("Inventar & Charakter",`${data.inventory.length}/${INVENTORY_LIMIT} Plätze · Zwei identische Items ergeben den nächsten Stern. Einzelverkauf bringt 30 %; Massen-Verkauf zahlt für jedes entfernte Item 30 % aus. Das letzte Item bleibt geschützt.`,`${fightAdminButtonHtml()}<button class="fkl-btn primary" type="button" data-fkl-best-equip>⚡ Bestes Equip anziehen</button><button class="fkl-btn gold" type="button" data-fkl-merge ${UI.selected.size===2?"":"disabled"}>✨ ${UI.selected.size}/2 matchen</button>`)}${loadoutPanelHtml()}${jkCoinTactical}${filter}${bulkDelete}<div class="fkl-inventory-layout"><section class="fkl-inventory">${list.map(itemCard).join("")||`<div class="fkl-empty-inventory">Keine passenden Items gefunden.</div>`}</section>${detailHtml(detail)}</div></div>`;
     bindPageHome();
     UI.main.querySelector("[data-fkl-best-equip]")?.addEventListener("click",equipBestLoadout);
@@ -3390,7 +3409,7 @@ function updateHud() {
   function finishCoopGuest(reason){const s=UI.session,c=s?.coop;if(!c||c.ended)return;c.ended=true;s.ended=true;cancelAnimationFrame(UI.raf);UI.raf=0;finishCoopRun(reason);}
   function finishCoopRun(reason){
     const s=UI.session,c=s?.coop;if(!s||!c)return;const activeWave=!!(s.enemies.length||s.spawnQueue.length),completedWave=Math.max(0,s.wave-(activeWave?1:0)),score=Math.floor(s.score||0),kills=Math.floor(s.kills||0),personalLoot=Math.max(0,Number(s.lootEarned?.length||0)),durationMs=Math.max(1000,performance.now()-s.startedAt),reward=Math.min(250000,Math.round(s.moneyEarned+completedWave*115+kills*7+score/900));
-    const data=ensureState();data.runs+=1;data.totalKills+=kills;data.bestScore=Math.max(data.bestScore,score);addFightXp(Math.round(completedWave*40+kills*2));if(reward)awardMoney(reward,"Fight.KL Wellen-KOOP");const mainXp=typeof window.JKGamesAwardMainGameXp==="function"?window.JKGamesAwardMainGameXp("fight",Math.min(100,Math.max(10,Math.floor(Math.max(10,completedWave)/10)*10)),"Fight.KL KOOP",{eventKey:`fight-coop:${c.matchId||Math.floor(s.startedAt)}:${completedWave}:${kills}`}):0;safeSave();updateHead();
+    const data=ensureState();data.runs+=1;data.totalKills+=kills;data.bestWave=Math.max(data.bestWave,completedWave);data.bestScore=Math.max(data.bestScore,score);addFightXp(Math.round(completedWave*40+kills*2));if(reward)awardMoney(reward,"Fight.KL Wellen-KOOP");const mainXp=typeof window.JKGamesAwardMainGameXp==="function"?window.JKGamesAwardMainGameXp("fight",Math.min(100,Math.max(10,Math.floor(Math.max(10,completedWave)/10)*10)),"Fight.KL KOOP",{eventKey:`fight-coop:${c.matchId||Math.floor(s.startedAt)}:${completedWave}:${kills}`}):0;safeSave();updateHead();syncCurrentFightLeaderboard().catch(()=>{});
     stopCoopNetwork(false);s.resizeObserver?.disconnect?.();UI.shell?.classList.remove("combat-active");UI.session=null;UI.pointer.fire=false;
     const modal=showModal(`<div style="font-size:64px">🤝</div><small class="fkl-kicker">WELLEN-KOOP BEENDET</small><h3>Team-Lauf beendet</h3><p>${escapeHtml(reason)}</p><div class="fkl-summary-grid"><div><small>KOOP-Welle</small><b>${completedWave}</b></div><div><small>Team-Kills</small><b>${kills}</b></div><div><small>Team-Score</small><b>${NUMBER.format(score)}</b></div><div><small>Belohnung</small><b>${EURO.format(reward)}</b></div><div><small>Haupt-EP</small><b>+${mainXp}</b></div><div><small>Eigene Items</small><b>${personalLoot}</b></div><div><small>Solo-Startpunkte</small><b>bis ${data.unlockedWaveStart}</b></div><div><small>Dauer</small><b>${Math.floor(durationMs/60000)}:${String(Math.floor(durationMs/1000)%60).padStart(2,"0")}</b></div></div><div class="fkl-modal-actions"><button class="fkl-btn gold" type="button" data-fkl-coop-again>Noch einmal</button><button class="fkl-btn" type="button" data-fkl-summary-inventory>Inventar</button><button class="fkl-btn" type="button" data-fkl-coop-home>Hauptmenü</button></div>`);modal.querySelector("[data-fkl-coop-again]")?.addEventListener("click",()=>{modal.remove();renderCoopLobby();});modal.querySelector("[data-fkl-summary-inventory]")?.addEventListener("click",()=>{modal.remove();renderInventory();});modal.querySelector("[data-fkl-coop-home]")?.addEventListener("click",()=>{modal.remove();renderDashboard();});
   }

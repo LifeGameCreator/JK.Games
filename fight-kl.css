@@ -672,3 +672,8 @@ body.fight-kl-open{overflow:hidden!important}
   font-weight:750;
   letter-spacing:.02em;
 }
+
+
+/* JK.Games V222 · aktuelle Rangliste mit Power-Spalte */
+.fkl-leader-row{grid-template-columns:55px minmax(160px,1fr) repeat(4,minmax(86px,112px))}
+@media(max-width:900px){.fkl-leader-row{grid-template-columns:38px minmax(120px,1fr) 76px}.fkl-leader-row>span:nth-of-type(n+3){display:none}}

@@ -4082,10 +4082,11 @@ function awardGameXp(amount, reason = "Game", options = {}) {
 }
 
 
-// V185: Gemeinsame Hauptcharakter-EP für die fünf Top-Games.
-// Eigene Spiellevel bleiben vollständig getrennt; diese kleine Zusatzbelohnung
-// stärkt nur den übergeordneten JK.Games-Charakter. Ein Tageslimit verhindert
-// Endlos-Farming durch sehr kurze Wiederholungen.
+// V221: Gemeinsame Hauptcharakter-EP für alle sechs Top Games.
+// Die jeweiligen Spiele vergeben weiterhin ihre eigenen internen Belohnungen.
+// Zusätzlich erhält der übergeordnete JK.Games-Hauptcharakter echte EP.
+// Event-Keys verhindern doppelte Gutschriften desselben Ergebnisses; ein
+// verstecktes Tageslimit gibt es nicht mehr, damit aktives Spielen immer zählt.
 function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = {}) {
   if (!state) return 0;
   const cleanGameId = String(gameId || "topgames").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "topgames";
@@ -4094,31 +4095,18 @@ function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = 
   const day = Math.max(1, Number(state.day || 1));
   const characterLevel = Math.max(0, Math.min(100, Number(state.level || 0)));
   const levelMultiplier = 1 + Math.min(0.4, characterLevel * 0.005);
-  const wanted = Math.max(1, Math.round(base * levelMultiplier));
-  const dailyCap = Math.min(1100, 350 + characterLevel * 8);
+  const earned = Math.max(1, Math.round(base * levelMultiplier));
   const ledger = state.topGamesMainXp && typeof state.topGamesMainXp === "object" ? state.topGamesMainXp : {};
   if (Number(ledger.day || 0) !== day) {
     ledger.day = day;
     ledger.total = 0;
     ledger.byGame = {};
     ledger.recentKeys = [];
-    ledger.capNoticeShown = false;
   }
   ledger.byGame ||= {};
-  ledger.recentKeys = Array.isArray(ledger.recentKeys) ? ledger.recentKeys.slice(-80) : [];
+  ledger.recentKeys = Array.isArray(ledger.recentKeys) ? ledger.recentKeys.slice(-120) : [];
   const eventKey = String(options.eventKey || "").slice(0, 140);
   if (eventKey && ledger.recentKeys.includes(eventKey)) return 0;
-  const remaining = Math.max(0, dailyCap - Math.max(0, Number(ledger.total || 0)));
-  const earned = Math.min(wanted, remaining);
-  if (!earned) {
-    if (options.showCapNotice !== false && !ledger.capNoticeShown) {
-      ledger.capNoticeShown = true;
-      addFeed(`Top-Games-EP: Das Tageslimit von ${dailyCap} EP ist für heute erreicht.`);
-    }
-    state.topGamesMainXp = ledger;
-    save();
-    return 0;
-  }
   ledger.total = Math.max(0, Number(ledger.total || 0)) + earned;
   ledger.byGame[cleanGameId] = Math.max(0, Number(ledger.byGame[cleanGameId] || 0)) + earned;
   if (eventKey) ledger.recentKeys.push(eventKey);
@@ -4130,10 +4118,15 @@ function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = 
 
 window.JKGamesAwardMainGameXp = awardTopGameMainXp;
 window.JKGamesTopGameXpStatus = () => {
-  const level = Math.max(0, Math.min(100, Number(state?.level || 0)));
-  const cap = Math.min(1100, 350 + level * 8);
   const ledger = state?.topGamesMainXp || {};
-  return { day: Number(state?.day || 1), earned: Math.max(0, Number(ledger.total || 0)), cap, level };
+  return {
+    day: Number(state?.day || 1),
+    earned: Math.max(0, Number(ledger.total || 0)),
+    cap: null,
+    unlimited: true,
+    level: Math.max(0, Math.min(100, Number(state?.level || 0))),
+    byGame: { ...(ledger.byGame || {}) }
+  };
 };
 
 function awardGameWinMoney(amount, reason = "Game") {
@@ -19303,7 +19296,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
-        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere danach auf 4×4, 8×8, 16×16 und baue später dein 32×32-Money-Imperium mit 100 Makern und Online-Topliste.</small></button>
+        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 200 normalen Makern, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
       </div>
     </div>`;
   if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;
