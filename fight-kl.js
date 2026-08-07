@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260807-fight-kl-v222-current-leaderboard";
+  const VERSION = "20260807-fight-kl-v237-free-jk-fragments";
   const MAX_LEVEL = 100;
   const MAX_STAR = 5;
   const INVENTORY_LIMIT = 1600;
@@ -2437,7 +2437,7 @@ function beginReload() {
     spawnParticles(enemy.x, enemy.y, enemy.color, enemy.boss ? 38 : enemy.normalBoss ? 28 : 15, enemy.boss ? 330 : enemy.normalBoss ? 270 : 190);
     if (enemy.split && !bossUnit && s.enemies.length < 100) for (let i = 0; i < 2; i++) { const child = { id: uid(), ...ENEMIES.runner, type: "runner", x: enemy.x + rand(-20,20), y: enemy.y + rand(-20,20), maxHp: enemy.maxHp * .28, hp: enemy.maxHp * .28, speed: enemy.speed * 1.15, damage: enemy.damage * .65, attackCooldown: .5, abilityCooldown: 0, hitFlash: 0, angle: 0, phase: rand(0,8), dead:false }; s.enemies.push(child); }
     if (Math.random() < .035 + s.player.lootBonus / 1200) s.pickups.push({ type: Math.random() < .35 ? "heal" : "credit", x: enemy.x, y: enemy.y, value: Math.random() < .35 ? 16 : 10 + s.wave * 2, life: 14, phase: 0 });
-    if (enemy.boss) { showCombatMessage(`${enemy.name} BESIEGT`); grantCombatLoot(s.wave, true); if(!s.coop||s.coop.role==="host"){const granted=grantFriendBossCopies();if(s.coop?.role==="host"&&granted)s.coop.friendRewardSeq=Number(s.coop.friendRewardSeq||0)+1;} }
+    if (enemy.boss) { showCombatMessage(`${enemy.name} BESIEGT`); grantCombatLoot(s.wave, true); window.JKCoinApp?.addFragments?.(10,`Fight.KL Boss · Welle ${s.wave}`,`fight-frag:${Math.floor(s.startedAt)}:${s.wave}`); const jkWon=window.JKCoinApp?.rollTopGameDrop?.("fight","boss",`fight-drop:${Math.floor(s.startedAt)}:${s.wave}`)||0;if(jkWon)showCombatMessage(`JK/COIN DROP · +${jkWon}`); if(!s.coop||s.coop.role==="host"){const granted=grantFriendBossCopies();if(s.coop?.role==="host"&&granted)s.coop.friendRewardSeq=Number(s.coop.friendRewardSeq||0)+1;} }
     else if (enemy.normalBoss) showCombatMessage(`${enemy.name} BESIEGT`);
   }
 function damagePlayerV116(amount, source) {

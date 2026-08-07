@@ -20471,3 +20471,6 @@ body.gfx-minimum .wardrobe-card.jk-exclusive-wardrobe-card {
   border-color: rgba(255, 153, 105, .72);
   box-shadow: 0 0 0 2px rgba(255, 111, 66, .10), 0 10px 24px rgba(0,0,0,.22);
 }
+
+/* V237 · Fragmente in täglichen Geschenken */
+.daily-gift-fragments{display:block;margin-top:4px;color:#7fe8ff!important;font-size:9px!important;font-weight:900;letter-spacing:.02em!important}

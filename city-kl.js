@@ -481,6 +481,7 @@
     const isDouble = dice[0] === dice[1];
     await animateDice(dice);
     C.game.lastRoll = dice;
+    if (!player.isBot && dice[0] === 6 && dice[1] === 6) { const won=window.JKCoinApp?.rollTopGameDrop?.("city", "double6", `city:${Date.now()}:${C.game.turn}:${player.position}`)||0; if(won)showToast("JK/Coin Drop!",`+${won} JK/Coin beim Doppel-Sechser.`); }
 
     if (player.inJail) {
       if (isDouble) {

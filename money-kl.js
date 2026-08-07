@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-money-kl-v221-drag-multiselect-performance-mainxp";
+  const VERSION = "2026-08-07-money-kl-v237-free-jk-drop";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
   const LEADERBOARD_ACTIVE_MS = 45 * 1000;
@@ -127,7 +127,7 @@
       jkMakerOwned: {},
       lastTickAt: Date.now(),
       boosts: { productionMultiplier: 1, productionUntil: 0, autoCollectUntil: 0, doubleUntil: 0 },
-      stats: { collected: 0, upgrades: 0, placements: 1, clicks: 0 },
+      stats: { collected: 0, upgrades: 0, placements: 1, clicks: 0, jkCollectAttempts: 0 },
       leaderboardUpdatedAt: 0,
       tutorialSeen: false,
       mainXpLastBucket: -1
@@ -298,7 +298,9 @@
       recordPeak(data);
       if (show) {
         awardMoneyMainXp(data, Math.min(18, 4 + Math.floor(Math.log10(amount + 1))), "Money.KL Alles eingesammelt");
-        toast(`+${formatDollar(amount)} eingesammelt`);
+        data.stats.jkCollectAttempts=Math.max(0,Math.floor(Number(data.stats.jkCollectAttempts)||0))+1;
+        const jkWon=window.JKCoinApp?.rollTopGameDrop?.("money","collectAll",`money:${data.stats.jkCollectAttempts}`)||0;
+        toast(jkWon?`+${formatDollar(amount)} · +${jkWon} JK/Coin`:`+${formatDollar(amount)} eingesammelt`);
       }
       persist();
     }

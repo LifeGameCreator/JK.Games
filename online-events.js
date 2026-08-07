@@ -1,5 +1,5 @@
 (() => {
-  const ONLINE_VERSION = "2026-08-07-v233-firestore-listener-recovery";
+  const ONLINE_VERSION = "2026-08-07-v237-event-fragments";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
@@ -1902,12 +1902,20 @@
         <header><span class="event-app-logo">E</span><div><p class="eyebrow">${active ? "Live-Event" : "Geplantes Event"}</p><h4>${htmlEscape(eventData.title || "JK.Games Event")}</h4></div><b>${eventCountdownText(eventData)}</b></header>
         <p class="event-app-description">${htmlEscape(eventData.description || "")}</p>
         <section class="event-app-task"><small>DEINE AUFGABE</small><strong>${htmlEscape(eventData.task || "Warte auf die Aufgabenbeschreibung des Event-Teams.")}</strong>${eventData.proofHint ? `<p>${htmlEscape(eventData.proofHint)}</p>` : ""}</section>
-        <section class="event-app-rewards"><h5>Belohnungen</h5><div>${eventData.rewardMoney ? `<span><b>${Number(eventData.rewardMoney).toLocaleString("de-DE")} €</b> Spielgeld</span>` : ""}${rewardItemsHtml(eventData.rewardItems)}</div><small>${Math.max(1, Number(eventData.maxWinners || 1))} Gewinnerplatz/-plätze</small></section>
+        <section class="event-app-rewards"><h5>Belohnungen</h5><div>${eventData.rewardMoney ? `<span><b>${Number(eventData.rewardMoney).toLocaleString("de-DE")} €</b> Spielgeld</span>` : ""}${rewardItemsHtml(eventData.rewardItems)}<span><b>50 JK-Fragmente</b> Gewinnerbonus</span></div><small>${Math.max(1, Number(eventData.maxWinners || 1))} Gewinnerplatz/-plätze</small></section>
         <section class="event-app-meta"><span><small>Teilnehmer</small><b>${Number(eventData.participantCount || 0)}</b></span><span><small>Gewinner</small><b>${winners.length}</b></span><span><small>Status</small><b>${active ? "Läuft" : "Wartet"}</b></span></section>
         ${joined ? `<section class="event-app-progress"><b>Du nimmst teil</b><small>${htmlEscape(currentParticipant.statusText || "Noch kein Fortschritt gemeldet.")}</small><textarea data-event-progress maxlength="300" placeholder="Kurz beschreiben, was du erledigt hast …"></textarea><button class="mini-button gold" data-event-progress-send>Fortschritt senden</button></section>` : `<button class="mini-button gold event-join-button" data-event-join ${active ? "" : "disabled"}>${active ? "Am Event teilnehmen" : "Event startet später"}</button>`}
         ${winners.length ? `<section class="event-app-winners"><h5>Gewinner</h5>${winners.map((winner, index) => `<span><b>${index + 1}.</b> ${htmlEscape(winner.displayName || "Spieler")}</span>`).join("")}</section>` : ""}
         <button class="mini-button" data-event-refresh>Aktualisieren</button>
       </div>`;
+  }
+
+  function maybeGrantEventWinnerFragments(eventData) {
+    if (!onlineUser || !eventData || !Array.isArray(eventData.winners)) return;
+    const winner = eventData.winners.find((row) => String(row?.uid || row?.userId || row?.playerUid || row?.userUid || row?.targetUid || row?.id || "") === String(onlineUser.uid));
+    if (!winner) return;
+    const eventKey = `${String(eventData.title || "event").slice(0,60)}:${Number(eventData.startsAtMs || 0)}:${Number(eventData.endsAtMs || 0)}`;
+    window.JKCoinApp?.addFragments?.(50, `Event-Gewinner · ${eventData.title || "JK.Games Event"}`, `event-winner:${eventKey}`);
   }
 
   async function loadOwnParticipant() {
@@ -1927,6 +1935,7 @@
     eventUnsubscribe?.();
     eventUnsubscribe = fb.onSnapshot(fb.doc(fb.db, "events", "current"), (snapshot) => {
       currentEvent = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+      maybeGrantEventWinnerFragments(currentEvent);
       loadOwnParticipant().catch(() => {});
       refreshOpenEventApp();
     }, (error) => handleServiceListenerError("Event", error, () => { eventUnsubscribe = null; }, () => startEventListener()));

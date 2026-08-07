@@ -83,7 +83,8 @@
     pointerStart: null,
     audio: null,
     modal: null,
-    toast: null
+    toast: null,
+    jkDropSeq: 0
   };
 
   function defaultSave() {
@@ -835,6 +836,11 @@
     while (groups.length) {
       M.combo += 1;
       M.stats.largestCombo = Math.max(M.stats.largestCombo, M.combo);
+      for (const group of groups) {
+        const length = Number(group?.indices?.length || 0);
+        if (length === 4) { const won=window.JKCoinApp?.rollTopGameDrop?.("match", "match4", `match:${M.gameStartedAt}:${++M.jkDropSeq}`)||0; if(won)toast("JK/Coin Drop!",`+${won} JK/Coin durch Vierer-Match.`); }
+        else if (length === 3) { const won=window.JKCoinApp?.rollTopGameDrop?.("match", "match3", `match:${M.gameStartedAt}:${++M.jkDropSeq}`)||0; if(won)toast("JK/Coin Drop!",`+${won} JK/Coin durch Dreier-Match.`); }
+      }
       const creation = specialCreation(groups, swapped);
       const targets = new Set(groups.flatMap(group => group.indices));
       creation.forEach((special, index) => targets.delete(index));

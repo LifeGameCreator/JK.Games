@@ -17601,6 +17601,7 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     switchMainTab("shop");
     render();
   });
+  shell.querySelector("[data-topgames-jk-info]")?.addEventListener("click", openTopGamesJkInfo);
   shell.querySelector("[data-open-runner-kl]")?.addEventListener("click", () => {
     // V102: Das tatsächlich verwendete Smartphone an Runner.KL übergeben.
     // So kann der Rücksprung exakt auf ein vorhandenes Gerät erfolgen.
@@ -19596,10 +19597,36 @@ function phoneSettingsViewHtml() {
     </div>`;
 }
 
+function openTopGamesJkInfo() {
+  document.querySelector("[data-topgames-jk-info-modal]")?.remove();
+  const dialog = document.createElement("dialog");
+  dialog.className = "topgames-jk-info-modal";
+  dialog.dataset.topgamesJkInfoModal = "1";
+  dialog.innerHTML = `
+    <div class="topgames-jk-info-card">
+      <header><div><small>JK.GAMES · FREE TO PLAY</small><h3>Gratis JK/Coin in Top Games</h3></div><button type="button" data-topgames-jk-info-close>×</button></header>
+      <p class="topgames-jk-info-lead">Die Drops sind absichtlich selten. Jeder echte Treffer wird direkt deinem JK/Coin-Guthaben gutgeschrieben.</p>
+      <div class="topgames-jk-info-list">
+        <article><b>Runner.KL</b><p>Beim Laufen wird ungefähr alle 250 m auf einen Drop geprüft: ca. 0,2 % für 10 JK/Coin, 0,02 % für 50 und 0,002 % für 100.</p></article>
+        <article><b>City.KL</b><p>Nur bei einem Doppel-Sechser: ca. 1 % für 50 JK/Coin und 0,1 % für 100.</p></article>
+        <article><b>Match.KL</b><p>Bei einem echten Vierer-Match: ca. 1 % für 100 JK/Coin. Bei einem Dreier-Match: ca. 0,01 % für 50.</p></article>
+        <article><b>Fight.KL</b><p>Bei jedem Hauptboss auf Welle 10, 20, 30 …: ca. 1 % für 50 JK/Coin und 0,01 % für 100. Jeder Hauptboss gibt zusätzlich 10 JK-Fragmente.</p></article>
+        <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
+        <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
+      </div>
+      <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
+    </div>`;
+  document.body.append(dialog);
+  const close = () => { try { dialog.close(); } catch {} dialog.remove(); };
+  dialog.querySelector("[data-topgames-jk-info-close]")?.addEventListener("click", close);
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) close(); });
+  try { dialog.showModal(); } catch { dialog.setAttribute("open", ""); }
+}
+
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><small>JK.GAMES · COTTBUS EDITION</small><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -31537,6 +31564,13 @@ render();
     }
   }
 
+  function dailyGiftFragmentAmount(day, daysInMonth) {
+    const d=Math.max(1,Math.floor(Number(day)||1)),days=Math.max(d,Math.floor(Number(daysInMonth)||d));
+    if(d===days)return 10;
+    if(d%7===0)return 3;
+    return 1;
+  }
+
   async function claimDailyGift(day, item) {
     if (!state) return;
     const calendar = dailyGiftServerCalendar || await syncDailyGiftServerState(item, true);
@@ -31559,6 +31593,8 @@ render();
       const response = await callFirebasePhoneFunction("claimDailyGiftServer", { day: selectedDay });
       if (!applyDailyGiftServerCalendar(response.calendar)) throw new Error("Der Server konnte den Abholstatus nicht bestätigen.");
       if (!grantDailyReward(reward)) return;
+      const fragmentAmount=dailyGiftFragmentAmount(selectedDay,calendar.daysInMonth);
+      window.JKCoinApp?.addFragments?.(fragmentAmount,`Tagesgeschenk Tag ${selectedDay}`,`daily-gift:${dailyMonthKey(now)}:${selectedDay}`);
       addFeed(`${reward.type === "special" ? "Monatspreis" : `Tagesgeschenk Tag ${selectedDay}`} abgeholt: ${reward.label}.`, {
         purchase: { kind: "use", title: reward.type === "special" ? "Monatspreis erhalten" : "Tagesgeschenk", name: reward.label, icon: reward.icon }
       });
@@ -31588,6 +31624,7 @@ render();
       <article class="daily-gift-card ${statusClass} ${special ? "special" : ""} ${day === today ? "today" : ""}">
         <header><b>Tag ${day}</b><span>${reward.icon}</span></header>
         <strong>${escapeHtml(reward.label)}</strong>
+        <small class="daily-gift-fragments">+${dailyGiftFragmentAmount(day, calendar.daysInMonth)} JK-Fragmente</small>
         <button class="mini-button ${available ? "gold" : ""}" data-daily-gift-claim="${day}" ${available ? "" : "disabled"}>${buttonText}</button>
       </article>`;
   }
@@ -31660,6 +31697,7 @@ render();
     if (reward.casino) reward.casino = Math.max(50, Math.round(reward.casino * factor));
     if (reward.xp) reward.xp = Math.max(10, Math.round(reward.xp * Math.min(1.6, factor)));
     if (reward.item) reward.item = [reward.item[0], Math.max(1, Math.round(Number(reward.item[1] || 1) * Math.min(1.5, factor)))];
+    reward.fragments = band === "elite" ? 20 : band === "expert" ? 12 : band === "advanced" ? 8 : 5;
     return reward;
   }
 
@@ -31747,6 +31785,8 @@ render();
       system.levelBandAtCreation = Math.max(1, Number(state.level || 1));
       system.quests = createDailyQuests(dateKey);
     }
+    const existingBand=dailyQuestPool(Math.max(1,Number(system.levelBandAtCreation||state.level||1))).band;
+    system.quests.forEach((quest)=>{if(quest?.reward&&!Number(quest.reward.fragments))quest.reward.fragments=existingBand==="elite"?20:existingBand==="expert"?12:existingBand==="advanced"?8:5;});
     updateDailyQuestProgress(false);
     return system;
   }
@@ -31776,6 +31816,7 @@ render();
     if (reward.casino) parts.push(`${Number(reward.casino).toLocaleString("de-DE")} Casino-Coins`);
     if (reward.xp) parts.push(`${Number(reward.xp).toLocaleString("de-DE")} EP`);
     if (reward.item) parts.push(`${reward.item[1]}× ${reward.item[0]}`);
+    if (reward.fragments) parts.push(`${Number(reward.fragments).toLocaleString("de-DE")} JK-Fragmente`);
     return parts.join(" · ") || "Fortschritt";
   }
 
@@ -31859,6 +31900,7 @@ render();
     if (quest.claimed) return addFeed("Diese Questbelohnung wurde bereits abgeholt.");
     if (Number(quest.progress || 0) < Number(quest.target || 0)) return addFeed("Diese Quest ist noch nicht abgeschlossen.");
     if (!grantDailyQuestReward(quest)) return;
+    if(Number(quest.reward?.fragments||0)>0)window.JKCoinApp?.addFragments?.(Number(quest.reward.fragments),`Tägliche Quest · ${quest.title}`,`daily-quest:${quest.id}`);
     quest.claimed = true;
     quest.claimedAt = Date.now();
     addFeed(`Questbelohnung abgeholt: ${quest.title} · ${dailyQuestRewardText(quest.reward)}.`, {
