@@ -90,3 +90,14 @@
 .jkc-collection-result-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.jkc-collection-result-head small{letter-spacing:.08em}.jkc-collection-result-head b{font-size:11px;color:#dcefff}
 .jkc-collection-limit{display:block;margin-top:11px;color:#91a4b3!important;letter-spacing:0!important;text-align:center}
 @media(max-width:560px){.jkc-collection-filter{margin-left:-4px;margin-right:-4px;padding-left:4px;padding-right:4px}.jkc-box-burst{min-width:122px;min-height:102px}.jkc-box-burst>span{font-size:52px}}
+
+/* V227: stabiler Sammlungsfilter + gesamter Kistenwert */
+.jkc-reveal-actions{align-items:stretch;justify-content:space-between;gap:10px}.jkc-crate-total{display:flex;flex-direction:column;justify-content:center;min-width:170px;border:1px solid #ffe58c55;border-radius:12px;background:linear-gradient(145deg,#231d0d,#111925);padding:8px 12px}.jkc-crate-total small{color:#d7bf70!important;letter-spacing:.08em!important}.jkc-crate-total b{margin-top:2px;color:#ffe58c;font-size:16px}.jkc-reveal-actions>.jkc-button{min-height:48px}.jkc-collection-filter{overscroll-behavior-inline:contain}.jkc-collection-filter .jkc-button.gold{scroll-snap-align:center}
+@media(max-width:560px){.jkc-reveal-actions{display:grid;grid-template-columns:1fr}.jkc-crate-total{min-width:0}.jkc-reveal-actions>.jkc-button{width:100%}}
+
+
+/* V229: Lucky/Sammler-Kisten als echte Top-Layer-Dialoge + neue Lucky-Rewards */
+dialog.jkc-reveal-modal{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;box-sizing:border-box!important;color:#edf7ff!important}
+dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter:blur(8px)}
+.jkc-reveal-clothing>span{background:linear-gradient(145deg,#6fdcff,#745cff)}
+.jkc-reveal-coin>span{background:linear-gradient(145deg,#dca9ff,#7b5cff);color:#fff;font-size:18px}

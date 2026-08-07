@@ -20,7 +20,7 @@
     blackjack: "Ziel: näher an 21 als der Dealer, ohne 21 zu überschreiten. Blackjack zahlt 3:2. Double verdoppelt den Einsatz und gibt genau eine Karte. Split ist bei zwei gleichwertigen Startkarten möglich.",
     poker: "Texas Hold’em: Zwei Handkarten und bis zu fünf Gemeinschaftskarten. Du kannst gegen mehrere Bots oder über Firebase gegen Online-Spieler antreten. Check/Call, Raise und Fold entscheiden jede Setzrunde.",
     slots: "Zahle Scheine aus deinem Casino-Wallet in den Automaten ein. Wähle den Einsatz und starte die Walzen. Gewinnlinien zahlen in das Automaten-Guthaben, das du jederzeit zurück ins Casino-Wallet buchen kannst.",
-    highlow: "Tippe, ob die nächste Karte höher oder niedriger ist. Die Basis-Gewinnchance liegt bei etwa 40 %. Nach langen Verlustserien greift ein Ausgleich, der anschließend wieder sinkt.",
+    highlow: "Tippe, ob die nächste Karte höher oder niedriger ist. Haben beide Karten denselben Wert, ist es ein Gleichstand: Dein Einsatz bleibt vollständig erhalten und du spielst weiter. Die Basis-Gewinnchance liegt bei etwa 40 %. Nach langen Verlustserien greift ein Ausgleich, der anschließend wieder sinkt.",
     roulette: "Setze Chips auf einzelne Zahlen oder Außenwetten. Das Rad und die Kugel drehen sichtbar. Zahl 0–36 zahlt 35:1, Rot/Schwarz und Gerade/Ungerade 1:1, Dutzende 2:1."
   };
 
@@ -896,6 +896,15 @@
     const chance = highlowChance(game.lossStreak);
     const win = Math.random() < chance;
     game.next = cardForOutcome(game.current, choice, win);
+    const isTie = rankValue(game.next.rank) === rankValue(game.current.rank);
+    if (isTie) {
+      game.history.unshift({ card: game.next, choice, win: null, tie: true });
+      game.current = game.next;
+      game.next = null;
+      game.message = `Gleichstand! Gleicher Kartenwert – kein Verlust. Dein Einsatz von ${formatEuroCents(game.riskCents, true)} bleibt erhalten und du spielst weiter.`;
+      refresh();
+      return;
+    }
     if (win) {
       game.round += 1;
       game.lossStreak = Math.max(0, game.lossStreak - 2);

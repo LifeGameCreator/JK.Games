@@ -2172,6 +2172,7 @@ function defaultAppearance(gender = "male") {
     hairColor: "#2c1b13",
     skin: "#c9875f",
     tattoos: [],
+    jkExclusiveSkin: "",
     outfit: {
       underwear: "Basic Shorts",
       socks: "Basic Socken",
@@ -2560,7 +2561,10 @@ function migrateState(save) {
     save.appearance.outfit.accessory = "";
   }
   save.appearance.tattoos ||= [];
+  save.appearance.jkExclusiveSkin = typeof save.appearance.jkExclusiveSkin === "string" ? save.appearance.jkExclusiveSkin : "";
   save.wardrobe ||= ["Boxershorts Basic"];
+  if (save.appearance.jkExclusiveSkin && !isJkExclusiveSkinName(save.appearance.jkExclusiveSkin)) save.appearance.jkExclusiveSkin = "";
+  if (save.appearance.jkExclusiveSkin && !save.wardrobe.includes(save.appearance.jkExclusiveSkin)) save.wardrobe.push(save.appearance.jkExclusiveSkin);
   const savedClothingNames = new Set((shopMarketCatalog.clothing || []).map((item) => item.item || item.name));
   const savedBackpackNames = new Set((shopMarketCatalog.backpacks || []).map((item) => item.item || item.name));
   save.items = (save.items || []).filter((item) => {
@@ -6717,6 +6721,95 @@ function openAchievementInfoDialog() {
   if (!els.dialog.open) els.dialog.showModal();
 }
 
+function isJkExclusiveSkinName(name) {
+  return /^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #\d+$/i.test(String(name || "").trim());
+}
+
+function jkExclusiveSkinInfo(name) {
+  const raw = String(name || "").trim();
+  const match = raw.match(/^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #(\d+)$/i);
+  if (!match) return null;
+  const tier = match[1].toLowerCase();
+  const number = Math.max(1, Math.floor(Number(match[2]) || 1));
+  const labels = { premium: "Premium", legend: "Legendär", universe: "Universe", galaxy: "Galaxy" };
+  const sellValues = { premium: 125000, legend: 300000, universe: 900000, galaxy: 2500000 };
+  return { name: raw, tier, label: labels[tier] || match[1], number, sellValue: sellValues[tier] || 125000 };
+}
+
+function jkExclusiveSkinSellValue(name) {
+  return jkExclusiveSkinInfo(name)?.sellValue || 0;
+}
+
+function jkExclusiveSkinHtml(name, size = "") {
+  const info = jkExclusiveSkinInfo(name);
+  if (!info) return "";
+  const seed = info.number * 97 + info.tier.length * 131;
+  const hue = seed % 360;
+  const secondaryHue = (hue + 58 + (info.number % 47)) % 360;
+  const variant = info.number % 4;
+  const palettes = {
+    premium: { bg: "#071d1c", primary: `hsl(${(hue + 155) % 360} 72% 48%)`, secondary: `hsl(${(secondaryHue + 145) % 360} 82% 62%)`, metal: "#d6eee7", dark: "#071110", glow: "#6affd6" },
+    legend: { bg: "#241006", primary: `hsl(${(hue + 350) % 360} 78% 48%)`, secondary: "#ffc85a", metal: "#fff1c4", dark: "#160807", glow: "#ff9f43" },
+    universe: { bg: "#081128", primary: `hsl(${(hue + 225) % 360} 78% 58%)`, secondary: `hsl(${(secondaryHue + 190) % 360} 90% 66%)`, metal: "#d7f5ff", dark: "#080b1a", glow: "#61dcff" },
+    galaxy: { bg: "#16051f", primary: `hsl(${(hue + 275) % 360} 86% 62%)`, secondary: `hsl(${(secondaryHue + 320) % 360} 92% 66%)`, metal: "#f6eaff", dark: "#09030f", glow: "#d66cff" }
+  };
+  const c = palettes[info.tier] || palettes.premium;
+  const uid = `jkx-${info.tier}-${info.number}`;
+  const visor = variant === 0
+    ? `<path d="M83 45 C91 35 101 31 111 31 C122 31 133 35 140 46 L136 60 C125 66 97 66 85 59Z" fill="${c.dark}" stroke="${c.secondary}" stroke-width="2.2"/><path d="M90 47 C102 42 120 42 133 47" fill="none" stroke="${c.glow}" stroke-width="3" stroke-linecap="round"/>`
+    : variant === 1
+      ? `<path d="M80 43 C91 31 132 30 143 44 L139 63 C126 71 96 71 82 62Z" fill="${c.dark}" stroke="${c.metal}" stroke-width="2"/><circle cx="98" cy="51" r="4" fill="${c.glow}"/><circle cx="124" cy="51" r="4" fill="${c.glow}"/>`
+      : variant === 2
+        ? `<path d="M84 40 L137 40 L144 55 L135 67 L86 67 L77 55Z" fill="${c.dark}" stroke="${c.secondary}" stroke-width="2.4"/><path d="M90 52 L132 52" stroke="${c.glow}" stroke-width="4" stroke-linecap="round"/>`
+        : `<path d="M82 43 C88 31 99 25 111 25 C124 25 135 31 141 43 L137 66 C125 73 97 73 84 66Z" fill="${c.dark}" stroke="${c.primary}" stroke-width="3"/><path d="M94 50 L104 54 M128 50 L118 54" stroke="${c.glow}" stroke-width="3.5" stroke-linecap="round"/>`;
+  const stars = info.tier === "galaxy" || info.tier === "universe"
+    ? Array.from({ length: info.tier === "galaxy" ? 12 : 7 }, (_, index) => {
+        const x = 26 + ((seed + index * 31) % 168);
+        const y = 28 + ((seed * 3 + index * 47) % 270);
+        const r = 1 + ((index + info.number) % 3) * .55;
+        return `<circle cx="${x}" cy="${y}" r="${r}" fill="${index % 3 === 0 ? c.secondary : c.metal}" opacity="${.45 + (index % 4) * .12}"/>`;
+      }).join("")
+    : "";
+  const cape = (info.tier === "galaxy" || info.tier === "legend")
+    ? `<path d="M75 101 C57 137 58 235 72 296 C84 282 94 266 105 244 L100 112Z" fill="${c.primary}" opacity=".42"/><path d="M145 101 C163 137 162 235 148 296 C136 282 126 266 115 244 L120 112Z" fill="${c.secondary}" opacity=".28"/>`
+    : "";
+  const coreShape = variant % 2 === 0
+    ? `<path d="M110 119 l16 20 -16 20 -16-20Z" fill="${c.dark}" stroke="${c.glow}" stroke-width="3"/><circle cx="110" cy="139" r="7" fill="${c.secondary}"/>`
+    : `<circle cx="110" cy="138" r="18" fill="${c.dark}" stroke="${c.glow}" stroke-width="3"/><path d="M98 138 H122 M110 126 V150" stroke="${c.secondary}" stroke-width="4" stroke-linecap="round"/>`;
+  return `
+    <div class="avatar-card ${size} jk-exclusive-card jk-exclusive-${info.tier}" data-jk-exclusive-skin="${escapeHtml(info.name)}">
+      <svg class="avatar-svg jk-exclusive-svg" viewBox="0 0 220 360" role="img" aria-label="${escapeHtml(info.name)}">
+        <defs>
+          <linearGradient id="${uid}-armor" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c.primary}"/><stop offset=".52" stop-color="${c.dark}"/><stop offset="1" stop-color="${c.secondary}"/></linearGradient>
+          <linearGradient id="${uid}-metal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c.dark}"/><stop offset=".5" stop-color="${c.metal}"/><stop offset="1" stop-color="${c.dark}"/></linearGradient>
+          <radialGradient id="${uid}-aura"><stop offset="0" stop-color="${c.glow}" stop-opacity=".34"/><stop offset="1" stop-color="${c.bg}" stop-opacity="0"/></radialGradient>
+        </defs>
+        <ellipse cx="110" cy="190" rx="101" ry="166" fill="url(#${uid}-aura)"/>
+        ${stars}
+        <ellipse cx="110" cy="342" rx="62" ry="12" fill="rgba(0,0,0,.42)"/>
+        ${cape}
+        <path d="M76 102 C87 88 98 84 110 84 C123 84 135 89 145 103 L153 196 C139 211 126 217 110 217 C94 217 80 211 67 196Z" fill="url(#${uid}-armor)" stroke="${c.metal}" stroke-width="2.4"/>
+        <path d="M70 109 C55 121 49 153 46 201 C44 221 58 226 64 207 L78 135Z" fill="${c.primary}" stroke="${c.metal}" stroke-width="2"/>
+        <path d="M150 109 C165 121 171 153 174 201 C176 221 162 226 156 207 L142 135Z" fill="${c.secondary}" stroke="${c.metal}" stroke-width="2"/>
+        <circle cx="53" cy="214" r="11" fill="${c.dark}" stroke="${c.glow}" stroke-width="2.3"/><circle cx="167" cy="214" r="11" fill="${c.dark}" stroke="${c.glow}" stroke-width="2.3"/>
+        <path d="M78 200 C88 211 101 216 110 216 C119 216 132 211 142 200 L139 320 L116 320 L111 222 L109 222 L104 320 L81 320Z" fill="url(#${uid}-armor)" stroke="${c.metal}" stroke-width="2.2"/>
+        <path d="M70 317 C82 312 99 313 108 321 L107 337 H64 C63 327 66 321 70 317Z" fill="${c.dark}" stroke="${c.secondary}" stroke-width="2.4"/>
+        <path d="M150 317 C138 312 121 313 112 321 L113 337 H156 C157 327 154 321 150 317Z" fill="${c.dark}" stroke="${c.secondary}" stroke-width="2.4"/>
+        <path d="M79 111 L96 97 L110 106 L124 97 L143 111 L137 189 C125 198 95 198 82 189Z" fill="rgba(5,8,12,.45)" stroke="${c.primary}" stroke-width="2"/>
+        ${coreShape}
+        <path d="M83 167 L101 173 M137 167 L119 173" stroke="${c.secondary}" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+        <path d="M93 82 L127 82 L132 102 C124 111 96 111 88 102Z" fill="url(#${uid}-metal)" stroke="${c.glow}" stroke-width="1.8"/>
+        <path d="M76 48 C76 20 93 7 111 7 C130 7 146 21 146 49 C146 78 132 92 111 92 C90 92 76 77 76 48Z" fill="${c.dark}" stroke="${c.metal}" stroke-width="2.6"/>
+        <path d="M74 45 C80 17 96 3 112 3 C132 3 147 18 151 46 L145 50 C134 34 88 34 76 51Z" fill="${c.primary}" stroke="${c.secondary}" stroke-width="2"/>
+        ${visor}
+        <path d="M76 260 L102 260 M118 260 L144 260" stroke="${c.glow}" stroke-width="3" stroke-linecap="round" opacity=".78"/>
+        <path d="M82 299 L102 299 M118 299 L138 299" stroke="${c.secondary}" stroke-width="2.5" stroke-linecap="round" opacity=".72"/>
+        <text x="110" y="238" text-anchor="middle" fill="${c.metal}" font-size="10" font-weight="900" letter-spacing="1.5">JK ${info.number}</text>
+      </svg>
+    </div>
+  `;
+}
+
 function outfitTone(value, fallback) {
   const text = String(value || "").toLowerCase();
   if (text.includes("schwarz") || text.includes("black")) return "#151719";
@@ -6833,6 +6926,10 @@ function faceAccessoryHtml(accessoryText, accessory) {
 }
 
 function avatarHtml(size = "", previewOutfit = null) {
+  const hasExclusivePreview = !!previewOutfit && Object.prototype.hasOwnProperty.call(previewOutfit, "__jkExclusiveSkin");
+  const exclusiveSkin = hasExclusivePreview ? String(previewOutfit.__jkExclusiveSkin || "") : String(state?.appearance?.jkExclusiveSkin || "");
+  if (exclusiveSkin && isJkExclusiveSkinName(exclusiveSkin)) return jkExclusiveSkinHtml(exclusiveSkin, size);
+  if (hasExclusivePreview) { previewOutfit = { ...previewOutfit }; delete previewOutfit.__jkExclusiveSkin; }
   const gender = state?.gender === "female" ? "female" : "male";
   const female = gender === "female";
   const appearance = state?.appearance || defaultAppearance(gender);
@@ -7011,6 +7108,7 @@ function wearClothing(itemName) {
   const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
   if (!item?.wear) return addFeed("Dieses Kleidungsstück ist noch nicht zugeordnet.");
   state.appearance ||= defaultAppearance();
+  state.appearance.jkExclusiveSkin = "";
   state.appearance.outfit = { ...defaultAppearance().outfit, ...(state.appearance.outfit || {}), ...item.wear };
   addFeed(`${item.name} angezogen.`);
   save();
@@ -7023,11 +7121,30 @@ function isClothingEquipped(item) {
 }
 
 function toggleWearClothing(itemName) {
+  if (isJkExclusiveSkinName(itemName)) {
+    state.appearance ||= defaultAppearance(state.gender);
+    const wasEquipped = state.appearance.jkExclusiveSkin === itemName;
+    state.appearance.jkExclusiveSkin = wasEquipped ? "" : itemName;
+    addFeed(wasEquipped ? `${itemName} ausgezogen.` : `${itemName} als Hauptskin aktiviert.`);
+    save();
+    openWardrobeDialog(wasEquipped ? "" : itemName);
+    render();
+    return;
+  }
   const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
   const wearEntries = Object.entries(item?.wear || {});
   if (!wearEntries.length) return addFeed("Dieses Kleidungsstück ist noch nicht zugeordnet.");
   state.appearance ||= defaultAppearance();
   state.appearance.outfit = { ...defaultAppearance().outfit, ...(state.appearance.outfit || {}) };
+  if (state.appearance.jkExclusiveSkin) {
+    state.appearance.jkExclusiveSkin = "";
+    wearEntries.forEach(([slot, value]) => { state.appearance.outfit[slot] = value; });
+    addFeed(`${item.name} angezogen.`);
+    save();
+    openWardrobeDialog(item.item || item.name);
+    render();
+    return;
+  }
   const wasEquipped = wearEntries.every(([slot, value]) => state.appearance.outfit[slot] === value);
   if (wasEquipped) {
     wearEntries.forEach(([slot, value]) => {
@@ -7035,6 +7152,7 @@ function toggleWearClothing(itemName) {
     });
     addFeed(`${item.name} ausgezogen.`);
   } else {
+    state.appearance.jkExclusiveSkin = "";
     wearEntries.forEach(([slot, value]) => { state.appearance.outfit[slot] = value; });
     addFeed(`${item.name} angezogen.`);
   }
@@ -7050,6 +7168,14 @@ function sellWardrobeItem(itemName) {
   const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
   const value = inventorySellValue(itemName);
   if (!value) return addFeed("Dieses Basis-Kleidungsstück kann nicht verkauft werden.");
+  if (isJkExclusiveSkinName(itemName)) {
+    state.appearance ||= defaultAppearance(state.gender);
+    if (state.appearance.jkExclusiveSkin === itemName) state.appearance.jkExclusiveSkin = "";
+    try {
+      const coin = window.JKCoinApp?.coinState?.();
+      if (coin?.entitlements) delete coin.entitlements[`main-skin:${itemName}`];
+    } catch {}
+  }
   Object.entries(item?.wear || {}).forEach(([slot, equippedValue]) => {
     if (state.appearance?.outfit?.[slot] === equippedValue) state.appearance.outfit[slot] = "";
   });
@@ -7063,37 +7189,48 @@ function sellWardrobeItem(itemName) {
 }
 
 function openWardrobeDialog(previewItemName = "") {
-  const previewItem = shopMarketCatalog.clothing.find((entry) => entry.item === previewItemName || entry.name === previewItemName);
-  const previewOutfit = previewItem?.wear || null;
+  const previewExclusiveSkin = isJkExclusiveSkinName(previewItemName) ? previewItemName : "";
+  const previewItem = previewExclusiveSkin ? null : shopMarketCatalog.clothing.find((entry) => entry.item === previewItemName || entry.name === previewItemName);
+  const previewOutfit = previewExclusiveSkin
+    ? { __jkExclusiveSkin: previewExclusiveSkin }
+    : previewItem?.wear
+      ? { ...previewItem.wear, __jkExclusiveSkin: "" }
+      : null;
   clearDialogDynamic();
   els.dialog.classList.add("wardrobe-dialog");
   els.dialogTitle.textContent = "Kleiderschrank";
-  els.dialogText.textContent = "Beobachten zeigt Kleidung nur als Vorschau. AN/AUS zieht das Kleidungsstück wirklich an oder aus.";
+  els.dialogText.textContent = "Beobachten zeigt Kleidung oder JK-Exklusiv-Skins nur als Vorschau. AN/AUS aktiviert sie wirklich für deinen Hauptcharakter.";
   const closet = document.createElement("div");
   closet.className = "wardrobe-closet";
   const wardrobe = state.wardrobe || [];
+  const activeExclusiveSkin = String(state.appearance?.jkExclusiveSkin || "");
   closet.innerHTML = `
-    <div class="wardrobe-preview">
+    <div class="wardrobe-preview ${previewExclusiveSkin ? "jk-exclusive-preview" : ""}">
       ${avatarHtml("large", previewOutfit)}
       <div class="meta-strip">
-        <span>Vorschau: ${previewItem?.name || "Aktueller Look"}</span>
-        <span>Kleidung: ${wardrobe.length}</span>
+        <span>Vorschau: ${escapeHtml(previewExclusiveSkin || previewItem?.name || activeExclusiveSkin || "Aktueller Look")}</span>
+        <span>Kleidung & Skins: ${wardrobe.length}</span>
       </div>
     </div>
     <div class="wardrobe-list">
       ${wardrobe.map((itemName, index) => {
-        const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
-        const equipped = item && isClothingEquipped(item);
+        const exclusive = jkExclusiveSkinInfo(itemName);
+        const item = exclusive ? null : shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
+        const equipped = exclusive ? activeExclusiveSkin === itemName : !!item && isClothingEquipped(item) && !activeExclusiveSkin;
+        const value = inventorySellValue(itemName);
+        const description = exclusive
+          ? `Exklusiver JK.Games-Hauptcharakter-Skin · ${exclusive.label}. Ersetzt beim Aktivieren den normalen Charakter-Look vollständig.${itemIdBadge(itemName)}`
+          : `${item?.text || "Kleidung aus deiner Garderobe."}${itemIdBadge(itemName)}`;
         return `
-          <article class="item-card wardrobe-card ${equipped ? "equipped" : ""}">
+          <article class="item-card wardrobe-card ${equipped ? "equipped" : ""} ${exclusive ? `jk-exclusive-wardrobe-card tier-${exclusive.tier}` : ""}">
             <div>
-              <h3>${item?.name || itemName}</h3>
-              <p>${item?.text || "Kleidung aus deiner Garderobe."}${itemIdBadge(itemName)}</p>
+              <h3>${escapeHtml(item?.name || itemName)}</h3>
+              <p>${description}</p>
             </div>
             <div class="wardrobe-actions">
               <button data-wardrobe-preview="${index}">Beobachten</button>
               <button class="${equipped ? "danger" : ""}" data-wardrobe-toggle="${index}">${equipped ? "AUS" : "AN"}</button>
-              <button class="mini-button" data-wardrobe-sell="${index}" title="Verkaufen für ${euro.format(inventorySellValue(itemName))}" ${inventorySellValue(itemName) <= 0 ? "disabled" : ""}>Verkaufen</button>
+              <button class="mini-button" data-wardrobe-sell="${index}" title="Verkaufen für ${euro.format(value)}" ${value <= 0 ? "disabled" : ""}>Verkaufen</button>
             </div>
           </article>
         `;
@@ -10238,6 +10375,7 @@ function completeShopPurchase(item, method, quantity = 1, purchaseMarketKey = ac
     state.wardrobe ||= [];
     if (!state.wardrobe.includes(item.item || item.name)) state.wardrobe.push(item.item || item.name);
     state.appearance ||= defaultAppearance();
+    state.appearance.jkExclusiveSkin = "";
     state.appearance.outfit = { ...defaultAppearance().outfit, ...(state.appearance.outfit || {}), ...item.wear };
   }
   if (item.property) {
@@ -13290,6 +13428,7 @@ function itemBasePrice(name) {
 
 function inventorySellValue(name) {
   if (/wasser/i.test(name)) return 0;
+  if (isJkExclusiveSkinName(name)) return jkExclusiveSkinSellValue(name);
   const entry = findShopCatalogEntry(name);
   const price = entry?.price || itemBasePrice(name);
   return Math.max(0, Math.round((price || 0) * 0.5));
@@ -13413,6 +13552,7 @@ let activePhoneCallDocUnsubscribe = null;
 let activePhoneCandidateUnsubscribe = null;
 let activePhoneCallTimeout = null;
 let phoneSmsRetryTimer = null;
+let phoneRealtimeRecoveryTimer = null;
 let phoneSmsLastSignature = "";
 let phoneIncomingLastSignature = "";
 
@@ -13777,24 +13917,38 @@ function isPhoneFirestoreOfflineError(error) {
     || text.includes("failed-precondition") && text.includes("offline");
 }
 
-async function recoverPhoneFirestoreTransport(fb, reason = "phone-firestore") {
+async function recoverPhoneFirestoreTransport(fb, reason = "phone-firestore", waitMs = 650) {
   if (!fb?.db || navigator.onLine === false) return false;
+  const core = window.LifeBuilderFirebaseCore;
+  try { await core?.reconnect?.({ force: false }); } catch {}
   try { await fb.enableNetwork?.(fb.db); } catch {}
-  try { await window.LifeBuilderFirebaseCore?.recoverFirestore?.(reason); } catch {}
-  await new Promise((resolve) => window.setTimeout(resolve, 380));
-  return true;
+  try { await core?.recoverFirestore?.(reason); } catch {}
+  await new Promise((resolve) => window.setTimeout(resolve, Math.max(350, Number(waitMs) || 650)));
+  return navigator.onLine !== false;
 }
 
-async function phoneFirestoreRequestWithRecovery(factory, label = "Telefon-Firebase", attempts = 3) {
+function schedulePhoneRealtimeRecovery(delay = 2200, reason = "phone-realtime") {
+  if (navigator.onLine === false) return;
+  clearTimeout(phoneRealtimeRecoveryTimer);
+  window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(Math.min(1200, Math.max(350, Number(delay) / 2 || 700)), reason);
+  phoneRealtimeRecoveryTimer = window.setTimeout(() => {
+    phoneRealtimeRecoveryTimer = null;
+    ensurePhoneBackgroundRealtime().catch((error) => {
+      if (!isPhoneFirestoreOfflineError(error)) console.warn("Telefon/SMS Wiederverbindung", error);
+    });
+  }, Math.max(700, Number(delay) || 2200));
+}
+
+async function phoneFirestoreRequestWithRecovery(factory, label = "Telefon-Firebase", attempts = 5) {
   let lastError = null;
   for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
     try {
-      return await onlineFirebaseTimeout(Promise.resolve().then(factory), 9000, label);
+      return await onlineFirebaseTimeout(Promise.resolve().then(factory), 10000, label);
     } catch (error) {
       lastError = error;
       if (!isPhoneFirestoreOfflineError(error) || navigator.onLine === false || attempt >= attempts - 1) throw error;
       const fb = await loadFirebasePhoneRuntime().catch(() => null);
-      await recoverPhoneFirestoreTransport(fb, `${label}-retry-${attempt + 1}`);
+      await recoverPhoneFirestoreTransport(fb, `${label}-retry-${attempt + 1}`, 600 + attempt * 350);
     }
   }
   throw lastError || new Error(`${label} fehlgeschlagen.`);
@@ -14108,8 +14262,12 @@ async function startGlobalSmsListener() {
     });
     if (added.length) saveRemoteRealtimeState();
   }, (error) => {
-    console.warn("Global SMS listener failed", error);
     phoneGlobalSmsUnsubscribe = null;
+    if (isPhoneFirestoreOfflineError(error)) {
+      schedulePhoneRealtimeRecovery(2200, "sms-listener-offline");
+      return;
+    }
+    console.warn("Global SMS listener failed", error);
     addFeed(`SMS-Benachrichtigungen werden neu verbunden: ${error.message || error}`);
     clearTimeout(phoneSmsRetryTimer);
     phoneSmsRetryTimer = window.setTimeout(() => startGlobalSmsListener().catch(console.warn), 5000);
@@ -14123,6 +14281,8 @@ function resetPhoneBackgroundRealtime() {
   phoneGlobalSmsUnsubscribe = null;
   clearTimeout(phoneSmsRetryTimer);
   phoneSmsRetryTimer = null;
+  clearTimeout(phoneRealtimeRecoveryTimer);
+  phoneRealtimeRecoveryTimer = null;
   phoneGlobalSmsPrimed = false;
   phoneSmsLastSignature = "";
   phoneIncomingLastSignature = "";
@@ -14133,15 +14293,26 @@ function resetPhoneBackgroundRealtime() {
 
 async function ensurePhoneBackgroundRealtime() {
   if (!state || !state.phoneSim || !ownedPhoneItem()) return;
+  if (navigator.onLine === false) return false;
   if (phoneBackgroundStarting) return phoneBackgroundStarting;
   phoneBackgroundStarting = (async () => {
-    const fb = await loadFirebasePhoneRuntime();
-    const registration = await registerPhoneOnline();
-    const key = `${registration?.ownerUid || ""}:${registration?.number || ""}:${selectedSlot}`;
-    if (!registration?.ownerUid || !registration?.number) return;
-    if (phoneBackgroundOwnerKey && phoneBackgroundOwnerKey !== key) resetPhoneBackgroundRealtime();
-    phoneBackgroundOwnerKey = key;
-    await Promise.all([startIncomingCallListener(), startGlobalSmsListener()]);
+    try {
+      const fb = await loadFirebasePhoneRuntime();
+      await recoverPhoneFirestoreTransport(fb, "phone-background-start", 450);
+      const registration = await registerPhoneOnline();
+      const key = `${registration?.ownerUid || ""}:${registration?.number || ""}:${selectedSlot}`;
+      if (!registration?.ownerUid || !registration?.number) return false;
+      if (phoneBackgroundOwnerKey && phoneBackgroundOwnerKey !== key) resetPhoneBackgroundRealtime();
+      phoneBackgroundOwnerKey = key;
+      await Promise.all([startIncomingCallListener(), startGlobalSmsListener()]);
+      return true;
+    } catch (error) {
+      if (isPhoneFirestoreOfflineError(error) && navigator.onLine !== false) {
+        schedulePhoneRealtimeRecovery(2200, "phone-background-offline");
+        return false;
+      }
+      throw error;
+    }
   })().finally(() => {
     phoneBackgroundStarting = null;
   });
@@ -14173,9 +14344,13 @@ async function startIncomingCallListener() {
       syncIncomingCallNotifications(state.phoneIncomingCalls);
       if (els.dialog?.open && els.dialog.querySelector(".device-shell")) refreshDeviceApp("phone");
     }, (error) => {
-      console.warn("Incoming call listener failed", error);
       phoneIncomingUnsubscribe = null;
       stopPhoneRingtone();
+      if (isPhoneFirestoreOfflineError(error)) {
+        schedulePhoneRealtimeRecovery(2200, "call-listener-offline");
+        return;
+      }
+      console.warn("Incoming call listener failed", error);
       if (allowFallback && String(error?.code || "").includes("failed-precondition")) {
         const fallbackQuery = fb.query(
           fb.collection(fb.db, "phoneCalls"),
@@ -29422,8 +29597,21 @@ function guessHighLow(choice) {
   if (!game.riskCents || !(game.playCard || game.currentCard)) return;
   const from = game.playCard || game.currentCard;
   const to = drawHighLowCard();
-  const win = choice === "high" ? to.value > from.value : choice === "low" ? to.value < from.value : to.value === from.value;
+  const isTie = to.value === from.value;
+  const win = choice === "high" ? to.value > from.value : choice === "low" ? to.value < from.value : isTie;
   game.nextCard = to;
+  if (isTie && choice !== "equal") {
+    game.history = [{ choice, from, to, win: null, tie: true }, ...(game.history || [])];
+    game.currentCard = from;
+    game.playCard = to;
+    game.nextCard = null;
+    game.stage = "guess";
+    game.message = `${to.rank}${to.suit}: Gleichstand. Dein Einsatz bleibt vollständig erhalten – du kannst ohne Verlust weiterspielen.`;
+    playCasinoSound("deal");
+    save();
+    refreshCasinoPanelStable();
+    return;
+  }
   game.history = [{ choice, from, to, win }, ...(game.history || [])];
   if (!win) {
     game.riskCents = 0;
@@ -32541,8 +32729,8 @@ function stabilizeMobileCharacterScroll(section = "") {
       if (typeof state !== "undefined" && state) {
         ensurePhoneBackgroundRealtime().catch((error) => {
           if (isPhoneFirestoreOfflineError(error)) {
-            window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(700, "phone-sms-reconnect");
-            scheduleRecovery(1800, false);
+            schedulePhoneRealtimeRecovery(2200, "phone-sms-reconnect");
+            scheduleRecovery(2400, false);
             return;
           }
           console.warn("Telefon/SMS reconnect", error);
@@ -33157,8 +33345,12 @@ function stabilizeMobileCharacterScroll(section = "") {
       if (changed || newMessages.length) saveRemoteRealtimeState();
       if (els.dialog?.open && els.dialog.querySelector(".ios-messages-app")) refreshDeviceApp("sms", ownedPhoneItem());
     }, (error) => {
-      console.warn("Global SMS listener V50 failed", error);
       phoneGlobalSmsUnsubscribe = null;
+      if (isPhoneFirestoreOfflineError(error)) {
+        schedulePhoneRealtimeRecovery(2200, "sms-v50-offline");
+        return;
+      }
+      console.warn("Global SMS listener V50 failed", error);
       clearTimeout(phoneSmsRetryTimer);
       phoneSmsRetryTimer = window.setTimeout(() => startGlobalSmsListener().catch(console.warn), 4000);
     });
@@ -33193,6 +33385,10 @@ function stabilizeMobileCharacterScroll(section = "") {
           if (String(call.calleeUid || "") !== String(registration.ownerUid)) return null;
           return call;
         } catch (error) {
+          if (isPhoneFirestoreOfflineError(error)) {
+            schedulePhoneRealtimeRecovery(2200, "call-inbox-v50-offline");
+            return null;
+          }
           console.warn("Anruf aus Posteingang konnte nicht geprüft werden", error);
           return null;
         }
@@ -33205,9 +33401,13 @@ function stabilizeMobileCharacterScroll(section = "") {
       syncIncomingCallNotifications(state.phoneIncomingCalls);
       if (els.dialog?.open && els.dialog.querySelector(".ios-phone-app")) refreshDeviceApp("phone", ownedPhoneItem());
     }, (error) => {
-      console.warn("Anruf-Posteingang getrennt", error);
       phoneIncomingUnsubscribe = null;
       stopPhoneRingtone();
+      if (isPhoneFirestoreOfflineError(error)) {
+        schedulePhoneRealtimeRecovery(2200, "call-v50-offline");
+        return;
+      }
+      console.warn("Anruf-Posteingang getrennt", error);
       window.setTimeout(() => startIncomingCallListener().catch(console.warn), 4000);
     });
   };
@@ -33332,7 +33532,7 @@ function stabilizeMobileCharacterScroll(section = "") {
   // ersetzt und anschließend über den neuen Anruf-/SMS-Posteingang gestartet.
   if (typeof state !== "undefined" && state) {
     resetPhoneBackgroundRealtime();
-    window.setTimeout(() => ensurePhoneBackgroundRealtime().catch((error) => console.warn("Telefon/SMS V50 Start", error)), 300);
+    window.setTimeout(() => ensurePhoneBackgroundRealtime().catch((error) => { if (!isPhoneFirestoreOfflineError(error)) console.warn("Telefon/SMS V50 Start", error); }), 1200);
   }
 
   window.JKGamesPhoneV50 = Object.freeze({
