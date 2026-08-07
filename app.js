@@ -4085,7 +4085,7 @@ function awardGameXp(amount, reason = "Game", options = {}) {
 }
 
 
-// V221: Gemeinsame Hauptcharakter-EP für alle sechs Top Games.
+// V242: Gemeinsame Hauptcharakter-EP für alle sieben Top Games.
 // Die jeweiligen Spiele vergeben weiterhin ihre eigenen internen Belohnungen.
 // Zusätzlich erhält der übergeordnete JK.Games-Hauptcharakter echte EP.
 // Event-Keys verhindern doppelte Gutschriften desselben Ergebnisses; ein
@@ -17286,7 +17286,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "Cottbus-Spiele: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL und Speed Car.KL sind vollständig spielbar." });
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17623,6 +17623,10 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-money-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.MoneyKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-speed-car-kl]")?.addEventListener("click", () => {
+    els.dialog.close();
+    window.SpeedCarKL?.open?.(item);
   });
   shell.querySelector("[data-device-open-games]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19605,6 +19609,7 @@ function openTopGamesJkInfo() {
         <article><b>Fight.KL</b><p>Bei jedem Hauptboss auf Welle 10, 20, 30 …: ca. 1 % für 50 JK/Coin und 0,01 % für 100. Jeder Hauptboss gibt zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
+        <article><b>Speed Car.KL</b><p>Speed Car.KL hat aktuell keine direkten Gratis-JK/Coin-Drops. Dort verdienst du Speed Coins über Fluchtstrecken und Rammschaden; optionale Extras findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
     </div>`;
@@ -19618,14 +19623,15 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL und Money.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL und Speed Car.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
         <button class="topgames-card match" data-open-match-kl><b>Match.KL</b><small>Leuchtendes Match-3-Abenteuer mit 80 Cottbus-Leveln.</small></button>
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
-        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 200 normalen Makern, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
+        <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
+        <button class="topgames-card speedcar" data-open-speed-car-kl><b>Speed Car.KL</b><small>Endlose Polizeiflucht, Online-Lobby, 3D-Autos, Damage, Tankstellen, Tuning, Werkstatt und Owner-Fahrzeuge.</small></button>
       </div>
     </div>`;
   if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;
@@ -35349,6 +35355,12 @@ window.JKGamesOpenTopGames = function JKGamesOpenTopGames(preferredItem = "") {
   return true;
 };
 window.JKGamesOwnedPhoneItem = ownedPhoneItem;
+// V242: sichere interne Brücke für eigenständige Top-Games. Dadurch kann Speed Car.KL
+// seinen kleinen Spielstand in denselben aktiven Cloud-Slot schreiben, ohne eigene
+// konkurrierende Cloud-Save-Streams zu starten.
+window.JKGamesGetActiveState = () => state;
+window.JKGamesPersistState = () => { if (state) save(); return true; };
+window.JKGamesAwardTopGameXp = (gameId, amount, reason, options = {}) => awardTopGameMainXp(gameId, amount, reason, options);
 
 // Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.
 window.addEventListener("runner-kl-world-reward", (event) => {
