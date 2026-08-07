@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 (() => {
   'use strict';
 
-  const VERSION = '2026-08-08-speed-car-kl-v246-rigid-ground-camera-fix';
+  const VERSION = '2026-08-08-speed-car-kl-v246-ad-swap-fix';
   const STORAGE_KEY = 'jk-games-speed-car-kl-v242';
   const ASSET = 'assets/speed-car-kl/';
   const PACK_URL = `${ASSET}low_poly_cars.glb`;
@@ -471,7 +471,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     UI.body?.querySelector('[data-sckl-owner-ingame]')?.addEventListener('click',()=>showOwnerIngameMenu(s));
     updateConsumableHud();
   }
-  function input(kind){if(kind==='gas')return UI.keys.KeyW||UI.keys.ArrowUp||UI.touch.gas;if(kind==='brake')return UI.keys.KeyS||UI.keys.ArrowDown||UI.touch.brake;if(kind==='left')return UI.keys.KeyA||UI.keys.ArrowLeft||UI.touch.left;if(kind==='right')return UI.keys.KeyD||UI.keys.ArrowRight||UI.touch.right;if(kind==='nitro')return UI.keys.ShiftLeft||UI.keys.ShiftRight||UI.touch.nitro;return false;}
+  function input(kind){if(kind==='gas')return UI.keys.KeyW||UI.keys.ArrowUp||UI.touch.gas;if(kind==='brake')return UI.keys.KeyS||UI.keys.ArrowDown||UI.touch.brake;if(kind==='left')return UI.keys.KeyD||UI.keys.ArrowLeft||UI.touch.left;if(kind==='right')return UI.keys.KeyA||UI.keys.ArrowRight||UI.touch.right;if(kind==='nitro')return UI.keys.ShiftLeft||UI.keys.ShiftRight||UI.touch.nitro;return false;}
   function onKeyDown(e){if(!UI.overlay)return;UI.keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='Escape'){e.preventDefault();stopWorld();renderHome();}if(e.code==='KeyE'&&UI.session?.mode==='lobby')interactWorld(UI.session);if(e.code==='KeyM'&&UI.session?.mode==='lobby'&&isOwner())showOwnerIngameMenu(UI.session);if(e.code==='KeyR'&&UI.session)useConsumable(UI.session,'repair');if(e.code==='KeyF'&&UI.session)useConsumable(UI.session,'fuel');}
   function onKeyUp(e){UI.keys[e.code]=false;}
   function interactWorld(s){if(s.mode!=='lobby')return;if(s.nearPlace==='shop'){stopWorld();renderGarage();}else if(s.nearPlace==='tune'){stopWorld();renderTuning();}}
