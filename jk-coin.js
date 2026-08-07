@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-jkcoin-v238-jk-maker-power-buff";
+  const VERSION = "2026-08-07-jkcoin-v239-money-500-makers-level20";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -165,16 +165,16 @@
     { game:"money", id:"money-production-20", name:"20× Produktion · 15 Min.", cost:2000, text:"Maximaler Produktionsboost: zwanzigfache Produktion für 15 Minuten.", grant:{kind:"production20",amount:1} },
     { game:"money", id:"money-instant-10", name:"10 Min. Sofortertrag", cost:500, text:"Schreibt dir sofort den Ertrag von zehn Minuten deiner aktuellen Money.KL-Produktion gut.", grant:{kind:"instant10",amount:1} },
 
-    { game:"money", id:"money-jk-maker-1", name:"JK Neon-Sammler", cost:400, text:"Premium-Maker mit 100 Billiarden pro Sekunde auf Level 1. Ein Exemplar zum Platzieren.", grant:{kind:"jkMaker:jk-maker-1",amount:1} },
-    { game:"money", id:"money-jk-maker-2", name:"JK Cash-Runner", cost:400, text:"Premium-Maker mit 500 Billiarden pro Sekunde auf Level 1. Ein Exemplar zum Platzieren.", grant:{kind:"jkMaker:jk-maker-2",amount:1} },
-    { game:"money", id:"money-jk-maker-3", name:"JK Quantum-Händler", cost:500, text:"Premium-Maker mit 2 Trillionen pro Sekunde auf Level 1. Ein Exemplar zum Platzieren.", grant:{kind:"jkMaker:jk-maker-3",amount:1} },
-    { game:"money", id:"money-jk-maker-4", name:"JK Galaxy-Broker", cost:500, text:"Premium-Maker mit 10 Trillionen pro Sekunde auf Level 1. Ein Exemplar zum Platzieren.", grant:{kind:"jkMaker:jk-maker-4",amount:1} },
-    { game:"money", id:"money-jk-maker-5", name:"JK Hyper-Mogul", cost:1000, text:"Sehr starker Premium-Maker mit 50 Trillionen pro Sekunde auf Level 1.", grant:{kind:"jkMaker:jk-maker-5",amount:1} },
-    { game:"money", id:"money-jk-maker-6", name:"JK Orbit-Bankier", cost:1000, text:"Sehr starker Premium-Maker mit 250 Trillionen pro Sekunde auf Level 1.", grant:{kind:"jkMaker:jk-maker-6",amount:1} },
-    { game:"money", id:"money-jk-maker-7", name:"JK Multiversum-Tycoon", cost:3000, text:"Endgame-Premium-Maker mit 2 Trilliarden pro Sekunde auf Level 1.", grant:{kind:"jkMaker:jk-maker-7",amount:1} },
-    { game:"money", id:"money-jk-maker-8", name:"JK Infinity-Investor", cost:3000, text:"Endgame-Premium-Maker mit 20 Trilliarden pro Sekunde auf Level 1.", grant:{kind:"jkMaker:jk-maker-8",amount:1} },
-    { game:"money", id:"money-jk-maker-9", name:"JK Black-Hole-Imperator", cost:5000, text:"Extrem mächtiger Premium-Maker mit 2 Quadrillionen pro Sekunde auf Level 1.", grant:{kind:"jkMaker:jk-maker-9",amount:1} },
-    { game:"money", id:"money-jk-maker-10", name:"JK Money-Gott", cost:5000, text:"Der brutalste JK Maker: 100 Quadrillionen pro Sekunde auf Level 1 und bis Level 5 ausbaubar.", grant:{kind:"jkMaker:jk-maker-10",amount:1} },
+    { game:"money", id:"money-jk-maker-1", name:"JK Neon-Sammler", cost:100, text:"100 Billiarden pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-1",amount:1} },
+    { game:"money", id:"money-jk-maker-2", name:"JK Cash-Runner", cost:200, text:"500 Billiarden pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-2",amount:1} },
+    { game:"money", id:"money-jk-maker-3", name:"JK Quantum-Händler", cost:300, text:"2 Trillionen pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-3",amount:1} },
+    { game:"money", id:"money-jk-maker-4", name:"JK Galaxy-Broker", cost:500, text:"1 Quadrillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-4",amount:1} },
+    { game:"money", id:"money-jk-maker-5", name:"JK Hyper-Mogul", cost:1000, text:"1 Quintillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-5",amount:1} },
+    { game:"money", id:"money-jk-maker-6", name:"JK Orbit-Bankier", cost:2000, text:"1 Sextillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-6",amount:1} },
+    { game:"money", id:"money-jk-maker-7", name:"JK Multiversum-Tycoon", cost:3000, text:"1 Septillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-7",amount:1} },
+    { game:"money", id:"money-jk-maker-8", name:"JK Infinity-Investor", cost:3500, text:"1 Octillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-8",amount:1} },
+    { game:"money", id:"money-jk-maker-9", name:"JK Black-Hole-Imperator", cost:4500, text:"1 Nonillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-9",amount:1} },
+    { game:"money", id:"money-jk-maker-10", name:"JK Money-Gott", cost:5000, text:"1 Decillion pro Sekunde auf Level 1 · bis Level 20 ausbaubar.", grant:{kind:"jkMaker:jk-maker-10",amount:1} },
 
     { game:"weed", id:"weed-grow", name:"Galaxy-Growlicht", cost:250, text:"Exklusives Growlicht für das Weed-Business.", grant:{kind:"growLight",amount:1} },
     { game:"weed", id:"weed-grow-5", name:"5 Galaxy-Growlichter", cost:950, text:"Großes Growlicht-Paket für mehrere Plätze.", grant:{kind:"growLight",amount:5} },

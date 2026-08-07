@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-money-kl-v238-jk-maker-power-buff";
+  const VERSION = "2026-08-07-money-kl-v240-maker-stages-galaxy-ultimate";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
   const LEADERBOARD_ACTIVE_MS = 45 * 1000;
@@ -26,29 +26,35 @@
   ];
   const MAKER_NAMES = Object.freeze([
     ...BASE_MAKER_NAMES,
-    ...BASE_MAKER_NAMES.map(name => `${name} II`)
+    ...BASE_MAKER_NAMES.map(name => `${name} · Stufe 2`),
+    ...BASE_MAKER_NAMES.map(name => `${name} · Stufe 3`),
+    ...BASE_MAKER_NAMES.map(name => `${name} · Stufe 4`),
+    ...BASE_MAKER_NAMES.map(name => `${name} · Stufe 5`)
   ]);
   const JK_MAKERS = Object.freeze([
-    { id:"jk-maker-1", name:"JK Neon-Sammler", icon:"JK", color:"#67ffd0", income:100_000_000_000_000_000, upgradeBase:1_000_000_000_000_000_000 },
-    { id:"jk-maker-2", name:"JK Cash-Runner", icon:"⚡", color:"#7ecbff", income:500_000_000_000_000_000, upgradeBase:5_000_000_000_000_000_000 },
-    { id:"jk-maker-3", name:"JK Quantum-Händler", icon:"Q", color:"#c18cff", income:2_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000 },
-    { id:"jk-maker-4", name:"JK Galaxy-Broker", icon:"◆", color:"#ff8fd8", income:10_000_000_000_000_000_000, upgradeBase:100_000_000_000_000_000_000 },
-    { id:"jk-maker-5", name:"JK Hyper-Mogul", icon:"H", color:"#ffe070", income:50_000_000_000_000_000_000, upgradeBase:500_000_000_000_000_000_000 },
-    { id:"jk-maker-6", name:"JK Orbit-Bankier", icon:"◉", color:"#78f0ff", income:250_000_000_000_000_000_000, upgradeBase:2_500_000_000_000_000_000_000 },
-    { id:"jk-maker-7", name:"JK Multiversum-Tycoon", icon:"∞", color:"#b88cff", income:2_000_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000_000 },
-    { id:"jk-maker-8", name:"JK Infinity-Investor", icon:"∞", color:"#ff79c9", income:20_000_000_000_000_000_000_000, upgradeBase:200_000_000_000_000_000_000_000 },
-    { id:"jk-maker-9", name:"JK Black-Hole-Imperator", icon:"●", color:"#9f76ff", income:2_000_000_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000_000_000 },
-    { id:"jk-maker-10", name:"JK Money-Gott", icon:"★", color:"#ffd95d", income:100_000_000_000_000_000_000_000_000, upgradeBase:1_000_000_000_000_000_000_000_000_000 }
-  ].map((maker,index)=>({ ...maker, index:200+index, jk:true, cost:0 })));
+    { id:"jk-maker-1", name:"JK Neon-Sammler", icon:"JK", color:"#67ffd0", income:1e17, upgradeBase:1e17 },
+    { id:"jk-maker-2", name:"JK Cash-Runner", icon:"⚡", color:"#7ecbff", income:5e17, upgradeBase:5e17 },
+    { id:"jk-maker-3", name:"JK Quantum-Händler", icon:"Q", color:"#c18cff", income:2e18, upgradeBase:2e18 },
+    { id:"jk-maker-4", name:"JK Galaxy-Broker", icon:"◆", color:"#ff8fd8", income:1e24, upgradeBase:1e24 },
+    { id:"jk-maker-5", name:"JK Hyper-Mogul", icon:"H", color:"#ffe070", income:1e30, upgradeBase:1e30 },
+    { id:"jk-maker-6", name:"JK Orbit-Bankier", icon:"◉", color:"#78f0ff", income:1e36, upgradeBase:1e36 },
+    { id:"jk-maker-7", name:"JK Multiversum-Tycoon", icon:"∞", color:"#b88cff", income:1e42, upgradeBase:1e42 },
+    { id:"jk-maker-8", name:"JK Infinity-Investor", icon:"∞", color:"#ff79c9", income:1e48, upgradeBase:1e48 },
+    { id:"jk-maker-9", name:"JK Black-Hole-Imperator", icon:"●", color:"#9f76ff", income:1e54, upgradeBase:1e54 },
+    { id:"jk-maker-10", name:"JK Money-Gott", icon:"★", color:"#ffd95d", income:1e60, upgradeBase:1e60 }
+  ].map((maker,index)=>({ ...maker, index:MAKER_NAMES.length+index, jk:true, cost:0 })));
   const ICONS = ["N","€","$","M","I","B","◆","◉","∞","★"];
   const COLORS = ["#63ffc1","#7fd3ff","#c894ff","#ffd766","#ff8da1","#6ef1ee","#a7ff7d","#ff9e5f","#d8e2ff","#f3a8ff"];
   const AVATARS = ["🧒","🧺","🛒","🎭","📦","💻","📈","🏢","💎","👑","🚀","🌌"] ;
 
-  const UI = { overlay: null, leftOpen: false, rightOpen: false, view: "board", selectedMaker: 0, selectedCell: "", selectedCells: new Set(), gesture: null, cellButtons: [], tick: 0, leaderboard: [], onlineStatus: "", sourceDevice: "", toastTimer: 0 };
+  const UI = { overlay: null, leftOpen: false, rightOpen: false, view: "board", makerStage: 1, selectedMaker: 0, selectedCell: "", selectedCells: new Set(), gesture: null, cellButtons: [], tick: 0, leaderboard: [], onlineStatus: "", sourceDevice: "", toastTimer: 0 };
   const number = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 });
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
-  const SHORT_SUFFIXES = ["", "K", "M", "MI", "B", "BA", "T", "TA", "Q", "QA", "QU", "QI", "S", "SA", "O", "OA", "N", "NA", "D", "DA", "UD", "DD", "TD", "QD", "QID", "SD", "SPD", "OD", "ND", "VG"];
+  const SHORT_SUFFIXES = ["", "K", "M", "Mrd", "B", "Brd", "T", "Trd", "Q", "Qrd", "Qi", "Qid", "Sx", "Sxd", "Sp", "Spd", "Oc", "Ocd", "No", "Nod", "Dc", "Dcd", "Udc", "Udcd", "Ddc", "Ddcd", "Tdc", "Tdcd", "Qadc", "Qadcd", "Qidc", "Qidcd"];
+  const NORMAL_LEVEL_MULTIPLIERS = Object.freeze([1, 3, 8, 25, 100]);
+  const JK_LEVEL_MULTIPLIERS = Object.freeze([1, 3, 8, 25, 100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, 102400, 204800, 409600, 819200, 1638400, 3276800]);
+  function makerMaxLevel(maker) { return maker?.jk ? 20 : 5; }
   function formatShortNumber(value) {
     const n = Math.max(0, Number(value) || 0);
     if (!Number.isFinite(n)) return "∞";
@@ -75,13 +81,18 @@
     return Math.max(1, Math.floor(makerRawBase(index) * 0.5));
   }
   function makerLevelIncome(index, level = 1) {
-    const multipliers = [1, 3, 8, 25, 100];
-    return Math.round(makerBase(index) * multipliers[clamp(level, 1, 5) - 1]);
+    return Math.round(makerBase(index) * NORMAL_LEVEL_MULTIPLIERS[clamp(level, 1, 5) - 1]);
+  }
+  function makerTierDifficulty(index) {
+    if (index < 200) return 1;
+    if (index < 300) return 4;
+    if (index < 400) return 12;
+    return 30;
   }
   function makerCost(index) {
     if (index === 0) return 0;
     const base = makerRawBase(index);
-    return Math.max(20, Math.round(base * (55 + index * 1.8)));
+    return Math.max(20, Math.round(base * (55 + index * 1.8) * makerTierDifficulty(index)));
   }
   function makerUpgradeCost(index, level) {
     return Math.max(10, Math.round(makerCost(index) * (0.55 + level * level * 0.62)));
@@ -89,6 +100,7 @@
   const MAKERS = MAKER_NAMES.map((name, index) => ({
     id: `maker-${index + 1}`,
     index,
+    stage: Math.min(5, Math.floor(index / BASE_MAKER_NAMES.length) + 1),
     name,
     icon: ICONS[index % ICONS.length],
     color: COLORS[index % COLORS.length],
@@ -96,17 +108,39 @@
     cost: makerCost(index),
     jk: false
   }));
-  const ALL_MAKERS = Object.freeze([...MAKERS, ...JK_MAKERS]);
+  const GALAXY_ULTIMATE_MAKER = Object.freeze({
+    id: "maker-galaxy-ultimate",
+    index: MAKER_NAMES.length,
+    stage: 5,
+    name: "Galaxy Money.KL-Imperator Ω",
+    icon: "✦",
+    color: "#d875ff",
+    income: 1e69,
+    cost: 1e75,
+    jk: false,
+    galaxy: true,
+    ultimate: true
+  });
+  const NORMAL_MAKERS = Object.freeze([...MAKERS, GALAXY_ULTIMATE_MAKER]);
+  const ALL_MAKERS = Object.freeze([...NORMAL_MAKERS, ...JK_MAKERS]);
   function findMaker(id) { return ALL_MAKERS.find(maker => maker.id === id) || null; }
   function makerIncome(maker, level = 1) {
-    const multipliers = [1, 3, 8, 25, 100];
     if (!maker) return 0;
-    if (maker.jk) return Math.round(Number(maker.income || 0) * multipliers[clamp(level, 1, 5) - 1]);
+    if (maker.jk) return Math.round(Number(maker.income || 0) * JK_LEVEL_MULTIPLIERS[clamp(level, 1, 20) - 1]);
+    if (maker.galaxy) return Math.round(Number(maker.income || 0) * NORMAL_LEVEL_MULTIPLIERS[clamp(level, 1, 5) - 1]);
     return makerLevelIncome(maker.index, level);
   }
   function upgradeCostForMaker(maker, level) {
     if (!maker) return 0;
-    if (maker.jk) return Math.max(10, Math.round(Number(maker.upgradeBase || maker.income || 1) * (0.55 + level * level * 0.62)));
+    if (maker.jk) {
+      const currentLevel = clamp(level, 1, 19);
+      const nextIncome = Number(maker.income || 1) * JK_LEVEL_MULTIPLIERS[currentLevel];
+      return Math.max(10, Math.round(nextIncome * (180 + currentLevel * 15)));
+    }
+    if (maker.galaxy) {
+      const currentLevel = clamp(level, 1, 4);
+      return Math.round(Number(maker.cost || 1) * (0.9 + currentLevel * currentLevel * 0.95));
+    }
     return makerUpgradeCost(maker.index, level);
   }
 
@@ -185,6 +219,11 @@
     data.boosts = { ...base.boosts, ...(data.boosts || {}) };
     data.stats = { ...base.stats, ...(data.stats || {}) };
     data.mainXpLastBucket = Number.isFinite(Number(data.mainXpLastBucket)) ? Number(data.mainXpLastBucket) : -1;
+    Object.values(data.cells).forEach(cell => {
+      const maker = findMaker(cell?.makerId);
+      if (!maker) return;
+      cell.level = clamp(cell.level || 1, 1, makerMaxLevel(maker));
+    });
 
     if (isLegacySave) {
       const oldUnlocked4 = data.unlocked4 === true || previousBoardSize >= 4;
@@ -392,8 +431,8 @@
     return keys.reduce((sum, key) => {
       const cell = data.cells?.[key];
       const maker = findMaker(cell?.makerId);
-      const level = clamp(cell?.level, 1, 5);
-      return sum + (cell && maker && level < 5 ? upgradeCostForMaker(maker, level) : 0);
+      const level = clamp(cell?.level, 1, makerMaxLevel(maker));
+      return sum + (cell && maker && level < makerMaxLevel(maker) ? upgradeCostForMaker(maker, level) : 0);
     }, 0);
   }
   function selectionRefund(data, keys) {
@@ -427,13 +466,17 @@
     if (!keys.length) return toast("Markiere zuerst mindestens einen Maker.");
     const upgradeable = keys.filter(key => {
       const cell = data.cells?.[key];
-      return cell && findMaker(cell.makerId) && clamp(cell.level, 1, 5) < 5;
+      const maker = cell ? findMaker(cell.makerId) : null;
+      return cell && maker && clamp(cell.level, 1, makerMaxLevel(maker)) < makerMaxLevel(maker);
     });
-    if (!upgradeable.length) return toast("Alle markierten Maker sind bereits Level 5.");
+    if (!upgradeable.length) return toast("Alle markierten Maker haben bereits ihr Maximallevel erreicht.");
     const cost = selectionUpgradeCost(data, upgradeable);
     if (data.dollars < cost) return toast(`Dir fehlen ${formatDollar(cost - data.dollars)} für alle markierten Upgrades.`);
     data.dollars -= cost;
-    upgradeable.forEach(key => { data.cells[key].level = clamp(data.cells[key].level, 1, 5) + 1; });
+    upgradeable.forEach(key => {
+      const maker = findMaker(data.cells[key]?.makerId);
+      data.cells[key].level = clamp(data.cells[key].level, 1, makerMaxLevel(maker)) + 1;
+    });
     data.stats.upgrades += upgradeable.length;
     awardMoneyMainXp(data, Math.min(24, 5 + upgradeable.length), "Money.KL Mehrfach-Upgrade");
     persist();
@@ -562,8 +605,9 @@
     if (!cell) return toast("Wähle zuerst einen platzierten Maker aus.");
     const maker = findMaker(cell.makerId);
     if (!maker) return toast("Dieser Maker konnte nicht geladen werden.");
-    const level = clamp(cell.level, 1, 5);
-    if (level >= 5) return toast("Dieser Maker ist bereits Level 5.");
+    const maxLevel = makerMaxLevel(maker);
+    const level = clamp(cell.level, 1, maxLevel);
+    if (level >= maxLevel) return toast(`Dieser Maker ist bereits Level ${maxLevel}.`);
     const cost = upgradeCostForMaker(maker, level);
     if (data.dollars < cost) return toast(`Dir fehlen ${formatDollar(cost - data.dollars)} für das Upgrade.`);
     data.dollars -= cost;
@@ -659,8 +703,9 @@
   }
   function makerModelHtml(maker, level = 1, compact = false) {
     const type = makerVisualType(maker.index);
-    const safeLevel = clamp(level, 1, 5);
-    return `<span class="money-kl-model type-${type} ${compact ? "compact" : ""}" style="--maker-color:${maker.color};--maker-level:${safeLevel}"><span class="model-shadow"></span><span class="model-base"></span><span class="model-body"></span><span class="model-roof"></span><span class="model-head"></span><span class="model-accent"></span><span class="model-sign">${esc(maker.icon)}</span></span>`;
+    const safeLevel = clamp(level, 1, makerMaxLevel(maker));
+    const visualLevel = maker.jk ? 1 + ((safeLevel - 1) * 4 / 19) : safeLevel;
+    return `<span class="money-kl-model type-${type} ${maker.galaxy ? "galaxy-ultimate" : ""} ${compact ? "compact" : ""}" style="--maker-color:${maker.color};--maker-level:${visualLevel.toFixed(2)}"><span class="model-shadow"></span><span class="model-base"></span><span class="model-body"></span><span class="model-roof"></span><span class="model-head"></span><span class="model-accent"></span><span class="model-sign">${esc(maker.icon)}</span>${maker.galaxy ? '<span class="galaxy-ring ring-a"></span><span class="galaxy-ring ring-b"></span><span class="galaxy-core"></span><span class="galaxy-stars"></span>' : ""}</span>`;
   }
   function useLiteBoardModels(data) {
     const occupied = Object.keys(data?.cells || {}).length;
@@ -669,8 +714,9 @@
     return Number(data?.boardSize || 2) >= 10 || occupied >= 64 || memory <= 4 || cores <= 4;
   }
   function makerBoardLiteHtml(maker, level = 1) {
-    const safeLevel = clamp(level, 1, 5);
-    return `<span class="money-kl-model-lite" style="--maker-color:${maker.color};--maker-level:${safeLevel}"><i>${esc(maker.icon)}</i></span>`;
+    const safeLevel = clamp(level, 1, makerMaxLevel(maker));
+    const visualLevel = maker.jk ? 1 + ((safeLevel - 1) * 4 / 19) : safeLevel;
+    return `<span class="money-kl-model-lite" style="--maker-color:${maker.color};--maker-level:${visualLevel.toFixed(2)}"><i>${esc(maker.icon)}</i></span>`;
   }
   function fieldProgressHtml(data) {
     return `<div class="money-kl-field-tiers">${BOARD_TIERS.map(tier => {
@@ -704,18 +750,32 @@
         } else {
           const maker = findMaker(cell.makerId) || MAKERS[0];
           const visual = lite ? makerBoardLiteHtml(maker, cell.level) : makerModelHtml(maker, cell.level);
-          html += `<button class="money-kl-cell occupied ${maker.jk ? "jk-premium" : ""} ${district} ${selected.has(key) ? "selected" : ""} ${Number(cell.stored || 0) >= .01 ? "has-money" : ""}" style="--maker-color:${maker.color}" data-money-cell="${key}" title="${esc(maker.name)} · Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s"><span class="money-kl-plot"><span class="plot-ground"></span><span class="plot-lines"></span>${visual}</span><em>${maker.jk ? "JK · " : ""}L${cell.level}</em><b>${Number(cell.stored || 0) >= 1 ? formatShortNumber(cell.stored) : ""}</b>${lite ? "" : `<span class="money-kl-cell-name">${esc(maker.name)}</span>`}</button>`;
+          html += `<button class="money-kl-cell occupied ${maker.jk ? "jk-premium" : ""} ${maker.galaxy ? "galaxy-ultimate" : ""} ${district} ${selected.has(key) ? "selected" : ""} ${Number(cell.stored || 0) >= .01 ? "has-money" : ""}" style="--maker-color:${maker.color}" data-money-cell="${key}" title="${esc(maker.name)} · Level ${cell.level} · ${formatDollar(cellIncome(cell))}/s"><span class="money-kl-plot"><span class="plot-ground"></span><span class="plot-lines"></span>${visual}</span><em>${maker.jk ? "JK · " : ""}L${cell.level}</em><b>${Number(cell.stored || 0) >= 1 ? formatShortNumber(cell.stored) : ""}</b>${lite ? "" : `<span class="money-kl-cell-name">${esc(maker.name)}</span>`}</button>`;
         }
       }
     }
     return html;
   }
+  function makerStageTabsHtml() {
+    const stages = [
+      { id:1, label:"Standard" },
+      { id:2, label:"Stufe 2" },
+      { id:3, label:"Stufe 3" },
+      { id:4, label:"Stufe 4" },
+      { id:5, label:"Stufe 5" }
+    ];
+    return `<div class="money-kl-maker-stage-tabs" role="tablist" aria-label="Maker-Stufen">${stages.map(stage => `<button class="${UI.makerStage === stage.id ? "active" : ""}" data-money-maker-stage="${stage.id}" role="tab" aria-selected="${UI.makerStage === stage.id ? "true" : "false"}">${stage.label}</button>`).join("")}</div>`;
+  }
   function makersHtml(data) {
-    return MAKERS.map(maker => {
+    const stage = clamp(UI.makerStage, 1, 5);
+    const list = NORMAL_MAKERS.filter(maker => Number(maker.stage || 1) === stage);
+    const cards = list.map(maker => {
       const unlocked = makerUnlocked(data, maker);
       const unlockText = unlocked ? `Kaufpreis: ${maker.cost ? formatDollar(maker.cost) : "START"}` : `Freischalten: einmal ${formatDollar(maker.cost)} besitzen`;
-      return `<button class="money-kl-maker ${data.selectedMakerId === maker.id ? "active" : ""} ${unlocked ? "" : "locked"}" data-money-maker="${maker.id}" ${unlocked ? "" : "disabled"}><span class="money-kl-maker-preview">${makerModelHtml(maker, 1, true)}</span><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerIncome(maker,1))}/s · Level 5: ${formatDollar(makerIncome(maker,5))}/s<br>${esc(unlockText)}</small></span><em>${maker.cost ? formatDollar(maker.cost) : "START"}</em></button>`;
+      const ultimateText = maker.galaxy ? `<span class="money-kl-galaxy-badge">ULTIMATE · GALAXY</span>` : "";
+      return `<button class="money-kl-maker ${maker.galaxy ? "galaxy-ultimate" : ""} ${data.selectedMakerId === maker.id ? "active" : ""} ${unlocked ? "" : "locked"}" data-money-maker="${maker.id}" ${unlocked ? "" : "disabled"}><span class="money-kl-maker-preview">${makerModelHtml(maker, 1, true)}</span><span>${ultimateText}<b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerIncome(maker,1))}/s · Level 5: ${formatDollar(makerIncome(maker,5))}/s<br>${esc(unlockText)}</small></span><em>${maker.cost ? formatDollar(maker.cost) : "START"}</em></button>`;
     }).join("");
+    return `${makerStageTabsHtml()}<div class="money-kl-stage-head"><small>MAKER-STUFE ${stage === 1 ? "STANDARD" : stage}</small><b>${list.length} Maker · Level 1–5</b></div>${cards}`;
   }
   function jkMakersHtml(data) {
     const cards = JK_MAKERS.map(maker => {
@@ -723,9 +783,9 @@
       const placed = placedJkMakerCount(data, maker.id);
       const available = Math.max(0, owned - placed);
       const selectable = available > 0;
-      return `<button class="money-kl-maker jk-premium ${data.selectedMakerId === maker.id ? "active" : ""} ${selectable ? "" : "locked"}" data-money-maker="${maker.id}" ${selectable ? "" : "disabled"}><span class="money-kl-maker-preview">${makerModelHtml(maker, 1, true)}</span><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerIncome(maker,1))}/s · Level 5: ${formatDollar(makerIncome(maker,5))}/s<br>Besitz: ${owned} · Platziert: ${placed} · Frei: ${available}</small></span><em>JK</em></button>`;
+      return `<button class="money-kl-maker jk-premium ${data.selectedMakerId === maker.id ? "active" : ""} ${selectable ? "" : "locked"}" data-money-maker="${maker.id}" ${selectable ? "" : "disabled"}><span class="money-kl-maker-preview">${makerModelHtml(maker, 1, true)}</span><span><b>${esc(maker.name)}</b><small>Level 1: ${formatDollar(makerIncome(maker,1))}/s · Level 20: ${formatDollar(makerIncome(maker,20))}/s<br>Besitz: ${owned} · Platziert: ${placed} · Frei: ${available}</small></span><em>JK</em></button>`;
     }).join("");
-    return `<div class="money-kl-jk-note"><b>JK Maker</b><p>Diese Premium-Maker werden ausschließlich im Money.KL-Bereich der JK/Coin-App gekauft. Jeder Kauf gibt dir ein platzierbares Exemplar.</p><button class="money-kl-button gold" data-money-open-jkcoin-store>Money.KL JK/Coin-Shop öffnen</button></div>${cards}`;
+    return `<div class="money-kl-jk-note"><b>JK Maker · Level 1–20</b><p>Diese Premium-Maker werden ausschließlich im Money.KL-Bereich der JK/Coin-App gekauft. Jeder Kauf gibt dir ein platzierbares Exemplar und kann bis Level 20 verbessert werden.</p><button class="money-kl-button gold" data-money-open-jkcoin-store>Money.KL JK/Coin-Shop öffnen</button></div>${cards}`;
   }
   function boostStatusHtml(data) {
     const now = Date.now();
@@ -743,12 +803,12 @@
   }
   function multiSelectionDetailHtml(data, keys) {
     const cells = keys.map(key => data.cells[key]).filter(Boolean);
-    const upgradeable = cells.filter(cell => clamp(cell.level, 1, 5) < 5);
+    const upgradeable = cells.filter(cell => { const maker=findMaker(cell?.makerId); return maker && clamp(cell.level, 1, makerMaxLevel(maker)) < makerMaxLevel(maker); });
     const upgradeCost = selectionUpgradeCost(data, keys);
     const refund = selectionRefund(data, keys);
     const stored = selectedStoredAmount(data, keys);
     const pps = cells.reduce((sum, cell) => sum + cellIncome(cell), 0) * productionMultiplier(data);
-    return `<div class="money-kl-detail money-kl-multi-detail"><small>MEHRFACHAUSWAHL</small><h3>${keys.length} Maker markiert</h3><p>Ziehe auf einer freien Fläche einen Rahmen über weitere Maker oder tippe einen Maker direkt an, um wieder einzeln zu arbeiten.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(pps)}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b>${formatDollar(stored)}</b></div><div class="money-kl-stat"><small>UPGRADE +1</small><b>${upgradeable.length ? formatDollar(upgradeCost) : "MAX"}</b></div><div class="money-kl-stat"><small>RÜCKGABE</small><b>${formatDollar(refund)}</b></div></div><div class="money-kl-actions"><button class="money-kl-button primary" data-money-upgrade-selected ${upgradeable.length ? "" : "disabled"}>${upgradeable.length ? `${upgradeable.length} Maker +1 upgraden` : "Alle Level 5"}</button><button class="money-kl-button" data-money-collect-selected>Markierte einsammeln</button><button class="money-kl-button danger" data-money-sell-selected>Markierte verkaufen</button><button class="money-kl-button" data-money-clear-selection>Markierung aufheben</button></div></div>`;
+    return `<div class="money-kl-detail money-kl-multi-detail"><small>MEHRFACHAUSWAHL</small><h3>${keys.length} Maker markiert</h3><p>Ziehe auf einer freien Fläche einen Rahmen über weitere Maker oder tippe einen Maker direkt an, um wieder einzeln zu arbeiten.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b>${formatDollar(pps)}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b>${formatDollar(stored)}</b></div><div class="money-kl-stat"><small>UPGRADE +1</small><b>${upgradeable.length ? formatDollar(upgradeCost) : "MAX"}</b></div><div class="money-kl-stat"><small>RÜCKGABE</small><b>${formatDollar(refund)}</b></div></div><div class="money-kl-actions"><button class="money-kl-button primary" data-money-upgrade-selected ${upgradeable.length ? "" : "disabled"}>${upgradeable.length ? `${upgradeable.length} Maker +1 upgraden` : "Alle auf Maximallevel"}</button><button class="money-kl-button" data-money-collect-selected>Markierte einsammeln</button><button class="money-kl-button danger" data-money-sell-selected>Markierte verkaufen</button><button class="money-kl-button" data-money-clear-selection>Markierung aufheben</button></div></div>`;
   }
   function detailHtml(data) {
     const selectedKeys = selectionKeys(data);
@@ -757,13 +817,15 @@
     if (!cell) {
       const maker = selectedMaker(data);
       const extra = maker.jk ? `<p class="money-kl-premium-copy">JK Maker · freie Exemplare: ${jkMakerAvailable(data,maker.id)}</p>` : "";
-      return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, 1, true)}</div><h3>${esc(maker.name)}</h3>${extra}<p>Wähle ein freies Feld. Der Maker startet auf Level 1 und kann bis Level 5 verbessert werden.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>LEVEL 1</small><b>${formatDollar(makerIncome(maker,1))}/s</b></div><div class="money-kl-stat"><small>LEVEL 5</small><b>${formatDollar(makerIncome(maker,5))}/s</b></div></div></div>`;
+      const maxLevel = makerMaxLevel(maker);
+      return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, 1, true)}</div><h3>${esc(maker.name)}</h3>${extra}<p>Wähle ein freies Feld. Der Maker startet auf Level 1 und kann bis Level ${maxLevel} verbessert werden.</p><div class="money-kl-stats"><div class="money-kl-stat"><small>LEVEL 1</small><b>${formatDollar(makerIncome(maker,1))}/s</b></div><div class="money-kl-stat"><small>LEVEL ${maxLevel}</small><b>${formatDollar(makerIncome(maker,maxLevel))}/s</b></div></div></div>`;
     }
     const maker = findMaker(cell.makerId) || MAKERS[0];
-    const level = clamp(cell.level,1,5);
-    const cost = level < 5 ? upgradeCostForMaker(maker, level) : 0;
+    const maxLevel = makerMaxLevel(maker);
+    const level = clamp(cell.level,1,maxLevel);
+    const cost = level < maxLevel ? upgradeCostForMaker(maker, level) : 0;
     const removeLabel = maker.jk ? "Ins JK-Maker-Inventar" : "Rückgabe · 35 %";
-    return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, cell.level, true)}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/5${maker.jk ? " · JK Maker" : ""}</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-selected-pps>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b data-money-live-selected-stored>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < 5 ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>${removeLabel}</button></div></div>`;
+    return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, cell.level, true)}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/${maxLevel}${maker.jk ? " · JK Maker" : ""}</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-selected-pps>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b data-money-live-selected-stored>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < maxLevel ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>${removeLabel}</button></div></div>`;
   }
   function leaderboardHtml() {
     if (!UI.leaderboard.length) return `<p style="color:#91b3a8">${esc(UI.onlineStatus || "Noch keine Einträge geladen.")}</p>`;
@@ -1024,6 +1086,7 @@
     root.querySelector("[data-money-toggle-right]")?.addEventListener("click", () => { UI.rightOpen = !UI.rightOpen; render(); });
     root.querySelector("[data-money-exit]")?.addEventListener("click", requestExit);
     root.querySelectorAll("[data-money-view]").forEach(btn => btn.addEventListener("click", () => { UI.view = btn.dataset.moneyView; UI.leftOpen = true; if (UI.view === "leader") loadLeaderboard(true); render(); }));
+    root.querySelectorAll("[data-money-maker-stage]").forEach(btn => btn.addEventListener("click", () => { UI.makerStage = clamp(Number(btn.dataset.moneyMakerStage), 1, 5); render(); }));
     root.querySelectorAll("[data-money-maker]").forEach(btn => btn.addEventListener("click", () => { const data=ensureState(); data.selectedMakerId=btn.dataset.moneyMaker; persist(); UI.view="board"; if (matchMedia("(max-width:900px)").matches) UI.leftOpen=false; render(); }));
     bindBoardGestures(root);
     root.querySelector("[data-money-upgrade]")?.addEventListener("click", upgradeSelected);
@@ -1114,5 +1177,5 @@
     if (returnPhone) window.setTimeout(() => window.JKGamesOpenTopGames?.(UI.sourceDevice),80);
   }
 
-  window.MoneyKL = Object.freeze({ version:VERSION, open, close, definitions:MAKERS, jkDefinitions:JK_MAKERS, getState:ensureState, leaderboard:loadLeaderboard, grantJkCoinPurchase });
+  window.MoneyKL = Object.freeze({ version:VERSION, open, close, definitions:NORMAL_MAKERS, jkDefinitions:JK_MAKERS, getState:ensureState, leaderboard:loadLeaderboard, grantJkCoinPurchase });
 })();

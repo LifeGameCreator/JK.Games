@@ -532,3 +532,172 @@
 .money-kl-center.performance-lite .money-kl-cell{contain:layout paint style;box-shadow:none}
 .money-kl-center.performance-lite .plot-lines{display:none}
 .money-kl-center.performance-lite .money-kl-cell.has-money::after{filter:none}
+
+/* V239 – 500 Maker, mobile performance and Dynamic-Island safe area */
+.money-kl-maker{content-visibility:auto;contain-intrinsic-size:64px;contain:layout style paint}
+@media(max-width:560px){
+  .money-kl-top{padding-top:max(50px,calc(env(safe-area-inset-top) + 12px));padding-right:max(12px,env(safe-area-inset-right));padding-left:max(12px,env(safe-area-inset-left))}
+  .money-kl-panel.left,.money-kl-panel.right{top:max(156px,calc(122px + env(safe-area-inset-top)));bottom:max(10px,env(safe-area-inset-bottom))}
+  .money-kl-panel{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  .money-kl-maker{grid-template-columns:36px minmax(0,1fr) auto;gap:8px;padding:8px}
+  .money-kl-maker small{font-size:8px;line-height:1.35}
+}
+
+/* V240 – Maker-Stufen + exklusiver Galaxy-Ultimate-Maker */
+.money-kl-maker-stage-tabs{
+  position:sticky;
+  top:0;
+  z-index:12;
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:6px;
+  padding:7px;
+  margin:0 0 8px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:13px;
+  background:rgba(4,16,13,.96);
+  box-shadow:0 8px 22px rgba(0,0,0,.28);
+  backdrop-filter:blur(14px);
+}
+.money-kl-maker-stage-tabs button{
+  min-width:0;
+  min-height:34px;
+  padding:6px 4px;
+  border:1px solid rgba(111,255,194,.18);
+  border-radius:9px;
+  color:#9ac6b8;
+  background:linear-gradient(145deg,#10251f,#081814);
+  font-size:9px;
+  font-weight:900;
+  line-height:1.1;
+  cursor:pointer;
+}
+.money-kl-maker-stage-tabs button:hover,
+.money-kl-maker-stage-tabs button:focus-visible{border-color:#67ffc3;color:#eafff7;outline:none}
+.money-kl-maker-stage-tabs button.active{
+  color:#06130f;
+  border-color:#8bffd2;
+  background:linear-gradient(145deg,#8bffd2,#45d99e);
+  box-shadow:0 0 18px rgba(79,255,184,.25);
+}
+.money-kl-stage-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:5px 3px 8px;
+  color:#88a99f;
+}
+.money-kl-stage-head small{font-size:9px;letter-spacing:.11em;color:#6effc0}
+.money-kl-stage-head b{font-size:9px;color:#a8c8be;white-space:nowrap}
+
+.money-kl-galaxy-badge{
+  display:inline-flex;
+  width:max-content;
+  margin:0 0 4px;
+  padding:3px 6px;
+  border:1px solid rgba(226,162,255,.48);
+  border-radius:999px;
+  color:#fff0ff;
+  background:linear-gradient(90deg,rgba(76,21,125,.8),rgba(129,29,121,.78),rgba(29,85,145,.76));
+  box-shadow:0 0 14px rgba(183,83,255,.2);
+  font-size:7px;
+  font-weight:1000;
+  letter-spacing:.13em;
+}
+.money-kl-maker.galaxy-ultimate{
+  position:relative;
+  isolation:isolate;
+  border-color:rgba(222,149,255,.72);
+  background:
+    radial-gradient(circle at 14% 22%,rgba(255,94,208,.2),transparent 28%),
+    radial-gradient(circle at 84% 18%,rgba(79,180,255,.2),transparent 30%),
+    linear-gradient(135deg,#10071e,#2a0c42 42%,#071c35 78%,#19091e);
+  box-shadow:inset 0 0 22px rgba(206,117,255,.1),0 0 22px rgba(153,64,255,.14);
+}
+.money-kl-maker.galaxy-ultimate::before,
+.money-kl-cell.galaxy-ultimate .money-kl-plot::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 20%,#fff 0 1px,transparent 1.4px),
+    radial-gradient(circle at 68% 18%,#ffd6ff 0 1px,transparent 1.5px),
+    radial-gradient(circle at 83% 67%,#c8e8ff 0 1px,transparent 1.5px),
+    radial-gradient(circle at 31% 79%,#fff 0 1px,transparent 1.4px),
+    radial-gradient(circle at 52% 48%,#ff9edb 0 1px,transparent 1.5px);
+  background-size:47px 41px,61px 53px,73px 67px,59px 71px,83px 79px;
+  opacity:.75;
+  animation:moneyKlGalaxyStars 7s linear infinite;
+}
+.money-kl-maker.galaxy-ultimate::after{
+  content:"GALAXY ULTIMATE";
+  position:absolute;
+  right:-27px;
+  top:10px;
+  z-index:2;
+  width:110px;
+  padding:3px 0;
+  transform:rotate(31deg);
+  color:#fff;
+  background:linear-gradient(90deg,#7628cc,#d23da9,#367fd3);
+  box-shadow:0 0 12px rgba(202,76,255,.32);
+  font-size:6px;
+  font-weight:1000;
+  letter-spacing:.09em;
+  text-align:center;
+}
+.money-kl-maker.galaxy-ultimate.active{border-color:#f3bdff;box-shadow:0 0 0 2px rgba(229,164,255,.2),0 0 30px rgba(190,67,255,.28)}
+.money-kl-maker.galaxy-ultimate .money-kl-maker-preview{
+  border-color:rgba(226,150,255,.48);
+  background:radial-gradient(circle at 50% 45%,rgba(170,81,255,.24),transparent 48%),linear-gradient(145deg,#1a0b30,#071627);
+  box-shadow:inset 0 0 18px rgba(168,85,255,.16),0 0 18px rgba(116,69,255,.12);
+}
+.money-kl-maker.galaxy-ultimate>em{color:#fff5ff;background:linear-gradient(145deg,#7024b7,#b62d9e,#276cba);border-color:rgba(255,255,255,.18)}
+.money-kl-cell.galaxy-ultimate .money-kl-plot{
+  border:1px solid rgba(224,153,255,.7);
+  background:
+    radial-gradient(circle at 30% 20%,rgba(255,94,205,.22),transparent 32%),
+    radial-gradient(circle at 70% 75%,rgba(57,154,255,.24),transparent 35%),
+    linear-gradient(145deg,#16082a,#301049 48%,#071b34);
+  box-shadow:inset 0 0 22px rgba(193,95,255,.15),0 0 18px rgba(161,72,255,.26);
+}
+.money-kl-cell.galaxy-ultimate{filter:drop-shadow(0 0 8px rgba(181,79,255,.3))}
+.money-kl-model.galaxy-ultimate{filter:drop-shadow(0 0 8px rgba(211,114,255,.72)) drop-shadow(0 0 16px rgba(67,150,255,.3))}
+.money-kl-model.galaxy-ultimate .model-body{
+  left:28%;right:28%;bottom:22%;height:52%;border-radius:48% 48% 32% 32%;
+  background:radial-gradient(circle at 50% 38%,#fff 0 4%,#ffb4f1 5% 10%,#a53cdf 16% 29%,#40206d 42%,#081426 72%);
+  box-shadow:0 0 12px #d56dff,inset 0 0 13px #050410;
+}
+.money-kl-model.galaxy-ultimate .model-base{
+  left:7%;right:7%;bottom:8%;height:12%;border-radius:50%;
+  background:radial-gradient(ellipse,#fff 0 4%,#e666ff 8%,#6f38df 32%,transparent 68%);
+  box-shadow:0 0 10px #cf68ff,0 0 20px #3e8fff;
+}
+.money-kl-model.galaxy-ultimate .model-accent{display:none}
+.money-kl-model.galaxy-ultimate .model-sign{
+  z-index:8;color:#fff;border-color:#f1c6ff88;background:#170725e8;box-shadow:0 0 10px #d662ff;
+}
+.money-kl-model.galaxy-ultimate .galaxy-core{
+  left:44%;top:35%;z-index:7;width:12%;aspect-ratio:1;border-radius:50%;
+  background:#fff;box-shadow:0 0 6px #fff,0 0 12px #ef73ff,0 0 20px #5aa8ff;
+}
+.money-kl-model.galaxy-ultimate .galaxy-ring{
+  left:13%;top:42%;z-index:6;width:74%;height:18%;border:2px solid rgba(229,151,255,.9);border-radius:50%;background:transparent;box-shadow:0 0 7px #d667ff;transform:rotate(-18deg);
+}
+.money-kl-model.galaxy-ultimate .galaxy-ring.ring-b{top:38%;transform:rotate(24deg);border-color:rgba(111,192,255,.82);box-shadow:0 0 7px #4f9fff}
+.money-kl-model.galaxy-ultimate .galaxy-stars{
+  inset:8%;z-index:5;border-radius:50%;
+  background:radial-gradient(circle at 15% 30%,#fff 0 1px,transparent 1.5px),radial-gradient(circle at 78% 22%,#ffbff2 0 1px,transparent 1.5px),radial-gradient(circle at 70% 78%,#c6e8ff 0 1px,transparent 1.5px),radial-gradient(circle at 28% 72%,#fff 0 1px,transparent 1.5px);
+  animation:moneyKlGalaxyOrbit 5s linear infinite;
+}
+@keyframes moneyKlGalaxyStars{to{background-position:47px 41px,-61px 53px,73px -67px,-59px 71px,83px 79px}}
+@keyframes moneyKlGalaxyOrbit{to{transform:rotate(360deg)}}
+
+@media(max-width:560px){
+  .money-kl-maker-stage-tabs{top:0;gap:4px;padding:5px;margin-bottom:7px}
+  .money-kl-maker-stage-tabs button{min-height:32px;padding:5px 2px;font-size:7.5px}
+  .money-kl-stage-head{align-items:flex-start;flex-direction:column;gap:2px;padding:3px 2px 7px}
+  .money-kl-maker.galaxy-ultimate::after{right:-31px;top:8px;font-size:5px}
+}
