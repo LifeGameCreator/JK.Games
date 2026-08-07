@@ -1,9 +1,10 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-money-kl-v213";
+  const VERSION = "2026-08-07-money-kl-v219-online-toplist";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
+  const LEADERBOARD_ACTIVE_MS = 45 * 1000;
   const BOARD_TIERS = Object.freeze([
     { size: 2, price: 0, label: "Mini-Startfeld", description: "4 Bauplätze · sofort verfügbar" },
     { size: 4, price: 1_000_000, label: "Kleines Viertel", description: "16 Bauplätze · ab $1 Million" },
@@ -395,9 +396,14 @@
     return `<div class="money-kl-detail"><div class="money-kl-detail-icon">${makerModelHtml(maker, cell ? cell.level : 1, true)}</div><h3>${esc(maker.name)}</h3><p>Position ${esc(UI.selectedCell)} · Level ${level}/5</p><div class="money-kl-stats"><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-selected-pps>${formatDollar(cellIncome(cell))}</b></div><div class="money-kl-stat"><small>GESPEICHERT</small><b data-money-live-selected-stored>${formatDollar(cell.stored || 0)}</b></div></div><div class="money-kl-actions">${level < 5 ? `<button class="money-kl-button primary" data-money-upgrade>Auf Level ${level + 1} · ${formatDollar(cost)}</button>` : `<button class="money-kl-button" disabled>Maximallevel erreicht</button>`}<button class="money-kl-button danger" data-money-remove>Rückgabe · 35 %</button></div></div>`;
   }
   function leaderboardHtml() {
-    if (!UI.leaderboard.length) return `<p style="color:#91b3a8">${esc(UI.onlineStatus || "Noch keine Online-Einträge geladen.")}</p>`;
+    if (!UI.leaderboard.length) return `<p style="color:#91b3a8">${esc(UI.onlineStatus || "Noch keine Einträge geladen.")}</p>`;
     const ownUid = window.LifeBuilderFirebaseCore?.getRuntime?.()?.auth?.currentUser?.uid || "";
-    return `<div class="money-kl-leader">${UI.leaderboard.map((row,index) => `<article class="${row.uid === ownUid ? "you" : ""}"><b>${index+1}.</b><span><b>${esc(row.displayName || "Spieler")}</b><small>${formatDollar(row.perSecond || 0)}/s · ${row.boardSize || 2}×${row.boardSize || 2}</small></span><strong>${formatDollar(row.netWorth || 0)}</strong></article>`).join("")}</div>`;
+    const now = Date.now();
+    const onlineCount = UI.leaderboard.filter(row => now - Number(row.updatedAtMs || 0) <= LEADERBOARD_ACTIVE_MS).length;
+    return `<p style="color:#91b3a8;margin:10px 0 8px">${onlineCount ? `${onlineCount} Spieler ${onlineCount === 1 ? "ist" : "sind"} gerade in Money.KL online.` : "Gerade ist kein weiterer Money.KL-Spieler online."}</p><div class="money-kl-leader">${UI.leaderboard.map((row,index) => {
+      const isOnline = now - Number(row.updatedAtMs || 0) <= LEADERBOARD_ACTIVE_MS;
+      return `<article class="${row.uid === ownUid ? "you" : ""}"><b>${index+1}.</b><span><b>${esc(row.displayName || "Spieler")}</b><small>${isOnline ? "● JETZT ONLINE · " : ""}${formatDollar(row.perSecond || 0)}/s · ${row.boardSize || 2}×${row.boardSize || 2}</small></span><strong>${formatDollar(row.netWorth || 0)}</strong></article>`;
+    }).join("")}</div>`;
   }
   function activeCharacterHtml() {
     const current = appState() || {};
@@ -416,7 +422,7 @@
   function leftPanelHtml(data) {
     const nextTier = BOARD_TIERS.find(tier => !tierUnlocked(data, tier.size));
     const nextUnlock = nextTier?.size || 0;
-    return `<aside class="money-kl-panel left ${UI.leftOpen ? "open" : ""}">${activeCharacterHtml()}<small>MONEY.KL</small><h2>Steuerung</h2><div class="money-kl-menu"><button class="${UI.view === "board" ? "active" : ""}" data-money-view="board">Spielfeld <span>${data.boardSize}×${data.boardSize}</span></button><button class="${UI.view === "makers" ? "active" : ""}" data-money-view="makers">100 Maker <span>Shop</span></button><button class="${UI.view === "boosts" ? "active" : ""}" data-money-view="boosts">Power-Ups <span>€</span></button><button class="${UI.view === "leader" ? "active" : ""}" data-money-view="leader">Topliste <span>Firebase</span></button></div>${UI.view === "makers" ? `<div class="money-kl-shop">${makersHtml(data)}</div>` : UI.view === "boosts" ? `<div class="money-kl-actions"><button class="money-kl-button primary" data-money-power="auto">Auto-Collector 30 Min. · 10.000 €</button><button class="money-kl-button primary" data-money-power="double">2× Produktion 15 Min. · 25.000 €</button><button class="money-kl-button gold" data-money-power="instant">10 Min. Sofortertrag · 50.000 €</button></div>` : UI.view === "leader" ? `<button class="money-kl-button" data-money-refresh-leader>Topliste aktualisieren</button>${leaderboardHtml()}` : `<p class="money-kl-help">Wähle einen Maker und tippe auf ein freies Grundstück. Belegte Grundstücke sammeln Dollar und lassen sich bis Level 5 ausbauen.</p><button class="money-kl-button primary" data-money-collect-all>Alles einsammeln</button><h3 class="money-kl-field-title">Feld-Ausbau</h3>${fieldProgressHtml(data)}${nextUnlock ? `<p class="money-kl-next-goal">Nächstes Ziel: ${nextUnlock}×${nextUnlock} für ${formatDollar(BOARD_TIERS.find(t => t.size === nextUnlock).price)}</p>` : `<p class="money-kl-next-goal complete">Maximale Fläche erreicht</p>`}`}</aside>`;
+    return `<aside class="money-kl-panel left ${UI.leftOpen ? "open" : ""}">${activeCharacterHtml()}<small>MONEY.KL</small><h2>Steuerung</h2><div class="money-kl-menu"><button class="${UI.view === "board" ? "active" : ""}" data-money-view="board">Spielfeld <span>${data.boardSize}×${data.boardSize}</span></button><button class="${UI.view === "makers" ? "active" : ""}" data-money-view="makers">100 Maker <span>Shop</span></button><button class="${UI.view === "boosts" ? "active" : ""}" data-money-view="boosts">Power-Ups <span>€</span></button><button class="${UI.view === "leader" ? "active" : ""}" data-money-view="leader">Topliste</button></div>${UI.view === "makers" ? `<div class="money-kl-shop">${makersHtml(data)}</div>` : UI.view === "boosts" ? `<div class="money-kl-actions"><button class="money-kl-button primary" data-money-power="auto">Auto-Collector 30 Min. · 10.000 €</button><button class="money-kl-button primary" data-money-power="double">2× Produktion 15 Min. · 25.000 €</button><button class="money-kl-button gold" data-money-power="instant">10 Min. Sofortertrag · 50.000 €</button></div>` : UI.view === "leader" ? `<button class="money-kl-button" data-money-refresh-leader>Topliste aktualisieren</button>${leaderboardHtml()}` : `<p class="money-kl-help">Wähle einen Maker und tippe auf ein freies Grundstück. Belegte Grundstücke sammeln Dollar und lassen sich bis Level 5 ausbauen.</p><button class="money-kl-button primary" data-money-collect-all>Alles einsammeln</button><h3 class="money-kl-field-title">Feld-Ausbau</h3>${fieldProgressHtml(data)}${nextUnlock ? `<p class="money-kl-next-goal">Nächstes Ziel: ${nextUnlock}×${nextUnlock} für ${formatDollar(BOARD_TIERS.find(t => t.size === nextUnlock).price)}</p>` : `<p class="money-kl-next-goal complete">Maximale Fläche erreicht</p>`}`}</aside>`;
   }
   function rightPanelHtml(data) {
     return `<aside class="money-kl-panel right ${UI.rightOpen ? "open" : ""}"><small>DEIN IMPERIUM</small><h2>Statistik</h2><div class="money-kl-stats"><div class="money-kl-stat"><small>PLATZIERT</small><b data-money-live-placed>${Object.keys(data.cells).length}/${data.boardSize*data.boardSize}</b></div><div class="money-kl-stat"><small>PRO SEKUNDE</small><b data-money-live-pps>${formatDollar(totalPerSecond(data))}</b></div><div class="money-kl-stat"><small>NETTOWERT</small><b data-money-live-networth>${formatDollar(netWorth(data))}</b></div><div class="money-kl-stat"><small>GESAMT VERDIENT</small><b data-money-live-lifetime>${formatDollar(data.lifetimeEarned)}</b></div></div>${detailHtml(data)}<div class="money-kl-detail"><small>AKTIVE BOOSTS</small><p data-money-live-boosts>2× Produktion: ${data.boosts.doubleUntil > Date.now() ? `${Math.ceil((data.boosts.doubleUntil-Date.now())/60000)} Min.` : "Aus"}<br>Auto-Collector: ${data.boosts.autoCollectUntil > Date.now() ? `${Math.ceil((data.boosts.autoCollectUntil-Date.now())/60000)} Min.` : "Aus"}</p></div></aside>`;
@@ -538,11 +544,24 @@
     try {
       await publishLeaderboard();
       const fb = await runtime();
-      const q = fb.query(fb.collection(fb.db, LEADERBOARD_COLLECTION), fb.orderBy("moneyKlNetWorth","desc"), fb.limit(50));
-      const snap = await fb.getDocs(q);
-      UI.leaderboard = snap.docs.map(d => ({ id:d.id, ...d.data(), netWorth:Number(d.data().moneyKlNetWorth||0), perSecond:Number(d.data().moneyKlPerSecond||0), lifetimeEarned:Number(d.data().moneyKlLifetimeEarned||0), boardSize:Number(d.data().moneyKlBoardSize||2), placed:Number(d.data().moneyKlPlaced||0), updatedAtMs:Number(d.data().moneyKlUpdatedAtMs||0) })).filter(row=>row.netWorth>0);
+      const collectionRef = fb.collection(fb.db, LEADERBOARD_COLLECTION);
+      const topQuery = fb.query(collectionRef, fb.orderBy("moneyKlNetWorth","desc"), fb.limit(50));
+      const recentQuery = fb.query(collectionRef, fb.orderBy("moneyKlUpdatedAtMs","desc"), fb.limit(50));
+      const [topSnap, recentSnap] = await Promise.all([fb.getDocs(topQuery), fb.getDocs(recentQuery)]);
+      const merged = new Map();
+      [...topSnap.docs, ...recentSnap.docs].forEach(d => merged.set(d.id, { id:d.id, ...d.data() }));
+      UI.leaderboard = [...merged.values()].map(row => ({
+        ...row,
+        uid:String(row.uid || row.id || ""),
+        netWorth:Number(row.moneyKlNetWorth || 0),
+        perSecond:Number(row.moneyKlPerSecond || 0),
+        lifetimeEarned:Number(row.moneyKlLifetimeEarned || 0),
+        boardSize:Number(row.moneyKlBoardSize || 2),
+        placed:Number(row.moneyKlPlaced || 0),
+        updatedAtMs:Number(row.moneyKlUpdatedAtMs || 0)
+      })).filter(row => row.uid).sort((a,b) => (b.netWorth - a.netWorth) || (b.lifetimeEarned - a.lifetimeEarned) || String(a.displayName || "").localeCompare(String(b.displayName || ""), "de"));
       UI.onlineStatus = UI.leaderboard.length ? "" : "Noch keine Einträge.";
-    } catch (error) { UI.onlineStatus = `Firebase-Topliste konnte nicht geladen werden: ${String(error?.message || error).replace(/^FirebaseError:\s*/i,"")}`; }
+    } catch (error) { UI.onlineStatus = `Online-Topliste konnte nicht geladen werden: ${String(error?.message || error).replace(/^FirebaseError:\s*/i,"")}`; }
     if (UI.overlay) render();
   }
   function open(sourceDevice="") {
