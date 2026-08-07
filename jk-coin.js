@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-06-jkcoin-v212";
+  const VERSION = "2026-08-07-jkcoin-v215";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const TOTAL_COLLECTIBLES = 6470;
@@ -108,10 +108,10 @@
   ];
   const ADJECTIVES = ["Verlorenes","Neon","Antikes","Kosmisches","Goldenes","Schatten","Königliches","Mechanisches","Kristall","Verfluchtes","Legendäres","Digitales","Galaktisches","Obsidian","Sternen","Zeitloses","Rubin","Smaragd","Silbernes","Schwarzes"];
   const NOUNS = ["Abzeichen","Artefakt","Amulett","Poster","Modul","Relikt","Ticket","Siegel","Sammlerstück","Emblem","Helm","Ring","Kern","Würfel","Chip","Medaillon","Schlüssel","Totem","Fragment","Trophäe"];
-  const NAV_STORAGE = "jk-games-jkcoin-nav-v212";
+  const NAV_STORAGE = "jk-games-jkcoin-nav-v215";
   function loadNavMemory(){try{return JSON.parse(sessionStorage.getItem(NAV_STORAGE)||"{}")||{};}catch{return {};}}
   const navMemory=loadNavMemory();
-  const ui = { tab:"home", game:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), grantsListening:false, toastTimer:0, lastGrantSync:0 };
+  const ui = { tab:"home", game:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), grantsListening:false, toastTimer:0, lastGrantSync:0, grantCollectionDenied:false, gameOverlay:"" };
   const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const randInt = (min,max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (n,min,max) => Math.min(max,Math.max(min,Number(n)||0));
@@ -160,7 +160,7 @@
 
   function html(){
     const c=coinState(),rate=currentRate();
-    const tabs=[["home","Übersicht"],["boxes","Lucky Boxes"],["games","Spiele"],["collection","Sammlung"],["ledger","Kontobewegungen"]].map(([id,label])=>`<button type="button" class="${ui.tab===id?"active":""}" data-jkc-tab="${id}">${label}</button>`).join("");
+    const tabs=[["home","Übersicht"],["boxes","Lucky Boxes"],["games","Spiele"],["collection","Sammlung"],["ledger","Kontobewegungen"]].map(([id,label])=>`<button type="button" class="jkc-nav-pill ${ui.tab===id?"active":""}" data-jkc-tab="${id}">${label}</button>`).join("");
     return `<div class="jkc-app"><section class="jkc-hero"><div class="jkc-hero-head"><div style="display:flex;gap:12px"><span class="jkc-logo">JK</span><div><small>PREMIUM-WÄHRUNG</small><h3>JK/Coin</h3><p style="margin:0;color:#a5b5c2">Lucky Boxes, Spiel-Extras und Sammlung.</p></div></div><div class="jkc-wallet"><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")}</b><em>1 JK/Coin = ${euro(rate)}</em></div></div></section>${scrollNavHtml("tabs",tabs)}${ui.tab==="boxes"?boxesHtml():ui.tab==="games"?gamesHtml():ui.tab==="collection"?collectionHtml():ui.tab==="ledger"?ledgerHtml():homeHtml()}</div>`;
   }
   function homeHtml(){const c=coinState(),rate=currentRate();return `<section class="jkc-section"><small>JK/COIN-MARKT</small><h4>Aktueller Umtauschkurs</h4><div class="jkc-rate"><div><small>NÄCHSTE ÄNDERUNG IN ${nextRateMinutes()} MIN.</small><b>1 JK/Coin = ${euro(rate)}</b><p>Normale Ingame-Euro-Währung kann nicht gegen JK/Coins getauscht werden.</p></div><button class="jkc-button gold" data-jkc-exchange>Umtauschen</button></div></section><section class="jkc-section"><small>JK/COIN-PAKETE</small><h4>JK/Coin-Pakete</h4><div class="jkc-grid">${PACKS.map(p=>`<article class="jkc-card highlight"><div class="jkc-pack"><span class="jkc-pack-icon">${p.coins>=3000?"◆":"JK"}</span><div><h5>${p.coins.toLocaleString("de-DE")} JK/Coin</h5><p>${p.bonus?`<span class="jkc-bonus">+${p.bonus}% Bonus</span>`:"Standardpaket"}</p></div><strong>${p.eur.toFixed(2).replace(".",",")} €</strong></div><div class="jkc-actions"><button class="jkc-button" data-jkc-request-pack="${p.id}">Anfrage senden</button></div></article>`).join("")}</div></section><section class="jkc-section"><small>SCHNELLZUGRIFF</small><div class="jkc-grid"><article class="jkc-card"><h5>Lucky Boxes</h5><p>Euro, Haupt-EP, exklusive Inhalte und sammelbare Gegenstände.</p><button class="jkc-button secondary" data-jkc-go="boxes">Öffnen</button></article><article class="jkc-card"><h5>Spiele-Shop</h5><p>Exklusive Inhalte für die unterstützten Top Games und Bereiche.</p><button class="jkc-button secondary" data-jkc-go="games">Öffnen</button></article></div></section>`;}
@@ -182,7 +182,10 @@
     shell.querySelectorAll("[data-jkc-sell-collectible]").forEach(b=>b.addEventListener("click",()=>sellCollectible(b.dataset.jkcSellCollectible,item)));
     syncGrants().catch(()=>{});
   }
-  function refreshPhone(item){try{if(typeof openDeviceInterface==="function")openDeviceInterface(item||window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}}
+  function refreshPhone(item){
+    if(ui.gameOverlay && document.querySelector(".jkc-ingame-overlay")){ renderGameOverlay(ui.gameOverlay); return; }
+    try{if(typeof openDeviceInterface==="function")openDeviceInterface(item||window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}
+  }
   function exchangePrompt(item){const c=coinState(),rate=currentRate();const raw=prompt(`Wie viele JK/Coins möchtest du zum Kurs 1 = ${euro(rate)} umtauschen?\nVerfügbar: ${c.balance}`);if(raw==null)return;const amount=Math.max(0,Math.floor(Number(String(raw).replace(",","."))||0));if(!amount||amount>c.balance)return toast("Ungültiger Betrag oder nicht genug JK/Coins.");if(!confirm(`${amount} JK/Coin gegen ${euro(amount*rate)} tauschen? Dieser Tausch kann nicht rückgängig gemacht werden.`))return;if(!spend(amount,`Umtausch zu ${euro(rate)} je JK/Coin`))return;const root=rootState();root.bank=Number(root.bank||0)+amount*rate;ledger("exchange",0,`${amount} JK/Coin → ${euro(amount*rate)}`,{rate});persist();feed(`${amount} JK/Coin wurden zum Kurs ${euro(rate)} in ${euro(amount*rate)} umgetauscht.`);refreshPhone(item);}
 
   function openBox(boxId,item){const box=BOXES.find(b=>b.id===boxId),c=coinState();if(!box)return;if(c.balance<box.cost)return toast("Nicht genug JK/Coins.");if(!confirm(`${box.name} für ${box.cost} JK/Coin öffnen?`))return;if(!spend(box.cost,box.name))return;const rewards=box.type==="reward"?openRewardBox(box):openCollectBox(box);persist();showRewards(box,rewards,()=>refreshPhone(item));}
@@ -202,11 +205,95 @@
   function applyPendingGameEntitlements(){const c=coinState(),apiMap={runner:window.RunnerKL,city:window.CityKL,match:window.MatchKL,fight:window.FightKL,dungeon:window.DungeonKL,weed:window.WeedKL,casino:window.JKCasinoV82};for(const entry of GAME_STORE){if(entry.game==="casino"&&entry.variable)continue;const total=Number(c.entitlements[entry.id]||0),applied=Number(c.appliedEntitlements[entry.id]||0),delta=Math.max(0,total-applied);if(!delta)continue;try{const ok=apiMap[entry.game]?.grantJkCoinPurchase?.(entry.grant.kind,delta,{sku:entry.id,name:entry.name});if(ok!==false&&apiMap[entry.game]?.grantJkCoinPurchase)c.appliedEntitlements[entry.id]=total;}catch(error){console.warn("JK/Coin Spiel-Gutschrift",entry.game,error);}}persist();}
 
   function bankPanelHtml(){const c=coinState(),rate=currentRate();return `<section class="jkc-bank-panel" data-jkc-bank-panel><small>JK/COIN-KONTO</small><h3>Premium-Währung</h3><div class="jkc-bank-summary"><div><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")} JK/Coin</b></div><div><small>AKTUELLER KURS</small><b>1 = ${euro(rate)}</b></div><div><small>AUSGEGEBEN</small><b>${Math.round(c.totalSpent).toLocaleString("de-DE")}</b></div></div><div class="jkc-actions"><button class="jkc-button gold" data-jkc-bank-exchange>JK/Coin in Euro tauschen</button><button class="jkc-button secondary" data-jkc-bank-ledger>Kontobewegungen</button></div></section>`;}
-  function bindBank(container){container?.querySelector("[data-jkc-bank-exchange]")?.addEventListener("click",()=>exchangePrompt(window.JKGamesOwnedPhoneItem?.()||""));container?.querySelector("[data-jkc-bank-ledger]")?.addEventListener("click",()=>{try{ui.tab="ledger";if(typeof openDeviceInterface==="function")openDeviceInterface(window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}});}
+  function bindBank(container){
+    const exchange=container?.querySelector("[data-jkc-bank-exchange]");
+    if(exchange)exchange.onclick=()=>exchangePrompt(window.JKGamesOwnedPhoneItem?.()||"");
+    const ledgerButton=container?.querySelector("[data-jkc-bank-ledger]");
+    if(ledgerButton)ledgerButton.onclick=()=>{try{ui.tab="ledger";if(typeof openDeviceInterface==="function")openDeviceInterface(window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}};
+  }
 
   async function syncProfileBalance(){try{const fb=await runtime(),user=await currentUser(fb),c=coinState();if(!user||!c)return;await fb.setDoc(fb.doc(fb.db,"playerProfiles",user.uid),{jkCoinBalance:c.balance,jkCoinSpent:c.totalSpent,jkCoinPurchased:c.totalPurchased,jkCoinUpdatedAtMs:Date.now()},{merge:true});}catch{}}
 
-  async function syncGrants(){if(Date.now()-ui.lastGrantSync<5000)return;ui.lastGrantSync=Date.now();try{const fb=await runtime(),user=await currentUser(fb);if(!user)return;const snap=await fb.getDocs(fb.query(fb.collection(fb.db,GRANT_COLLECTION,user.uid,"items"),fb.limit(100)));for(const docSnap of snap.docs){if(coinState().lastGrantIds.includes(docSnap.id))continue;const data=docSnap.data();if(data.status!=="ready")continue;const amount=Math.floor(Number(data.coins)||0);if(amount){const c=coinState();const applied=amount>0?amount:-Math.min(c.balance,Math.abs(amount));c.balance=Math.max(0,c.balance+applied);if(applied>0)c.totalPurchased+=applied;else c.totalGifted+=Math.abs(applied);c.lastGrantIds.push(docSnap.id);ledger(applied>0?"purchase":"correction",applied,applied>0?`Kaufanfrage bestätigt · ${data.packId||data.reason||"JK/Coin"}`:`Owner-Korrektur · ${data.reason||"JK/Coin entfernt"}`);await fb.setDoc(docSnap.ref,{status:"claimed",claimedAtMs:Date.now(),appliedCoins:applied},{merge:true}).catch(()=>{});toast(`${applied>0?"+":""}${applied.toLocaleString("de-DE")} JK/Coin ${applied>0?"gutgeschrieben":"korrigiert"}.`);persist();updateSettingsBalance();}}}catch(error){console.warn("JK/Coin-Gutschriften",error?.message||error);}}
+  async function applyRemoteCoinAmount(amount, label, grantKey, type="purchase"){
+    const c=coinState();
+    if(!c || c.lastGrantIds.includes(grantKey)) return false;
+    const raw=Math.floor(Number(amount)||0);
+    if(!raw) return false;
+    const applied=raw>0?raw:-Math.min(c.balance,Math.abs(raw));
+    c.balance=Math.max(0,c.balance+applied);
+    if(applied>0)c.totalPurchased+=applied;else c.totalGifted+=Math.abs(applied);
+    c.lastGrantIds.push(grantKey);
+    c.lastGrantIds=c.lastGrantIds.slice(-500);
+    ledger(type,applied,label);
+    toast(`${applied>0?"+":""}${applied.toLocaleString("de-DE")} JK/Coin ${applied>0?"gutgeschrieben":"korrigiert"}.`);
+    persist();updateSettingsBalance();
+    return true;
+  }
+
+  async function syncApprovedPurchaseRequests(fb,user){
+    const c=coinState(); if(!c)return;
+    const candidates=c.requests.filter(r=>r?.online&&r.id&&!String(r.id).startsWith("local-")&&!c.lastGrantIds.includes(`request:${r.id}`)).slice(0,60);
+    for(const local of candidates){
+      try{
+        const snap=await fb.getDoc(fb.doc(fb.db,PURCHASE_COLLECTION,local.id));
+        if(!snap.exists())continue;
+        const data=snap.data()||{};
+        if(data.uid&&data.uid!==user.uid)continue;
+        local.status=data.status||local.status;
+        if(data.status==="approved"){
+          const applied=await applyRemoteCoinAmount(Number(data.approvedCoins??data.coins??local.coins)||0,`Kaufanfrage bestätigt · ${data.packId||local.packId||"JK/Coin"}`,`request:${local.id}`,"purchase");
+          if(applied)local.claimedAtMs=Date.now();
+        }else if(data.status==="rejected")local.rejectedAtMs=Number(data.rejectedAtMs||Date.now());
+      }catch(error){
+        const code=String(error?.code||"");
+        if(!/permission-denied|unauthenticated/i.test(code))console.debug?.("JK/Coin Anfrage-Sync pausiert",error?.message||error);
+      }
+    }
+    persist();
+  }
+
+  async function syncGrantCollection(fb,user){
+    if(ui.grantCollectionDenied)return;
+    try{
+      const snap=await fb.getDocs(fb.query(fb.collection(fb.db,GRANT_COLLECTION,user.uid,"items"),fb.limit(100)));
+      for(const docSnap of snap.docs){
+        const data=docSnap.data()||{};
+        if(data.status!=="ready")continue;
+        const requestKey=data.requestId?`request:${data.requestId}`:"";
+        if(requestKey&&coinState().lastGrantIds.includes(requestKey)){
+          await fb.setDoc(docSnap.ref,{status:"claimed",claimedAtMs:Date.now(),appliedCoins:0},{merge:true}).catch(()=>{});
+          continue;
+        }
+        if(coinState().lastGrantIds.includes(`grant:${docSnap.id}`))continue;
+        const amount=Math.floor(Number(data.coins)||0);
+        const applied=await applyRemoteCoinAmount(amount,amount>0?`JK/Coin-Gutschrift · ${data.packId||data.reason||"Owner"}`:`Owner-Korrektur · ${data.reason||"JK/Coin entfernt"}`,`grant:${docSnap.id}`,amount>0?"purchase":"correction");
+        if(applied)await fb.setDoc(docSnap.ref,{status:"claimed",claimedAtMs:Date.now(),appliedCoins:amount},{merge:true}).catch(()=>{});
+      }
+    }catch(error){
+      const code=String(error?.code||error?.message||"");
+      if(/permission-denied|missing or insufficient permissions/i.test(code)){
+        ui.grantCollectionDenied=true;
+        return;
+      }
+      console.debug?.("JK/Coin Grant-Sync pausiert",error?.message||error);
+    }
+  }
+
+  async function syncGrants(){
+    if(Date.now()-ui.lastGrantSync<5000)return;
+    ui.lastGrantSync=Date.now();
+    try{
+      const fb=await runtime(),user=await currentUser(fb);if(!user)return;
+      // Bestätigte Kaufanfragen werden direkt aus dem eigenen Request gelesen.
+      // Dadurch funktionieren normale Gutschriften auch dann, wenn die optionale
+      // jkCoinGrants-Unterkollektion in den Firestore-Regeln noch nicht freigegeben ist.
+      await syncApprovedPurchaseRequests(fb,user);
+      await syncGrantCollection(fb,user);
+    }catch(error){
+      const code=String(error?.code||error?.message||"");
+      if(!/permission-denied|missing or insufficient permissions|unauthenticated/i.test(code))console.debug?.("JK/Coin Sync pausiert",error?.message||error);
+    }
+  }
 
   async function renderOwnerPanel(container,context={}){
     if(!container)return;
@@ -239,8 +326,10 @@
       const row=rows.find(r=>r.id===btn.dataset.requestId);if(!row)return;btn.disabled=true;
       try{
         if(btn.dataset.jkcOwnerRequest==="approve"){
-          await fb.setDoc(fb.doc(fb.db,GRANT_COLLECTION,row.uid,"items",row.id),{status:"ready",coins:Number(row.coins||0),packId:row.packId||"",requestId:row.id,createdAtMs:Date.now(),createdByUid:context.currentUser?.uid||"owner"},{merge:true});
-          await fb.setDoc(fb.doc(fb.db,PURCHASE_COLLECTION,row.id),{status:"approved",approvedAtMs:Date.now(),approvedByUid:context.currentUser?.uid||"owner",updatedAtMs:Date.now()},{merge:true});
+          await fb.setDoc(fb.doc(fb.db,PURCHASE_COLLECTION,row.id),{status:"approved",approvedCoins:Number(row.coins||0),approvedAtMs:Date.now(),approvedByUid:context.currentUser?.uid||"owner",updatedAtMs:Date.now()},{merge:true});
+          // Optionaler Kompatibilitätsweg für manuelle/ältere Grant-Regeln. Eine
+          // fehlende Berechtigung blockiert die normale Kaufgutschrift nicht mehr.
+          await fb.setDoc(fb.doc(fb.db,GRANT_COLLECTION,row.uid,"items",row.id),{status:"ready",coins:Number(row.coins||0),packId:row.packId||"",requestId:row.id,createdAtMs:Date.now(),createdByUid:context.currentUser?.uid||"owner"},{merge:true}).catch(()=>{});
         }else await fb.setDoc(fb.doc(fb.db,PURCHASE_COLLECTION,row.id),{status:"rejected",rejectedAtMs:Date.now(),rejectedByUid:context.currentUser?.uid||"owner",updatedAtMs:Date.now()},{merge:true});
         await renderOwnerPanel(container,context);
       }catch(error){toast(String(error?.message||error));btn.disabled=false;}
@@ -257,10 +346,47 @@
   function toast(text){let el=document.querySelector(".jkc-toast");if(!el){el=document.createElement("div");el.className="jkc-toast";document.body.append(el);}el.textContent=text;clearTimeout(ui.toastTimer);requestAnimationFrame(()=>el.classList.add("show"));ui.toastTimer=setTimeout(()=>el.classList.remove("show"),2500);}
   function decorateActiveViews(){
     document.querySelectorAll(".device-shell .jkc-app").forEach(app=>{if(app.dataset.jkcBound)return;app.dataset.jkcBound="1";bind(app.closest(".device-shell")||document,window.JKGamesOwnedPhoneItem?.()||"Smartphone");});
-    document.querySelectorAll(".jk-bank-app-v58, .device-active-bank").forEach(bank=>{if(!bank.querySelector("[data-jkc-bank-panel]")){bank.insertAdjacentHTML("beforeend",bankPanelHtml());bindBank(bank);}});
+    document.querySelectorAll(".jk-bank-app-v58, .device-active-bank").forEach(bank=>bindBank(bank));
   }
-  function init(){coinState();installSettingsCard();const observer=new MutationObserver(()=>{installSettingsCard();decorateActiveViews();});observer.observe(document.documentElement,{childList:true,subtree:true});decorateActiveViews();window.addEventListener("lifebuilder-local-save-flushed",()=>updateSettingsBalance());setInterval(()=>syncGrants().catch(()=>{}),15000);setInterval(()=>{applyPendingGameEntitlements();syncProfileBalance();},30000);setTimeout(()=>{applyPendingGameEntitlements();syncProfileBalance();},2500);}
+  const GAME_CONTEXTS = [
+    ["runner",".runner-kl-overlay"],["city",".city-kl-overlay"],["match",".match-kl-overlay"],
+    ["fight",".fight-kl-modal"],["dungeon",".dkl-modal"],["weed",".wk-overlay"],["casino",".casino-v82-game-panel"]
+  ];
+  const GAME_LABELS={runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",weed:"Weed Business",casino:"Casino"};
 
-  window.JKCoinApp=Object.freeze({version:VERSION,html,bind,bankPanelHtml,bindBank,requestPack,coinState,currentRate,renderOwnerPanel,credit,spend,syncGrants,syncProfileBalance,applyPendingGameEntitlements,gameStore:GAME_STORE,boxes:BOXES});
+  function renderGameOverlay(game){
+    const old=document.querySelector(".jkc-ingame-overlay");
+    ui.gameOverlay=game;ui.game=game;ui.tab="games";
+    const host=old||document.createElement("div");
+    host.className="jkc-ingame-overlay";
+    host.dataset.jkcGameOverlay=game;
+    host.innerHTML=`<div class="jkc-ingame-card"><header class="jkc-ingame-head"><div><small>JK/COIN · ${esc(GAME_LABELS[game]||game)}</small><h2>${esc(GAME_LABELS[game]||game)} Extras</h2><p>Direkt für das aktuell geöffnete Spiel.</p></div><button type="button" data-jkc-game-close aria-label="JK/Coin schließen">×</button></header><div class="jkc-app jkc-ingame-app">${gamesHtml()}</div></div>`;
+    if(!old)document.body.append(host);
+    host.querySelector("[data-jkc-game-close]")?.addEventListener("click",()=>{ui.gameOverlay="";host.remove();});
+    bindScrollNav(host);
+    host.querySelectorAll("[data-jkc-game-filter]").forEach(btn=>btn.addEventListener("click",()=>{ui.game=game;renderGameOverlay(game);}));
+    host.querySelectorAll("[data-jkc-buy-game]").forEach(btn=>btn.addEventListener("click",()=>buyGameItem(btn.dataset.jkcBuyGame,"")));
+    syncGrants().catch(()=>{});
+  }
+
+  function openForGame(game){if(!GAME_LABELS[game])return;renderGameOverlay(game);}
+
+  function installGameShortcuts(){
+    for(const [game,selector] of GAME_CONTEXTS){
+      document.querySelectorAll(selector).forEach(root=>{
+        if(root.querySelector(":scope > [data-jkc-ingame-open]"))return;
+        const btn=document.createElement("button");
+        btn.type="button";btn.className="jkc-ingame-open";btn.dataset.jkcIngameOpen=game;
+        btn.innerHTML=`<span>JK</span><b>JK/Coin</b>`;
+        btn.title=`JK/Coin-Shop für ${GAME_LABELS[game]}`;
+        btn.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();openForGame(game);});
+        root.append(btn);
+      });
+    }
+  }
+
+  function init(){coinState();installSettingsCard();const observer=new MutationObserver(()=>{installSettingsCard();decorateActiveViews();installGameShortcuts();});observer.observe(document.documentElement,{childList:true,subtree:true});decorateActiveViews();installGameShortcuts();window.addEventListener("lifebuilder-local-save-flushed",()=>updateSettingsBalance());setInterval(()=>syncGrants().catch(()=>{}),15000);setInterval(()=>{applyPendingGameEntitlements();syncProfileBalance();},30000);setTimeout(()=>{applyPendingGameEntitlements();syncProfileBalance();installGameShortcuts();},2500);}
+
+  window.JKCoinApp=Object.freeze({version:VERSION,html,bind,bankPanelHtml,bindBank,requestPack,coinState,currentRate,renderOwnerPanel,credit,spend,syncGrants,syncProfileBalance,applyPendingGameEntitlements,openForGame,gameStore:GAME_STORE,boxes:BOXES});
   init();
 })();

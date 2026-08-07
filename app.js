@@ -5207,12 +5207,16 @@ function completeWorldTravelIfReady() {
 }
 
 
-const BEGINNER_PHONE_TUTORIAL_VERSION = 2;
-const BEGINNER_PHONE_TUTORIAL_STEPS = ["buy-basic", "buy-sim", "buy-credit", "use-sim", "use-credit", "open-phone", "open-shop", "buy-upgrade"];
+const BEGINNER_PHONE_TUTORIAL_VERSION = 4;
+const BEGINNER_PHONE_TUTORIAL_STEPS = [
+  "home-open", "home-exit", "market-select", "market-route", "wait-travel", "enter-market",
+  "buy-basic", "buy-sim", "buy-credit", "use-sim", "use-credit", "open-phone", "open-shop", "buy-upgrade"
+];
 let beginnerPhoneTutorialTimer = null;
 let beginnerPhoneTutorialLastStep = "";
 let beginnerPhoneTutorialLastOpenAt = 0;
 let beginnerPhoneTutorialHighlighted = null;
+const beginnerPhoneTutorialAutoOpened = new Set();
 
 function beginnerPhoneTutorialState() {
   if (!state) return null;
@@ -5222,28 +5226,44 @@ function beginnerPhoneTutorialState() {
 }
 
 function ensureRequiredBeginnerPhoneTutorial() {
-  if (!state || !state.introDone) return beginnerPhoneTutorialState();
+  if (!state) return null;
   const current = beginnerPhoneTutorialState();
-  if (current?.status === "completed") {
-    if (current.version !== BEGINNER_PHONE_TUTORIAL_VERSION) {
-      current.version = BEGINNER_PHONE_TUTORIAL_VERSION;
-      current.updatedAtMs = Date.now();
+  // V215: Dieses Tutorial ist nur ein einmaliger Einstieg. Bereits vorhandene
+  // Charaktere oder übersprungene/abgeschlossene Tutorials werden nie erneut
+  // zwangsweise gestartet.
+  if (!current) {
+    if (state.introDone) {
+      state.beginnerPhoneTutorial = {
+        version: BEGINNER_PHONE_TUTORIAL_VERSION,
+        status: "skipped",
+        step: "done",
+        skippedAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+        reason: "existing-character"
+      };
       save();
+      return state.beginnerPhoneTutorial;
     }
-    return current;
+    return null;
   }
-  if (!current || current.version !== BEGINNER_PHONE_TUTORIAL_VERSION || current.status !== "active") {
-    state.beginnerPhoneTutorial = {
-      version: BEGINNER_PHONE_TUTORIAL_VERSION,
-      status: "active",
-      step: "buy-basic",
-      startedAtMs: Number(current?.startedAtMs || Date.now()),
-      updatedAtMs: Date.now(),
-      required: true
-    };
-    save();
+  let changed = false;
+  if (current.version !== BEGINNER_PHONE_TUTORIAL_VERSION) {
+    // Alte V211–V215-Tutorialzustände werden nicht erneut aufgezwungen.
+    // Ein damals bereits aktiver Altzustand wird für bestehende Charaktere beendet;
+    // neue V216-Durchläufe starten ausschließlich über das Intro selbst.
+    if (current.status === "active") {
+      current.status = "skipped";
+      current.step = "done";
+      current.skippedAtMs = Date.now();
+      current.reason = "v216-migration";
+      clearBeginnerPhoneTutorialUi();
+    }
+    current.version = BEGINNER_PHONE_TUTORIAL_VERSION;
+    current.updatedAtMs = Date.now();
+    changed = true;
   }
-  return state.beginnerPhoneTutorial;
+  if (changed) save();
+  return current;
 }
 
 function beginnerPhoneTutorialActive() {
@@ -5253,10 +5273,11 @@ function beginnerPhoneTutorialActive() {
 
 function beginBeginnerPhoneTutorial() {
   if (!state) return;
+  beginnerPhoneTutorialAutoOpened.clear();
   state.beginnerPhoneTutorial = {
     version: BEGINNER_PHONE_TUTORIAL_VERSION,
     status: "active",
-    step: "buy-basic",
+    step: "home-open",
     startedAtMs: Date.now(),
     updatedAtMs: Date.now()
   };
@@ -5266,15 +5287,23 @@ function beginBeginnerPhoneTutorial() {
 
 function skipBeginnerPhoneTutorial() {
   if (!state) return;
-  // Die Smartphone-Einrichtung ist bewusst verpflichtend. Ältere Spielstände,
-  // die das Tutorial als „skipped“ gespeichert haben, werden ab V211 wieder
-  // in den geführten Ablauf übernommen.
-  beginBeginnerPhoneTutorial();
-  addFeed("Die Smartphone-Einrichtung kann nicht übersprungen werden. Sie stellt sicher, dass Handy, SIM und Guthaben bei allen Spielern korrekt eingerichtet sind.");
+  state.beginnerPhoneTutorial = {
+    version: BEGINNER_PHONE_TUTORIAL_VERSION,
+    status: "skipped",
+    step: "done",
+    skippedAtMs: Date.now(),
+    updatedAtMs: Date.now()
+  };
+  beginnerPhoneTutorialAutoOpened.clear();
+  clearBeginnerPhoneTutorialUi();
+  save();
+  addFeed("Smartphone-Tutorial übersprungen. Es wird für diesen Charakter nicht erneut angezeigt.");
+  renderFeed(true);
 }
 
 function completeBeginnerPhoneTutorial() {
   if (!state) return;
+  beginnerPhoneTutorialAutoOpened.clear();
   state.beginnerPhoneTutorial = {
     version: BEGINNER_PHONE_TUTORIAL_VERSION,
     status: "completed",
@@ -5317,8 +5346,18 @@ function normalizeBeginnerPhoneTutorialProgress() {
   if (!data || data.status !== "active") return;
   const beforeStep = data.step;
   let guard = 0;
-  while (guard++ < 12) {
+  while (guard++ < 20) {
     const step = data.step;
+    const dialogTitle = String(els.dialogTitle?.textContent || "");
+    const homeDialogOpen = !!(els.dialog?.open && (els.dialog.querySelector(".property-home-actions, .emergency-shelter-actions") || /wohnung|notunterkunft/i.test(dialogTitle)));
+    const routeToMarketOpen = !!(els.dialog?.open && /route nach supermarkt/i.test(dialogTitle));
+    const marketDialogOpen = !!(els.dialog?.open && /^supermarkt\b/i.test(dialogTitle) && els.dialog.querySelector(".market-list"));
+    if (step === "home-open" && homeDialogOpen) { data.step = "home-exit"; continue; }
+    if (step === "home-exit" && !state.homeDashboardActive && activeTabId() === "world" && !homeDialogOpen) { data.step = "market-select"; continue; }
+    if (step === "market-select" && routeToMarketOpen) { data.step = "market-route"; continue; }
+    if (step === "market-route" && state.localTravel?.placeId === "market") { data.step = "wait-travel"; continue; }
+    if (step === "wait-travel" && !state.localTravel && state.location === "market") { data.step = "enter-market"; continue; }
+    if (step === "enter-market" && marketDialogOpen) { data.step = "buy-basic"; continue; }
     if (step === "buy-basic" && beginnerOwnsPhoneAtLeast(0)) { data.step = "buy-sim"; continue; }
     if (step === "buy-sim" && (beginnerHasUninstalledSim() || hasPhoneSim())) { data.step = "buy-credit"; continue; }
     if (step === "buy-credit" && (beginnerHasCreditCard() || phoneCreditAmount() > 0)) { data.step = "use-sim"; continue; }
@@ -5350,7 +5389,7 @@ function ensureBeginnerPhoneTutorialCoach() {
   coach = document.createElement("aside");
   coach.className = "beginner-phone-tutorial";
   coach.dataset.beginnerPhoneTutorial = "1";
-  coach.innerHTML = `<div class="beginner-phone-tutorial-progress"><span data-beginner-progress></span><b class="beginner-phone-tutorial-required">PFLICHT-EINRICHTUNG</b></div><small data-beginner-kicker>ERSTE SCHRITTE</small><h3 data-beginner-title></h3><p data-beginner-text></p>`;
+  coach.innerHTML = `<div class="beginner-phone-tutorial-progress"><span data-beginner-progress></span><b class="beginner-phone-tutorial-required">SMARTPHONE-START</b></div><small data-beginner-kicker>ERSTE SCHRITTE</small><h3 data-beginner-title></h3><p data-beginner-text></p><button type="button" class="beginner-phone-tutorial-skip" data-beginner-phone-skip>Tutorial überspringen</button>`;
   host.appendChild(coach);
   return coach;
 }
@@ -5376,8 +5415,19 @@ function beginnerFindCardByTitle(root, matcher) {
   return [...root.querySelectorAll("article.item-card")].find((card) => test(card.querySelector("h3")?.textContent || "", card)) || null;
 }
 
+function beginnerFindButtonByText(root, matcher) {
+  if (!root) return null;
+  const test = typeof matcher === "function" ? matcher : (value) => String(value || "").trim() === String(matcher || "").trim();
+  return [...root.querySelectorAll("button")].find((button) => test(button.textContent || "", button)) || null;
+}
+
 function beginnerShowCoach({ title, text, stepIndex, target = null, kicker = "SMARTPHONE-START" }) {
   const coach = ensureBeginnerPhoneTutorialCoach();
+  const skipButton = coach.querySelector("[data-beginner-phone-skip]");
+  if (skipButton && !skipButton.dataset.bound) {
+    skipButton.dataset.bound = "1";
+    skipButton.addEventListener("click", skipBeginnerPhoneTutorial);
+  }
   coach.querySelector("[data-beginner-kicker]").textContent = kicker;
   coach.querySelector("[data-beginner-title]").textContent = title;
   coach.querySelector("[data-beginner-text]").textContent = text;
@@ -5393,19 +5443,19 @@ function beginnerShowCoach({ title, text, stepIndex, target = null, kicker = "SM
 function beginnerEnsureLocalMarket(step) {
   const title = String(els.dialogTitle?.textContent || "");
   if (els.dialog?.open && /^Supermarkt\b/i.test(title) && els.dialog.querySelector(".market-list")) return;
-  const now = Date.now();
-  if (beginnerPhoneTutorialLastStep === step && now - beginnerPhoneTutorialLastOpenAt < 1200) return;
+  if (beginnerPhoneTutorialAutoOpened.has(step)) return;
+  beginnerPhoneTutorialAutoOpened.add(step);
   beginnerPhoneTutorialLastStep = step;
-  beginnerPhoneTutorialLastOpenAt = now;
+  beginnerPhoneTutorialLastOpenAt = Date.now();
   openLocalMarketDialog();
 }
 
 function beginnerEnsureInventory(step) {
   if (els.dialog?.open && els.dialog.classList.contains("inventory-dialog")) return;
-  const now = Date.now();
-  if (beginnerPhoneTutorialLastStep === step && now - beginnerPhoneTutorialLastOpenAt < 1200) return;
+  if (beginnerPhoneTutorialAutoOpened.has(step)) return;
+  beginnerPhoneTutorialAutoOpened.add(step);
   beginnerPhoneTutorialLastStep = step;
-  beginnerPhoneTutorialLastOpenAt = now;
+  beginnerPhoneTutorialLastOpenAt = Date.now();
   openCharacterHub("inventory");
 }
 
@@ -5421,17 +5471,62 @@ function runBeginnerPhoneTutorial() {
   const step = data.step;
   const stepIndex = Math.max(0, BEGINNER_PHONE_TUTORIAL_STEPS.indexOf(step));
 
-  if (step === "buy-basic") {
-    beginnerEnsureLocalMarket(step);
+  if (step === "home-open") {
+    const target = document.querySelector("[data-home-shortcut]:not(:disabled)");
+    beginnerShowCoach({
+      title: "Das ist deine Wohnung",
+      text: "Tippe zuerst auf deine Wohnung. Hier schläfst du, verwaltest dein Zuhause und startest deine ersten Wege durch die Stadt.",
+      stepIndex, target, kicker: "DEIN START"
+    });
+  } else if (step === "home-exit") {
+    const target = beginnerFindButtonByText(els.dialog, (text) => /^ausgang$/i.test(String(text).trim()));
+    beginnerShowCoach({
+      title: "Verlasse deine Wohnung",
+      text: "Tippe auf Ausgang. Danach siehst du die lokale Stadtkarte und kannst dein erstes Ziel auswählen.",
+      stepIndex, target, kicker: "DEINE WOHNUNG"
+    });
+  } else if (step === "market-select") {
+    const target = document.querySelector('.map-pin[data-place="market"]');
+    beginnerShowCoach({
+      title: "Gehe zum Shop",
+      text: "Wähle auf der Stadtkarte den Supermarkt. Dort bekommst du dein erstes Handy, eine SIM-Karte und Guthaben.",
+      stepIndex, target, kicker: "ERSTER WEG"
+    });
+  } else if (step === "market-route") {
+    const routeBox = els.dialog?.querySelector(".local-route-actions");
+    beginnerShowCoach({
+      title: "Wähle deine Route",
+      text: "Zu Fuß ist kostenlos und dauert 60 Sekunden. Die Bahn dauert 30 Sekunden und kostet ein Ticket. Später kannst du Fahrzeuge kaufen und lokale Wege je nach Fahrzeug bis auf ungefähr 5 Sekunden verkürzen.",
+      stepIndex, target: routeBox, kicker: "UNTERWEGS"
+    });
+  } else if (step === "wait-travel") {
+    const seconds = Math.max(0, Math.ceil((Number(state.localTravel?.arrivesAt || Date.now()) - Date.now()) / 1000));
+    beginnerShowCoach({
+      title: "Du bist unterwegs",
+      text: state.localTravel ? `Warte noch ungefähr ${seconds} Sekunden bis zur Ankunft. Während einer Fahrt bleibt dein Spielstand aktiv.` : "Die Fahrt ist fast abgeschlossen.",
+      stepIndex, kicker: "REISE"
+    });
+  } else if (step === "enter-market") {
+    const target = [...(els.routeList?.querySelectorAll('button[data-kind="local-action"]') || [])].find((button) => button.dataset.index === "market") || beginnerFindButtonByText(els.routeList, (text) => /betreten|kaufhalle/i.test(text));
+    beginnerShowCoach({
+      title: "Betritt den Supermarkt",
+      text: "Du bist angekommen. Tippe jetzt auf „Kaufhalle betreten“. Danach führt dich das Tutorial direkt zu den Smartphone-Artikeln.",
+      stepIndex, target, kicker: "SUPERMARKT"
+    });
+  } else if (step === "buy-basic") {
+    const marketOpen = !!(els.dialog?.open && /^Supermarkt\b/i.test(String(els.dialogTitle?.textContent || "")) && els.dialog.querySelector(".market-list"));
+    if (!marketOpen) { setBeginnerPhoneTutorialStep("enter-market"); scheduleBeginnerPhoneTutorial(80); return; }
     const card = beginnerFindCardByTitle(els.dialog, (title) => /basic phone kl-1/i.test(title));
     const target = card?.querySelector("button:not(:disabled)") || card;
     beginnerShowCoach({ title: "Hol dir dein erstes Handy", text: "Scrolle im Supermarkt ganz nach unten und kaufe das leuchtende Basic Phone KL-1.", stepIndex, target });
   } else if (step === "buy-sim") {
-    beginnerEnsureLocalMarket(step);
+    const marketOpen = !!(els.dialog?.open && /^Supermarkt\b/i.test(String(els.dialogTitle?.textContent || "")) && els.dialog.querySelector(".market-list"));
+    if (!marketOpen) { setBeginnerPhoneTutorialStep("enter-market"); scheduleBeginnerPhoneTutorial(80); return; }
     const card = beginnerFindCardByTitle(els.dialog, (title) => /sim\.kl free tarif/i.test(title)) || beginnerFindCardByTitle(els.dialog, (title) => /sim\.kl.*tarif/i.test(title));
     beginnerShowCoach({ title: "Kaufe eine SIM-Karte", text: "Nimm zunächst den günstigen Sim.KL Free Tarif. Später kannst du jederzeit einen besseren Tarif einsetzen.", stepIndex, target: card?.querySelector("button:not(:disabled)") || card });
   } else if (step === "buy-credit") {
-    beginnerEnsureLocalMarket(step);
+    const marketOpen = !!(els.dialog?.open && /^Supermarkt\b/i.test(String(els.dialogTitle?.textContent || "")) && els.dialog.querySelector(".market-list"));
+    if (!marketOpen) { setBeginnerPhoneTutorialStep("enter-market"); scheduleBeginnerPhoneTutorial(80); return; }
     const card = beginnerFindCardByTitle(els.dialog, (title) => /guthabenkarte 50/i.test(title)) || beginnerFindCardByTitle(els.dialog, (title) => /guthabenkarte/i.test(title));
     beginnerShowCoach({ title: "Kaufe Handy-Guthaben", text: "Kaufe eine Sim.KL-Guthabenkarte. Die 50-Euro-Karte reicht für den Einstieg.", stepIndex, target: card?.querySelector("button:not(:disabled)") || card });
   } else if (step === "use-sim") {
@@ -5455,18 +5550,16 @@ function runBeginnerPhoneTutorial() {
     const shortcut = document.querySelector("[data-phone-shortcut]:not(:disabled)");
     beginnerShowCoach({ title: "Öffne dein Handy", text: "Tippe jetzt auf den leuchtenden Handy-Button auf dem Hauptbildschirm.", stepIndex, target: shortcut });
   } else if (step === "open-shop") {
-    const phone = ownedPhoneItem();
     const shell = document.querySelector("#detailDialog[open] .device-shell");
-    if (!shell && phone) {
-      const now = Date.now();
-      if (beginnerPhoneTutorialLastStep !== step || now - beginnerPhoneTutorialLastOpenAt > 1200) {
-        beginnerPhoneTutorialLastStep = step;
-        beginnerPhoneTutorialLastOpenAt = now;
-        openDeviceInterface(phone, "home", false);
-      }
-    }
-    const target = document.querySelector('#detailDialog[open] [data-device-app="shop"]');
-    beginnerShowCoach({ title: "Öffne die Shop-App", text: "Tippe im Handy auf Shop. Dort kaufst du jetzt ein richtiges Einsteiger-Smartphone.", stepIndex, target });
+    const target = shell
+      ? document.querySelector('#detailDialog[open] [data-device-app="shop"]')
+      : document.querySelector("[data-phone-shortcut]:not(:disabled)");
+    beginnerShowCoach({
+      title: shell ? "Öffne die Shop-App" : "Öffne dein Handy",
+      text: shell ? "Tippe im Handy auf Shop. Dort findest du das Einsteiger-Smartphone." : "Öffne dein Handy. Danach tippe auf die Shop-App.",
+      stepIndex,
+      target
+    });
   } else if (step === "buy-upgrade") {
     const phone = ownedPhoneItem();
     const nativeShop = document.querySelector('#detailDialog[open] .phone-market-app-v68[data-phone-market-mode="shop"]');
@@ -5480,26 +5573,16 @@ function runBeginnerPhoneTutorial() {
     } else if (nativeShop) {
       let card = [...nativeShop.querySelectorAll(".phone-market-card-v68")].find((entry) => /^(einsteiger-)?smartphone$/i.test((entry.querySelector("h3")?.textContent || "").trim()));
       if (!card && phone) {
-        const now = Date.now();
-        if (beginnerPhoneTutorialLastStep !== "buy-upgrade-market-reset" || now - beginnerPhoneTutorialLastOpenAt > 1200) {
-          beginnerPhoneTutorialLastStep = "buy-upgrade-market-reset";
-          beginnerPhoneTutorialLastOpenAt = now;
-          state.phoneShopUiV68 = { query: "", category: "Alle" };
-          openDeviceInterface(phone, "shop", false);
-        }
         card = [...document.querySelectorAll('#detailDialog[open] .phone-market-app-v68[data-phone-market-mode="shop"] .phone-market-card-v68')]
           .find((entry) => /^(einsteiger-)?smartphone$/i.test((entry.querySelector("h3")?.textContent || "").trim()));
       }
       beginnerShowCoach({ title: "Kaufe das Einsteiger-Smartphone", text: "Tippe beim Einsteiger-Smartphone auf „Kaufen“ und bezahle anschließend bar oder über dein Konto.", stepIndex, target: card?.querySelector("[data-phone-market-buy]:not(:disabled)") || card || nativeShop });
     } else {
-      const now = Date.now();
-      if (phone && (beginnerPhoneTutorialLastStep !== step || now - beginnerPhoneTutorialLastOpenAt > 1200)) {
-        beginnerPhoneTutorialLastStep = step;
-        beginnerPhoneTutorialLastOpenAt = now;
-        openDeviceInterface(phone, "shop", false);
-      }
-      const target = document.querySelector('#detailDialog[open] [data-device-app="shop"]');
-      beginnerShowCoach({ title: "Öffne die Shop-App", text: "Öffne im Handy die Shop-App. Dort findest du das Einsteiger-Smartphone.", stepIndex, target });
+      const shell = document.querySelector("#detailDialog[open] .device-shell");
+      const target = shell
+        ? document.querySelector('#detailDialog[open] [data-device-app="shop"]')
+        : document.querySelector("[data-phone-shortcut]:not(:disabled)");
+      beginnerShowCoach({ title: shell ? "Öffne die Shop-App" : "Öffne dein Handy", text: "Öffne die Shop-App und kaufe dort das Einsteiger-Smartphone.", stepIndex, target });
     }
   }
   scheduleBeginnerPhoneTutorial(320);
@@ -5523,19 +5606,16 @@ function showIntroSkipConfirmation(index) {
   clearDialogDynamic();
   els.dialog.classList.add("intro-dialog");
   els.dialogTitle.textContent = "Tutorial wirklich überspringen?";
-  els.dialogText.textContent = "Du überspringst nur die allgemeinen Erklärseiten. Die geführte Smartphone-Einrichtung mit Basic Phone, SIM-Karte, Guthaben, Inventar und Online-Shop startet danach trotzdem, damit jeder Spieler dieselbe funktionierende Grundausstattung besitzt.";
+  els.dialogText.textContent = "Die allgemeinen Einführungshinweise werden übersprungen. Danach startet einmalig die geführte Smartphone-Einrichtung mit Wohnung, Ausgang, Shop, Reise, Handy, SIM und Guthaben.";
   const continueButton = document.createElement("button");
   continueButton.className = "primary-button";
   continueButton.textContent = "Tutorial fortsetzen";
   continueButton.onclick = () => showIntroStep(index);
   const skipButton = document.createElement("button");
   skipButton.className = "mini-button danger";
-  skipButton.textContent = "Erklärseiten überspringen";
+  skipButton.textContent = "Tutorial überspringen";
   skipButton.onclick = () => {
-    state.introDone = true;
-    save();
-    els.dialog.close();
-    beginBeginnerPhoneTutorial();
+    finishIntroAndStartBeginnerPhoneTutorial();
   };
   els.dialog.append(continueButton, skipButton);
   if (!els.dialog.open) els.dialog.showModal();

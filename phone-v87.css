@@ -1646,3 +1646,9 @@
   font-size: .38rem;
   font-weight: 900;
 }
+
+
+/* V216 · JK/Coin als echtes Unterkonto statt separatem Bank-Panel */
+.jk-bank-premium-subaccount-v216{background:linear-gradient(135deg,rgba(66,43,128,.16),rgba(30,121,150,.10));border:1px solid rgba(119,93,220,.24)}
+.jk-bank-premium-icon-v216{display:grid!important;place-items:center;font-size:11px!important;font-weight:900!important;letter-spacing:.03em;background:linear-gradient(135deg,#7e5cff,#42d4ff)!important;color:#fff!important;border-radius:11px!important}
+.jk-bank-premium-subaccount-v216>strong{white-space:nowrap;font-size:13px}

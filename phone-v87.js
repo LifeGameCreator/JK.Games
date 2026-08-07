@@ -1422,7 +1422,24 @@
     return baseSaveV68(...args);
   };
 
+  function premiumSubaccountRowV216() {
+    const api = window.JKCoinApp;
+    if (!api?.coinState) return "";
+    const coin = api.coinState();
+    const rate = api.currentRate?.() || 0;
+    return `<article class="jk-bank-subaccount-row-v68 jk-bank-premium-subaccount-v216">
+      <span class="jk-bank-premium-icon-v216">JK</span>
+      <div><b>Premium-Währungskonto</b><small>JK/Coin · aktueller Umtauschkurs 1 = ${euro(rate)}</small></div>
+      <strong>${Math.max(0, Number(coin.balance || 0)).toLocaleString("de-DE")} JK/Coin</strong>
+      <div class="jk-bank-subaccount-actions-v68">
+        <button type="button" data-jkc-bank-exchange>Umtausch</button>
+        <button type="button" data-jkc-bank-ledger>Verlauf</button>
+      </div>
+    </article>`;
+  }
+
   function subaccountsHtmlV68() {
+    const premiumRow = premiumSubaccountRowV216();
     const rows = ensureSubaccountsV68().map((account) => {
       const autoText = account.auto === "tax"
         ? `Automatisch für offene Steuern: ${euro.format(Math.max(0, Number(state.taxLiability || 0)))}`
@@ -1443,7 +1460,7 @@
     return `<section class="jk-bank-white-card-v58 jk-bank-subaccounts-v68">
       <header><div><small>UNTERKONTEN</small><h3>Deine Unterkonten</h3></div><span>Auto</span></header>
       <p class="jk-bank-subaccounts-hint-v68">Geld auf dem Steuer- oder Schuldenkonto wird automatisch genutzt, sobald dort offene Beträge vorhanden sind.</p>
-      <div>${rows}</div>
+      <div>${premiumRow}${rows}</div>
     </section>`;
   }
 
@@ -1474,7 +1491,7 @@
     return `<section class="jk-bank-white-card-v58 jk-bank-subaccounts-summary-v78">
       <button type="button" data-jk-bank-view="subaccounts">
         <span>▦</span>
-        <div><small>UNTERKONTEN</small><b>Deine Unterkonten</b><em>${accounts.length} Konten verwalten</em></div>
+        <div><small>UNTERKONTEN</small><b>Deine Unterkonten</b><em>${accounts.length + 1} Konten · inkl. JK/Coin</em></div>
         <strong>${euro.format(total)}</strong><i>›</i>
       </button>
     </section>`;
@@ -1485,7 +1502,7 @@
       <section class="jk-bank-page-head-v58">
         <button type="button" class="jk-bank-inline-back-v58" data-jk-bank-view="overview">‹</button>
         <small>DEINE FINANZEN</small><h2>Deine Unterkonten</h2>
-        <p>Verteile Geld auf Sparkonto, Steuerkonto, Schuldenkonto und Rücklagenkonto. Steuer- und Schuldenkonto gleichen offene Beträge automatisch aus.</p>
+        <p>Hier findest du zuerst dein Premium-Währungskonto und darunter Sparkonto, Steuerkonto, Schuldenkonto und Rücklagenkonto. Steuer- und Schuldenkonto gleichen offene Beträge automatisch aus.</p>
       </section>
       ${subaccountsHtmlV68()}
       ${bankBottomNavHtmlV78("overview")}

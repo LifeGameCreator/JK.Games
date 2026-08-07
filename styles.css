@@ -20402,3 +20402,7 @@ body.phone-v65-open {
 @media (prefers-reduced-motion: reduce) {
   .jk-beginner-highlight { animation: none !important; }
 }
+
+/* V215 · Smartphone-Start ist einmalig und jederzeit überspringbar */
+.beginner-phone-tutorial-skip{display:block;margin-top:10px;margin-left:auto;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(11,20,31,.82);color:#dbe5ee;padding:7px 10px;font-size:11px;font-weight:850;cursor:pointer;pointer-events:auto}
+.beginner-phone-tutorial-skip:hover,.beginner-phone-tutorial-skip:focus-visible{border-color:rgba(143,220,255,.62);color:#fff}

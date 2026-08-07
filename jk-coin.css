@@ -13,3 +13,26 @@
 .jkc-scroll-rail i{position:absolute;left:0;top:2px;height:7px;min-width:34px;border-radius:999px;background:linear-gradient(90deg,#5fe8ff,#9c65ff,#ff72d7);box-shadow:0 0 12px #9c65ff99;will-change:transform,width}
 .jkc-game-grid{margin-top:11px}
 @media(max-width:560px){.jkc-scroll-nav{grid-template-columns:34px minmax(0,1fr) 34px;gap:5px}.jkc-scroll-arrow{height:34px}.jkc-grid{grid-template-columns:1fr}.jkc-settings-pack-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V215 · Galaxy-Navigation statt Browser-Standardbuttons */
+.jkc-nav-pill{
+  appearance:none;-webkit-appearance:none;border:1px solid rgba(154,102,255,.48)!important;border-radius:13px!important;
+  background:linear-gradient(145deg,rgba(28,31,55,.96),rgba(10,21,36,.98))!important;color:#dce8f5!important;
+  padding:9px 14px!important;font:inherit;font-size:12px!important;font-weight:900!important;letter-spacing:.015em;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 5px 14px rgba(0,0,0,.28);outline:none!important;
+}
+.jkc-nav-pill:hover,.jkc-nav-pill:focus-visible{border-color:#7ee8ff!important;color:#fff!important;box-shadow:0 0 0 2px rgba(104,226,255,.12),0 6px 18px rgba(0,0,0,.32)}
+.jkc-nav-pill.active{border-color:#d184ff!important;background:radial-gradient(circle at 78% 10%,rgba(255,103,216,.27),transparent 40%),linear-gradient(135deg,#6b3fc9,#325cae 58%,#146f89)!important;color:#fff!important;box-shadow:0 0 20px rgba(143,86,255,.36),inset 0 1px 0 rgba(255,255,255,.14)}
+
+/* V215 · JK/Coin direkt in unterstützten Spielen */
+.jkc-ingame-open{position:fixed;z-index:160500;right:max(18px,calc(env(safe-area-inset-right) + 18px));top:max(82px,calc(env(safe-area-inset-top) + 70px));display:flex;align-items:center;gap:7px;border:1px solid rgba(168,104,255,.72);border-radius:14px;background:radial-gradient(circle at 15% 20%,rgba(101,231,255,.22),transparent 44%),linear-gradient(145deg,#17122e,#0b1c2c);color:#fff;padding:8px 11px;box-shadow:0 8px 28px rgba(0,0,0,.48),0 0 22px rgba(144,81,255,.22);cursor:pointer;min-height:42px}
+.jkc-ingame-open span{width:25px;height:25px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(145deg,#c076ff,#4f65ff 60%,#4ee9ff);font-size:10px;font-weight:1000;box-shadow:0 0 12px rgba(148,96,255,.5)}
+.jkc-ingame-open b{font-size:11px;white-space:nowrap}
+.jkc-ingame-overlay{position:fixed;inset:0;z-index:170000;display:grid;place-items:center;background:rgba(2,5,11,.82);backdrop-filter:blur(9px);padding:max(16px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+.jkc-ingame-card{width:min(720px,100%);max-height:min(88vh,820px);overflow:auto;border:1px solid rgba(169,105,255,.62);border-radius:24px;background:linear-gradient(155deg,#0c1422,#07121b 62%,#101225);box-shadow:0 30px 100px #000,0 0 36px rgba(135,75,255,.22);padding:14px}
+.jkc-ingame-head{position:sticky;top:-14px;z-index:4;display:flex;justify-content:space-between;gap:16px;align-items:center;margin:-14px -14px 10px;padding:14px 14px 12px;background:linear-gradient(180deg,#10192a 75%,rgba(16,25,42,.9));border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(8px)}
+.jkc-ingame-head small{color:#7beaff;font-size:10px;font-weight:950;letter-spacing:.11em}.jkc-ingame-head h2{margin:2px 0 2px;font-size:20px;color:#fff}.jkc-ingame-head p{margin:0;color:#92a6b5;font-size:11px}
+.jkc-ingame-head>button{flex:0 0 auto;width:42px;height:42px;border:1px solid rgba(255,255,255,.16);border-radius:13px;background:#142130;color:#fff;font-size:24px;cursor:pointer}
+.jkc-ingame-app .jkc-game-filter{display:none}
+.jkc-ingame-app .jkc-scroll-nav[data-jkc-scroll-nav="games"]{display:none}
+@media(max-width:560px){.jkc-ingame-open{top:max(72px,calc(env(safe-area-inset-top) + 60px));right:max(10px,calc(env(safe-area-inset-right) + 10px));padding:7px 9px}.jkc-ingame-open b{display:none}.jkc-ingame-card{max-height:92vh;border-radius:18px;padding:10px}.jkc-ingame-head{top:-10px;margin:-10px -10px 8px;padding:11px}.jkc-ingame-head h2{font-size:17px}}
