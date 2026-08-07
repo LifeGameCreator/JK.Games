@@ -14,6 +14,7 @@
   };
   const DATABASE_ID = "gamekl";
   const FUNCTIONS_REGION = "europe-west3";
+  const FIREBASE_SDK_VERSION = "12.17.1";
 
   let runtime = null;
   let loading = null;
@@ -66,20 +67,32 @@
     if (navigator.onLine === false) throw new Error("Keine Internetverbindung.");
 
     const [appMod, authMod, dbMod, storageMod, functionsMod] = await withTimeout(Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js"),
-      import("https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js")
+      import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/12.17.1/firebase-storage.js"),
+      import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
     ]), 20000, "Firebase-Bibliotheken");
 
     const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(CONFIG);
     const auth = authMod.getAuth(app);
-    // V241: nur noch die von Firebase selbst verwaltete Standard-Verbindung verwenden.
-    // Erzwungenes Long-Polling erzeugte bei instabilen/recycelten WebChannel-Sessions
-    // 400er Write/Listen-Kanäle und konnte den PersistentWriteStream in einen
-    // internen "Unexpected state" bringen.
-    const db = dbMod.getFirestore(app, DATABASE_ID);
+    // V245: Firestore 12.17.1 + automatische Transport-Erkennung.
+    // Kein erzwungenes Long-Polling: Firestore darf selbst zwischen Streaming und
+    // Long-Polling wechseln. Ein etwas kuerzerer 25-s-Polling-Timeout hilft bei
+    // Proxies/Router-Sessions, die 30-s-Hanging-GETs vorzeitig beenden.
+    let db;
+    try {
+      db = dbMod.initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        experimentalLongPollingOptions: { timeoutSeconds: 25 }
+      }, DATABASE_ID);
+    } catch (error) {
+      // Falls ein anderer Bereich die benannte Instanz wider Erwarten bereits
+      // initialisiert hat, niemals eine zweite Firestore-Instanz erzeugen.
+      const text = String(error?.message || error || "").toLowerCase();
+      if (!text.includes("already") && !text.includes("initialized")) throw error;
+      db = dbMod.getFirestore(app, DATABASE_ID);
+    }
 
     runtime = {
       ...authMod,
@@ -92,7 +105,8 @@
       storage: storageMod.getStorage(app),
       functions: functionsMod.getFunctions(app, FUNCTIONS_REGION),
       databaseId: DATABASE_ID,
-      functionsRegion: FUNCTIONS_REGION
+      functionsRegion: FUNCTIONS_REGION,
+      sdkVersion: FIREBASE_SDK_VERSION
     };
     emit("ready");
     return runtime;
@@ -197,8 +211,45 @@
     if (!document.hidden && navigator.onLine !== false) scheduleFirestoreRecovery(900, "tab-visible");
   });
 
+  // Safety net: a Firestore INTERNAL ASSERTION poisons the SDK queue; after that
+  // further reads/writes can no longer recover in-place. Flush the local save and
+  // perform at most one clean page restart per 10 minutes instead of flooding the
+  // console and continuously retrying a dead client.
+  const HARD_RECOVERY_KEY = "jk-games-firestore-hard-recovery-at";
+  let hardRecoveryScheduled = false;
+  function isFatalFirestoreAssertion(error) {
+    const text = errorText(error);
+    return text.includes("firestore") && text.includes("internal assertion failed");
+  }
+  function scheduleHardFirestoreRecovery(error) {
+    if (hardRecoveryScheduled || navigator.onLine === false) return false;
+    const now = Date.now();
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(HARD_RECOVERY_KEY) || 0); } catch {}
+    if (now - last < 10 * 60 * 1000) return false;
+    hardRecoveryScheduled = true;
+    try { sessionStorage.setItem(HARD_RECOVERY_KEY, String(now)); } catch {}
+    try { window.LifeBuilderSaveControl?.flush?.(); } catch {}
+    emit("error", error?.message || error || "Firestore interner Zustand");
+    window.dispatchEvent(new CustomEvent("lifebuilder-firestore-hard-recovery", {
+      detail: { reason: "internal-assertion", at: now }
+    }));
+    window.setTimeout(() => {
+      try { window.location.reload(); } catch {}
+    }, 900);
+    return true;
+  }
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isFatalFirestoreAssertion(event?.reason)) scheduleHardFirestoreRecovery(event.reason);
+  });
+  window.addEventListener("error", (event) => {
+    const candidate = event?.error || event?.message || "";
+    if (isFatalFirestoreAssertion(candidate)) scheduleHardFirestoreRecovery(candidate);
+  }, true);
+
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-07-v241-firestore-stream-stability",
+    version: "2026-08-08-v245-firestore-sdk12171-transport-recovery",
+    sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
     reconnect,
@@ -208,6 +259,8 @@
     scheduleFirestoreRecovery,
     isRecoverableFirestoreError,
     isTargetCollisionError,
+    isFatalFirestoreAssertion,
+    scheduleHardFirestoreRecovery,
     withTimeout,
     getRuntime: () => runtime,
     getStatus: () => status,

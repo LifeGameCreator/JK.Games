@@ -13833,11 +13833,11 @@ async function loadFirebasePhoneRuntime() {
       fb = await onlineFirebaseTimeout(window.LifeBuilderFirebaseCore.load(), 18000, "Online-Grundverbindung");
     } else {
       const [appMod, authMod, dbMod, storageMod, functionsMod] = await onlineFirebaseTimeout(Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js")
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-storage.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
       ]), 18000, "Online-Bibliotheken");
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
       const auth = authMod.getAuth(app);

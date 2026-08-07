@@ -13,9 +13,9 @@
     firebasePromise = (async () => {
       if (window.LifeBuilderFirebaseCore?.load) return window.LifeBuilderFirebaseCore.load();
       const [appMod, authMod, dbMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js")
       ]);
       const config = typeof firebasePhoneConfig !== "undefined" ? firebasePhoneConfig : {
         apiKey: "AIzaSyB0rCUbDhATvtTQNOvJDNZQxK0PChnDK60",

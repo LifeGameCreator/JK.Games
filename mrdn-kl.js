@@ -753,9 +753,9 @@
       else if (window.LifeBuilderFirebaseCore?.load) runtime = await window.LifeBuilderFirebaseCore.load();
       else {
         const [appMod, authMod, dbMod] = await Promise.all([
-          import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-          import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-          import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
+          import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+          import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js")
         ]);
         const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
         const auth = authMod.getAuth(app);
