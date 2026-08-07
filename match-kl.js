@@ -1240,11 +1240,12 @@
       { id: 'bomb', amount: 2, price: 180 }, { id: 'shuffle', amount: 3, price: 110 }, { id: 'moves', amount: 2, price: 220 },
       { id: 'startBomb', amount: 2, price: 190 }, { id: 'startRocket', amount: 2, price: 190 }, { id: 'lives', amount: 5, price: 300 }
     ];
-    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Booster-Shop', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">MATCH COINS AUSGEBEN</small><h2>Booster und Leben</h2></div><p>Alle Booster können auch durch Level und Tagesaufgaben verdient werden.</p></div><div class="mkl-shop-grid">${items.map(item => {
+    M.shell.innerHTML = `<main class="match-kl-screen"><div class="mkl-screen">${appbar('Booster-Shop', true)}<div class="mkl-page"><div class="mkl-section-title"><div><small class="mkl-kicker">MATCH COINS AUSGEBEN</small><h2>Booster und Leben</h2></div><p>Alle Booster können auch durch Level und Tagesaufgaben verdient werden.</p></div><div class="mkl-shop-grid"><article class="mkl-shop-item jkc-match-shop-item"><i class="jkc-match-logo">JK</i><b>JK Coins</b><small>Weitere Match.KL-Boosts mit JK/Coin kaufen. Der komplette JK/Coin-Bereich bleibt verfügbar.</small><button type="button" class="mkl-primary" data-mkl-jkcoin>JK öffnen</button></article>${items.map(item => {
       const booster = item.id === 'lives' ? { name: 'Leben auffüllen', icon: '❤️', text: 'Füllt deine fünf Herzen vollständig auf.' } : BOOSTERS[item.id];
       return `<article class="mkl-shop-item"><i>${booster.icon}</i><b>${escapeHtml(booster.name)}</b><small>${escapeHtml(booster.text)}<br><strong>${item.id === 'lives' ? 'Alle Herzen' : `+${item.amount} Stück`}</strong></small><button type="button" class="mkl-primary" data-mkl-buy="${item.id}" data-price="${item.price}" data-amount="${item.amount}">🪙 ${item.price}</button></article>`;
     }).join('')}</div></div></div></main>`;
     bindCommon();
+    M.shell.querySelector('[data-mkl-jkcoin]')?.addEventListener('click', () => window.JKCoinApp?.openForGame?.('match'));
     M.shell.querySelectorAll('[data-mkl-buy]').forEach(button => button.addEventListener('click', () => {
       const price = Number(button.dataset.price); const amount = Number(button.dataset.amount); const id = button.dataset.mklBuy;
       if (M.save.coins < price) return toast('Nicht genug Match Coins', 'Spiele Level oder erledige Tagesaufgaben.');

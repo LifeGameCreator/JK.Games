@@ -1379,10 +1379,12 @@
       <small class="city-kl-kicker">SPIELMENÜ</small><h2>City.KL</h2>
       <p>Dein Spiel wird automatisch auf diesem Gerät gespeichert.</p>
       <div class="city-kl-menu-actions">
+        <button type="button" class="secondary jkc-game-menu-button" data-city-jkcoin title="JK/Coin öffnen">JK</button>
         <button type="button" class="primary" data-modal-close>Weiterspielen</button>
         <button type="button" class="secondary" data-restart>Neues Spiel</button>
         <button type="button" class="danger" data-exit>Zu Top Games</button>
       </div>`);
+    C.overlay.querySelector('[data-city-jkcoin]')?.addEventListener('click', () => window.JKCoinApp?.openForGame?.('city'));
     C.overlay.querySelector('[data-restart]')?.addEventListener('click', () => {
       closeModal();
       showConfirm('Neues Spiel starten?', 'Der aktuelle Spielstand wird gelöscht.', () => {

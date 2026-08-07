@@ -36,3 +36,25 @@
 .jkc-ingame-app .jkc-game-filter{display:none}
 .jkc-ingame-app .jkc-scroll-nav[data-jkc-scroll-nav="games"]{display:none}
 @media(max-width:560px){.jkc-ingame-open{top:max(72px,calc(env(safe-area-inset-top) + 60px));right:max(10px,calc(env(safe-area-inset-right) + 10px));padding:7px 9px}.jkc-ingame-open b{display:none}.jkc-ingame-card{max-height:92vh;border-radius:18px;padding:10px}.jkc-ingame-head{top:-10px;margin:-10px -10px 8px;padding:11px}.jkc-ingame-head h2{font-size:17px}}
+
+
+/* JK.Games V217 · feste JK-Buttons in den einzelnen Spielen + immer vordergründige Voll-App */
+.jkc-ingame-open{display:none!important}
+.jkc-ingame-overlay{z-index:2147483000!important;isolation:isolate;overscroll-behavior:contain}
+.jkc-ingame-card{width:min(820px,100%);max-height:min(92dvh,900px);overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.jkc-ingame-app .jkc-scroll-nav[data-jkc-scroll-nav="games"]{display:grid!important}
+.jkc-game-inline-button,.jkc-game-menu-button{
+  appearance:none;-webkit-appearance:none;border:1px solid rgba(177,111,255,.76)!important;
+  background:radial-gradient(circle at 20% 15%,rgba(103,232,255,.24),transparent 45%),linear-gradient(145deg,#22143a,#0c2334)!important;
+  color:#fff!important;font-weight:1000!important;letter-spacing:.04em!important;
+  box-shadow:0 0 0 1px rgba(91,228,255,.08) inset,0 0 18px rgba(132,77,255,.28)!important;
+}
+.jkc-game-inline-button{min-width:44px!important;min-height:44px!important;padding:0 10px!important;border-radius:13px!important}
+.jkc-game-menu-button{width:100%!important;min-height:44px!important;border-radius:13px!important}
+.jkc-match-shop-item{border-color:rgba(167,103,255,.62)!important;background:radial-gradient(circle at 75% 10%,rgba(104,229,255,.16),transparent 42%),linear-gradient(145deg,#21153a,#0c2031)!important}
+.jkc-match-logo{font-style:normal!important;display:grid!important;place-items:center!important;width:54px!important;height:54px!important;border-radius:16px!important;background:linear-gradient(145deg,#bf75ff,#5c62ff 58%,#52e6ff)!important;color:#fff!important;font-size:16px!important;font-weight:1000!important;box-shadow:0 0 24px rgba(141,89,255,.42)!important}
+@media(max-width:560px){
+  .jkc-ingame-overlay{padding:max(8px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+  .jkc-ingame-card{width:100%;max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));border-radius:16px}
+  .jkc-ingame-head p{display:block}
+}

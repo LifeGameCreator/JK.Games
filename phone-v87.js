@@ -1429,7 +1429,7 @@
     const rate = api.currentRate?.() || 0;
     return `<article class="jk-bank-subaccount-row-v68 jk-bank-premium-subaccount-v216">
       <span class="jk-bank-premium-icon-v216">JK</span>
-      <div><b>Premium-Währungskonto</b><small>JK/Coin · aktueller Umtauschkurs 1 = ${euro(rate)}</small></div>
+      <div><b>Premium-Währungskonto</b><small>JK/Coin · aktueller Umtauschkurs 1 = ${euro.format(rate)}</small></div>
       <strong>${Math.max(0, Number(coin.balance || 0)).toLocaleString("de-DE")} JK/Coin</strong>
       <div class="jk-bank-subaccount-actions-v68">
         <button type="button" data-jkc-bank-exchange>Umtausch</button>

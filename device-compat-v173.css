@@ -139,3 +139,22 @@
     padding-left:max(12px,calc(env(safe-area-inset-left,0px) + 8px))!important;
   }
 }
+
+
+/* JK.Games V217 · Eingabemodus automatisch: Touch-Steuerung nur auf Handy/Tablet */
+@media (hover:hover) and (pointer:fine){
+  .c3d-mobile-controls,.mdc-mobile-controls,
+  .runner-kl-controls,
+  .arena-kl-sticks,
+  .fkl-duel-controls .fkl-stick,.fkl-stick,
+  .dkl-mobile-stick,
+  .bh-mobile-boost-trigger,.bh-mobile-score-strip,.bh-move-pad,.bh-move-pad-v2,
+  .am-mobile-tools,.am-mobile-score-strip,
+  .racer-controls,
+  .snake-controls,
+  .iconman-controls{display:none!important}
+}
+@media (hover:none),(pointer:coarse){
+  .c3d-mobile-controls,.mdc-mobile-controls{display:flex}
+  button,[role="button"]{touch-action:manipulation}
+}

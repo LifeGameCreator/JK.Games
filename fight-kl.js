@@ -1203,11 +1203,12 @@ function aggregateLoadoutStats() {
     UI.overlay.className = "fight-kl-modal";
     UI.overlay.setAttribute("role", "dialog");
     UI.overlay.setAttribute("aria-modal", "true");
-    UI.overlay.innerHTML = `<section class="fight-kl-shell"><header class="fkl-head"><div class="fkl-logo"><div class="fkl-logo-mark">⚔</div><div><small>ENDLESS UPGRADE ARENA</small><h2>FIGHT<span>.KL</span></h2></div></div><div class="fkl-head-stats" data-fkl-head-stats></div><div class="fkl-head-actions"><button class="fkl-icon-btn" type="button" data-fkl-home title="Hauptmenü">⌂</button><button class="fkl-icon-btn" type="button" data-fkl-close title="Zurück zu Top Games">×</button></div></header><main class="fkl-main" data-fkl-main></main><div class="fkl-toast" data-fkl-toast></div></section>`;
+    UI.overlay.innerHTML = `<section class="fight-kl-shell"><header class="fkl-head"><div class="fkl-logo"><div class="fkl-logo-mark">⚔</div><div><small>ENDLESS UPGRADE ARENA</small><h2>FIGHT<span>.KL</span></h2></div></div><div class="fkl-head-stats" data-fkl-head-stats></div><div class="fkl-head-actions"><button class="fkl-icon-btn jkc-game-inline-button" type="button" data-fkl-jkcoin title="JK/Coin öffnen">JK</button><button class="fkl-icon-btn" type="button" data-fkl-home title="Hauptmenü">⌂</button><button class="fkl-icon-btn" type="button" data-fkl-close title="Zurück zu Top Games">×</button></div></header><main class="fkl-main" data-fkl-main></main><div class="fkl-toast" data-fkl-toast></div></section>`;
     document.body.appendChild(UI.overlay);
     document.body.classList.add("fight-kl-open");
     UI.shell = UI.overlay.querySelector(".fight-kl-shell");
     UI.main = UI.overlay.querySelector("[data-fkl-main]");
+    UI.overlay.querySelector("[data-fkl-jkcoin]")?.addEventListener("click", () => window.JKCoinApp?.openForGame?.("fight"));
     UI.overlay.querySelector("[data-fkl-home]").addEventListener("click", () => UI.session ? pauseCombat() : UI.duel ? stopDuel(true) : renderDashboard());
     UI.overlay.querySelector("[data-fkl-close]").addEventListener("click", () => UI.session ? showExitConfirm() : UI.duel ? leaveOnlineDuel(true) : returnToTopGames());
     window.addEventListener("keydown", onKeyDown);

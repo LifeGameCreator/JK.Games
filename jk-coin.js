@@ -1,15 +1,15 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-jkcoin-v215";
+  const VERSION = "2026-08-07-jkcoin-v218";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const TOTAL_COLLECTIBLES = 6470;
   const PACKS = [
-    { id:"pack-100", eur:1.99, coins:100, bonus:0 },
+    { id:"pack-100", eur:0.99, coins:100, bonus:0 },
     { id:"pack-600", eur:4.99, coins:600, bonus:19 },
     { id:"pack-1350", eur:9.99, coins:1350, bonus:35 },
-    { id:"pack-4000", eur:24.99, coins:4000, bonus:60 },
+    { id:"pack-3500", eur:24.99, coins:3500, bonus:40 },
     { id:"pack-8000", eur:49.99, coins:8000, bonus:58 }
   ];
   const RARITIES = [
@@ -141,8 +141,9 @@
 
   async function requestPack(packId){
     const pack=PACKS.find(p=>p.id===packId);if(!pack)return;
+    const c=coinState();if(!c)return toast("JK/Coin wartet noch auf deinen Spielstand.");
     if(!confirm(`${pack.coins.toLocaleString("de-DE")} JK/Coin für ${pack.eur.toFixed(2).replace(".",",")} € anfragen?`))return;
-    const c=coinState();const local={id:`local-${Date.now()}`,packId,status:"pending",coins:pack.coins,eur:pack.eur,createdAtMs:Date.now()};c.requests.unshift(local);persist();
+    const local={id:`local-${Date.now()}`,packId,status:"pending",coins:pack.coins,eur:pack.eur,createdAtMs:Date.now()};c.requests.unshift(local);persist();
     try{
       const fb=await runtime(),user=await currentUser(fb);if(!user)throw new Error("Bitte zuerst anmelden.");
       const ref=fb.doc(fb.collection(fb.db,PURCHASE_COLLECTION));
@@ -159,7 +160,9 @@
   function bindScrollNav(shell){shell.querySelectorAll("[data-jkc-scroll-nav]").forEach(nav=>{const kind=nav.dataset.jkcScrollNav,track=nav.querySelector("[data-jkc-scroll-track]"),rail=nav.querySelector("[data-jkc-scroll-rail]"),thumb=nav.querySelector("[data-jkc-scroll-thumb]");if(!track||!rail||!thumb)return;const key=kind==="tabs"?"tabScroll":"gameScroll";const update=()=>{const max=Math.max(0,track.scrollWidth-track.clientWidth),ratio=track.scrollWidth?Math.min(1,track.clientWidth/track.scrollWidth):1,railW=rail.clientWidth||1,thumbW=Math.max(34,railW*ratio),travel=Math.max(0,railW-thumbW);thumb.style.width=`${thumbW}px`;thumb.style.transform=`translateX(${max?travel*(track.scrollLeft/max):0}px)`;ui[key]=track.scrollLeft;saveNavMemory();};const restore=()=>{track.scrollLeft=Math.min(Math.max(0,Number(ui[key])||0),Math.max(0,track.scrollWidth-track.clientWidth));update();};nav.querySelectorAll("[data-jkc-scroll-dir]").forEach(btn=>btn.addEventListener("click",()=>track.scrollBy({left:Number(btn.dataset.jkcScrollDir||1)*Math.max(150,track.clientWidth*.72),behavior:"smooth"})));track.addEventListener("scroll",update,{passive:true});track.addEventListener("wheel",event=>{if(Math.abs(event.deltaY)>Math.abs(event.deltaX)){event.preventDefault();track.scrollLeft+=event.deltaY;}},{passive:false});let railPointer=null;const moveRail=event=>{if(railPointer!==event.pointerId)return;const rect=rail.getBoundingClientRect(),max=Math.max(0,track.scrollWidth-track.clientWidth),thumbW=thumb.getBoundingClientRect().width||34,travel=Math.max(1,rect.width-thumbW),x=Math.max(0,Math.min(travel,event.clientX-rect.left-thumbW/2));track.scrollLeft=max*(x/travel);};rail.addEventListener("pointerdown",event=>{event.preventDefault();railPointer=event.pointerId;try{rail.setPointerCapture(event.pointerId);}catch{}moveRail(event);});rail.addEventListener("pointermove",moveRail);const end=event=>{if(railPointer===event.pointerId)railPointer=null;};rail.addEventListener("pointerup",end);rail.addEventListener("pointercancel",end);requestAnimationFrame(restore);setTimeout(restore,80);});}
 
   function html(){
-    const c=coinState(),rate=currentRate();
+    const c=coinState();
+    if(!c)return `<div class="jkc-app"><section class="jkc-section"><small>JK/COIN</small><h4>Spielstand wird geladen …</h4><p>JK/Coin ist gleich verfügbar.</p></section></div>`;
+    const rate=currentRate();
     const tabs=[["home","Übersicht"],["boxes","Lucky Boxes"],["games","Spiele"],["collection","Sammlung"],["ledger","Kontobewegungen"]].map(([id,label])=>`<button type="button" class="jkc-nav-pill ${ui.tab===id?"active":""}" data-jkc-tab="${id}">${label}</button>`).join("");
     return `<div class="jkc-app"><section class="jkc-hero"><div class="jkc-hero-head"><div style="display:flex;gap:12px"><span class="jkc-logo">JK</span><div><small>PREMIUM-WÄHRUNG</small><h3>JK/Coin</h3><p style="margin:0;color:#a5b5c2">Lucky Boxes, Spiel-Extras und Sammlung.</p></div></div><div class="jkc-wallet"><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")}</b><em>1 JK/Coin = ${euro(rate)}</em></div></div></section>${scrollNavHtml("tabs",tabs)}${ui.tab==="boxes"?boxesHtml():ui.tab==="games"?gamesHtml():ui.tab==="collection"?collectionHtml():ui.tab==="ledger"?ledgerHtml():homeHtml()}</div>`;
   }
@@ -186,9 +189,9 @@
     if(ui.gameOverlay && document.querySelector(".jkc-ingame-overlay")){ renderGameOverlay(ui.gameOverlay); return; }
     try{if(typeof openDeviceInterface==="function")openDeviceInterface(item||window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}
   }
-  function exchangePrompt(item){const c=coinState(),rate=currentRate();const raw=prompt(`Wie viele JK/Coins möchtest du zum Kurs 1 = ${euro(rate)} umtauschen?\nVerfügbar: ${c.balance}`);if(raw==null)return;const amount=Math.max(0,Math.floor(Number(String(raw).replace(",","."))||0));if(!amount||amount>c.balance)return toast("Ungültiger Betrag oder nicht genug JK/Coins.");if(!confirm(`${amount} JK/Coin gegen ${euro(amount*rate)} tauschen? Dieser Tausch kann nicht rückgängig gemacht werden.`))return;if(!spend(amount,`Umtausch zu ${euro(rate)} je JK/Coin`))return;const root=rootState();root.bank=Number(root.bank||0)+amount*rate;ledger("exchange",0,`${amount} JK/Coin → ${euro(amount*rate)}`,{rate});persist();feed(`${amount} JK/Coin wurden zum Kurs ${euro(rate)} in ${euro(amount*rate)} umgetauscht.`);refreshPhone(item);}
+  function exchangePrompt(item){const c=coinState();if(!c)return toast("JK/Coin wartet noch auf deinen Spielstand.");const rate=currentRate();const raw=prompt(`Wie viele JK/Coins möchtest du zum Kurs 1 = ${euro(rate)} umtauschen?\nVerfügbar: ${c.balance}`);if(raw==null)return;const amount=Math.max(0,Math.floor(Number(String(raw).replace(",","."))||0));if(!amount||amount>c.balance)return toast("Ungültiger Betrag oder nicht genug JK/Coins.");if(!confirm(`${amount} JK/Coin gegen ${euro(amount*rate)} tauschen? Dieser Tausch kann nicht rückgängig gemacht werden.`))return;if(!spend(amount,`Umtausch zu ${euro(rate)} je JK/Coin`))return;const root=rootState();root.bank=Number(root.bank||0)+amount*rate;ledger("exchange",0,`${amount} JK/Coin → ${euro(amount*rate)}`,{rate});persist();feed(`${amount} JK/Coin wurden zum Kurs ${euro(rate)} in ${euro(amount*rate)} umgetauscht.`);refreshPhone(item);}
 
-  function openBox(boxId,item){const box=BOXES.find(b=>b.id===boxId),c=coinState();if(!box)return;if(c.balance<box.cost)return toast("Nicht genug JK/Coins.");if(!confirm(`${box.name} für ${box.cost} JK/Coin öffnen?`))return;if(!spend(box.cost,box.name))return;const rewards=box.type==="reward"?openRewardBox(box):openCollectBox(box);persist();showRewards(box,rewards,()=>refreshPhone(item));}
+  function openBox(boxId,item){const box=BOXES.find(b=>b.id===boxId),c=coinState();if(!box||!c)return toast("JK/Coin wartet noch auf deinen Spielstand.");if(c.balance<box.cost)return toast("Nicht genug JK/Coins.");if(!confirm(`${box.name} für ${box.cost} JK/Coin öffnen?`))return;if(!spend(box.cost,box.name))return;const rewards=box.type==="reward"?openRewardBox(box):openCollectBox(box);persist();showRewards(box,rewards,()=>refreshPhone(item));}
   function openRewardBox(box){const root=rootState();const money=randInt(box.money[0],box.money[1]);const xp=randInt(box.xp[0],box.xp[1]);root.bank=Number(root.bank||0)+money;try{if(typeof addXp==="function")addXp(xp,box.name);}catch{root.xp=Number(root.xp||0)+xp;}const rewards=[{name:euro(money),text:"Bankguthaben"},{name:`${xp} Haupt-EP`,text:"Charakterfortschritt"}];
     if(box.cost>=500&&Math.random()<Math.min(.8,.18+box.cost/9000)){const skin=`JK Exclusive ${box.cost>=5000?"Galaxy":box.cost>=2000?"Universe":box.cost>=1000?"Legend":"Premium"} Skin #${randInt(1,999)}`;root.wardrobe=Array.isArray(root.wardrobe)?root.wardrobe:[];if(!root.wardrobe.includes(skin))root.wardrobe.push(skin);coinState().entitlements[`main-skin:${skin}`]=1;rewards.push({name:skin,text:"Exklusiver Hauptcharakter-Skin"});}
     for(let i=0;i<box.items;i++){const collectible=createCollectibleWeighted(box.minRarity);addCollectible(collectible);rewards.push({name:collectible.name,text:`${collectible.rarityName} · ${euro(collectible.value)}`});}return rewards;}
@@ -200,11 +203,11 @@
   function sellCollectible(uid,item){const c=coinState(),idx=c.collectibles.findIndex(x=>x.uid===uid);if(idx<0)return;const collectible=c.collectibles[idx];if(!confirm(`${collectible.name} für ${euro(collectible.value)} verkaufen?`))return;c.collectibles.splice(idx,1);rootState().bank=Number(rootState().bank||0)+collectible.value;ledger("collectible",0,`${collectible.name} verkauft · ${euro(collectible.value)}`);persist();refreshPhone(item);}
   function showRewards(box,rewards,onClose){const modal=document.createElement("div");modal.className="jkc-modal";modal.innerHTML=`<div class="jkc-modal-card"><small>GEÖFFNET</small><h2>${esc(box.name)}</h2><div class="jkc-open-rewards">${rewards.map(r=>`<article class="jkc-reward"><b>${esc(r.name)}</b><small>${esc(r.text)}</small></article>`).join("")}</div><div class="jkc-actions"><button class="jkc-button gold" data-jkc-close-rewards>Belohnungen übernehmen</button></div></div>`;document.body.append(modal);modal.querySelector("[data-jkc-close-rewards]").onclick=()=>{modal.remove();onClose?.();};}
 
-  function buyGameItem(id,item){const entry=GAME_STORE.find(x=>x.id===id);if(!entry)return;let amount=entry.grant.amount;if(entry.variable){const raw=prompt(`Wie viele JK/Coins möchtest du zum aktuellen Kurs in Jetons umwandeln?\n1 JK/Coin = ${euro(currentRate())} Jetons`);if(raw==null)return;amount=Math.max(1,Math.floor(Number(raw)||0));if(amount>coinState().balance)return toast("Nicht genug JK/Coins.");}const cost=entry.variable?amount:entry.cost;if(!confirm(`${entry.name} für ${cost} JK/Coin kaufen?`))return;if(!spend(cost,entry.name))return;grantGamePurchase(entry,{...entry.grant,amount});persist();toast(`${entry.name} wurde deinem Spiel hinzugefügt.`);refreshPhone(item);}
+  function buyGameItem(id,item){const entry=GAME_STORE.find(x=>x.id===id),c=coinState();if(!entry||!c)return toast("JK/Coin wartet noch auf deinen Spielstand.");let amount=entry.grant.amount;if(entry.variable){const raw=prompt(`Wie viele JK/Coins möchtest du zum aktuellen Kurs in Jetons umwandeln?\n1 JK/Coin = ${euro(currentRate())} Jetons`);if(raw==null)return;amount=Math.max(1,Math.floor(Number(raw)||0));if(amount>c.balance)return toast("Nicht genug JK/Coins.");}const cost=entry.variable?amount:entry.cost;if(!confirm(`${entry.name} für ${cost} JK/Coin kaufen?`))return;if(!spend(cost,entry.name))return;grantGamePurchase(entry,{...entry.grant,amount});persist();toast(`${entry.name} wurde deinem Spiel hinzugefügt.`);refreshPhone(item);}
   function grantGamePurchase(entry,grant){const c=coinState();c.gamePurchases[entry.id]=Number(c.gamePurchases[entry.id]||0)+1;c.entitlements[entry.id]=Number(c.entitlements[entry.id]||0)+Number(grant.amount||1);const rate=currentRate();if(entry.game==="casino"&&grant.kind==="jetons"){const eur=grant.amount*rate;const root=rootState();root.casinoWalletCents=Math.round(Number(root.casinoWalletCents||root.casinoWallet*100||0)+eur*100);root.casinoWallet=root.casinoWalletCents/100;c.appliedEntitlements[entry.id]=Number(c.entitlements[entry.id]||0);return;}applyPendingGameEntitlements();}
-  function applyPendingGameEntitlements(){const c=coinState(),apiMap={runner:window.RunnerKL,city:window.CityKL,match:window.MatchKL,fight:window.FightKL,dungeon:window.DungeonKL,weed:window.WeedKL,casino:window.JKCasinoV82};for(const entry of GAME_STORE){if(entry.game==="casino"&&entry.variable)continue;const total=Number(c.entitlements[entry.id]||0),applied=Number(c.appliedEntitlements[entry.id]||0),delta=Math.max(0,total-applied);if(!delta)continue;try{const ok=apiMap[entry.game]?.grantJkCoinPurchase?.(entry.grant.kind,delta,{sku:entry.id,name:entry.name});if(ok!==false&&apiMap[entry.game]?.grantJkCoinPurchase)c.appliedEntitlements[entry.id]=total;}catch(error){console.warn("JK/Coin Spiel-Gutschrift",entry.game,error);}}persist();}
+  function applyPendingGameEntitlements(){const c=coinState();if(!c)return false;const apiMap={runner:window.RunnerKL,city:window.CityKL,match:window.MatchKL,fight:window.FightKL,dungeon:window.DungeonKL,weed:window.WeedKL,casino:window.JKCasinoV82};for(const entry of GAME_STORE){if(entry.game==="casino"&&entry.variable)continue;const total=Number(c.entitlements?.[entry.id]||0),applied=Number(c.appliedEntitlements?.[entry.id]||0),delta=Math.max(0,total-applied);if(!delta)continue;try{const api=apiMap[entry.game];const grant=api?.grantJkCoinPurchase;if(typeof grant!=="function")continue;const ok=grant.call(api,entry.grant.kind,delta,{sku:entry.id,name:entry.name});if(ok!==false)c.appliedEntitlements[entry.id]=total;}catch(error){console.warn("JK/Coin Spiel-Gutschrift",entry.game,error);}}persist();return true;}
 
-  function bankPanelHtml(){const c=coinState(),rate=currentRate();return `<section class="jkc-bank-panel" data-jkc-bank-panel><small>JK/COIN-KONTO</small><h3>Premium-Währung</h3><div class="jkc-bank-summary"><div><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")} JK/Coin</b></div><div><small>AKTUELLER KURS</small><b>1 = ${euro(rate)}</b></div><div><small>AUSGEGEBEN</small><b>${Math.round(c.totalSpent).toLocaleString("de-DE")}</b></div></div><div class="jkc-actions"><button class="jkc-button gold" data-jkc-bank-exchange>JK/Coin in Euro tauschen</button><button class="jkc-button secondary" data-jkc-bank-ledger>Kontobewegungen</button></div></section>`;}
+  function bankPanelHtml(){const c=coinState();if(!c)return `<section class="jkc-bank-panel"><small>JK/COIN-KONTO</small><h3>Wird geladen …</h3></section>`;const rate=currentRate();return `<section class="jkc-bank-panel" data-jkc-bank-panel><small>JK/COIN-KONTO</small><h3>Premium-Währung</h3><div class="jkc-bank-summary"><div><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")} JK/Coin</b></div><div><small>AKTUELLER KURS</small><b>1 = ${euro(rate)}</b></div><div><small>AUSGEGEBEN</small><b>${Math.round(c.totalSpent).toLocaleString("de-DE")}</b></div></div><div class="jkc-actions"><button class="jkc-button gold" data-jkc-bank-exchange>JK/Coin in Euro tauschen</button><button class="jkc-button secondary" data-jkc-bank-ledger>Kontobewegungen</button></div></section>`;}
   function bindBank(container){
     const exchange=container?.querySelector("[data-jkc-bank-exchange]");
     if(exchange)exchange.onclick=()=>exchangePrompt(window.JKGamesOwnedPhoneItem?.()||"");
@@ -254,17 +257,18 @@
 
   async function syncGrantCollection(fb,user){
     if(ui.grantCollectionDenied)return;
+    const c=coinState();if(!c)return;
     try{
       const snap=await fb.getDocs(fb.query(fb.collection(fb.db,GRANT_COLLECTION,user.uid,"items"),fb.limit(100)));
       for(const docSnap of snap.docs){
         const data=docSnap.data()||{};
         if(data.status!=="ready")continue;
         const requestKey=data.requestId?`request:${data.requestId}`:"";
-        if(requestKey&&coinState().lastGrantIds.includes(requestKey)){
+        if(requestKey&&c.lastGrantIds.includes(requestKey)){
           await fb.setDoc(docSnap.ref,{status:"claimed",claimedAtMs:Date.now(),appliedCoins:0},{merge:true}).catch(()=>{});
           continue;
         }
-        if(coinState().lastGrantIds.includes(`grant:${docSnap.id}`))continue;
+        if(c.lastGrantIds.includes(`grant:${docSnap.id}`))continue;
         const amount=Math.floor(Number(data.coins)||0);
         const applied=await applyRemoteCoinAmount(amount,amount>0?`JK/Coin-Gutschrift · ${data.packId||data.reason||"Owner"}`:`Owner-Korrektur · ${data.reason||"JK/Coin entfernt"}`,`grant:${docSnap.id}`,amount>0?"purchase":"correction");
         if(applied)await fb.setDoc(docSnap.ref,{status:"claimed",claimedAtMs:Date.now(),appliedCoins:amount},{merge:true}).catch(()=>{});
@@ -348,41 +352,30 @@
     document.querySelectorAll(".device-shell .jkc-app").forEach(app=>{if(app.dataset.jkcBound)return;app.dataset.jkcBound="1";bind(app.closest(".device-shell")||document,window.JKGamesOwnedPhoneItem?.()||"Smartphone");});
     document.querySelectorAll(".jk-bank-app-v58, .device-active-bank").forEach(bank=>bindBank(bank));
   }
-  const GAME_CONTEXTS = [
-    ["runner",".runner-kl-overlay"],["city",".city-kl-overlay"],["match",".match-kl-overlay"],
-    ["fight",".fight-kl-modal"],["dungeon",".dkl-modal"],["weed",".wk-overlay"],["casino",".casino-v82-game-panel"]
-  ];
-  const GAME_LABELS={runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",weed:"Weed Business",casino:"Casino"};
+  const GAME_LABELS={runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",weed:"Weed Business",casino:"Casino"};
 
   function renderGameOverlay(game){
     const old=document.querySelector(".jkc-ingame-overlay");
-    ui.gameOverlay=game;ui.game=game;ui.tab="games";
+    const context=GAME_LABELS[game]?game:"runner";
+    const hasDedicatedStore=GAME_STORE.some(entry=>entry.game===context);
+    ui.gameOverlay=context;
+    if(!old){ui.tab="games";ui.game=hasDedicatedStore?context:"all";}
     const host=old||document.createElement("div");
     host.className="jkc-ingame-overlay";
-    host.dataset.jkcGameOverlay=game;
-    host.innerHTML=`<div class="jkc-ingame-card"><header class="jkc-ingame-head"><div><small>JK/COIN · ${esc(GAME_LABELS[game]||game)}</small><h2>${esc(GAME_LABELS[game]||game)} Extras</h2><p>Direkt für das aktuell geöffnete Spiel.</p></div><button type="button" data-jkc-game-close aria-label="JK/Coin schließen">×</button></header><div class="jkc-app jkc-ingame-app">${gamesHtml()}</div></div>`;
+    host.dataset.jkcGameOverlay=context;
+    host.innerHTML=`<div class="jkc-ingame-card"><header class="jkc-ingame-head"><div><small>JK/COIN · ${esc(GAME_LABELS[context]||context)}</small><h2>JK/Coin</h2><p>Der komplette JK/Coin-Bereich bleibt geöffnet – inklusive ${esc(GAME_LABELS[context]||context)} Extras.</p></div><button type="button" data-jkc-game-close aria-label="JK/Coin schließen">×</button></header><div class="jkc-ingame-app">${html()}</div></div>`;
     if(!old)document.body.append(host);
     host.querySelector("[data-jkc-game-close]")?.addEventListener("click",()=>{ui.gameOverlay="";host.remove();});
-    bindScrollNav(host);
-    host.querySelectorAll("[data-jkc-game-filter]").forEach(btn=>btn.addEventListener("click",()=>{ui.game=game;renderGameOverlay(game);}));
-    host.querySelectorAll("[data-jkc-buy-game]").forEach(btn=>btn.addEventListener("click",()=>buyGameItem(btn.dataset.jkcBuyGame,"")));
+    bind(host,"");
     syncGrants().catch(()=>{});
   }
 
   function openForGame(game){if(!GAME_LABELS[game])return;renderGameOverlay(game);}
 
   function installGameShortcuts(){
-    for(const [game,selector] of GAME_CONTEXTS){
-      document.querySelectorAll(selector).forEach(root=>{
-        if(root.querySelector(":scope > [data-jkc-ingame-open]"))return;
-        const btn=document.createElement("button");
-        btn.type="button";btn.className="jkc-ingame-open";btn.dataset.jkcIngameOpen=game;
-        btn.innerHTML=`<span>JK</span><b>JK/Coin</b>`;
-        btn.title=`JK/Coin-Shop für ${GAME_LABELS[game]}`;
-        btn.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();openForGame(game);});
-        root.append(btn);
-      });
-    }
+    // V217: Keine frei schwebenden JK/Coin-Schaltflächen mehr. Die Spiele besitzen
+    // feste JK-Buttons an den vom jeweiligen UI vorgesehenen Stellen.
+    document.querySelectorAll("[data-jkc-ingame-open]").forEach(button=>button.remove());
   }
 
   function init(){coinState();installSettingsCard();const observer=new MutationObserver(()=>{installSettingsCard();decorateActiveViews();installGameShortcuts();});observer.observe(document.documentElement,{childList:true,subtree:true});decorateActiveViews();installGameShortcuts();window.addEventListener("lifebuilder-local-save-flushed",()=>updateSettingsBalance());setInterval(()=>syncGrants().catch(()=>{}),15000);setInterval(()=>{applyPendingGameEntitlements();syncProfileBalance();},30000);setTimeout(()=>{applyPendingGameEntitlements();syncProfileBalance();installGameShortcuts();},2500);}

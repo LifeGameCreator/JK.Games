@@ -2154,12 +2154,13 @@ class CenterDynastyGame {
       bone.userData.__centerIdleQuaternion=q;
       bone.userData.__centerIdlePosition=bone.userData.__centerBindPosition?.clone?.()||bone.position.clone();
     };
-    setTarget(this.playerBones.upperRight,{x:.015,y:.008,z:1.72});
-    setTarget(this.playerBones.upperLeft,{x:.015,y:-.008,z:-1.72});
-    setTarget(this.playerBones.lowerRight,{x:-.055,y:-.015,z:.018});
-    setTarget(this.playerBones.lowerLeft,{x:-.055,y:.015,z:-.018});
-    setTarget(this.playerBones.shoulderRight,{z:.018});
-    setTarget(this.playerBones.shoulderLeft,{z:-.018});
+    // V217: Im Stand liegen die Arme sichtbar näher am Oberkörper statt seitlich abzustehen.
+    setTarget(this.playerBones.upperRight,{x:.02,y:.015,z:1.94});
+    setTarget(this.playerBones.upperLeft,{x:.02,y:-.015,z:-1.94});
+    setTarget(this.playerBones.lowerRight,{x:-.09,y:-.018,z:.035});
+    setTarget(this.playerBones.lowerLeft,{x:-.09,y:.018,z:-.035});
+    setTarget(this.playerBones.shoulderRight,{z:.01});
+    setTarget(this.playerBones.shoulderLeft,{z:-.01});
     setTarget(this.playerBones.chest,{x:.01});
     setTarget(this.playerBones.neck,{x:.01});
     setTarget(this.playerBones.head,{x:.01});
@@ -2460,7 +2461,7 @@ class CenterDynastyGame {
       const light=new THREE.PointLight(0xff8b32,4.2,18,2);light.position.y=1.03;group.add(light);group.userData.light=light;
       group.rotation.set(.02,0,-.12);
     }
-    const scale={staff:.88,sword:.52,axe:.46,hammer:.48,torch:.52}[kind]||.5;
+    const scale={staff:.88,sword:.54,axe:.56,hammer:.54,torch:.54}[kind]||.5;
     group.scale.setScalar(scale);
     group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});
     return group;
@@ -2555,7 +2556,16 @@ class CenterDynastyGame {
     const hand=this.playerBones.handRight;
     if(hand){
       const anchor=new THREE.Group();anchor.name='center-held-item-grip';hand.add(anchor);anchor.add(mesh);
-      const grips={sword:{p:[.01,-.19,.085],r:[0,Math.PI/2,-.08]},axe:{p:[.005,-.39,.075],r:[0,Math.PI/2,-.08]},hammer:{p:[.008,-.27,.07],r:[0,Math.PI/2,-.08]},staff:{p:[.012,-.28,.13],r:[.12,Math.PI/2,-.34]},torch:{p:[.01,-.25,.075],r:[0,Math.PI/2,-.1]}};
+      // V217: Die prozeduralen Items werden an der Hand aufgerichtet und leicht in
+      // Blickrichtung geneigt. Der Griff sitzt näher in der Hand; Axt/Hammer bleiben
+      // kompakt, sind aber deutlich sichtbar.
+      const grips={
+        sword:{p:[.015,-.07,.07],r:[Math.PI-.18,.05,-.16]},
+        axe:{p:[.012,-.08,.07],r:[Math.PI-.22,.04,-.18]},
+        hammer:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
+        staff:{p:[.015,-.09,.09],r:[Math.PI-.24,.06,-.22]},
+        torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]}
+      };
       const tr=grips[kind]||grips.sword;anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;
     }else this.modelPivot.add(mesh);
     this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;
@@ -3994,8 +4004,8 @@ class CenterDynastyGame {
     if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
     else if(action==='unstuck')this.teleportOwner(this.player.position.x+Math.sin(this.yaw)*-6,this.player.position.z+Math.cos(this.yaw)*-6,null,'freie Position');
-    else if(action==='time-day'){this.state.time=12;this.ownerFlags.freezeTime=true;this.toast('Mittag eingestellt und Zeit angehalten.');}
-    else if(action==='time-night'){this.state.time=0;this.ownerFlags.freezeTime=true;this.toast('Mitternacht eingestellt und Zeit angehalten.');}
+    else if(action==='time-day'){this.state.time=12;this.toast('Mittag eingestellt. Zeit anhalten bleibt aus, bis du es ausdrücklich aktivierst.');}
+    else if(action==='time-night'){this.state.time=0;this.toast('Mitternacht eingestellt. Zeit anhalten bleibt aus, bis du es ausdrücklich aktivierst.');}
     else if(action.startsWith('weather-')){this.state.weather=action.replace('weather-','');this.state.weatherRemaining=8;this.state.weatherUntil=(this.state.time+8)%24;this.updateWeatherParticles();this.toast(`Wetter: ${WEATHER[this.state.weather]?.name||this.state.weather}`);}
     else if(action==='season-next'){this.state.season=(this.state.season+1)%SEASONS.length;this.applySeasonVisuals();this.toast(`${SEASONS[this.state.season].icon} ${SEASONS[this.state.season].name}`);}
     else if(action==='grant-resource'){const id=this.ownerPanelBody.querySelector('[data-owner-resource]')?.value,amount=Math.floor(clamp(this.ownerPanelBody.querySelector('[data-owner-amount]')?.value,1,9999));if(id in this.state.inventory){this.state.inventory[id]+=amount;this.toast(`+${amount} ${RESOURCE_LABELS[id]||id}`);}}
