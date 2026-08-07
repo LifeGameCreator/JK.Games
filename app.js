@@ -9781,11 +9781,13 @@ function renderShop() {
   const categorySlug = (value, index) => `shop-category-${index}-${String(value || "shop").toLowerCase().replace(/[^a-z0-9äöüß]+/gi, "-").replace(/^-+|-+$/g, "")}`;
   const nav = `
     <div class="shop-category-nav-shell" data-shop-category-shell>
-      <button type="button" class="shop-category-arrow left" data-shop-category-scroll="-1" aria-label="Shop-Kategorien nach links">‹</button>
       <div class="shop-category-nav" data-shop-category-nav tabindex="0" aria-label="Shop-Kategorien horizontal verschieben">
         ${categories.map((category, index) => `<button type="button" data-shop-category-target="${categorySlug(category, index)}" class="${index === 0 ? "active" : ""}">${escapeHtml(category)}</button>`).join("")}
       </div>
-      <button type="button" class="shop-category-arrow right" data-shop-category-scroll="1" aria-label="Shop-Kategorien nach rechts">›</button>
+      <label class="shop-category-swipe-v223" title="Nach links oder rechts ziehen">
+        <span>↔</span>
+        <input type="range" min="0" max="1000" value="0" step="1" data-shop-category-slider aria-label="Shop-Kategorien nach links oder rechts ziehen">
+      </label>
     </div>`;
   const grouped = categories.map((category, categoryIndex) => {
     const items = visibleShopItemsV68
@@ -9806,6 +9808,7 @@ function renderShop() {
   els.shopList.innerHTML = nav + grouped;
 
   const categoryNav = els.shopList.querySelector("[data-shop-category-nav]");
+  const categorySlider = els.shopList.querySelector("[data-shop-category-slider]");
   const navButtons = [...els.shopList.querySelectorAll("[data-shop-category-target]")];
   const setActiveCategory = (targetId) => navButtons.forEach((button) => button.classList.toggle("active", button.dataset.shopCategoryTarget === targetId));
   navButtons.forEach((button) => button.addEventListener("click", () => {
@@ -9815,12 +9818,20 @@ function renderShop() {
     target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
     button.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }));
-  els.shopList.querySelectorAll("[data-shop-category-scroll]").forEach((button) => button.addEventListener("click", () => {
-    if (!categoryNav) return;
-    const direction = Number(button.dataset.shopCategoryScroll || 1);
-    categoryNav.scrollBy({ left: direction * Math.max(180, categoryNav.clientWidth * 0.72), behavior: "smooth" });
-  }));
   if (categoryNav) {
+    const syncCategorySlider = () => {
+      if (!categorySlider) return;
+      const max = Math.max(0, categoryNav.scrollWidth - categoryNav.clientWidth);
+      const value = max > 0 ? Math.round(categoryNav.scrollLeft / max * 1000) : 0;
+      if (Number(categorySlider.value) !== value) categorySlider.value = String(value);
+      categorySlider.disabled = max <= 1;
+    };
+    categorySlider?.addEventListener("input", () => {
+      const max = Math.max(0, categoryNav.scrollWidth - categoryNav.clientWidth);
+      categoryNav.scrollLeft = max * (Number(categorySlider.value || 0) / 1000);
+    });
+    categoryNav.addEventListener("scroll", syncCategorySlider, { passive: true });
+    window.requestAnimationFrame?.(syncCategorySlider);
     categoryNav.addEventListener("wheel", (event) => {
       if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || categoryNav.scrollWidth <= categoryNav.clientWidth) return;
       event.preventDefault();
@@ -9833,6 +9844,7 @@ function renderShop() {
     let dragStartScroll = 0;
     let dragged = false;
     categoryNav.addEventListener("pointerdown", (event) => {
+      if (event.target.closest?.("button")) return;
       if (event.pointerType === "touch" || event.button !== 0) return;
       dragPointerId = event.pointerId;
       dragStartX = event.clientX;
@@ -9878,7 +9890,7 @@ function renderShop() {
   }
 
   els.shopList.querySelectorAll('button[data-kind="shop-market"]').forEach((button) => button.addEventListener("click", () => openShopMarket(shopItems[Number(button.dataset.index)])));
-  els.shopList.querySelectorAll("button:not(:disabled):not([data-kind]):not([data-shop-category-target]):not([data-shop-category-scroll])").forEach((button) => button.addEventListener("click", () => buy(shopItems[Number(button.dataset.index)])));
+  els.shopList.querySelectorAll("button:not(:disabled):not([data-kind]):not([data-shop-category-target])").forEach((button) => button.addEventListener("click", () => buy(shopItems[Number(button.dataset.index)])));
 }
 
 function openShopMarket(marketItem) {
@@ -10389,15 +10401,21 @@ const VEHICLE_SPECS_V86 = Object.freeze({
 });
 
 function vehicleItems() {
-  return Object.keys(VEHICLE_SPECS_V86);
+  const fixed = Object.keys(VEHICLE_SPECS_V86);
+  const dynamic = typeof state !== "undefined" && state?.vehicleMeta
+    ? Object.entries(state.vehicleMeta)
+      .filter(([, meta]) => meta?.isVehicle === true || ["fine-anzeigen", "auction"].includes(String(meta?.source || "")))
+      .map(([name]) => name)
+    : [];
+  return [...new Set([...fixed, ...dynamic])];
 }
 
 function vehicleSpec(vehicle) {
   const name = String(vehicle || "");
   if (VEHICLE_SPECS_V86[name]) return VEHICLE_SPECS_V86[name];
   if (/Elektro/i.test(name)) return { fuelType: "strom", tankCapacity: 75, consumption: 18, unit: "kWh", label: "Elektrofahrzeug" };
-  if (/Motorboot/i.test(name)) return VEHICLE_SPECS_V86.Motorboot;
-  if (/Yacht/i.test(name)) return VEHICLE_SPECS_V86["Luxus-Yacht"];
+  if (/Motorboot|Speedboat|Kajütboot/i.test(name)) return VEHICLE_SPECS_V86.Motorboot;
+  if (/Yacht|Jacht|Superyacht|Explorer/i.test(name)) return VEHICLE_SPECS_V86["Luxus-Yacht"];
   if (/Kombi/i.test(name)) return { fuelType: "diesel", tankCapacity: 80, consumption: 3.2, unit: "L", label: "Diesel-Kombi" };
   if (/SUV/i.test(name)) return { fuelType: "diesel", tankCapacity: 100, consumption: 4.0, unit: "L", label: "Diesel-SUV" };
   if (/Supercar|Luxus/i.test(name)) return VEHICLE_SPECS_V86["Luxuswagen Supercar"];
@@ -10446,23 +10464,50 @@ function ensureVehicleMeta(vehicle) {
 }
 
 function primaryVehicle() {
-  const landVehicles = new Set(vehicleItems().filter((item) => !/Motorboot|Yacht/i.test(item)));
-  return (state.items || []).find((item) => landVehicles.has(item)) || "";
+  const owned = (state.items || []).filter((item) => {
+    if (!vehicleItems().includes(item)) return false;
+    const meta = state.vehicleMeta?.[item] || {};
+    return meta.vehicleKind !== "water" && !/Motorboot|Yacht|Jacht|Speedboat|Kajütboot/i.test(item);
+  });
+  if (!owned.length) return "";
+  // Für die lokale Karte wird automatisch das schnellste vorhandene Landfahrzeug
+  // verwendet. Dadurch wirken auch Fahrzeuge aus FeinAnzeigen.KL sofort mit ihrer
+  // tatsächlichen Geschwindigkeitsklasse, ohne dass alte Autos sie verdecken.
+  return owned.slice().sort((a, b) => {
+    const aMeta = state.vehicleMeta?.[a] || {};
+    const bMeta = state.vehicleMeta?.[b] || {};
+    const aDamaged = !!(aMeta.damaged || state.carDamaged);
+    const bDamaged = !!(bMeta.damaged || state.carDamaged);
+    if (aDamaged !== bDamaged) return aDamaged ? 1 : -1;
+    return Number(vehicleTravelProfile(a).seconds || 60) - Number(vehicleTravelProfile(b).seconds || 60);
+  })[0] || "";
 }
 
 function vehicleTravelProfile(vehicle = primaryVehicle()) {
   const name = String(vehicle || "");
-  if (!name) return { id: "none", label: "Auto", seconds: 20, fuel: 1.5, businessSpeed: 235 };
+  if (!name) return { id: "none", label: "Auto", seconds: 20, fuel: 1.5, businessSpeed: 235, topSpeedKmh: 0 };
   const spec = vehicleSpec(name);
-  if (/ohne\s*TÜV/i.test(name)) return { id: "used-no-tuv", label: "Gebrauchtwagen ohne TÜV", seconds: 25, fuel: spec.consumption, businessSpeed: 188 };
+  const meta = state?.vehicleMeta?.[name] || {};
+  const customSeconds = Number(meta.localTravelSeconds || 0);
+  if (meta.isVehicle === true && meta.vehicleKind !== "water" && customSeconds > 0) {
+    return {
+      id: "fine-anzeigen",
+      label: spec.label || name,
+      seconds: clamp(Math.round(customSeconds), 4, 30),
+      fuel: Math.max(.1, Number(spec.consumption || 4)),
+      businessSpeed: Math.max(180, Number(meta.businessSpeed || 313)),
+      topSpeedKmh: Math.max(0, Math.round(Number(meta.topSpeedKmh || 0)))
+    };
+  }
+  if (/ohne\s*TÜV/i.test(name)) return { id: "used-no-tuv", label: "Gebrauchtwagen ohne TÜV", seconds: 25, fuel: spec.consumption, businessSpeed: 188, topSpeedKmh: 145 };
   if (spec.fuelType === "strom") {
     const seconds = /Sport/i.test(name) ? 6 : /SUV|Limousine/i.test(name) ? 10 : 12;
-    return { id: "electric", label: spec.label, seconds, fuel: spec.consumption, businessSpeed: /Sport/i.test(name) ? 780 : 520 };
+    return { id: "electric", label: spec.label, seconds, fuel: spec.consumption, businessSpeed: /Sport/i.test(name) ? 780 : 520, topSpeedKmh: /Sport/i.test(name) ? 280 : 210 };
   }
-  if (/Luxus|Supercar/i.test(name)) return { id: "luxury", label: "Supersportwagen", seconds: 5, fuel: 5, businessSpeed: 940 };
-  if (/Premium|Sport/i.test(name)) return { id: "premium", label: "Premiumwagen", seconds: 10, fuel: spec.consumption, businessSpeed: 470 };
-  if (/Gebrauchtwagen|^Auto$/i.test(name)) return { id: "used-tuv", label: spec.label, seconds: 20, fuel: spec.consumption, businessSpeed: 235 };
-  return { id: "new", label: spec.label, seconds: 15, fuel: spec.consumption, businessSpeed: 313 };
+  if (/Luxus|Supercar/i.test(name)) return { id: "luxury", label: "Supersportwagen", seconds: 5, fuel: 5, businessSpeed: 940, topSpeedKmh: 320 };
+  if (/Premium|Sport/i.test(name)) return { id: "premium", label: "Premiumwagen", seconds: 10, fuel: spec.consumption, businessSpeed: 470, topSpeedKmh: 250 };
+  if (/Gebrauchtwagen|^Auto$/i.test(name)) return { id: "used-tuv", label: spec.label, seconds: 20, fuel: spec.consumption, businessSpeed: 235, topSpeedKmh: 175 };
+  return { id: "new", label: spec.label, seconds: 15, fuel: spec.consumption, businessSpeed: 313, topSpeedKmh: 195 };
 }
 
 function vehicleFuelUnit(vehicle = primaryVehicle()) {
@@ -11560,14 +11605,14 @@ function openLocalTravelChoice(placeId) {
       seconds: carProfile.seconds,
       fuel: carProfile.fuel,
       vehicle: car,
-      text: `${car || "Auto"}: ${carProfile.seconds} Sekunden und ${formatVehicleFuelAmount(carProfile.fuel, car)} pro lokaler Fahrt.`,
+      text: `${car || "Auto"}: ${carProfile.seconds} Sekunden${carProfile.topSpeedKmh ? ` · ${carProfile.topSpeedKmh} km/h` : ""} und ${formatVehicleFuelAmount(carProfile.fuel, car)} pro lokaler Fahrt.`,
       locked: !hasCar || state.carDamaged || carMeta?.damaged || (carMeta?.fuel || 0) < carProfile.fuel
     }
   ];
   clearDialogDynamic();
   els.dialogTitle.textContent = `Route nach ${place.name}`;
   els.dialogText.innerHTML = `
-    <span>Wähle deine Route: Zu Fuß 60 Sekunden, Bahn 30 Sekunden${hasCar ? `, ${carProfile.label} ${carProfile.seconds} Sekunden (${formatVehicleFuelAmount(carProfile.fuel, car)})` : ", Auto noch nicht vorhanden"}.</span>
+    <span>Wähle deine Route: Zu Fuß 60 Sekunden, Bahn 30 Sekunden${hasCar ? `, ${carProfile.label} ${carProfile.seconds} Sekunden${carProfile.topSpeedKmh ? ` · ${carProfile.topSpeedKmh} km/h` : ""} (${formatVehicleFuelAmount(carProfile.fuel, car)})` : ", Auto noch nicht vorhanden"}.</span>
     <div class="dialog-actions local-route-actions">
       ${modes.map((mode) => `
         <button
@@ -13723,6 +13768,38 @@ async function loadFirebasePhoneRuntime() {
   return firebasePhoneRuntimePromise;
 }
 
+function isPhoneFirestoreOfflineError(error) {
+  const text = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+  return text.includes("failed to get document because the client is offline")
+    || text.includes("client is offline")
+    || text.includes("network-request-failed")
+    || text.includes("unavailable")
+    || text.includes("failed-precondition") && text.includes("offline");
+}
+
+async function recoverPhoneFirestoreTransport(fb, reason = "phone-firestore") {
+  if (!fb?.db || navigator.onLine === false) return false;
+  try { await fb.enableNetwork?.(fb.db); } catch {}
+  try { await window.LifeBuilderFirebaseCore?.recoverFirestore?.(reason); } catch {}
+  await new Promise((resolve) => window.setTimeout(resolve, 380));
+  return true;
+}
+
+async function phoneFirestoreRequestWithRecovery(factory, label = "Telefon-Firebase", attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+    try {
+      return await onlineFirebaseTimeout(Promise.resolve().then(factory), 9000, label);
+    } catch (error) {
+      lastError = error;
+      if (!isPhoneFirestoreOfflineError(error) || navigator.onLine === false || attempt >= attempts - 1) throw error;
+      const fb = await loadFirebasePhoneRuntime().catch(() => null);
+      await recoverPhoneFirestoreTransport(fb, `${label}-retry-${attempt + 1}`);
+    }
+  }
+  throw lastError || new Error(`${label} fehlgeschlagen.`);
+}
+
 // Kompatibilitätsalias: ältere Online-Shop-Stellen verwendeten in V41
 // versehentlich den Namen getFirebasePhoneRuntime.
 async function getFirebasePhoneRuntime() {
@@ -13835,19 +13912,19 @@ async function registerPhoneOnline() {
     const number = ensurePhoneIdentity();
     if (!number) return null;
     const phoneRef = fb.doc(fb.db, "phones", number);
-    const existing = await onlineFirebaseTimeout(fb.getDoc(phoneRef), 8000, "Telefonnummer prüfen");
+    const existing = await phoneFirestoreRequestWithRecovery(() => fb.getDoc(phoneRef), "Telefonnummer prüfen");
     if (existing.exists() && existing.data()?.ownerUid !== ownerUid) {
       state.phoneNumber = createPhoneNumber();
       save();
       continue;
     }
-    await onlineFirebaseTimeout(fb.setDoc(phoneRef, {
+    await phoneFirestoreRequestWithRecovery(() => fb.setDoc(phoneRef, {
       number,
       ownerUid,
       displayName: `${state.firstName || ""} ${state.lastName || ""}`.trim() || state.name || "JK.Games",
       slot: activeSlot,
       updatedAt: fb.serverTimestamp()
-    }, { merge: true }), 8000, "Telefonnummer registrieren");
+    }, { merge: true }), "Telefonnummer registrieren");
     return { number, ownerUid };
   }
   throw new Error("Es konnte keine freie Telefonnummer erstellt werden.");
@@ -13856,7 +13933,7 @@ async function registerPhoneOnline() {
 async function lookupPhoneRegistration(fb, rawNumber) {
   const number = normalizePhoneNumber(rawNumber);
   if (!number) return null;
-  const snapshot = await onlineFirebaseTimeout(fb.getDoc(fb.doc(fb.db, "phones", number)), 8000, "Telefonnummer suchen");
+  const snapshot = await phoneFirestoreRequestWithRecovery(() => fb.getDoc(fb.doc(fb.db, "phones", number)), "Telefonnummer suchen");
   if (!snapshot.exists()) return null;
   const data = snapshot.data();
   if (!data?.ownerUid || data.number !== number) return null;
@@ -32462,7 +32539,14 @@ function stabilizeMobileCharacterScroll(section = "") {
       const status = String(core?.getStatus?.() || "idle");
       if (force || ["error", "offline"].includes(status)) await core?.reconnect?.({ force }).catch(() => {});
       if (typeof state !== "undefined" && state) {
-        ensurePhoneBackgroundRealtime().catch((error) => console.warn("Telefon/SMS reconnect", error));
+        ensurePhoneBackgroundRealtime().catch((error) => {
+          if (isPhoneFirestoreOfflineError(error)) {
+            window.LifeBuilderFirebaseCore?.scheduleFirestoreRecovery?.(700, "phone-sms-reconnect");
+            scheduleRecovery(1800, false);
+            return;
+          }
+          console.warn("Telefon/SMS reconnect", error);
+        });
         if (appVisible("finder")) loadFinderOnlineProfiles(false, ownedPhoneItem()).catch((error) => console.warn("Finder reconnect", error));
         if (appVisible("finster")) ensureFinsterRealtime().catch((error) => console.warn("Finster reconnect", error));
       }

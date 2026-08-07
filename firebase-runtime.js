@@ -130,7 +130,18 @@
       emit("offline", "Keine Internetverbindung.");
       return null;
     }
-    return load({ force: options?.force === true || status === "error" || status === "offline" });
+    const force = options?.force === true;
+    // Firestore kann intern auf "offline" stehen, obwohl der Browser längst
+    // wieder Internet hat. In diesem Fall reicht enableNetwork und wir müssen
+    // die komplette Firebase-App nicht neu initialisieren.
+    if (runtime?.db && !force) {
+      try {
+        await runtime.enableNetwork(runtime.db);
+        emit("ready");
+        return runtime;
+      } catch {}
+    }
+    return load({ force: force || status === "error" || status === "offline" });
   }
 
   function scheduleReconnect(delay = 800) {
@@ -169,7 +180,7 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden && navigator.onLine !== false) scheduleFirestoreRecovery(1200, "tab-visible"); });
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-06-v204-firestore-transport",
+    version: "2026-08-07-v223-firestore-phone-recovery",
     load,
     waitForAuth,
     reconnect,

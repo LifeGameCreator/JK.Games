@@ -1762,10 +1762,9 @@
         <div><b>${euro.format(state.bank)}</b><span>Konto</span><b>${euro.format(state.cash)}</b><span>Bar</span></div>
       </section>
       <label class="phone-market-search-v68"><span>⌕</span><input type="search" value="${escapeHtml(ui.query || "")}" placeholder="${vehicleMode ? "Fahrzeug suchen" : "Im Shop suchen"}" data-phone-market-search></label>
-      <div class="phone-market-tabs-shell-v196">
-        <button type="button" class="phone-market-tabs-arrow-v196 left" data-phone-market-tabs-scroll="-1" aria-label="Kategorien nach links">‹</button>
+      <div class="phone-market-tabs-shell-v223">
         <div class="phone-market-tabs-v68" data-phone-market-tabs>${categories.map((category) => `<button type="button" class="${category === ui.category ? "active" : ""}" data-phone-market-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}</div>
-        <button type="button" class="phone-market-tabs-arrow-v196 right" data-phone-market-tabs-scroll="1" aria-label="Kategorien nach rechts">›</button>
+        <label class="phone-market-tabs-swipe-v223" title="Kategorien nach links oder rechts ziehen"><span>↔</span><input type="range" min="0" max="1000" value="0" step="1" data-phone-market-tabs-slider aria-label="Shop-Kategorien nach links oder rechts ziehen"></label>
       </div>
       <section class="phone-market-list-v68">${cards || `<div class="phone-market-empty-v68"><span>⌕</span><b>Keine Angebote gefunden</b><small>Ändere Suche oder Kategorie.</small></div>`}</section>
     </div>`;
@@ -1973,11 +1972,20 @@
     const ui = phoneMarketStateV68(mode);
     const entries = phoneMarketEntriesV68(mode);
     const tabs = root.querySelector("[data-phone-market-tabs]");
+    const tabsSlider = root.querySelector("[data-phone-market-tabs-slider]");
 
     if (tabs) {
+      const syncTabsSlider = () => {
+        if (!tabsSlider) return;
+        const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+        const left = Math.max(0, Math.min(max, Number(tabs.scrollLeft || 0)));
+        tabsSlider.disabled = max <= 1;
+        tabsSlider.value = String(max > 0 ? Math.round((left / max) * 1000) : 0);
+      };
       const restoreTabs = () => {
         const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
         tabs.scrollLeft = Math.max(0, Math.min(max, Number(ui.categoryScrollLeft || 0)));
+        syncTabsSlider();
       };
       if (window.requestAnimationFrame) window.requestAnimationFrame(restoreTabs);
       else window.setTimeout(restoreTabs, 0);
@@ -1990,7 +1998,14 @@
 
       tabs.addEventListener("scroll", () => {
         ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+        syncTabsSlider();
       }, { passive: true });
+
+      tabsSlider?.addEventListener("input", () => {
+        const max = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+        tabs.scrollLeft = max * (Math.max(0, Math.min(1000, Number(tabsSlider.value || 0))) / 1000);
+        ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0));
+      });
 
       tabs.addEventListener("wheel", (event) => {
         const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
@@ -2001,6 +2016,7 @@
       }, { passive: false });
 
       tabs.addEventListener("pointerdown", (event) => {
+        if (event.target.closest?.("button")) return;
         // Touch nutzt bewusst das native horizontale Browser-Scrolling. Würden
         // wir den Finger hier per Pointer-Capture übernehmen, kann ein normales
         // Antippen einer Kategorie als Drag enden und der Click wird verschluckt.
@@ -2043,13 +2059,6 @@
         }
       }, true);
 
-      root.querySelectorAll("[data-phone-market-tabs-scroll]").forEach((button) => button.addEventListener("click", () => {
-        const direction = Number(button.dataset.phoneMarketTabsScroll || 0) || 1;
-        const amount = Math.max(160, Math.round(tabs.clientWidth * 0.78));
-        if (typeof tabs.scrollBy === "function") tabs.scrollBy({ left: direction * amount, behavior: "smooth" });
-        else tabs.scrollLeft += direction * amount;
-        window.setTimeout(() => { ui.categoryScrollLeft = Math.max(0, Number(tabs.scrollLeft || 0)); }, 260);
-      }));
     }
 
     root.querySelector("[data-phone-market-search]")?.addEventListener("input", (event) => {

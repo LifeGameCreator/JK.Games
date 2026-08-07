@@ -1563,68 +1563,32 @@
   .phone-market-inline-balances-v184 > span:last-child {grid-column:1/-1}
 }
 
-/* JK.Games V196 · Handy-Online-Shop Kategorien sicher horizontal erreichbar */
-.phone-market-tabs-shell-v196 {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 30px;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
+/* JK.Games V223 · Online-Shop Kategorien: klickbare Tabs + echter Swipe-Schieber */
+.phone-market-tabs-shell-v223 {
+  flex:0 0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:4px;min-width:0;
 }
-.phone-market-tabs-shell-v196 .phone-market-tabs-v68 {
-  min-width: 0;
-  padding: 1px 2px 3px;
-  overflow-x: scroll;
-  overflow-y: hidden;
-  overscroll-behavior-inline: contain;
-  scroll-behavior: smooth;
-  scroll-snap-type: x proximity;
-  touch-action: pan-x pinch-zoom;
-  -webkit-overflow-scrolling: touch;
-  cursor: grab;
+.phone-market-tabs-shell-v223 .phone-market-tabs-v68 {
+  min-width:0;padding:1px 2px 2px;overflow-x:auto;overflow-y:hidden;
+  overscroll-behavior-inline:contain;scroll-behavior:smooth;scroll-snap-type:x proximity;
+  touch-action:pan-x pinch-zoom;-webkit-overflow-scrolling:touch;cursor:grab;scrollbar-width:none;
 }
-.phone-market-tabs-shell-v196 .phone-market-tabs-v68.dragging {
-  cursor: grabbing;
-  user-select: none;
-  scroll-snap-type: none;
+.phone-market-tabs-shell-v223 .phone-market-tabs-v68::-webkit-scrollbar {display:none}
+.phone-market-tabs-shell-v223 .phone-market-tabs-v68.dragging {cursor:grabbing;user-select:none;scroll-snap-type:none}
+.phone-market-tabs-shell-v223 .phone-market-tabs-v68 button {
+  scroll-snap-align:center;touch-action:manipulation;pointer-events:auto;position:relative;z-index:1;
+  -webkit-tap-highlight-color:rgba(102,174,255,.22);
 }
-.phone-market-tabs-shell-v196 .phone-market-tabs-v68 button {
-  scroll-snap-align: center;
-  touch-action: manipulation;
-  pointer-events: auto;
-  -webkit-tap-highlight-color: rgba(102, 174, 255, .22);
+.phone-market-tabs-swipe-v223 {
+  display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:5px;min-width:0;
+  padding:0 3px;color:rgba(215,232,255,.72);font-size:.58rem;font-weight:950;
 }
-.phone-market-tabs-arrow-v196 {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  padding: 0;
-  border: 1px solid rgba(110, 174, 255, .38);
-  border-radius: 10px;
-  color: #fff;
-  background: linear-gradient(180deg, rgba(31, 105, 205, .82), rgba(17, 54, 116, .92));
-  box-shadow: 0 5px 12px rgba(0, 0, 0, .24);
-  font-size: 1.15rem;
-  font-weight: 950;
-  line-height: 1;
-  touch-action: manipulation;
+.phone-market-tabs-swipe-v223 > span {display:grid;place-items:center;line-height:1}
+.phone-market-tabs-swipe-v223 input {
+  width:100%;height:22px;margin:0;accent-color:#4e9cff;cursor:ew-resize;touch-action:none;
 }
-.phone-market-tabs-arrow-v196:active {
-  transform: scale(.94);
-}
-@media (max-width: 430px) {
-  .phone-market-tabs-shell-v196 {
-    grid-template-columns: 28px minmax(0, 1fr) 28px;
-    gap: 4px;
-  }
-  .phone-market-tabs-arrow-v196 {
-    width: 28px;
-    min-width: 28px;
-    height: 30px;
-  }
+.phone-market-tabs-swipe-v223 input:disabled {opacity:.28;cursor:default}
+@media (max-width:430px) {
+  .phone-market-tabs-swipe-v223 {padding-inline:2px}
 }
 .phone-market-card-v68.owned-device-v196 {
   border-color: rgba(67, 221, 169, .34);

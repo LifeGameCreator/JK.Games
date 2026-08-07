@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-07-27-expansion-v61-pet-needs";
+  const VERSION = "2026-08-07-jkgames-v223-fineanzeigen-usable-assets";
   const DAY_MS = 86_400_000;
   const HOUR_MS = 3_600_000;
   const SPECIAL_TOTAL = 1000;
@@ -140,6 +140,57 @@
     { kind: "Haustier", icon: "🐾", names: ["Seltenes Tierheim-Paket"], min: 150, max: 1600 },
     { kind: "Special", icon: "✨", names: ["Special-Sammlerstück"], min: 1000, max: 1_000_000 }
   ];
+
+  function fineAnzeigenVehicleMeta(listing) {
+    const kind = String(listing?.kind || "");
+    const name = String(listing?.name || "");
+    const water = /Motorboot|Luxusjacht|Yacht|Jacht|Speedboat|Kajütboot/i.test(`${kind} ${name}`);
+    const land = /Fahrzeug|Neuwagen|Supercar/i.test(kind) && !water;
+    if (!land && !water) return null;
+
+    let topSpeedKmh = 0;
+    let localTravelSeconds = 0;
+    let businessSpeed = 0;
+    if (water) {
+      topSpeedKmh = /Superyacht|Explorer|Luxus/i.test(name) ? 58 : /Speedboat|Sport/i.test(name) ? 92 : 68;
+    } else if (/Hypercar|Supercar|Luxus|Supersport/i.test(name) || kind === "Supercar") {
+      topSpeedKmh = /Hypercar/i.test(name) ? 355 : 320;
+      localTravelSeconds = 5;
+      businessSpeed = 940;
+    } else if (/Premium|Performance|Sport/i.test(name)) {
+      topSpeedKmh = 250;
+      localTravelSeconds = 8;
+      businessSpeed = 610;
+    } else if (/Elektro/i.test(name)) {
+      topSpeedKmh = 210;
+      localTravelSeconds = 10;
+      businessSpeed = 520;
+    } else if (/Neuwagen/i.test(`${kind} ${name}`)) {
+      topSpeedKmh = /Business/i.test(name) ? 220 : 190;
+      localTravelSeconds = /Business/i.test(name) ? 11 : 13;
+      businessSpeed = /Business/i.test(name) ? 500 : 410;
+    } else if (/Kombi|SUV/i.test(name)) {
+      topSpeedKmh = /SUV/i.test(name) ? 190 : 205;
+      localTravelSeconds = 16;
+      businessSpeed = 325;
+    } else if (/Youngtimer/i.test(name)) {
+      topSpeedKmh = 175;
+      localTravelSeconds = 18;
+      businessSpeed = 285;
+    } else {
+      topSpeedKmh = 165;
+      localTravelSeconds = 20;
+      businessSpeed = 235;
+    }
+    return {
+      isVehicle: true,
+      vehicleKind: water ? "water" : "land",
+      auctionKind: kind,
+      topSpeedKmh,
+      localTravelSeconds,
+      businessSpeed
+    };
+  }
 
   const esc = (value) => typeof escapeHtml === "function"
     ? escapeHtml(value)
@@ -584,19 +635,45 @@
       data.specialCollection.discovered[specialId] = true;
     } else if (listing.kind === "Haustier" && listing.pet) {
       const wasEmpty = data.pets.length === 0;
-      const acquiredPet = { ...normalizePetOffer(listing.pet), level: 1, xp: 0, hunger: 85, thirst: 85, happiness: 80, care: 90, adoptedAtMs: now(), active: wasEmpty };
+      const acquiredPet = {
+        ...normalizePetOffer(listing.pet),
+        level: 1, xp: 0, xpMode: "cumulative50",
+        hunger: 85, thirst: 85, happiness: 80, care: 90,
+        toiletNeed: listing.pet.type === "dog" ? 25 : 0,
+        adoptedAtMs: now(), source: "fine-anzeigen", active: wasEmpty
+      };
       data.pets.push(acquiredPet);
       if (wasEmpty) data.activePetId = acquiredPet.id;
       data.petStats.adopted = Number(data.petStats.adopted || 0) + 1;
+      try { window.LifeBuilderPetUI?.refreshOpenPetMeters?.(); } catch {}
     } else {
       state.items ||= [];
       state.items.push(listing.name);
-      state.vehicleMeta ||= {};
-      state.vehicleMeta[listing.name] ||= { purchasePrice: listing.price, fuel: 100, condition: 100, boughtAtMs: now(), source: "auction" };
+      const vehicleMeta = fineAnzeigenVehicleMeta(listing);
+      if (vehicleMeta) {
+        state.vehicleMeta ||= {};
+        const tankCapacity = typeof vehicleTankCapacity === "function" ? Number(vehicleTankCapacity(listing.name) || 0) : 0;
+        state.vehicleMeta[listing.name] = {
+          ...(state.vehicleMeta[listing.name] || {}),
+          ...vehicleMeta,
+          purchasePrice: listing.price,
+          fuel: tankCapacity > 0 ? tankCapacity : Number(state.vehicleMeta[listing.name]?.fuel || 100),
+          condition: 100,
+          damaged: false,
+          boughtAtMs: now(),
+          source: "fine-anzeigen"
+        };
+      }
     }
     data.auctionHouse.botListings = data.auctionHouse.botListings.filter((entry) => entry.id !== id);
     data.auctionHouse.stats.bought = Number(data.auctionHouse.stats.bought || 0) + 1;
-    if (typeof addFeed === "function") addFeed(`Auktion gewonnen: ${listing.name} für ${money(listing.price)}.`);
+    if (typeof addFeed === "function") {
+      const vehicleMeta = fineAnzeigenVehicleMeta(listing);
+      const suffix = vehicleMeta?.vehicleKind === "land"
+        ? ` · Fahrbereit auf der lokalen Karte (${vehicleMeta.topSpeedKmh} km/h).`
+        : listing.kind === "Haustier" ? " · Das Tier ist jetzt im Haustier-Menü verfügbar." : "";
+      addFeed(`Auktion gewonnen: ${listing.name} für ${money(listing.price)}${suffix}`);
+    }
     saveRender();
     openAuction();
   }

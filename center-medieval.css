@@ -166,3 +166,18 @@
 .mdc-death-screen{position:absolute;inset:0;z-index:90;display:grid;place-items:center;background:rgba(6,4,12,.78);backdrop-filter:blur(8px)}
 .mdc-death-screen[hidden]{display:none!important}.mdc-death-screen>div{width:min(520px,calc(100% - 32px));padding:28px;border:1px solid rgba(190,110,255,.55);border-radius:22px;background:linear-gradient(145deg,rgba(22,12,37,.98),rgba(7,11,18,.98));box-shadow:0 28px 90px rgba(0,0,0,.55);text-align:center;color:#f7efff}.mdc-death-screen small{color:#c685ff;font-weight:900;letter-spacing:.14em}.mdc-death-screen h2{margin:8px 0 10px}.mdc-death-screen p{color:#c9bfd6}.mdc-death-screen>div>div{display:flex;gap:12px;justify-content:center;margin-top:18px}.mdc-death-screen button{padding:12px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:#221635;color:white;font-weight:800}.mdc-death-screen button:first-child{background:linear-gradient(135deg,#8d38ff,#d65cff)}
 .mdc-keybind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:12px}.mdc-keybind-grid label{display:grid;gap:6px;padding:10px;border:1px solid rgba(219,190,255,.14);border-radius:12px;background:rgba(255,255,255,.035);font-size:12px;font-weight:800;color:#d9d0e4}.mdc-keybind-grid select{width:100%;min-height:38px;border:1px solid rgba(190,130,255,.25);border-radius:9px;background:#111923;color:#fff;padding:7px 9px;font-weight:800}
+
+/* JK.Games V223 · alle sichtbaren Galaxy-Owner-Aktionen im selben Galaxy-Design */
+.mdc-owner-actions button.mdc-galaxy-action {
+  position:relative;overflow:hidden;border-color:#a34dff99 !important;
+  background:radial-gradient(circle at 20% 22%,rgba(195,76,255,.36),transparent 36%),radial-gradient(circle at 78% 72%,rgba(255,49,95,.26),transparent 42%),linear-gradient(135deg,#10021d,#3b0d66 48%,#19051f) !important;
+  color:#f5e5ff !important;text-shadow:0 0 9px rgba(196,81,255,.9);
+  box-shadow:inset 0 0 18px rgba(142,44,255,.26),0 0 14px rgba(135,44,255,.2) !important;
+}
+.mdc-owner-actions button.mdc-galaxy-action::before {
+  content:"✦";position:absolute;left:7px;top:4px;color:#ff6b94;filter:drop-shadow(0 0 5px #ff315f);animation:mdcAuraSpark 1.4s ease-in-out infinite;pointer-events:none;
+}
+.mdc-owner-actions button.mdc-galaxy-action.active {
+  border-color:#e28cff !important;box-shadow:inset 0 0 22px rgba(160,58,255,.44),0 0 18px rgba(195,76,255,.38) !important;
+}
+.mdc-galaxy-heading {color:#ead7ff;text-shadow:0 0 10px rgba(173,72,255,.65)}
