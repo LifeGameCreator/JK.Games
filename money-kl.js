@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-money-kl-v237-free-jk-drop";
+  const VERSION = "2026-08-07-money-kl-v238-jk-maker-power-buff";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
   const LEADERBOARD_ACTIVE_MS = 45 * 1000;
@@ -29,16 +29,16 @@
     ...BASE_MAKER_NAMES.map(name => `${name} II`)
   ]);
   const JK_MAKERS = Object.freeze([
-    { id:"jk-maker-1", name:"JK Neon-Sammler", icon:"JK", color:"#67ffd0", income:2_000_000_000, upgradeBase:20_000_000_000 },
-    { id:"jk-maker-2", name:"JK Cash-Runner", icon:"⚡", color:"#7ecbff", income:4_000_000_000, upgradeBase:40_000_000_000 },
-    { id:"jk-maker-3", name:"JK Quantum-Händler", icon:"Q", color:"#c18cff", income:8_000_000_000, upgradeBase:80_000_000_000 },
-    { id:"jk-maker-4", name:"JK Galaxy-Broker", icon:"◆", color:"#ff8fd8", income:15_000_000_000, upgradeBase:150_000_000_000 },
-    { id:"jk-maker-5", name:"JK Hyper-Mogul", icon:"H", color:"#ffe070", income:50_000_000_000, upgradeBase:500_000_000_000 },
-    { id:"jk-maker-6", name:"JK Orbit-Bankier", icon:"◉", color:"#78f0ff", income:100_000_000_000, upgradeBase:1_000_000_000_000 },
-    { id:"jk-maker-7", name:"JK Multiversum-Tycoon", icon:"∞", color:"#b88cff", income:500_000_000_000, upgradeBase:5_000_000_000_000 },
-    { id:"jk-maker-8", name:"JK Infinity-Investor", icon:"∞", color:"#ff79c9", income:1_000_000_000_000, upgradeBase:10_000_000_000_000 },
-    { id:"jk-maker-9", name:"JK Black-Hole-Imperator", icon:"●", color:"#9f76ff", income:5_000_000_000_000, upgradeBase:50_000_000_000_000 },
-    { id:"jk-maker-10", name:"JK Money-Gott", icon:"★", color:"#ffd95d", income:10_000_000_000_000, upgradeBase:100_000_000_000_000 }
+    { id:"jk-maker-1", name:"JK Neon-Sammler", icon:"JK", color:"#67ffd0", income:100_000_000_000_000_000, upgradeBase:1_000_000_000_000_000_000 },
+    { id:"jk-maker-2", name:"JK Cash-Runner", icon:"⚡", color:"#7ecbff", income:500_000_000_000_000_000, upgradeBase:5_000_000_000_000_000_000 },
+    { id:"jk-maker-3", name:"JK Quantum-Händler", icon:"Q", color:"#c18cff", income:2_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000 },
+    { id:"jk-maker-4", name:"JK Galaxy-Broker", icon:"◆", color:"#ff8fd8", income:10_000_000_000_000_000_000, upgradeBase:100_000_000_000_000_000_000 },
+    { id:"jk-maker-5", name:"JK Hyper-Mogul", icon:"H", color:"#ffe070", income:50_000_000_000_000_000_000, upgradeBase:500_000_000_000_000_000_000 },
+    { id:"jk-maker-6", name:"JK Orbit-Bankier", icon:"◉", color:"#78f0ff", income:250_000_000_000_000_000_000, upgradeBase:2_500_000_000_000_000_000_000 },
+    { id:"jk-maker-7", name:"JK Multiversum-Tycoon", icon:"∞", color:"#b88cff", income:2_000_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000_000 },
+    { id:"jk-maker-8", name:"JK Infinity-Investor", icon:"∞", color:"#ff79c9", income:20_000_000_000_000_000_000_000, upgradeBase:200_000_000_000_000_000_000_000 },
+    { id:"jk-maker-9", name:"JK Black-Hole-Imperator", icon:"●", color:"#9f76ff", income:2_000_000_000_000_000_000_000_000, upgradeBase:20_000_000_000_000_000_000_000_000 },
+    { id:"jk-maker-10", name:"JK Money-Gott", icon:"★", color:"#ffd95d", income:100_000_000_000_000_000_000_000_000, upgradeBase:1_000_000_000_000_000_000_000_000_000 }
   ].map((maker,index)=>({ ...maker, index:200+index, jk:true, cost:0 })));
   const ICONS = ["N","€","$","M","I","B","◆","◉","∞","★"];
   const COLORS = ["#63ffc1","#7fd3ff","#c894ff","#ffd766","#ff8da1","#6ef1ee","#a7ff7d","#ff9e5f","#d8e2ff","#f3a8ff"];
