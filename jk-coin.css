@@ -106,11 +106,14 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
 .jkc-collection-result-head{flex-wrap:wrap}.jkc-collection-result-head>.jkc-button{margin-left:auto;max-width:100%;white-space:normal;text-align:center}
 @media(max-width:560px){.jkc-collection-result-head>.jkc-button{width:100%;margin-left:0}}
 
-/* V235: öffentliche Hype-Rangliste */
+/* V236: öffentliche Hype-Rangliste – strikt vertikal und nur nach unten scrollbar */
 .jkc-hype-modal {
-  max-width: none;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
   border: 0;
   padding: 18px;
+  overflow-x: hidden;
 }
 .jkc-hype-modal::backdrop {
   background: rgba(3, 5, 8, .80);
@@ -118,8 +121,13 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
 }
 .jkc-hype-card {
   width: min(94vw, 780px);
+  max-width: 100%;
   max-height: min(88vh, 860px);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   border: 1px solid rgba(255, 132, 82, .34);
   background:
     radial-gradient(circle at 82% 0%, rgba(255, 79, 42, .17), transparent 34%),
@@ -145,10 +153,11 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
   cursor: pointer;
 }
 .jkc-hype-own {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  min-width: 0;
 }
 .jkc-hype-own article {
   padding: 13px;
@@ -158,12 +167,19 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
 }
 .jkc-hype-own small { display: block; color: #9da8b2; font-size: .68rem; }
 .jkc-hype-own b { display: block; margin-top: 4px; font-size: 1.08rem; color: #ff9a69; }
-.jkc-hype-toolbar {
+.jkc-hype-refresh-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 8px 0 10px;
+  margin: 4px 0 14px;
+}
+.jkc-hype-refresh-row .jkc-button {
+  width: 100%;
+}
+.jkc-hype-list-title {
+  display: block;
+  margin: 0 0 10px;
+  font-weight: 900;
+  font-size: 1rem;
+  color: #f3f6f8;
 }
 .jkc-hype-list {
   display: grid;
@@ -171,6 +187,7 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
 }
 .jkc-hype-list > article {
   display: grid;
+  min-width: 0;
   grid-template-columns: 38px minmax(0,1fr) auto;
   align-items: center;
   gap: 10px;
@@ -194,11 +211,10 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
   font-weight: 900;
 }
 .jkc-hype-list b,
-.jkc-hype-list small { display: block; }
+.jkc-hype-list small { display: block; min-width: 0; overflow-wrap: anywhere; }
 .jkc-hype-list small { color: #9ba7b1; margin-top: 3px; font-size: .72rem; }
 .jkc-hype-list strong { color: #ff9a69; white-space: nowrap; }
 @media (max-width: 620px) {
-  .jkc-hype-own { grid-template-columns: 1fr; }
   .jkc-hype-card { width: min(96vw, 780px); max-height: 91vh; }
   .jkc-hype-list > article { grid-template-columns: 32px minmax(0,1fr); }
   .jkc-hype-list > article > strong { grid-column: 2; justify-self: start; }
