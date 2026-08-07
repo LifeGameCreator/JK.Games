@@ -151,8 +151,7 @@
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
       const auth = authMod.getAuth(app);
       let db;
-      try { db = dbMod.initializeFirestore(app, { experimentalForceLongPolling: true, experimentalLongPollingOptions: { timeoutSeconds: 30 }, useFetchStreams: false }, BH_DATABASE_ID); }
-      catch { db = dbMod.getFirestore(app, BH_DATABASE_ID); }
+      db = dbMod.getFirestore(app, BH_DATABASE_ID);
       rt.fb = { ...authMod, ...dbMod, auth, db };
       return rt.fb;
     })().catch((error) => {

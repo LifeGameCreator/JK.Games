@@ -75,16 +75,11 @@
 
     const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(CONFIG);
     const auth = authMod.getAuth(app);
-    let db;
-    try {
-      db = dbMod.initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-        experimentalLongPollingOptions: { timeoutSeconds: 30 },
-        useFetchStreams: false
-      }, DATABASE_ID);
-    } catch {
-      db = dbMod.getFirestore(app, DATABASE_ID);
-    }
+    // V241: nur noch die von Firebase selbst verwaltete Standard-Verbindung verwenden.
+    // Erzwungenes Long-Polling erzeugte bei instabilen/recycelten WebChannel-Sessions
+    // 400er Write/Listen-Kanäle und konnte den PersistentWriteStream in einen
+    // internen "Unexpected state" bringen.
+    const db = dbMod.getFirestore(app, DATABASE_ID);
 
     runtime = {
       ...authMod,
@@ -137,10 +132,9 @@
     });
   }
 
-  // Wichtig: Firestore nur EINMAL zentral wieder aktivieren. Mehrfaches bzw.
-  // paralleles disableNetwork()/enableNetwork() kann beim Web-SDK laufende
-  // Snapshot-Targets gegeneinander laufen lassen ("Target ID already exists").
-  // Deshalb kein disableNetwork mehr und alle Recovery-Aufrufe laufen single-flight.
+  // V241: Firestore wird nicht mehr manuell per enableNetwork/disableNetwork
+  // umgeschaltet. Das Web-SDK verwaltet den Transport selbst. Manuelle Toggles
+  // während offener Writes/Listens waren die Hauptursache der Stream-Kollisionen.
   async function ensureFirestoreOnline(reason = "network-resume", options = {}) {
     if (navigator.onLine === false) {
       emit("offline", "Keine Internetverbindung.");
@@ -157,19 +151,11 @@
 
     firestoreRecoveryPromise = (async () => {
       try {
-        await withTimeout(fb.enableNetwork(fb.db), 12000, "Firestore-Wiederverbindung");
+        // Kein enableNetwork(): wenn Firestore nie deaktiviert wird, gibt es hier
+        // nichts zu reaktivieren. Offene SDK-Operationen dürfen ungestört auslaufen.
         emit("ready");
         window.dispatchEvent(new CustomEvent("lifebuilder-firestore-recovered", { detail: { reason } }));
         return fb;
-      } catch (error) {
-        // Ein Target-Konflikt entsteht gerade durch konkurrierende Reconnects.
-        // Nicht erneut toggeln; die einzelnen Listener werden kontrolliert neu angehängt.
-        if (isTargetCollisionError(error)) {
-          emit("ready");
-          return fb;
-        }
-        emit(navigator.onLine === false ? "offline" : "error", error?.message || error);
-        throw error;
       } finally {
         firestoreRecoveryPromise = null;
       }
@@ -212,7 +198,7 @@
   });
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-07-v233-firestore-single-flight-recovery",
+    version: "2026-08-07-v241-firestore-stream-stability",
     load,
     waitForAuth,
     reconnect,

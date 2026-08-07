@@ -127,11 +127,8 @@
   const safeArray = (value) => Array.isArray(value) ? value : [];
   const safeObject = (value) => value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const withModTimeout = (promise, timeoutMs = 12000, label = "Online-Abfrage") => {
-    let timer = null;
-    const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} hat nach ${Math.ceil(timeoutMs / 1000)} Sekunden nicht geantwortet.`)), timeoutMs);
-    });
-    return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+    // V241: keine verwaisten Firestore-Operationen durch Promise.race.
+    return Promise.resolve(promise);
   };
   const selectedPlayerSlot = (fallback = 0) => Number.isFinite(Number(selectedPlayerSlotIndex))
     ? Math.max(0, Math.min(3, Math.floor(Number(selectedPlayerSlotIndex))))
@@ -179,8 +176,7 @@
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
       const auth = authMod.getAuth(app);
       let db;
-      try { db = dbMod.initializeFirestore(app, { experimentalForceLongPolling: true, experimentalLongPollingOptions: { timeoutSeconds: 30 }, useFetchStreams: false }, DB_ID); }
-      catch { db = dbMod.getFirestore(app, DB_ID); }
+      db = dbMod.getFirestore(app, DB_ID);
       const functions = fnMod.getFunctions(app, REGION);
       return { ...authMod, ...dbMod, ...fnMod, app, auth, db, functions };
     })().catch((error) => {

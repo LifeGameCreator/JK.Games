@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-jkcoin-v239-money-500-makers-level20";
+  const VERSION = "2026-08-07-jkcoin-v241-firestore-stability";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -196,7 +196,7 @@
   const NAV_STORAGE = "jk-games-jkcoin-nav-v215";
   function loadNavMemory(){try{return JSON.parse(sessionStorage.getItem(NAV_STORAGE)||"{}")||{};}catch{return {};}}
   const navMemory=loadNavMemory();
-  const ui = { tab:"home", game:"all", collectionRarity:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), collectionScroll:Math.max(0,Number(navMemory.collectionScroll)||0), grantsListening:false, toastTimer:0, lastGrantSync:0, grantCollectionDenied:false, gameOverlay:"" };
+  const ui = { tab:"home", game:"all", collectionRarity:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), collectionScroll:Math.max(0,Number(navMemory.collectionScroll)||0), grantsListening:false, grantSyncBusy:false, profileSyncBusy:false, profileSyncSignature:"", toastTimer:0, lastGrantSync:0, grantCollectionDenied:false, gameOverlay:"" };
   const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const randInt = (min,max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (n,min,max) => Math.min(max,Math.max(min,Number(n)||0));
@@ -371,7 +371,7 @@
     if(ledgerButton)ledgerButton.onclick=()=>{try{ui.tab="ledger";if(typeof openDeviceInterface==="function")openDeviceInterface(window.JKGamesOwnedPhoneItem?.()||"Smartphone","jkcoin",false);}catch{}};
   }
 
-  async function syncProfileBalance(){try{const fb=await runtime(),user=await currentUser(fb),c=coinState();if(!user||!c)return;await fb.setDoc(fb.doc(fb.db,"playerProfiles",user.uid),{jkCoinBalance:c.balance,jkCoinSpent:c.totalSpent,jkCoinPurchased:c.totalPurchased,jkCoinUpdatedAtMs:Date.now()},{merge:true});}catch{}}
+  async function syncProfileBalance(){if(ui.profileSyncBusy)return false;try{const fb=await runtime(),user=await currentUser(fb),c=coinState();if(!user||!c)return false;const signature=`${c.balance}|${c.totalSpent}|${c.totalPurchased}`;if(signature===ui.profileSyncSignature)return true;ui.profileSyncBusy=true;await fb.setDoc(fb.doc(fb.db,"playerProfiles",user.uid),{jkCoinBalance:c.balance,jkCoinSpent:c.totalSpent,jkCoinPurchased:c.totalPurchased,jkCoinUpdatedAtMs:Date.now()},{merge:true});ui.profileSyncSignature=signature;return true;}catch{return false;}finally{ui.profileSyncBusy=false;}}
 
   async function applyRemoteCoinAmount(amount, label, grantKey, type="purchase"){
     const c=coinState();
@@ -440,19 +440,17 @@
   }
 
   async function syncGrants(){
-    if(Date.now()-ui.lastGrantSync<5000)return;
+    if(ui.grantSyncBusy||Date.now()-ui.lastGrantSync<15000)return;
     ui.lastGrantSync=Date.now();
+    ui.grantSyncBusy=true;
     try{
       const fb=await runtime(),user=await currentUser(fb);if(!user)return;
-      // Bestätigte Kaufanfragen werden direkt aus dem eigenen Request gelesen.
-      // Dadurch funktionieren normale Gutschriften auch dann, wenn die optionale
-      // jkCoinGrants-Unterkollektion in den Firestore-Regeln noch nicht freigegeben ist.
       await syncApprovedPurchaseRequests(fb,user);
       await syncGrantCollection(fb,user);
     }catch(error){
       const code=String(error?.code||error?.message||"");
       if(!/permission-denied|missing or insufficient permissions|unauthenticated/i.test(code))console.debug?.("JK/Coin Sync pausiert",error?.message||error);
-    }
+    }finally{ui.grantSyncBusy=false;}
   }
 
   async function renderOwnerPanel(container,context={}){
@@ -541,7 +539,7 @@
     document.querySelectorAll("[data-jkc-ingame-open]").forEach(button=>button.remove());
   }
 
-  function init(){coinState();installSettingsCard();installHypeShortcut();const observer=new MutationObserver(()=>{installSettingsCard();decorateActiveViews();installGameShortcuts();installHypeShortcut();});observer.observe(document.documentElement,{childList:true,subtree:true});decorateActiveViews();installGameShortcuts();window.addEventListener("lifebuilder-local-save-flushed",()=>updateSettingsBalance());window.addEventListener("online",()=>syncHypeProfile().catch(()=>{}));setInterval(()=>syncGrants().catch(()=>{}),15000);setInterval(()=>{applyPendingGameEntitlements();syncProfileBalance();},30000);setTimeout(()=>{applyPendingGameEntitlements();processHypeMilestones();syncProfileBalance();installGameShortcuts();installHypeShortcut();},2500);}
+  function init(){coinState();installSettingsCard();installHypeShortcut();const observer=new MutationObserver(()=>{installSettingsCard();decorateActiveViews();installGameShortcuts();installHypeShortcut();});observer.observe(document.documentElement,{childList:true,subtree:true});decorateActiveViews();installGameShortcuts();window.addEventListener("lifebuilder-local-save-flushed",()=>updateSettingsBalance());window.addEventListener("online",()=>syncHypeProfile().catch(()=>{}));setInterval(()=>syncGrants().catch(()=>{}),60000);setInterval(()=>{applyPendingGameEntitlements();syncProfileBalance();},120000);setTimeout(()=>{applyPendingGameEntitlements();processHypeMilestones();syncProfileBalance();installGameShortcuts();installHypeShortcut();},2500);}
 
   window.JKCoinApp=Object.freeze({version:VERSION,html,bind,bankPanelHtml,bindBank,requestPack,coinState,currentRate,renderOwnerPanel,credit,spend,syncGrants,syncProfileBalance,applyPendingGameEntitlements,openForGame,openHype,syncHypeProfile,addFragments,rollTopGameDrop,processHypeMilestones,fragmentRate:FRAGMENTS_PER_COIN,gameStore:GAME_STORE,boxes:BOXES});
   init();

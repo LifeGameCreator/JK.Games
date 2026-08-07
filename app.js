@@ -1188,11 +1188,10 @@ let finderIncomingLikesRetryDelay = 4000;
 let finderRuntimeUid = "";
 
 function onlineFirebaseTimeout(promise, timeoutMs = 12000, label = "Online-Anfrage") {
-  let timer = null;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} hat zu lange gedauert. Verbindung wird neu aufgebaut.`)), Math.max(1000, timeoutMs));
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  // V241: Firestore-Operationen werden nicht mehr durch Promise.race künstlich
+  // "abgebrochen". Ein Race kann die SDK-Anfrage nicht stoppen; sie lief im
+  // Hintergrund weiter, während bereits ein Retry gestartet wurde.
+  return Promise.resolve(promise);
 }
 
 function finderOnlineProfileFromData(uid, data = {}) {
@@ -13842,16 +13841,7 @@ async function loadFirebasePhoneRuntime() {
       ]), 18000, "Online-Bibliotheken");
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
       const auth = authMod.getAuth(app);
-      let db;
-      try {
-        db = dbMod.initializeFirestore(app, {
-          experimentalForceLongPolling: true,
-          experimentalLongPollingOptions: { timeoutSeconds: 30 },
-          useFetchStreams: false
-        }, FIRESTORE_DATABASE_ID);
-      } catch {
-        db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
-      }
+      const db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
       fb = {
         ...authMod,
         ...dbMod,
@@ -13932,7 +13922,9 @@ async function recoverPhoneFirestoreTransport(fb, reason = "phone-firestore", wa
   try {
     if (core?.ensureFirestoreOnline) await core.ensureFirestoreOnline(reason, { force: false });
     else if (core?.reconnect) await core.reconnect({ force: false });
-    else if (typeof fb.enableNetwork === "function") await fb.enableNetwork(fb.db);
+    // Kein direkter enableNetwork()-Fallback mehr. Firestore verwaltet seinen
+    // Transport selbst; manuelles Umschalten während offener Listener/Writes
+    // kann den internen Streamzustand beschädigen.
   } catch (error) {
     if (!isPhoneFirestoreTargetCollision(error)) throw error;
   }
@@ -34974,7 +34966,7 @@ function stabilizeMobileCharacterScroll(section = "") {
       const looksLikeIban = compactIban.startsWith("DE") && compactIban.length >= 20;
       let results = [];
       if (looksLikeIban) {
-        const registry = await window.LifeBuilderFirebaseCore.withTimeout(fb.getDoc(fb.doc(fb.db, "bankIbans", compactIban)), 8000, "Empfängersuche");
+        const registry = await fb.getDoc(fb.doc(fb.db, "bankIbans", compactIban));
         if (registry.exists()) {
           const data = registry.data();
           results = [{ uid: data.ownerUid, accountUid: data.ownerUid, slot: Math.max(0, Number(data.slot || 0)), displayName: data.displayName, city: data.city, iban: data.iban, online: false }];
@@ -34988,7 +34980,7 @@ function stabilizeMobileCharacterScroll(section = "") {
           fb.endAt(`${normalizedName}\uf8ff`),
           fb.limit(10)
         );
-        const snapshot = await window.LifeBuilderFirebaseCore.withTimeout(fb.getDocs(profilesQuery), 9000, "Empfängersuche");
+        const snapshot = await fb.getDocs(profilesQuery);
         results = snapshot.docs.map((doc) => ({ uid: doc.id, ...doc.data() }));
       }
       bankProfilesV58 = results
@@ -35286,7 +35278,7 @@ function stabilizeMobileCharacterScroll(section = "") {
     state.bank = bankRoundV58(Number(state.bank || 0) - totalDebit);
     save();
     try {
-      await window.LifeBuilderFirebaseCore.withTimeout(fb.setDoc(ref, payload), 9000, "Überweisung");
+      await fb.setDoc(ref, payload);
       await recordPotentialMoneyFraudV179(fb, payload).catch(() => {});
     } catch (error) {
       bankSetLedgerContextV58("Stornierte Überweisung");

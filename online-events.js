@@ -1,5 +1,5 @@
 (() => {
-  const ONLINE_VERSION = "2026-08-07-v237-event-fragments";
+  const ONLINE_VERSION = "2026-08-07-v241-firestore-stream-stability";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
@@ -198,16 +198,7 @@
       const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
       const auth = authMod.getAuth(app);
       try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
-      let db;
-      try {
-        db = dbMod.initializeFirestore(app, {
-          experimentalForceLongPolling: true,
-          experimentalLongPollingOptions: { timeoutSeconds: 30 },
-          useFetchStreams: false
-        }, FIRESTORE_DATABASE_ID);
-      } catch {
-        db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
-      }
+      const db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
       return { ...authMod, ...dbMod, auth, db };
     })().catch((error) => {
       firebasePromise = null;
@@ -223,11 +214,11 @@
   }
 
   function withDatabaseTimeout(promise, timeoutMs = DATABASE_VERIFY_TIMEOUT_MS) {
-    let timeoutId = null;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(databaseTimeoutError()), timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+    // V241: Firestore-Promises dürfen NICHT per Promise.race künstlich abgebrochen
+    // werden. Der alte Timeout ließ die echte SDK-Operation im Hintergrund weiterlaufen
+    // und startete anschließend schon den nächsten Write/Retry. Genau dadurch stapelten
+    // sich WriteStreams bis zu FIRESTORE INTERNAL ASSERTION FAILED: Unexpected state.
+    return Promise.resolve(promise);
   }
 
   function databaseErrorText(error) {
@@ -357,36 +348,21 @@
     if (databaseVerificationPromise) return databaseVerificationPromise;
     databaseVerificationPromise = (async () => {
       const runtime = fb || await loadOnlineFirebase();
-      const now = Date.now();
       try {
-        // Ein echter Server-Lesezugriff ist der zuverlässige Verbindungsnachweis.
-        // Der frühere Pflicht-Schreibzugriff konnte bei einer langsamen/alten Regelversion
-        // unbegrenzt warten und hielt den Spieler bei „Datenbankprüfung erforderlich“ fest.
-        const accountRef = runtime.doc(runtime.db, "accounts", user.uid);
-        const probe = typeof runtime.getDocFromServer === "function"
-          ? runtime.getDocFromServer(accountRef)
-          : runtime.getDoc(accountRef);
-        await withDatabaseTimeout(probe);
-
+        // V241: keine künstliche Server-Probe und kein connectionChecks-Schreibzugriff
+        // mehr. Beides erzeugte bei jedem Recovery zusätzliche Listen/Write-Kanäle.
+        // Die Anmeldung ist der Start-Gate; echte Datenzugriffe melden ihre Fehler selbst.
+        if (!runtime?.auth?.currentUser || runtime.auth.currentUser.uid !== user.uid) {
+          const error = new Error("Firebase-Anmeldung ist noch nicht vollständig bereit.");
+          error.code = "auth-not-ready";
+          throw error;
+        }
         databaseReadyUid = user.uid;
         databaseConnectionError = "";
         clearTimeout(databaseRetryTimer);
         databaseRetryTimer = null;
         updateOnlineStatusBadge();
         updateAuthOverlayState();
-
-        // Der sichtbare Verbindungsnachweis bleibt erhalten, blockiert den Login aber nicht mehr.
-        // Falls nur diese optionale Schreibregel noch nicht veröffentlicht wurde, funktionieren
-        // Anmeldung, Spielstart und die übrigen Online-Daten trotzdem weiter.
-        withDatabaseTimeout(runtime.setDoc(runtime.doc(runtime.db, "connectionChecks", user.uid), {
-          uid: user.uid,
-          email: user.email || "",
-          displayName: user.displayName || "",
-          lastConnectedAtMs: now,
-          version: ONLINE_VERSION
-        }, { merge: true })).catch((error) => {
-          console.warn("Optionaler Firestore-Verbindungsnachweis konnte nicht gespeichert werden", error);
-        });
         return true;
       } catch (error) {
         databaseReadyUid = "";
@@ -1078,7 +1054,7 @@
     const ref = cloudSlotRef(fb, ownerUid, slotIndex);
     let committedRevision = expectedRevision;
 
-    await withDatabaseTimeout(fb.runTransaction(fb.db, async (transaction) => {
+    await fb.runTransaction(fb.db, async (transaction) => {
       const snapshot = await transaction.get(ref);
       const currentRevision = snapshot.exists() ? Math.max(0, Number(snapshot.data()?.revision || 0)) : 0;
       if (snapshot.exists() && currentRevision !== expectedRevision) {
@@ -1098,7 +1074,7 @@
         version: ONLINE_VERSION
       });
       committedRevision = nextRevision;
-    }), CLOUD_UPLOAD_TIMEOUT_MS);
+    });
 
     if (onlineUser?.uid !== ownerUid) return null;
     slotState.onlineUpdatedAtMs = updatedAtMs;
@@ -1114,7 +1090,7 @@
     if (!ownerUid) return;
     const fb = await loadOnlineFirebase();
     if (fb.auth.currentUser?.uid !== ownerUid) return;
-    await withDatabaseTimeout(fb.deleteDoc(cloudSlotRef(fb, ownerUid, slotIndex)), CLOUD_UPLOAD_TIMEOUT_MS);
+    await fb.deleteDoc(cloudSlotRef(fb, ownerUid, slotIndex));
     cloudSlotRevisions[slotIndex] = 0;
     cloudSlotLoaded[slotIndex] = true;
   }
@@ -1122,19 +1098,8 @@
   async function readCloudSlotFromServer(slotIndex) {
     const fb = await loadOnlineFirebase();
     const ref = cloudSlotRef(fb, onlineUser.uid, slotIndex);
-    let lastError = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        const reader = typeof fb.getDocFromServer === "function" ? fb.getDocFromServer(ref) : fb.getDoc(ref);
-        return await withDatabaseTimeout(reader, DATABASE_VERIFY_TIMEOUT_MS);
-      } catch (error) {
-        lastError = error;
-        if ((!isFirestoreOfflineError(error) && !isFirestoreTargetCollision(error)) || attempt >= 2 || navigator.onLine === false) throw error;
-        await recoverOnlineFirestore(`cloud-slot-${slotIndex}-attempt-${attempt + 1}`);
-        await waitOnlineRetry(450 + attempt * 550);
-      }
-    }
-    throw lastError || new Error("Cloud-Spielstand konnte nicht gelesen werden.");
+    // Ein einzelner SDK-Lesevorgang. Keine parallelen getDocFromServer-Retries mehr.
+    return fb.getDoc(ref);
   }
 
   async function resolveCloudRevisionConflict(slotIndex, localState) {
@@ -1306,7 +1271,7 @@
       note: "Account Reset · Pre-Beta"
     };
     try {
-      const snapshot = await withDatabaseTimeout(fb.getDoc(fb.doc(fb.db, ...RESET_CONTROL_PATH_V180)), DATABASE_VERIFY_TIMEOUT_MS);
+      const snapshot = await fb.getDoc(fb.doc(fb.db, ...RESET_CONTROL_PATH_V180));
       if (!snapshot.exists()) return builtIn;
       const remote = { id: snapshot.id, ...snapshot.data() };
       return Number(remote.version || 0) >= RESET_TARGET_VERSION_V180 ? { ...builtIn, ...remote, active: true } : builtIn;
@@ -1323,7 +1288,7 @@
     if (!control?.active || Number(control.version || 0) < RESET_TARGET_VERSION_V180) return false;
     const targetGeneration = Math.max(RESET_TARGET_GENERATION_V180, Number(control.generation || RESET_TARGET_GENERATION_V180));
     const accountRef = fb.doc(fb.db, "accounts", user.uid);
-    const accountSnapshot = await withDatabaseTimeout(fb.getDoc(accountRef), DATABASE_VERIFY_TIMEOUT_MS).catch(() => null);
+    const accountSnapshot = await fb.getDoc(accountRef).catch(() => null);
     const appliedGeneration = Math.max(0, Number(accountSnapshot?.data?.()?.resetGeneration || 0));
     let localAppliedGeneration = 0;
     try { localAppliedGeneration = Math.max(0, Number(localStorage.getItem(LOCAL_RESET_GENERATION_KEY_V180) || 0)); } catch {}
@@ -1345,7 +1310,7 @@
       resetPreservedAuth: true,
       updatedAtMs: Date.now()
     }, { merge: true });
-    await withDatabaseTimeout(batch.commit(), CLOUD_UPLOAD_TIMEOUT_MS);
+    await batch.commit();
     }
 
     saveSlots = [null, null, null, null];
@@ -1629,11 +1594,10 @@
     try {
       const fb = await loadOnlineFirebase();
       const audit = evaluateAudit(onlineUser.uid);
-      const options = { merge: true };
-      await withDatabaseTimeout(Promise.all([
-        fb.setDoc(fb.doc(fb.db, "playerProfiles", onlineUser.uid), publicProfilePayload(audit, true), options),
-        fb.setDoc(fb.doc(fb.db, "playerPrivate", onlineUser.uid), privateProfilePayload(audit), options)
-      ]), 9000);
+      const batch = fb.writeBatch(fb.db);
+      batch.set(fb.doc(fb.db, "playerProfiles", onlineUser.uid), publicProfilePayload(audit, true), { merge: true });
+      batch.set(fb.doc(fb.db, "playerPrivate", onlineUser.uid), privateProfilePayload(audit), { merge: true });
+      await batch.commit();
       playerSyncLastAt = Date.now();
       if (force) updateOnlineStatusBadge();
     } finally {

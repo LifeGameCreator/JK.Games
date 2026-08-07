@@ -761,8 +761,7 @@
         const auth = authMod.getAuth(app);
         if (typeof auth.authStateReady === "function") await auth.authStateReady();
         let db;
-        try { db = dbMod.initializeFirestore(app, { experimentalForceLongPolling: true, experimentalLongPollingOptions: { timeoutSeconds: 30 }, useFetchStreams: false }, AM_DATABASE_ID); }
-        catch { db = dbMod.getFirestore(app, AM_DATABASE_ID); }
+        db = dbMod.getFirestore(app, AM_DATABASE_ID);
         runtime = { ...authMod, ...dbMod, auth, db };
       }
       amRuntime.fb = runtime;
