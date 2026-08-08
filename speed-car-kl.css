@@ -5,3 +5,23 @@
 .topgames-card.speedcar{background:linear-gradient(145deg,#07131f,#142b3b 48%,#3b102c);border-color:#63e8ff66;box-shadow:inset 0 1px rgba(255,255,255,.08),0 10px 24px rgba(36,157,200,.16)}.topgames-card.speedcar:hover{filter:brightness(1.1)}
 
 .sckl-countdown{position:absolute;z-index:35;left:50%;top:50%;transform:translate(-50%,-50%);min-width:118px;text-align:center;font-size:clamp(76px,18vw,160px);line-height:1;font-weight:1000;letter-spacing:-.06em;color:#fff;text-shadow:0 0 18px #000,0 0 42px #43cfff,0 0 90px #6d43ff;pointer-events:none;filter:drop-shadow(0 16px 26px #000b)}.sckl-countdown[hidden]{display:none!important}
+
+/* V253 · JK.Games Galaxy Design */
+.speed-car-kl-overlay{background:
+radial-gradient(circle at 15% 10%,rgba(163,79,255,.24),transparent 34%),
+radial-gradient(circle at 84% 16%,rgba(54,229,255,.18),transparent 31%),
+radial-gradient(circle at 70% 86%,rgba(255,76,198,.12),transparent 32%),
+linear-gradient(145deg,#080817,#07131f 58%,#15091f)}
+.speed-car-kl-overlay:before{content:"";position:absolute;inset:0;pointer-events:none;background-image:
+radial-gradient(circle,#fff 0 1px,transparent 1.5px),
+radial-gradient(circle,#73edff 0 1px,transparent 1.4px),
+radial-gradient(circle,#d67cff 0 1px,transparent 1.5px);background-size:31px 31px,53px 53px,79px 79px;background-position:0 0,17px 22px,35px 9px;opacity:.14;animation:scklGalaxyDrift 18s linear infinite}
+.speed-car-kl-overlay .sckl-shell{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,8,23,.70),rgba(3,10,18,.91))}
+.speed-car-kl-overlay .sckl-topbar{background:linear-gradient(135deg,rgba(17,11,39,.96),rgba(7,24,38,.93) 58%,rgba(22,10,34,.95));border-bottom-color:rgba(119,224,255,.28);box-shadow:0 8px 36px rgba(111,74,255,.13)}
+.speed-car-kl-overlay .sckl-brand h1,.speed-car-kl-overlay .sckl-page-head h2,.speed-car-kl-overlay .sckl-hero-copy h2{background:linear-gradient(90deg,#fff,#91ecff 35%,#c38aff 70%,#ff8dd8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.speed-car-kl-overlay .sckl-hero-copy,.speed-car-kl-overlay .sckl-selected-car,.speed-car-kl-overlay .sckl-car-card,.speed-car-kl-overlay .sckl-tune-card,.speed-car-kl-overlay .sckl-info-list article,.speed-car-kl-overlay .sckl-owner-grid button{background:radial-gradient(circle at 88% 0,rgba(155,92,255,.17),transparent 40%),linear-gradient(145deg,rgba(13,27,39,.97),rgba(14,8,29,.97));border-color:rgba(126,209,255,.25)}
+.speed-car-kl-overlay .sckl-top-actions button,.speed-car-kl-overlay .sckl-page-head button,.speed-car-kl-overlay .sckl-home button,.speed-car-kl-overlay .sckl-page button,.speed-car-kl-overlay .sckl-world-exit,.speed-car-kl-overlay .sckl-owner-float button{border-color:rgba(130,153,255,.34);background:linear-gradient(145deg,rgba(22,31,58,.96),rgba(19,12,41,.94));box-shadow:inset 0 1px rgba(255,255,255,.06)}
+.speed-car-kl-overlay button.primary{background:linear-gradient(135deg,#9f73ff,#5c79ff 52%,#45dff2);border-color:#bba5ff;color:#fff;box-shadow:0 0 22px rgba(121,96,255,.26)}
+.speed-car-kl-overlay .sckl-hud.top>div,.speed-car-kl-overlay .sckl-online-list,.speed-car-kl-overlay .sckl-chase-panel{background:linear-gradient(145deg,rgba(7,20,35,.90),rgba(18,9,35,.88));border-color:rgba(112,220,255,.24)}
+.topgames-card.speedcar{background:radial-gradient(circle at 90% 10%,#914bff44,transparent 42%),radial-gradient(circle at 10% 100%,#3de9ff2d,transparent 48%),linear-gradient(145deg,#11112e,#0c1b2c 58%,#251039);border-color:#a67cff77;box-shadow:inset 0 1px rgba(255,255,255,.08),0 10px 28px rgba(121,74,255,.16)}
+@keyframes scklGalaxyDrift{to{background-position:31px 31px,70px 75px,114px 88px}}
