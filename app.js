@@ -3966,8 +3966,13 @@ function improveSkill(name, amount = 1) {
   state.skills[name] = Math.min(10, (state.skills[name] || 1) + amount);
 }
 
+const MAIN_MAX_LEVEL = 10000;
+
 function xpNeeded(level = state.level || 0) {
-  return Math.min(1000000, Math.max(100, (level + 1) * 100));
+  const safeLevel = Math.max(0, Math.min(MAIN_MAX_LEVEL - 1, Math.floor(Number(level) || 0)));
+  // Bewusst sehr lange Hauptlevel-Kurve: Jedes Level kostet 100 EP mehr als das vorherige.
+  // Dadurch steigt der Bedarf bis auf 1.000.000 EP kurz vor Level 10.000.
+  return Math.min(1000000, Math.max(100, (safeLevel + 1) * 100));
 }
 
 const experienceToastQueue = [];
@@ -4057,17 +4062,25 @@ function addXp(amount, reason = "", options = {}) {
   const earned = Math.max(0, Math.round(Number(amount) || 0));
   if (!earned) return 0;
   const { toast = true, toastReason = reason } = options;
-  state.level ||= 0;
-  state.xp ||= 0;
+  state.level = Math.max(0, Math.min(MAIN_MAX_LEVEL, Math.floor(Number(state.level || 0))));
+  state.xp = Math.max(0, Number(state.xp || 0));
   const levelBefore = state.level;
+  if (state.level >= MAIN_MAX_LEVEL) {
+    state.xp = 0;
+    if (toast) queueExperienceToast(earned, toastReason || reason || "Erfahrung erhalten", `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht`);
+    return earned;
+  }
   state.xp += earned;
-  while (state.level < 100 && state.xp >= xpNeeded(state.level)) {
+  while (state.level < MAIN_MAX_LEVEL && state.xp >= xpNeeded(state.level)) {
     state.xp -= xpNeeded(state.level);
     state.level += 1;
     state.skillPoints = (state.skillPoints || 0) + 1;
     addFeed(`Level ${state.level} erreicht. +1 Skillpunkt.`);
   }
-  const levelText = state.level > levelBefore ? `Level ${state.level} erreicht · +1 Skillpunkt` : "";
+  if (state.level >= MAIN_MAX_LEVEL) state.xp = 0;
+  const levelText = state.level > levelBefore
+    ? (state.level >= MAIN_MAX_LEVEL ? `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht · +1 Skillpunkt` : `Level ${state.level} erreicht · +1 Skillpunkt`)
+    : "";
   if (toast) queueExperienceToast(earned, toastReason || reason || "Erfahrung erhalten", levelText);
   return earned;
 }
@@ -4127,7 +4140,7 @@ window.JKGamesTopGameXpStatus = () => {
     earned: Math.max(0, Number(ledger.total || 0)),
     cap: null,
     unlimited: true,
-    level: Math.max(0, Math.min(100, Number(state?.level || 0))),
+    level: Math.max(0, Math.min(MAIN_MAX_LEVEL, Number(state?.level || 0))),
     byGame: { ...(ledger.byGame || {}) }
   };
 };
@@ -5824,15 +5837,19 @@ const tattooMotifs = [
 function openLevelInfoDialog() {
   if (!state) return;
   clearDialogDynamic();
-  const need = xpNeeded(state.level || 0);
-  const current = Math.max(0, Number(state.xp || 0));
-  const remaining = Math.max(0, need - current);
-  const percent = Math.max(0, Math.min(100, Math.round(current / Math.max(1, need) * 100)));
-  els.dialogTitle.textContent = `Level ${state.level || 0}`;
-  els.dialogText.textContent = `${current.toLocaleString("de-DE")} von ${need.toLocaleString("de-DE")} EP gesammelt.`;
+  const level = Math.max(0, Math.min(MAIN_MAX_LEVEL, Math.floor(Number(state.level || 0))));
+  const atMax = level >= MAIN_MAX_LEVEL;
+  const need = atMax ? 0 : xpNeeded(level);
+  const current = atMax ? 0 : Math.max(0, Number(state.xp || 0));
+  const remaining = atMax ? 0 : Math.max(0, need - current);
+  const percent = atMax ? 100 : Math.max(0, Math.min(100, Math.round(current / Math.max(1, need) * 100)));
+  els.dialogTitle.textContent = `Level ${level.toLocaleString("de-DE")}`;
+  els.dialogText.textContent = atMax
+    ? `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht.`
+    : `${current.toLocaleString("de-DE")} von ${need.toLocaleString("de-DE")} EP gesammelt.`;
   const panel = document.createElement("div");
   panel.className = "profile-info-scroll level-info-panel";
-  panel.innerHTML = `<section class="profile-info-card"><small>FORTSCHRITT ZUM NÄCHSTEN LEVEL</small><strong>${percent}%</strong><div class="profile-info-bar"><i style="width:${percent}%"></i></div><p>Noch <b>${remaining.toLocaleString("de-DE")} EP</b> bis Level ${(state.level || 0) + 1}.</p></section><section class="profile-tip-list"><h3>So erhältst du EP</h3><article>✓ Arbeiten, Lernen und Training abschließen</article><article>✓ Games spielen und Erfolge abholen</article><article>✓ Tägliche Quests und Events erledigen</article></section>`;
+  panel.innerHTML = `<section class="profile-info-card"><small>${atMax ? "MAXIMALLEVEL" : "FORTSCHRITT ZUM NÄCHSTEN LEVEL"}</small><strong>${atMax ? MAIN_MAX_LEVEL.toLocaleString("de-DE") : `${percent}%`}</strong><div class="profile-info-bar"><i style="width:${percent}%"></i></div><p>${atMax ? `Du hast das höchste Hauptlevel von <b>${MAIN_MAX_LEVEL.toLocaleString("de-DE")}</b> erreicht.` : `Noch <b>${remaining.toLocaleString("de-DE")} EP</b> bis Level ${(level + 1).toLocaleString("de-DE")}.`}</p></section><section class="profile-tip-list"><h3>So erhältst du EP</h3><article>✓ Arbeiten, Lernen und Training abschließen</article><article>✓ Games spielen und Erfolge abholen</article><article>✓ Tägliche Quests und Events erledigen</article></section>`;
   els.dialog.append(panel);
   if (!els.dialog.open) els.dialog.showModal();
 }
