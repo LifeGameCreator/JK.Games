@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v276-wings-back-flight-animation-fix';
+const CENTER_VERSION = '2026-08-08-jkgames-v277-wings-spine-attachment-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3170,6 +3170,23 @@ applyHeldItemVisual() {
     this.animateHeldItemEffects(this.ownerHeldObject,now);this.animateHeldItemEffects(this.firstPersonHeldObject,now);
   }
 
+  resolveBackAttachmentBone(root,bones={}){
+    // V277: Wings muessen wirklich am Oberkoerper-Skelett haengen. Wir nehmen nur
+    // echte Bones und bevorzugen UpperChest/Chest/Spine2, damit niemals versehentlich
+    // ein Arm-/Hand-Mesh als Anker verwendet wird.
+    const direct=bones?.chest;
+    if(direct?.isBone)return direct;
+    const candidates=[];
+    root?.traverse?.((object)=>{if(object?.isBone)candidates.push(object);});
+    const by=(pattern)=>candidates.find((bone)=>pattern.test(bone.name||''));
+    return by(/(?:upperchest|^chest$|chest_)/i)
+      || by(/(?:spine[_ .-]?0?2|spine2)/i)
+      || by(/(?:spine[_ .-]?0?1|spine1)/i)
+      || by(/(?:^spine$|spine_)/i)
+      || (bones?.neck?.parent?.isBone?bones.neck.parent:null)
+      || null;
+  }
+
   configureWearableFollower(object,parent,bone,desiredPosition,desiredQuaternion=new THREE.Quaternion()){
     if(!object||!parent||!bone)return false;
     parent.updateWorldMatrix?.(true,true);bone.updateWorldMatrix?.(true,false);
@@ -3265,7 +3282,7 @@ applyOwnerWearables(){
     const appearance=this.state.ownerAppearance||{},capeTheme=this.appearanceTheme('cape'),hatTheme=this.appearanceTheme('hat'),allowed=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&['normal','galaxy'].includes(appearance.skin||'normal')),wantCape=allowed&&!!appearance.cape,wantHat=allowed&&!!appearance.hat;
     if(this.ownerCapeObject&&this.ownerCapeObject.userData?.theme!==capeTheme){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(this.ownerHatObject&&this.ownerHatObject.userData?.theme!==hatTheme){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
     if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
-    if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape(capeTheme);this.modelPivot.add(cape);this.ownerCapeObject=cape;/* V273: Wings wieder fest am Rücken statt an einem animierten Brust-/Arm-Bone. Das verhindert, dass sie bei bestimmten Staff-Rigs an die Hände wandern. */cape.userData.centerBackAttachment=true;cape.position.set(0,1.46,-.32);cape.quaternion.identity();}
+    if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape(capeTheme);this.modelPivot.add(cape);this.ownerCapeObject=cape;cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();/* V277: 10 cm naeher an den Ruecken und an UpperChest/Spine fixiert. */if(!this.configureWearableFollower(cape,this.modelPivot,backBone,backPos,backQ)){cape.position.copy(backPos);cape.quaternion.copy(backQ);}}
     if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat(hatTheme);this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
   }
 
@@ -4804,7 +4821,7 @@ applyRemoteOwnerAura(remote) {
     if(remote.lastMaterialThemeKey!==materialKey){const skinTexture=skinTheme!=='none'&&tier!=='minimal'?this.getStaffSkinTexture(skinTheme):null,cfg=skinTheme==='none'?null:staffThemeConfig(skinTheme);remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,skinTheme!=='none'&&tier!=='minimal',skinTexture);const original=mat.userData.__centerOriginalMaterial||{};if(skinTheme!=='none'&&tier==='minimal'){mat.color?.set?.(cfg.primary);mat.emissive?.set?.(cfg.emissive);if('emissiveIntensity'in mat)mat.emissiveIntensity=.42;}const opacity=remote.vanished?.3:(original.opacity??1);mat.transparent=remote.vanished||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!remote.vanished&&original.depthWrite!==false;mat.needsUpdate=true;}});remote.lastMaterialThemeKey=materialKey;}
     if(remote.aura&&(remote.aura.userData?.theme!==auraTheme||remote.aura.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=tier==='low'?this.createCheapRemoteAura(auraTheme):this.createGalaxyAuraGroup(true,auraTheme);remote.aura.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.aura,tier);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
     const visible=isStaffVisual&&!hidden&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&(remote.cape.userData?.theme!==capeTheme||remote.cape.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.hat&&(remote.hat.userData?.theme!==hatTheme||remote.hat.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
-    if(visible&&remote.ownerCape&&!remote.cape){remote.cape=tier==='minimal'||tier==='low'?this.createCheapRemoteWings(capeTheme):this.createGalaxyOwnerCape(capeTheme,tier!=='high');remote.cape.userData.qualityTier=tier;remote.cape.scale.setScalar(tier==='minimal'?.82:.9);this.simplifyRemoteVisual(remote.cape,tier);remote.pivot.add(remote.cape);/* V273: Remote-Wings bleiben fest am Rücken; kein Bone-Follower zu Brust/Armen. */remote.cape.userData.centerBackAttachment=true;remote.cape.position.set(0,1.46,-.32);remote.cape.quaternion.identity();}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;
+    if(visible&&remote.ownerCape&&!remote.cape){remote.cape=tier==='minimal'||tier==='low'?this.createCheapRemoteWings(capeTheme):this.createGalaxyOwnerCape(capeTheme,tier!=='high');remote.cape.userData.qualityTier=tier;remote.cape.scale.setScalar(tier==='minimal'?.82:.9);this.simplifyRemoteVisual(remote.cape,tier);remote.pivot.add(remote.cape);remote.cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(remote.model,remote.bones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();/* V277: Auch bei Online-Spielern fest am Oberkoerper statt nur am Root-Pivot. */if(!this.configureWearableFollower(remote.cape,remote.pivot,backBone,backPos,backQ)){remote.cape.position.copy(backPos);remote.cape.quaternion.copy(backQ);}}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;
     if(visible&&remote.ownerHat&&tier!=='minimal'&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(hatTheme,tier!=='high');remote.hat.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.hat,tier);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat&&tier!=='minimal';
   }
 
