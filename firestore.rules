@@ -1,0 +1,3364 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function normalizedPlayerName(displayName) {
+      return displayName.trim().replace('[ ]+', ' ').lower();
+    }
+
+    function validPlayerName(displayName, usernameKey) {
+      return displayName is string
+        && usernameKey is string
+        && displayName.size() >= 3
+        && displayName.size() <= 30
+        && displayName == displayName.trim()
+        && displayName.matches('[A-Za-z0-9ÄÖÜäöüß._ -]{3,30}')
+        && usernameKey == normalizedPlayerName(displayName)
+        && usernameKey.size() >= 3
+        && usernameKey.size() <= 30;
+    }
+
+    function usernamePath(usernameKey) {
+      return /databases/$(database)/documents/usernames/$(usernameKey);
+    }
+
+    function usernameOwnedAfter(uid, usernameKey) {
+      return existsAfter(usernamePath(usernameKey))
+        && getAfter(usernamePath(usernameKey)).data.uid == uid
+        && getAfter(usernamePath(usernameKey)).data.usernameKey == usernameKey;
+    }
+
+    function accountPath(uid) {
+      return /databases/$(database)/documents/accounts/$(uid);
+    }
+
+    function usernameMatchesAccountAfter(uid, usernameKey) {
+      return existsAfter(accountPath(uid))
+        && getAfter(accountPath(uid)).data.uid == uid
+        && getAfter(accountPath(uid)).data.usernameKey == usernameKey;
+    }
+
+    function profileNameMatchesAccount(uid, profileData) {
+      return exists(accountPath(uid))
+        && profileData.displayName == get(accountPath(uid)).data.displayName
+        && profileData.displayNameLower == get(accountPath(uid)).data.usernameKey;
+    }
+
+    function finsterHandlePath(handle) {
+      return /databases/$(database)/documents/finsterHandles/$(handle);
+    }
+
+    function finsterUserPath(uid) {
+      return /databases/$(database)/documents/finsterUsers/$(uid);
+    }
+
+    function finsterPostPath(postId) {
+      return /databases/$(database)/documents/finsterPosts/$(postId);
+    }
+
+    function finsterLikePath(postId, uid) {
+      return /databases/$(database)/documents/finsterPosts/$(postId)/likes/$(uid);
+    }
+
+    function finsterCommentPath(postId, commentId) {
+      return /databases/$(database)/documents/finsterPosts/$(postId)/comments/$(commentId);
+    }
+
+    function finsterHandleOwnedAfter(uid, handle) {
+      return existsAfter(finsterHandlePath(handle))
+        && getAfter(finsterHandlePath(handle)).data.uid == uid
+        && getAfter(finsterHandlePath(handle)).data.handle == handle;
+    }
+
+    function finsterUserOwnsHandleAfter(uid, handle) {
+      return existsAfter(finsterUserPath(uid))
+        && getAfter(finsterUserPath(uid)).data.uid == uid
+        && getAfter(finsterUserPath(uid)).data.handle == handle;
+    }
+
+    function finsterProfileMatches(uid, handle, displayName) {
+      return exists(finsterUserPath(uid))
+        && get(finsterUserPath(uid)).data.handle == handle
+        && get(finsterUserPath(uid)).data.displayName == displayName;
+    }
+
+    function validSessionDescription(data, expectedType) {
+      return data is map
+        && data.keys().hasOnly(['type', 'sdp'])
+        && data.type == expectedType
+        && data.sdp is string
+        && data.sdp.size() > 0
+        && data.sdp.size() <= 30000;
+    }
+
+    function validIceCandidate(data) {
+      return data.keys().hasAll(['candidate'])
+        && data.keys().hasOnly(['candidate', 'sdpMid', 'sdpMLineIndex', 'usernameFragment'])
+        && data.candidate is string
+        && data.candidate.size() <= 4096
+        && (data.get('sdpMid', null) == null || (data.sdpMid is string && data.sdpMid.size() <= 255))
+        && (data.get('sdpMLineIndex', null) == null || data.sdpMLineIndex is int)
+        && (data.get('usernameFragment', null) == null || (data.usernameFragment is string && data.usernameFragment.size() <= 255));
+    }
+
+    function playerShopListingPath(listingId) {
+      return /databases/$(database)/documents/playerShopListings/$(listingId);
+    }
+
+    function playerShopOrderPath(orderId) {
+      return /databases/$(database)/documents/playerShopOrders/$(orderId);
+    }
+
+    function validSupportPlayerMessage(message) {
+      return message is map
+        && message.keys().hasOnly(['senderUid', 'senderName', 'senderRole', 'text', 'createdAtMs'])
+        && message.senderUid == request.auth.uid
+        && message.senderName is string
+        && message.senderName.size() > 0
+        && message.senderName.size() <= 180
+        && message.senderRole == 'player'
+        && message.text is string
+        && message.text.size() > 0
+        && message.text.size() <= 2000
+        && message.createdAtMs is int;
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.admin == true
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function phoneExists(phoneNumber) {
+      return exists(/databases/$(database)/documents/phones/$(phoneNumber));
+    }
+
+    function phoneOwnerUid(phoneNumber) {
+      return get(/databases/$(database)/documents/phones/$(phoneNumber)).data.ownerUid;
+    }
+
+    function ownsPhone(phoneNumber) {
+      return signedIn() && phoneExists(phoneNumber) && phoneOwnerUid(phoneNumber) == request.auth.uid;
+    }
+
+    function conversationData(conversationId) {
+      return get(/databases/$(database)/documents/phoneConversations/$(conversationId)).data;
+    }
+
+    function callData(callId) {
+      return get(/databases/$(database)/documents/phoneCalls/$(callId)).data;
+    }
+
+    // Prüft die öffentlichen Echtzeitdaten der begehbaren Cottbus-Zentrale.
+    // Diese Daten enthalten nur Position, Darstellung und Online-Status.
+    function validCottbusPresence(data) {
+      return data is map
+        && data.keys().hasOnly([
+          'online', 'mapId', 'sessionId', 'x', 'y', 'z', 'yaw', 'bodyYaw',
+          'walking', 'view', 'gender', 'firstName', 'lastName', 'level',
+          'slot', 'ownerClaim', 'updatedAtMs', 'leftAtMs', 'version',
+          'mode', 'staffRole', 'vanished', 'flying', 'season', 'day',
+          'appearanceSkin', 'appearanceSize', 'heldItem', 'vehicle',
+          'ownerCape', 'ownerHat', 'ownerAura'
+        ])
+        && data.online is bool
+        // Alte Cottbus-3D-Präsenz bleibt les-/schreibbar; das aktuelle Center
+        // verwendet bewusst eine eigene Map-ID und eine deutlich größere Welt.
+        && data.mapId in ['spremberger-strasse-v1', 'center-dynasty-open-world-v3']
+        && data.sessionId is string
+        && data.sessionId.size() > 0
+        && data.sessionId.size() <= 120
+        && data.x is number
+        && data.x >= -6100
+        && data.x <= 6100
+        && data.get('y', 0) is number
+        && data.get('y', 0) >= -1000
+        && data.get('y', 0) <= 10000
+        && data.z is number
+        && data.z >= -6100
+        && data.z <= 6100
+        && data.yaw is number
+        && data.bodyYaw is number
+        && data.walking is bool
+        && data.view in ['first', 'third']
+        && data.gender in ['male', 'female']
+        && data.firstName is string
+        && data.firstName.size() > 0
+        && data.firstName.size() <= 30
+        && data.lastName is string
+        && data.lastName.size() <= 30
+        && data.level is int
+        && data.level >= 0
+        && data.slot is int
+        && data.slot >= 0
+        && data.slot <= 3
+        && data.ownerClaim is bool
+        && data.updatedAtMs is int
+        && data.updatedAtMs > 0
+        && data.get('leftAtMs', 0) is int
+        && data.get('leftAtMs', 0) >= 0
+        && data.version is string
+        && data.version.size() > 0
+        && data.version.size() <= 120
+        && data.get('mode', '') in ['', 'center']
+        && data.get('staffRole', 'player') in ['player', 'supporter', 'moderator', 'admin', 'owner']
+        && data.get('vanished', false) is bool
+        && data.get('flying', false) is bool
+        && data.get('season', 0) is int
+        && data.get('season', 0) >= 0
+        && data.get('season', 0) <= 3
+        && data.get('day', 1) is int
+        && data.get('day', 1) >= 1
+        && data.get('appearanceSkin', 'normal') in ['normal', 'galaxy', 'shadow', 'oaura', 'ball', 'crystal', 'bush', 'tree', 'rock', 'grass', 'fox', 'shark', 'cow', 'orca', 'horse', 'owl', 'wolf1', 'wolf2', 'spider', 'clownfish', 'bird']
+        && data.get('appearanceSize', 1) is number
+        && data.get('appearanceSize', 1) >= 0.45
+        && data.get('appearanceSize', 1) <= 2.5
+        && data.get('heldItem', 'none') in ['none', 'sword', 'axe', 'staff', 'torch', 'hammer', 'eternalFlame']
+        && data.get('vehicle', 'none') in ['none', 'scooter']
+        && data.get('ownerCape', false) is bool
+        && data.get('ownerHat', false) is bool
+        && data.get('ownerAura', false) is bool;
+    }
+
+    function validPublicPlayerProfileValues(data, uid) {
+      return data is map
+        && data.keys().hasAll([
+          'uid', 'displayName', 'displayNameLower', 'level', 'city', 'job',
+          'slot', 'online', 'lastSeenAtMs', 'updatedAtMs', 'version',
+          'suspicious', 'riskScore', 'bankIban', 'bankIbanNormalized'
+        ])
+        && data.uid == uid
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && data.displayName.size() <= 80
+        && data.displayNameLower is string
+        && data.displayNameLower.size() > 0
+        && data.displayNameLower.size() <= 100
+        && data.level is int
+        && data.level >= 0
+        && data.city is string
+        && data.city.size() <= 80
+        && data.job is string
+        && data.job.size() <= 100
+        && data.slot is int
+        && data.slot >= 0
+        && data.slot <= 3
+        && data.online is bool
+        && data.lastSeenAtMs is int
+        && data.lastSeenAtMs > 0
+        && data.updatedAtMs is int
+        && data.updatedAtMs > 0
+        && data.version is string
+        && data.version.size() > 0
+        && data.version.size() <= 120
+        && data.suspicious is bool
+        && data.riskScore is int
+        && data.riskScore >= 0
+        && data.riskScore <= 100
+        && data.bankIban is string
+        && data.bankIban.size() <= 34
+        && data.bankIbanNormalized is string
+        && data.bankIbanNormalized.size() <= 34
+        && (
+          !data.keys().hasAny(['cottbus3D'])
+          || validCottbusPresence(data.cottbus3D)
+        );
+    }
+
+    function validPrivatePlayerProfileValues(data, uid) {
+      return data is map
+        && data.keys().hasAll([
+          'uid', 'bank', 'cash', 'debt', 'phoneCredit', 'dirtyMoney',
+          'hunger', 'thirst', 'energy', 'mood', 'health', 'level', 'xp',
+          'itemCounts', 'itemCount', 'properties', 'statistics', 'shop',
+          'audit', 'updatedAtMs', 'version'
+        ])
+        && data.uid == uid
+        && data.bank is int
+        && data.cash is int
+        && data.debt is int
+        && data.phoneCredit is int
+        && data.dirtyMoney is int
+        && data.hunger is int
+        && data.thirst is int
+        && data.energy is int
+        && data.mood is int
+        && data.health is int
+        && data.level is int
+        && data.level >= 0
+        && data.xp is int
+        && data.xp >= 0
+        && data.itemCounts is map
+        && data.itemCount is int
+        && data.itemCount >= 0
+        && data.properties is list
+        && data.statistics is map
+        && data.shop is map
+        && data.audit is map
+        && data.updatedAtMs is int
+        && data.updatedAtMs > 0
+        && data.version is string
+        && data.version.size() > 0
+        && data.version.size() <= 120;
+    }
+
+    function validGameSaveDocument(data, uid, slotId) {
+      return data is map
+        && data.keys().hasOnly([
+          'uid', 'slot', 'stateJson', 'updatedAtMs', 'revision',
+          'writerDeviceId', 'version'
+        ])
+        && data.uid == uid
+        && data.slot is int
+        && data.slot >= 0
+        && data.slot <= 3
+        && (
+          (slotId == 'slot-1' && data.slot == 0)
+          || (slotId == 'slot-2' && data.slot == 1)
+          || (slotId == 'slot-3' && data.slot == 2)
+          || (slotId == 'slot-4' && data.slot == 3)
+        )
+        && data.stateJson is string
+        && data.stateJson.size() > 0
+        && data.stateJson.size() <= 900000
+        && data.updatedAtMs is int
+        && data.updatedAtMs > 0
+        && data.revision is int
+        && data.revision >= 1
+        && data.writerDeviceId is string
+        && data.writerDeviceId.size() > 0
+        && data.writerDeviceId.size() <= 80
+        && data.version is string
+        && data.version.size() > 0
+        && data.version.size() <= 120;
+    }
+
+    // V180 vorbereitet: gemeinsames Bank-/Steuerkonto und Casino-Konto.
+    // Die Browser-Synchronisierung bleibt in V180 deaktiviert. Ein Owner kann die
+    // Startwerte bei der späteren Reset-Aktivierung kontrolliert initialisieren.
+    match /global/systemAccounts {
+      allow read: if signedIn();
+      allow create, update: if v180ActiveOwner()
+        && request.resource.data.keys().hasOnly([
+          'publicTreasury', 'taxAccount', 'casinoAccount', 'economyVersion',
+          'unifiedTaxAndBank', 'updatedAtMs', 'updatedBy'
+        ])
+        && request.resource.data.publicTreasury is number
+        && request.resource.data.publicTreasury >= 0
+        && request.resource.data.taxAccount == request.resource.data.publicTreasury
+        && request.resource.data.casinoAccount is number
+        && request.resource.data.casinoAccount >= 0
+        && request.resource.data.economyVersion is int
+        && request.resource.data.economyVersion >= 180
+        && request.resource.data.unifiedTaxAndBank == true
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.updatedBy is string;
+      allow delete: if false;
+    }
+
+    // Der Reset ist in der ausgelieferten Version NICHT aktiv. Nur ein Owner darf
+    // später eine neue Generation aktivieren. Auth/E-Mail werden nicht gelöscht.
+    match /global/resetControlV180 {
+      allow read: if signedIn();
+      allow create, update: if v180ActiveOwner()
+        && request.resource.data.keys().hasOnly([
+          'active', 'version', 'generation', 'activatedAtMs', 'activatedByUid',
+          'note', 'startBank', 'bankOpeningCredit', 'startCash', 'characterSlots',
+          'systemBankStart', 'casinoBankStart', 'phase'
+        ])
+        && request.resource.data.active is bool
+        && request.resource.data.version is int
+        && request.resource.data.version >= 180
+        && request.resource.data.generation is int
+        && request.resource.data.generation >= 1
+        && request.resource.data.activatedAtMs is int
+        && request.resource.data.activatedByUid == request.auth.uid
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 240
+        && request.resource.data.startBank == 0
+        && request.resource.data.bankOpeningCredit == 10000
+        && request.resource.data.startCash == 1000
+        && request.resource.data.characterSlots == 4
+        && request.resource.data.systemBankStart == 1000000000000
+        && request.resource.data.casinoBankStart == 100000000000
+        && request.resource.data.phase == 'pre-beta';
+      allow delete: if false;
+    }
+
+    match /phones/{phoneNumber} {
+      // Authenticated users may look up one exact number before sending a message/call.
+      // Listing the complete phone registry is forbidden.
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['number', 'ownerUid', 'displayName', 'slot', 'updatedAt'])
+        && request.resource.data.number == phoneNumber
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.slot is int;
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.number == resource.data.number
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'slot', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.slot is int;
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /phoneConversations/{conversationId} {
+      allow get: if signedIn()
+        && resource.data.participantUids is list
+        && resource.data.participantUids.hasAny([request.auth.uid]);
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['phoneNumbers', 'participantUids', 'createdAt', 'createdAtMs', 'updatedAtMs'])
+        && request.resource.data.phoneNumbers is list
+        && request.resource.data.phoneNumbers.size() == 2
+        && request.resource.data.participantUids is list
+        && request.resource.data.participantUids.size() >= 1
+        && request.resource.data.participantUids.size() <= 2
+        && request.resource.data.participantUids.hasAny([request.auth.uid])
+        && phoneExists(request.resource.data.phoneNumbers[0])
+        && phoneExists(request.resource.data.phoneNumbers[1])
+        && request.resource.data.participantUids.hasAll([
+          phoneOwnerUid(request.resource.data.phoneNumbers[0]),
+          phoneOwnerUid(request.resource.data.phoneNumbers[1])
+        ])
+        && (ownsPhone(request.resource.data.phoneNumbers[0]) || ownsPhone(request.resource.data.phoneNumbers[1]))
+        && (
+          conversationId == request.resource.data.phoneNumbers[0] + '_' + request.resource.data.phoneNumbers[1]
+          || conversationId == request.resource.data.phoneNumbers[1] + '_' + request.resource.data.phoneNumbers[0]
+        )
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+
+      allow update: if signedIn()
+        && resource.data.participantUids is list
+        && resource.data.participantUids.hasAny([request.auth.uid])
+        && request.resource.data.phoneNumbers == resource.data.phoneNumbers
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAtMs'])
+        && request.resource.data.updatedAtMs is int;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && conversationData(conversationId).participantUids.hasAny([request.auth.uid])
+          && (
+            resource.data.senderUid == request.auth.uid
+            || resource.data.recipientUid == request.auth.uid
+          );
+
+        allow create: if signedIn()
+          && conversationData(conversationId).participantUids.hasAny([request.auth.uid])
+          && request.resource.data.keys().hasOnly(['conversationId', 'from', 'to', 'senderUid', 'recipientUid', 'text', 'createdAt', 'createdAtMs'])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.conversationId == conversationId
+          && request.resource.data.from in conversationData(conversationId).phoneNumbers
+          && request.resource.data.to in conversationData(conversationId).phoneNumbers
+          && phoneExists(request.resource.data.from)
+          && phoneExists(request.resource.data.to)
+          && request.resource.data.senderUid == phoneOwnerUid(request.resource.data.from)
+          && request.resource.data.recipientUid == phoneOwnerUid(request.resource.data.to)
+          && request.resource.data.senderUid in conversationData(conversationId).participantUids
+          && request.resource.data.recipientUid in conversationData(conversationId).participantUids
+          && ownsPhone(request.resource.data.from)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAtMs is int;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // Separater SMS-Posteingang für sofortige Benachrichtigungen.
+    // Der Absender legt hier nur eine unveränderliche Kopie der Nachricht ab;
+    // lesen darf ausschließlich der Empfänger. Dadurch ist keine fehleranfällige
+    // collectionGroup-Abfrage über alle Unterhaltungen mehr nötig.
+    match /phoneInboxes/{phoneNumber} {
+      allow read, write: if false;
+
+      match /messages/{messageId} {
+        allow read: if ownsPhone(phoneNumber);
+
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['conversationId', 'from', 'to', 'senderUid', 'recipientUid', 'text', 'createdAt', 'createdAtMs'])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.to == phoneNumber
+          && request.resource.data.recipientUid == phoneOwnerUid(phoneNumber)
+          && request.resource.data.conversationId is string
+          && (
+            request.resource.data.conversationId == request.resource.data.from + '_' + request.resource.data.to
+            || request.resource.data.conversationId == request.resource.data.to + '_' + request.resource.data.from
+          )
+          && request.resource.data.from is string
+          && request.resource.data.to is string
+          && phoneExists(request.resource.data.from)
+          && phoneExists(request.resource.data.to)
+          && request.resource.data.senderUid == phoneOwnerUid(request.resource.data.from)
+          && request.resource.data.recipientUid == phoneOwnerUid(request.resource.data.to)
+          && ownsPhone(request.resource.data.from)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.createdAtMs is int;
+
+        allow update: if false;
+        allow delete: if ownsPhone(phoneNumber);
+      }
+    }
+
+    // Zuverlässiger Anruf-Posteingang pro Telefonnummer. Der Anrufer legt
+    // beim Erstellen des Anrufs nur einen kleinen Hinweis ab. Lesen und
+    // Entfernen darf ausschließlich der Besitzer der angerufenen Nummer.
+    match /phoneCallInboxes/{phoneNumber} {
+      allow read, write: if false;
+
+      match /calls/{callId} {
+        allow read, delete: if ownsPhone(phoneNumber);
+
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly([
+            'callId', 'caller', 'callee', 'callerUid', 'calleeUid',
+            'status', 'createdAtMs', 'createdAt'
+          ])
+          && request.resource.data.callId == callId
+          && request.resource.data.callee == phoneNumber
+          && request.resource.data.status == 'ringing'
+          && request.resource.data.callerUid == request.auth.uid
+          && request.resource.data.caller is string
+          && request.resource.data.callee is string
+          && phoneExists(request.resource.data.caller)
+          && phoneExists(request.resource.data.callee)
+          && phoneOwnerUid(request.resource.data.caller) == request.auth.uid
+          && phoneOwnerUid(request.resource.data.callee) == request.resource.data.calleeUid
+          && request.resource.data.createdAtMs is int;
+
+        allow update: if false;
+      }
+    }
+
+    match /phoneCalls/{callId} {
+      allow get: if signedIn()
+        && resource.data.participantUids is list
+        && resource.data.participantUids.hasAny([request.auth.uid]);
+
+      allow list: if signedIn()
+        && resource.data.calleeUid == request.auth.uid
+        && ownsPhone(resource.data.callee);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['caller', 'callee', 'callerUid', 'calleeUid', 'participantUids', 'status', 'offer', 'createdAtMs', 'createdAt'])
+        && request.resource.data.callerUid == request.auth.uid
+        && request.resource.data.participantUids is list
+        && request.resource.data.participantUids.size() >= 1
+        && request.resource.data.participantUids.size() <= 2
+        && phoneExists(request.resource.data.caller)
+        && phoneExists(request.resource.data.callee)
+        && request.resource.data.callerUid == phoneOwnerUid(request.resource.data.caller)
+        && request.resource.data.calleeUid == phoneOwnerUid(request.resource.data.callee)
+        && request.resource.data.participantUids.hasAll([request.resource.data.callerUid, request.resource.data.calleeUid])
+        && ownsPhone(request.resource.data.caller)
+        && request.resource.data.status == 'ringing'
+        && validSessionDescription(request.resource.data.offer, 'offer')
+        && request.resource.data.createdAtMs is int;
+
+      allow update: if signedIn()
+        && resource.data.participantUids.hasAny([request.auth.uid])
+        && request.resource.data.caller == resource.data.caller
+        && request.resource.data.callee == resource.data.callee
+        && request.resource.data.callerUid == resource.data.callerUid
+        && request.resource.data.calleeUid == resource.data.calleeUid
+        && request.resource.data.participantUids == resource.data.participantUids
+        && (
+          (
+            request.auth.uid == resource.data.calleeUid
+            && resource.data.status == 'ringing'
+            && request.resource.data.status == 'active'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'answer', 'answeredAtMs'])
+            && validSessionDescription(request.resource.data.answer, 'answer')
+            && request.resource.data.answeredAtMs is int
+          )
+          || (
+            request.auth.uid == resource.data.calleeUid
+            && resource.data.status == 'ringing'
+            && request.resource.data.status == 'rejected'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectedAtMs'])
+            && request.resource.data.rejectedAtMs is int
+          )
+          || (
+            request.auth.uid == resource.data.callerUid
+            && resource.data.status in ['ringing', 'active']
+            && request.resource.data.status == 'missed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAtMs'])
+            && request.resource.data.endedAtMs is int
+          )
+          || (
+            resource.data.status in ['ringing', 'active']
+            && request.resource.data.status == 'ended'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAtMs'])
+            && request.resource.data.endedAtMs is int
+          )
+        );
+
+      allow delete: if signedIn() && resource.data.participantUids.hasAny([request.auth.uid]);
+
+      match /callerCandidates/{candidateId} {
+        allow read: if signedIn() && callData(callId).participantUids.hasAny([request.auth.uid]);
+        allow create: if signedIn()
+          && callData(callId).callerUid == request.auth.uid
+          && callData(callId).status in ['ringing', 'active']
+          && validIceCandidate(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /calleeCandidates/{candidateId} {
+        allow read: if signedIn() && callData(callId).participantUids.hasAny([request.auth.uid]);
+        allow create: if signedIn()
+          && callData(callId).calleeUid == request.auth.uid
+          && callData(callId).status in ['ringing', 'active']
+          && validIceCandidate(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /{otherCollection}/{documentId} {
+        allow read, write: if false;
+      }
+    }
+
+
+    // finster.kl social app
+    match /finsterHandles/{handle} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'handle', 'createdAtMs'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.handle == handle
+        && handle.matches('[a-z0-9._-]{3,24}')
+        && handle.size() >= 3
+        && handle.size() <= 24
+        && request.resource.data.createdAtMs is int
+        && finsterUserOwnsHandleAfter(request.auth.uid, handle);
+      // Benutzernamen bleiben nach der Registrierung unveränderlich. So kann
+      // kein zweiter Account einen noch verwendeten Namen übernehmen.
+      allow update, delete: if false;
+    }
+
+    match /finsterUsers/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'handle', 'displayName', 'bio', 'city', 'avatarHue', 'createdAtMs', 'updatedAtMs'])
+        && request.resource.data.handle is string
+        && request.resource.data.handle.size() >= 3
+        && request.resource.data.handle.size() <= 24
+        && request.resource.data.handle.matches('[a-z0-9._-]{3,24}')
+        && finsterHandleOwnedAfter(request.auth.uid, request.resource.data.handle)
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 180
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.handle == resource.data.handle
+        && (
+          !resource.data.keys().hasAny(['createdAtMs'])
+          || request.resource.data.createdAtMs == resource.data.createdAtMs
+        )
+        && request.resource.data.keys().hasOnly(['uid', 'handle', 'displayName', 'bio', 'city', 'avatarHue', 'createdAtMs', 'updatedAtMs'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 180
+        && request.resource.data.updatedAtMs is int;
+      allow delete: if false;
+    }
+
+    match /finsterPosts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'handle', 'displayName', 'caption', 'imageUrl',
+          'storagePath', 'createdAtMs', 'likeCount', 'commentCount',
+          'lastLikeUid', 'lastCommentId'
+        ])
+        && finsterProfileMatches(request.auth.uid, request.resource.data.handle, request.resource.data.displayName)
+        && request.resource.data.caption is string
+        && request.resource.data.caption.size() <= 1000
+        && request.resource.data.imageUrl is string
+        && request.resource.data.imageUrl.size() > 0
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.likeCount == 0
+        && request.resource.data.commentCount == 0
+        && request.resource.data.get('lastLikeUid', '') == ''
+        && request.resource.data.get('lastCommentId', '') == '';
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'likeCount', 'commentCount', 'lastLikeUid', 'lastCommentId'
+        ])
+        && request.resource.data.likeCount is int
+        && request.resource.data.commentCount is int
+        && request.resource.data.likeCount >= 0
+        && request.resource.data.commentCount >= 0
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'likeCount', 'lastLikeUid'
+            ])
+            && request.resource.data.lastLikeUid == request.auth.uid
+            && (
+              (
+                request.resource.data.likeCount == resource.data.likeCount + 1
+                && !exists(finsterLikePath(postId, request.auth.uid))
+                && existsAfter(finsterLikePath(postId, request.auth.uid))
+                && getAfter(finsterLikePath(postId, request.auth.uid)).data.ownerUid == request.auth.uid
+              )
+              || (
+                request.resource.data.likeCount == resource.data.likeCount - 1
+                && exists(finsterLikePath(postId, request.auth.uid))
+                && !existsAfter(finsterLikePath(postId, request.auth.uid))
+              )
+            )
+          )
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'commentCount', 'lastCommentId'
+            ])
+            && request.resource.data.commentCount == resource.data.commentCount + 1
+            && request.resource.data.lastCommentId is string
+            && request.resource.data.lastCommentId.size() > 0
+            && request.resource.data.lastCommentId != resource.data.get('lastCommentId', '')
+            && !exists(finsterCommentPath(postId, request.resource.data.lastCommentId))
+            && existsAfter(finsterCommentPath(postId, request.resource.data.lastCommentId))
+            && getAfter(finsterCommentPath(postId, request.resource.data.lastCommentId)).data.ownerUid == request.auth.uid
+          )
+        );
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      match /likes/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['ownerUid', 'createdAtMs'])
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.createdAtMs is int
+          && exists(finsterPostPath(postId))
+          && existsAfter(finsterPostPath(postId))
+          && getAfter(finsterPostPath(postId)).data.lastLikeUid == request.auth.uid
+          && getAfter(finsterPostPath(postId)).data.likeCount
+            == get(finsterPostPath(postId)).data.likeCount + 1;
+        allow delete: if signedIn()
+          && uid == request.auth.uid
+          && exists(finsterPostPath(postId))
+          && existsAfter(finsterPostPath(postId))
+          && getAfter(finsterPostPath(postId)).data.lastLikeUid == request.auth.uid
+          && getAfter(finsterPostPath(postId)).data.likeCount
+            == get(finsterPostPath(postId)).data.likeCount - 1;
+        allow update: if false;
+      }
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['ownerUid', 'handle', 'displayName', 'text', 'createdAtMs'])
+          && finsterProfileMatches(request.auth.uid, request.resource.data.handle, request.resource.data.displayName)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.createdAtMs is int
+          && exists(finsterPostPath(postId))
+          && existsAfter(finsterPostPath(postId))
+          && getAfter(finsterPostPath(postId)).data.lastCommentId == commentId
+          && getAfter(finsterPostPath(postId)).data.commentCount
+            == get(finsterPostPath(postId)).data.commentCount + 1;
+        allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+        allow update: if false;
+      }
+    }
+
+
+
+    // Gemeinsamer LifeBuilder-Spieler-Shop. Die Spielwährung bleibt im Browser-
+    // Spielstand; Firestore synchronisiert ausschließlich Angebote und Bestellungen.
+    match /playerShopListings/{listingId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'sellerName', 'shopName', 'itemName', 'itemKind',
+          'quantity', 'price', 'illegal', 'icon', 'text', 'effect',
+          'consumableText', 'blackData', 'vehicleMeta', 'propertyData', 'status',
+          'lastOrderId', 'createdAtMs', 'updatedAtMs'
+        ])
+        && request.resource.data.sellerName is string
+        && request.resource.data.sellerName.size() <= 80
+        && request.resource.data.shopName is string
+        && request.resource.data.shopName.size() <= 40
+        && request.resource.data.itemName is string
+        && request.resource.data.itemName.size() > 0
+        && request.resource.data.itemName.size() <= 100
+        && request.resource.data.itemKind is string
+        && request.resource.data.itemKind.size() <= 30
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity > 0
+        && request.resource.data.quantity <= 5000
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && request.resource.data.price <= 999999999
+        && request.resource.data.illegal is bool
+        && request.resource.data.icon is string
+        && request.resource.data.icon.size() <= 8
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 240
+        && request.resource.data.consumableText is string
+        && request.resource.data.consumableText.size() <= 240
+        && request.resource.data.vehicleMeta is map
+        && request.resource.data.propertyData is map
+        && request.resource.data.status == 'active'
+        && request.resource.data.lastOrderId == ''
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+
+      // Der Eigentümer darf sein Angebot verwalten. Käufer dürfen in einer
+      // Transaktion ausschließlich genau ein Stück abziehen und den Status setzen.
+      allow update: if signedIn() && (
+        (
+          resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.createdAtMs == resource.data.createdAtMs
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'sellerName', 'shopName', 'quantity', 'price', 'status', 'updatedAtMs'
+          ])
+          && request.resource.data.quantity is int
+          && request.resource.data.quantity >= 0
+          && request.resource.data.price is int
+          && request.resource.data.price > 0
+          && request.resource.data.status in ['active', 'soldout']
+        )
+        ||
+        (
+          resource.data.ownerUid != request.auth.uid
+          && resource.data.status == 'active'
+          && resource.data.quantity > 0
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'status', 'lastOrderId', 'updatedAtMs'])
+          && request.resource.data.quantity == resource.data.quantity - 1
+          && request.resource.data.lastOrderId is string
+          && request.resource.data.lastOrderId.size() > 0
+          && request.resource.data.lastOrderId != resource.data.get('lastOrderId', '')
+          && !exists(playerShopOrderPath(request.resource.data.lastOrderId))
+          && existsAfter(playerShopOrderPath(request.resource.data.lastOrderId))
+          && getAfter(playerShopOrderPath(request.resource.data.lastOrderId)).data.listingId == listingId
+          && getAfter(playerShopOrderPath(request.resource.data.lastOrderId)).data.buyerUid == request.auth.uid
+          && getAfter(playerShopOrderPath(request.resource.data.lastOrderId)).data.sellerUid == resource.data.ownerUid
+          && getAfter(playerShopOrderPath(request.resource.data.lastOrderId)).data.price == resource.data.price
+          && (
+            (request.resource.data.quantity == 0 && request.resource.data.status == 'soldout')
+            || (request.resource.data.quantity > 0 && request.resource.data.status == 'active')
+          )
+          && request.resource.data.updatedAtMs is int
+        )
+      );
+
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /playerShopOrders/{orderId} {
+      allow get: if signedIn()
+        && (resource.data.buyerUid == request.auth.uid || resource.data.sellerUid == request.auth.uid);
+      allow list: if signedIn()
+        && (resource.data.buyerUid == request.auth.uid || resource.data.sellerUid == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'listingId', 'sellerUid', 'buyerUid', 'itemName', 'itemKind',
+          'quantity', 'price', 'total', 'illegal', 'status', 'createdAtMs'
+        ])
+        && request.resource.data.buyerUid == request.auth.uid
+        && request.resource.data.sellerUid is string
+        && request.resource.data.sellerUid != request.auth.uid
+        && request.resource.data.listingId is string
+        && exists(playerShopListingPath(request.resource.data.listingId))
+        && existsAfter(playerShopListingPath(request.resource.data.listingId))
+        && get(playerShopListingPath(request.resource.data.listingId)).data.status == 'active'
+        && get(playerShopListingPath(request.resource.data.listingId)).data.quantity > 0
+        && getAfter(playerShopListingPath(request.resource.data.listingId)).data.quantity
+          == get(playerShopListingPath(request.resource.data.listingId)).data.quantity - 1
+        && getAfter(playerShopListingPath(request.resource.data.listingId)).data.lastOrderId == orderId
+        && request.resource.data.sellerUid
+          == get(playerShopListingPath(request.resource.data.listingId)).data.ownerUid
+        && request.resource.data.itemName is string
+        && request.resource.data.itemName.size() > 0
+        && request.resource.data.itemName.size() <= 100
+        && request.resource.data.itemName
+          == get(playerShopListingPath(request.resource.data.listingId)).data.itemName
+        && request.resource.data.itemKind is string
+        && request.resource.data.itemKind.size() <= 30
+        && request.resource.data.itemKind
+          == get(playerShopListingPath(request.resource.data.listingId)).data.itemKind
+        && request.resource.data.quantity == 1
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && request.resource.data.price
+          == get(playerShopListingPath(request.resource.data.listingId)).data.price
+        && request.resource.data.total == request.resource.data.price
+        && request.resource.data.illegal is bool
+        && request.resource.data.illegal
+          == get(playerShopListingPath(request.resource.data.listingId)).data.illegal
+        && request.resource.data.status == 'paid'
+        && request.resource.data.createdAtMs is int;
+
+      allow update: if signedIn()
+        && resource.data.sellerUid == request.auth.uid
+        && resource.data.status == 'paid'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'sellerClaimedAtMs'])
+        && request.resource.data.status == 'claimed'
+        && request.resource.data.sellerClaimedAtMs is int;
+
+      allow delete: if false;
+    }
+
+
+    // LifeBuilder Accounts, rollenbasiertes Team, Support und Events.
+    function staffRoleData() {
+      return get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data;
+    }
+
+    function staffRoleRank(role) {
+      return role == 'owner' ? 7
+        : role == 'admin' ? 6
+        : role == 'moderator' ? 5
+        : role == 'test_moderator' ? 4
+        : role == 'supporter' ? 3
+        : role == 'test_supporter' ? 2
+        : role == 'test_member' ? 1
+        : 0;
+    }
+
+    function activeStaffAtLeast(minRank) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+        && staffRoleData().active == true
+        && staffRoleData().activeSessionExpiresAt is timestamp
+        && staffRoleData().activeSessionExpiresAt > request.time
+        && staffRoleRank(staffRoleData().role) >= minRank;
+    }
+
+    // V180: Wirtschaft und Charakterstempel dürfen nur von aktiven Admins/Ownern
+    // verwaltet werden. Moderatoren behalten Spieler-/Moderationsrechte, aber kein Geld.
+    function v180ActiveAdminOrOwner() {
+      return activeStaffAtLeast(6)
+        && staffRoleData().role in ['admin', 'owner'];
+    }
+
+    function v180ActiveOwner() {
+      return activeStaffAtLeast(7)
+        && staffRoleData().role == 'owner';
+    }
+
+    function v180ResetControlPath() {
+      return /databases/$(database)/documents/global/resetControlV180;
+    }
+
+    function v180ResetActive() {
+      return signedIn()
+        && exists(v180ResetControlPath())
+        && get(v180ResetControlPath()).data.active == true
+        && get(v180ResetControlPath()).data.version is int
+        && get(v180ResetControlPath()).data.version >= 180
+        && get(v180ResetControlPath()).data.generation is int
+        && get(v180ResetControlPath()).data.generation >= 1;
+    }
+
+    match /admins/{uid} {
+      // Legacy-Kompatibilität. Neue Rechte liegen in staffRoles.
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /staffRoles/{uid} {
+      // Exakter Abruf ist für die sichtbare Owner-/Team-Kennzeichnung erlaubt.
+      // Für die Mehrheitsfreigabe dürfen nur aktive Admins/Owner die Liste laden.
+      allow get: if signedIn();
+      allow list: if v180ActiveAdminOrOwner();
+      allow create, update, delete: if false;
+    }
+
+    match /staffInviteCodes/{codeHash} {
+      // Codes und Hashes sind ausschließlich für Cloud Functions sichtbar.
+      allow read, write: if false;
+    }
+
+    match /staffAudit/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /usernames/{usernameKey} {
+      // Ein exakter Name darf geprüft werden; das Auflisten aller Namen bleibt gesperrt.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'usernameKey', 'displayName', 'createdAtMs'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.usernameKey == usernameKey
+        && validPlayerName(request.resource.data.displayName, request.resource.data.usernameKey)
+        && usernameMatchesAccountAfter(request.auth.uid, usernameKey)
+        && request.resource.data.createdAtMs is int;
+      // Namen sind dauerhaft an den ersten Account gebunden und können nicht überschrieben werden.
+      allow update, delete: if false;
+    }
+
+    match /accounts/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || activeStaffAtLeast(1));
+
+      // Neue Konten: Pflichtfelder prüfen, ohne spätere/ältere Zusatzfelder
+      // unnötig zu blockieren. So bleiben bestehende LifeBuilder-Konten kompatibel.
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.keys().hasAll(['uid', 'email', 'displayName', 'usernameKey', 'createdAtMs', 'updatedAtMs'])
+        && validPlayerName(request.resource.data.displayName, request.resource.data.usernameKey)
+        && usernameOwnedAfter(uid, request.resource.data.usernameKey)
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+
+      // Kompatibilitäts-Update für ältere Accounts: Vorhandene Zusatzfelder
+      // dürfen bestehen bleiben. Der zweite Zweig markiert nur eine aktivierte
+      // Reset-Generation; Auth, E-Mail und Accountname bleiben unverändert.
+      allow update: if (
+        signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'email', 'displayName', 'usernameKey', 'createdAtMs', 'updatedAtMs'
+        ])
+        && request.resource.data.updatedAtMs is int
+        && (
+          (
+            resource.data.get('createdAtMs', 0) == 0
+            && request.resource.data.createdAtMs is int
+          )
+          || request.resource.data.get('createdAtMs', 0) == resource.data.get('createdAtMs', 0)
+        )
+        && validPlayerName(request.resource.data.displayName, request.resource.data.usernameKey)
+        && usernameOwnedAfter(uid, request.resource.data.usernameKey)
+        && (
+          resource.data.get('usernameKey', '') == ''
+          || request.resource.data.usernameKey == resource.data.usernameKey
+        )
+      ) || (
+        signedIn()
+        && uid == request.auth.uid
+        && v180ResetActive()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'resetGeneration', 'resetAppliedAtMs', 'resetVersion',
+          'resetPreservedAuth', 'updatedAtMs'
+        ])
+        && request.resource.data.resetGeneration == get(v180ResetControlPath()).data.generation
+        && request.resource.data.resetVersion == get(v180ResetControlPath()).data.version
+        && request.resource.data.resetPreservedAuth == true
+        && request.resource.data.resetAppliedAtMs is int
+        && request.resource.data.updatedAtMs is int
+      );
+
+      allow delete: if false;
+    }
+
+    // Persönliche Bank-IBAN: exakte Suche ist erlaubt, vollständiges Auflisten nicht.
+    match /bankIbans/{iban} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'iban', 'ownerUid', 'displayName', 'city', 'slot', 'updatedAtMs'
+        ])
+        && request.resource.data.iban == iban
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.city is string
+        && request.resource.data.city.size() <= 80
+        && request.resource.data.slot is int
+        && request.resource.data.updatedAtMs is int;
+
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.iban == resource.data.iban
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'city', 'slot', 'updatedAtMs'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.city is string
+        && request.resource.data.city.size() <= 80
+        && request.resource.data.slot is int
+        && request.resource.data.updatedAtMs is int;
+
+      allow delete: if false;
+    }
+
+    // V218: JK/Coin-Kontostand-Synchronisierung für die eigene Profilanzeige.
+    function validJkCoinProfileValues(data) {
+      return data.jkCoinBalance is int
+        && data.jkCoinBalance >= 0
+        && data.jkCoinSpent is int
+        && data.jkCoinSpent >= 0
+        && data.jkCoinPurchased is int
+        && data.jkCoinPurchased >= 0
+        && data.jkCoinUpdatedAtMs is int;
+    }
+
+    // V220: öffentliche Money.KL-Toplistenwerte mit der neuen 2/4/6/8/10-Feldprogression.
+    // Der jeweilige Spieler darf nur seinen eigenen Eintrag aktualisieren; lesen dürfen alle angemeldeten Spieler.
+    function validMoneyKlLeaderboardValues(data, uid) {
+      return data is map
+        && data.uid == uid
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && data.displayName.size() <= 80
+        && data.moneyKlNetWorth is number
+        && data.moneyKlNetWorth >= 0
+        && data.moneyKlPerSecond is number
+        && data.moneyKlPerSecond >= 0
+        && data.moneyKlLifetimeEarned is number
+        && data.moneyKlLifetimeEarned >= 0
+        && data.moneyKlBoardSize is int
+        && data.moneyKlBoardSize in [2, 4, 6, 8, 10]
+        && data.moneyKlPlaced is int
+        && data.moneyKlPlaced >= 0
+        && data.moneyKlPlaced <= 100
+        && data.moneyKlUpdatedAtMs is int
+        && data.moneyKlUpdatedAtMs > 0;
+    }
+
+    // Öffentliche Spielerprofile und Live-Status der Cottbus-Zentrale.
+    // Alle angemeldeten Spieler dürfen die öffentlichen Profile lesen.
+    // Schreiben darf ausschließlich der jeweilige Firebase-Account.
+    match /playerProfiles/{uid} {
+      allow read: if signedIn();
+
+      // Vollständiges Profil oder ein erster reiner Cottbus-Presence-Eintrag.
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && (
+          (
+            request.resource.data.keys().hasOnly([
+              'uid', 'displayName', 'displayNameLower', 'level', 'city', 'job',
+              'slot', 'online', 'lastSeenAtMs', 'updatedAtMs', 'version',
+              'suspicious', 'riskScore', 'bankIban', 'bankIbanNormalized',
+              'cottbus3D'
+            ])
+            && validPublicPlayerProfileValues(request.resource.data, uid)
+          )
+          ||
+          (
+            request.resource.data.keys().hasOnly(['cottbus3D'])
+            && validCottbusPresence(request.resource.data.cottbus3D)
+          )
+          ||
+          (
+            request.resource.data.keys().hasOnly([
+              'jkCoinBalance', 'jkCoinSpent', 'jkCoinPurchased', 'jkCoinUpdatedAtMs'
+            ])
+            && validJkCoinProfileValues(request.resource.data)
+          )
+          ||
+          (
+            request.resource.data.keys().hasOnly([
+              'uid', 'displayName', 'moneyKlNetWorth', 'moneyKlPerSecond',
+              'moneyKlLifetimeEarned', 'moneyKlBoardSize', 'moneyKlPlaced',
+              'moneyKlUpdatedAtMs'
+            ])
+            && validMoneyKlLeaderboardValues(request.resource.data, uid)
+          )
+        );
+
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && (
+          // Normale Profilsynchronisierung. Alte, unveränderte Zusatzfelder
+          // dürfen bestehen bleiben, damit ältere Accounts nicht ausgesperrt werden.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'uid', 'displayName', 'displayNameLower', 'level', 'city', 'job',
+              'slot', 'online', 'lastSeenAtMs', 'updatedAtMs', 'version',
+              'suspicious', 'riskScore', 'bankIban', 'bankIbanNormalized',
+              'cottbus3D'
+            ])
+            && validPublicPlayerProfileValues(request.resource.data, uid)
+          )
+          ||
+          // Schnelle Positions-/Anwesenheitsupdates der begehbaren Zentrale.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cottbus3D'])
+            && validCottbusPresence(request.resource.data.cottbus3D)
+          )
+          ||
+          // Beim Abmelden setzt online-events.js nur diese drei Felder.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'online', 'lastSeenAtMs', 'updatedAtMs'
+            ])
+            && request.resource.data.online is bool
+            && request.resource.data.lastSeenAtMs is int
+            && request.resource.data.updatedAtMs is int
+          )
+          ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'jkCoinBalance', 'jkCoinSpent', 'jkCoinPurchased', 'jkCoinUpdatedAtMs'
+            ])
+            && validJkCoinProfileValues(request.resource.data)
+          )
+          ||
+          // Money.KL schreibt nur öffentliche Toplistenwerte in das eigene Profil.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'uid', 'displayName', 'moneyKlNetWorth', 'moneyKlPerSecond',
+              'moneyKlLifetimeEarned', 'moneyKlBoardSize', 'moneyKlPlaced',
+              'moneyKlUpdatedAtMs'
+            ])
+            && validMoneyKlLeaderboardValues(request.resource.data, uid)
+          )
+        );
+
+      allow delete: if signedIn()
+        && uid == request.auth.uid
+        && v180ResetActive();
+    }
+
+    // Private Spielerwerte. Nur Eigentümer und aktive Teammitglieder dürfen lesen;
+    // ausschließlich der Eigentümer darf seine Daten schreiben.
+    match /playerPrivate/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || activeStaffAtLeast(1));
+
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'bank', 'cash', 'debt', 'phoneCredit', 'dirtyMoney',
+          'hunger', 'thirst', 'energy', 'mood', 'health', 'level', 'xp',
+          'itemCounts', 'itemCount', 'properties', 'statistics', 'shop',
+          'audit', 'updatedAtMs', 'version'
+        ])
+        && validPrivatePlayerProfileValues(request.resource.data, uid);
+
+      // Merge-Updates bleiben mit älteren Dokumenten kompatibel. Verändert werden
+      // dürfen trotzdem nur die von JK.Games verwendeten privaten Profilfelder.
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid', 'bank', 'cash', 'debt', 'phoneCredit', 'dirtyMoney',
+          'hunger', 'thirst', 'energy', 'mood', 'health', 'level', 'xp',
+          'itemCounts', 'itemCount', 'properties', 'statistics', 'shop',
+          'audit', 'updatedAtMs', 'version'
+        ])
+        && validPrivatePlayerProfileValues(request.resource.data, uid);
+
+      allow delete: if signedIn()
+        && uid == request.auth.uid
+        && v180ResetActive();
+    }
+
+    match /playerCommands/{uid}/queue/{commandId} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, delete: if false;
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'result', 'appliedAtMs'])
+        && request.resource.data.status in ['done', 'failed']
+        && request.resource.data.appliedAtMs is int;
+    }
+
+    match /moderation/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow get, list: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'ownerName', 'ownerEmail', 'category', 'priority', 'subject',
+          'status', 'assignedToUid', 'assignedToName', 'messages', 'createdAtMs',
+          'updatedAtMs', 'version', 'deleted'
+        ])
+        && request.resource.data.ownerName is string
+        && request.resource.data.ownerName.size() <= 100
+        && request.resource.data.ownerEmail is string
+        && request.resource.data.ownerEmail.size() <= 180
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 60
+        && request.resource.data.priority in ['normal', 'high', 'urgent']
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() > 0
+        && request.resource.data.subject.size() <= 100
+        && request.resource.data.status == 'open'
+        && request.resource.data.assignedToUid == ''
+        && request.resource.data.messages is list
+        && request.resource.data.messages.size() == 1
+        && validSupportPlayerMessage(request.resource.data.messages[0])
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.deleted == false;
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messages', 'status', 'updatedAtMs'])
+        && request.resource.data.messages is list
+        && request.resource.data.messages.size() == resource.data.messages.size() + 1
+        && request.resource.data.messages
+          == resource.data.messages.concat([
+            request.resource.data.messages[resource.data.messages.size()]
+          ])
+        && validSupportPlayerMessage(
+          request.resource.data.messages[resource.data.messages.size()]
+        )
+        && request.resource.data.status in ['open', 'waiting_player']
+        && request.resource.data.updatedAtMs is int;
+      allow delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+
+      match /participants/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status in ['joined', 'submitted'];
+        allow update: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'displayNameLower', 'status', 'statusText',
+            'updatedAtMs', 'submittedAtMs'
+          ])
+          && request.resource.data.status in ['joined', 'submitted'];
+        allow delete: if false;
+      }
+    }
+
+
+
+    // Sichtbarer Verbindungsnachweis: Wird nach erfolgreicher Anmeldung
+    // automatisch erstellt bzw. aktualisiert. Dadurch ist sofort erkennbar,
+    // dass GitHub Pages wirklich mit Firestore und nicht nur lokal verbunden ist.
+    match /connectionChecks/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create, update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'lastConnectedAtMs', 'version'
+        ])
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.lastConnectedAtMs is int
+        && request.resource.data.version is string;
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+
+    // Tägliche Geschenke werden ausschließlich über Cloud Functions mit
+    // Firebase-Serverzeit verwaltet. Das Geräte-Datum hat keinen Einfluss.
+    match /dailyGiftCalendars/{uid}/months/{monthId} {
+      allow read, write: if false;
+    }
+
+    // Serverseitige Charakter-Klassifizierung. Clients dürfen diese Daten weder
+    // lesen noch verändern; das Online-Mod-Menü erhält sie nur über Cloud Functions.
+    match /playerTrust/{uid} {
+      allow read, write: if false;
+      match /events/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Vollständige, private Spielstände pro Firebase-Account und Slot.
+    match /gameSaves/{uid}/slots/{slotId} {
+      // Der Eigentümer liest seinen Spielstand. Eine aktive Team-Sitzung darf ihn
+      // zusätzlich read-only im Mod-Menü laden; Schreiben bleibt ausschließlich
+      // dem jeweiligen Account vorbehalten.
+      allow read: if signedIn() && (uid == request.auth.uid || activeStaffAtLeast(1));
+
+      // Die App erhöht die Revision bereits innerhalb einer Firestore-Transaktion.
+      // Die Regel prüft deshalb Aufbau, Besitzer und Slot, blockiert aber keine
+      // älteren bereits vorhandenen Spielstände wegen einer historischen Revision.
+      allow create, update: if signedIn()
+        && uid == request.auth.uid
+        && validGameSaveDocument(request.resource.data, uid, slotId);
+
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+    function validFinderPet(data) {
+      return !data.keys().hasAny(['pet'])
+        || (
+          data.pet is map
+          && data.pet.keys().hasAll(['id', 'type', 'name', 'icon', 'description'])
+          && data.pet.keys().hasOnly(['id', 'type', 'name', 'icon', 'description'])
+          && data.pet.id is string
+          && data.pet.id.size() > 0
+          && data.pet.id.size() <= 80
+          && data.pet.type is string
+          && data.pet.type.size() > 0
+          && data.pet.type.size() <= 32
+          && data.pet.name is string
+          && data.pet.name.size() > 0
+          && data.pet.name.size() <= 40
+          && data.pet.icon is string
+          && data.pet.icon.size() > 0
+          && data.pet.icon.size() <= 8
+          && data.pet.description is string
+          && data.pet.description.size() <= 160
+        );
+    }
+
+    // Finder.KL: echte Spielerprofile in der benannten Datenbank gamekl.
+    // Nur der jeweilige Account darf sein Profil schreiben. Andere angemeldete
+    // Spieler dürfen ausschließlich Profile lesen, die online gestellt wurden.
+    match /finderProfiles/{uid} {
+      allow get: if signedIn()
+        && (
+          uid == request.auth.uid
+          || resource.data.online == true
+          || exists(/databases/$(database)/documents/finderIncomingLikes/$(request.auth.uid)/senders/$(uid))
+          || exists(/databases/$(database)/documents/finderMatches/$(request.auth.uid)/partners/$(uid))
+        );
+      allow list: if signedIn() && resource.data.online == true;
+
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'gender', 'age', 'city', 'job', 'bio',
+          'interests', 'intention', 'online', 'createdAtMs', 'updatedAtMs',
+          'lastSeenAtMs', 'pet'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.gender in ['male', 'female']
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 99
+        && request.resource.data.city is string
+        && request.resource.data.city.size() <= 50
+        && request.resource.data.job is string
+        && request.resource.data.job.size() <= 60
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 240
+        && request.resource.data.interests is list
+        && request.resource.data.interests.size() <= 5
+        && request.resource.data.intention is string
+        && request.resource.data.intention.size() <= 100
+        && validFinderPet(request.resource.data)
+        && request.resource.data.online is bool
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.lastSeenAtMs is int;
+
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.uid == request.auth.uid
+        && (
+          !resource.data.keys().hasAny(['createdAtMs'])
+          || request.resource.data.createdAtMs == resource.data.createdAtMs
+        )
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'gender', 'age', 'city', 'job', 'bio',
+          'interests', 'intention', 'online', 'createdAtMs', 'updatedAtMs',
+          'lastSeenAtMs', 'pet'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40
+        && request.resource.data.gender in ['male', 'female']
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 99
+        && request.resource.data.city is string
+        && request.resource.data.city.size() <= 50
+        && request.resource.data.job is string
+        && request.resource.data.job.size() <= 60
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 240
+        && request.resource.data.interests is list
+        && request.resource.data.interests.size() <= 5
+        && request.resource.data.intention is string
+        && request.resource.data.intention.size() <= 100
+        && validFinderPet(request.resource.data)
+        && request.resource.data.online is bool
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.lastSeenAtMs is int;
+
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+    // Gegenseitige Likes: Der Absender schreibt nur unter seiner eigenen UID.
+    // Ein einzelner Gegen-Like darf gelesen werden, damit ein Match erkannt wird.
+    match /finderLikes/{uid}/targets/{targetUid} {
+      allow get: if signedIn();
+      allow list: if signedIn() && (uid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create, update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'fromUid', 'toUid', 'createdAtMs'
+        ])
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.fromUid == uid
+        && request.resource.data.toUid == targetUid
+        && request.resource.data.createdAtMs is int;
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+    // Finder.KL V43: direktes Postfach für eingehende Match-Likes.
+    // Dadurch muss der Empfänger keine teure Collection-Group-Abfrage mehr ausführen.
+    match /finderIncomingLikes/{ownerUid}/senders/{senderUid} {
+      allow get, list: if signedIn() && ownerUid == request.auth.uid;
+
+      allow create, update: if signedIn()
+        && senderUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'fromUid', 'toUid', 'createdAtMs', 'updatedAtMs'
+        ])
+        && request.resource.data.fromUid == senderUid
+        && request.resource.data.toUid == ownerUid
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+
+      allow delete: if signedIn() && ownerUid == request.auth.uid;
+    }
+
+    // Finder.KL V43: servergespeicherte Online-Matches pro Account.
+    // Beide Beteiligten dürfen die zwei gespiegelten Match-Dokumente anlegen.
+    match /finderMatches/{ownerUid}/partners/{partnerUid} {
+      function validFinderMatch(data) {
+        return data.keys().hasOnly([
+            'ownerUid', 'partnerUid', 'participantUids', 'createdAtMs', 'updatedAtMs'
+          ])
+          && data.ownerUid == ownerUid
+          && data.partnerUid == partnerUid
+          && ownerUid != partnerUid
+          && data.participantUids is list
+          && data.participantUids.size() == 2
+          && data.participantUids.hasAll([ownerUid, partnerUid])
+          && data.createdAtMs is int
+          && data.updatedAtMs is int;
+      }
+
+      allow get, list: if signedIn() && ownerUid == request.auth.uid;
+
+      allow create: if signedIn()
+        && (request.auth.uid == ownerUid || request.auth.uid == partnerUid)
+        && validFinderMatch(request.resource.data)
+        && exists(/databases/$(database)/documents/finderLikes/$(ownerUid)/targets/$(partnerUid))
+        && exists(/databases/$(database)/documents/finderLikes/$(partnerUid)/targets/$(ownerUid));
+
+      allow update: if signedIn()
+        && (request.auth.uid == ownerUid || request.auth.uid == partnerUid)
+        && validFinderMatch(request.resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.partnerUid == resource.data.partnerUid
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAtMs']);
+
+      allow delete: if signedIn() && ownerUid == request.auth.uid;
+    }
+
+    // Finder.KL: privater Echtspieler-Chat. Eine Unterhaltung kann nur von
+    // zwei Accounts eröffnet und gelesen werden, die sich gegenseitig geliked haben.
+    match /finderConversations/{conversationId} {
+      function isConversationParticipant(data) {
+        return signedIn()
+          && data.participantUids is list
+          && data.participantUids.size() == 2
+          && data.participantUids.hasAny([request.auth.uid])
+          && data.userA is string
+          && data.userB is string
+          && data.userA != data.userB
+          && data.participantUids.hasAll([data.userA, data.userB]);
+      }
+
+      function isMutualFinderMatch(data) {
+        return exists(/databases/$(database)/documents/finderLikes/$(data.userA)/targets/$(data.userB))
+          && exists(/databases/$(database)/documents/finderLikes/$(data.userB)/targets/$(data.userA));
+      }
+
+      allow get, list: if isConversationParticipant(resource.data);
+
+      allow create: if isConversationParticipant(request.resource.data)
+        && isMutualFinderMatch(request.resource.data)
+        && request.resource.data.keys().hasOnly([
+          'participantUids', 'userA', 'userB', 'createdAtMs', 'updatedAtMs',
+          'lastMessage'
+        ])
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 100;
+
+      allow update: if isConversationParticipant(resource.data)
+        && isConversationParticipant(request.resource.data)
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.userA == resource.data.userA
+        && request.resource.data.userB == resource.data.userB
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.keys().hasOnly([
+          'participantUids', 'userA', 'userB', 'createdAtMs', 'updatedAtMs',
+          'lastMessage'
+        ])
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 100;
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function conversation() {
+          return get(/databases/$(database)/documents/finderConversations/$(conversationId)).data;
+        }
+
+        function mayReadConversation() {
+          return signedIn()
+            && conversation().participantUids is list
+            && conversation().participantUids.hasAny([request.auth.uid]);
+        }
+
+        allow get, list: if mayReadConversation();
+        allow create: if mayReadConversation()
+          && request.resource.data.keys().hasOnly([
+            'senderUid', 'recipientUid', 'participantUids', 'text', 'createdAtMs'
+          ])
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.recipientUid is string
+          && request.resource.data.recipientUid != request.auth.uid
+          && request.resource.data.participantUids == conversation().participantUids
+          && request.resource.data.participantUids.hasAll([
+            request.resource.data.senderUid,
+            request.resource.data.recipientUid
+          ])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 360
+          && request.resource.data.createdAtMs is int;
+        allow update, delete: if false;
+      }
+    }
+
+    // ÄrgerMensch.KL – öffentliche/private 2–4-Spieler-Lobbys und Live-Spielstand.
+    // Der Spielstand enthält ausschließlich Minispielwerte. LifeBuilder-Geld und
+    // Inventar werden hier nicht verändert. Teilnehmer aktualisieren ihre Partie
+    // transaktional; neue Spieler dürfen nur einem offenen Warteraum beitreten.
+    match /angerMenschGames/{gameId} {
+      // Direkter Abruf per sechsstelliger Raum-ID ist für den Codebeitritt erlaubt.
+      // Auflisten dürfen Clients ausschließlich öffentliche Räume.
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.visibility == 'public';
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'gameId', 'hostUid', 'hostName', 'visibility', 'maxPlayers',
+          'fillBots', 'status', 'playerUids', 'players', 'gameState',
+          'winnerName', 'createdAtMs', 'updatedAtMs', 'version'
+        ])
+        && request.resource.data.gameId == gameId
+        && request.resource.data.gameId.matches('[A-Z0-9]{6}')
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.hostName is string
+        && request.resource.data.hostName.size() > 0
+        && request.resource.data.hostName.size() <= 40
+        && request.resource.data.visibility in ['public', 'private']
+        && request.resource.data.maxPlayers is int
+        && request.resource.data.maxPlayers >= 2
+        && request.resource.data.maxPlayers <= 4
+        && request.resource.data.fillBots is bool
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() == 1
+        && request.resource.data.playerUids[0] == request.auth.uid
+        && request.resource.data.players is list
+        && request.resource.data.players.size() == 1
+        && request.resource.data.players[0] is map
+        && request.resource.data.players[0].keys().hasOnly(['uid', 'name', 'isBot'])
+        && request.resource.data.players[0].uid == request.auth.uid
+        && request.resource.data.players[0].name is string
+        && request.resource.data.players[0].name.size() > 0
+        && request.resource.data.players[0].name.size() <= 40
+        && request.resource.data.players[0].isBot == false
+        && request.resource.data.gameState == null
+        && request.resource.data.winnerName == ''
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.version is string;
+
+      allow update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'gameId', 'hostUid', 'hostName', 'visibility', 'maxPlayers',
+          'fillBots', 'status', 'playerUids', 'players', 'gameState',
+          'winnerName', 'createdAtMs', 'updatedAtMs', 'version'
+        ])
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.hostName == resource.data.hostName
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.maxPlayers == resource.data.maxPlayers
+        && request.resource.data.visibility == resource.data.visibility
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() <= resource.data.maxPlayers
+        && request.resource.data.players is list
+        && request.resource.data.players.size() <= resource.data.maxPlayers
+        && request.resource.data.status in ['lobby', 'playing', 'finished']
+        && (
+          resource.data.hostUid == request.auth.uid
+          || resource.data.playerUids.hasAny([request.auth.uid])
+          || (
+            resource.data.status == 'lobby'
+            && request.resource.data.status == 'lobby'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerUids', 'players', 'updatedAtMs'])
+            && request.resource.data.playerUids == resource.data.playerUids.concat([request.auth.uid])
+            && request.resource.data.players.size() == resource.data.players.size() + 1
+            && request.resource.data.players[0:resource.data.players.size()] == resource.data.players
+            && request.resource.data.players[resource.data.players.size()] is map
+            && request.resource.data.players[resource.data.players.size()].keys().hasOnly(['uid', 'name', 'isBot'])
+            && request.resource.data.players[resource.data.players.size()].uid == request.auth.uid
+            && request.resource.data.players[resource.data.players.size()].name is string
+            && request.resource.data.players[resource.data.players.size()].name.size() > 0
+            && request.resource.data.players[resource.data.players.size()].name.size() <= 40
+            && request.resource.data.players[resource.data.players.size()].isBot == false
+          )
+        );
+
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+    }
+
+    // LifeBuilder Battle – Grundstück-Kampf, Paket-Chaos und Reaktions-Battle.
+    // Enthält ausschließlich Lobby-, Rundenscore- und Minispielwerte. Teilnehmer
+    // aktualisieren den Live-Zustand transaktional. Private Räume sind nur per
+    // konkretem sechsstelligen Code abrufbar; aufgelistet werden nur öffentliche Räume.
+    match /lifeBuilderBattleGames/{gameId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.visibility == 'public';
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'gameId', 'gameType', 'hostUid', 'hostName', 'visibility',
+          'maxPlayers', 'fillBots', 'status', 'settings', 'playerUids',
+          'players', 'gameState', 'winnerName', 'createdAtMs',
+          'updatedAtMs', 'version'
+        ])
+        && request.resource.data.gameId == gameId
+        && request.resource.data.gameId.matches('[A-Z0-9]{6}')
+        && request.resource.data.gameType in ['territory', 'packages', 'reaction']
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.hostName is string
+        && request.resource.data.hostName.size() > 0
+        && request.resource.data.hostName.size() <= 40
+        && request.resource.data.visibility in ['public', 'private']
+        && request.resource.data.maxPlayers is int
+        && request.resource.data.maxPlayers >= 2
+        && request.resource.data.maxPlayers <= 4
+        && request.resource.data.fillBots is bool
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.settings is map
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() == 1
+        && request.resource.data.playerUids[0] == request.auth.uid
+        && request.resource.data.players is list
+        && request.resource.data.players.size() == 1
+        && request.resource.data.players[0] is map
+        && request.resource.data.players[0].keys().hasOnly(['uid', 'name', 'isBot'])
+        && request.resource.data.players[0].uid == request.auth.uid
+        && request.resource.data.players[0].name is string
+        && request.resource.data.players[0].name.size() > 0
+        && request.resource.data.players[0].name.size() <= 40
+        && request.resource.data.players[0].isBot == false
+        && request.resource.data.gameState == null
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.version is string;
+
+      allow update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'gameId', 'gameType', 'hostUid', 'hostName', 'visibility',
+          'maxPlayers', 'fillBots', 'status', 'settings', 'playerUids',
+          'players', 'gameState', 'winnerName', 'createdAtMs',
+          'updatedAtMs', 'version'
+        ])
+        && request.resource.data.gameId == resource.data.gameId
+        && request.resource.data.gameType == resource.data.gameType
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.hostName == resource.data.hostName
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.maxPlayers == resource.data.maxPlayers
+        && request.resource.data.visibility == resource.data.visibility
+        && request.resource.data.settings == resource.data.settings
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() <= resource.data.maxPlayers
+        && request.resource.data.players is list
+        && request.resource.data.players.size() <= resource.data.maxPlayers
+        && request.resource.data.status in ['lobby', 'playing', 'finished']
+        && (
+          resource.data.hostUid == request.auth.uid
+          || resource.data.playerUids.hasAny([request.auth.uid])
+          || (
+            resource.data.status == 'lobby'
+            && request.resource.data.status == 'lobby'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerUids', 'players', 'updatedAtMs'])
+            && request.resource.data.playerUids == resource.data.playerUids.concat([request.auth.uid])
+            && request.resource.data.players.size() == resource.data.players.size() + 1
+            && request.resource.data.players[0:resource.data.players.size()] == resource.data.players
+            && request.resource.data.players[resource.data.players.size()] is map
+            && request.resource.data.players[resource.data.players.size()].keys().hasOnly(['uid', 'name', 'isBot'])
+            && request.resource.data.players[resource.data.players.size()].uid == request.auth.uid
+            && request.resource.data.players[resource.data.players.size()].name is string
+            && request.resource.data.players[resource.data.players.size()].name.size() > 0
+            && request.resource.data.players[resource.data.players.size()].name.size() <= 40
+            && request.resource.data.players[resource.data.players.size()].isBot == false
+          )
+        );
+
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+    }
+
+
+    // Arena.KL – Bot- und Online-Lobbys für 2 bis 4 angemeldete Spieler.
+    // Öffentliche Räume sind suchbar; private Räume nur über ihren sechsstelligen Code.
+    // Der Host veröffentlicht den autoritativen Live-Zustand. Teilnehmer dürfen
+    // ausschließlich das eigene Eingabe-, Loadout- und Anwesenheitsdokument ändern.
+    match /arenaKlRooms/{roomId} {
+      allow get: if signedIn();
+      allow list: if signedIn()
+        && resource.data.status == 'waiting'
+        && resource.data.visibility == 'public';
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'hostUid', 'status', 'visibility', 'maxPlayers', 'currentPlayers',
+          'playerUids', 'slots', 'playerNames', 'mapId', 'botDifficulty', 'createdAtMs',
+          'updatedAtMs', 'version'
+        ])
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.visibility in ['public', 'private']
+        && (
+          request.resource.data.visibility == 'public'
+          || roomId.matches('[A-Z0-9]{6}')
+        )
+        && request.resource.data.maxPlayers is int
+        && request.resource.data.maxPlayers >= 2
+        && request.resource.data.maxPlayers <= 4
+        && request.resource.data.currentPlayers == 1
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() == 1
+        && request.resource.data.playerUids[0] == request.auth.uid
+        && request.resource.data.slots is map
+        && request.resource.data.slots[request.auth.uid] == 0
+        && request.resource.data.playerNames is map
+        && request.resource.data.playerNames[request.auth.uid] is string
+        && request.resource.data.playerNames[request.auth.uid].size() > 0
+        && request.resource.data.playerNames[request.auth.uid].size() <= 40
+        && request.resource.data.mapId in ['warehouse', 'subway', 'harbor', 'clinic', 'bunker']
+        && request.resource.data.botDifficulty in ['easy', 'medium', 'hard']
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.version is string
+        && request.resource.data.version.size() <= 80;
+
+      allow update: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'hostUid', 'status', 'visibility', 'maxPlayers', 'currentPlayers',
+          'playerUids', 'slots', 'playerNames', 'mapId', 'botDifficulty', 'createdAtMs',
+          'updatedAtMs', 'version', 'botCount', 'startedAtMs', 'seed',
+          'winnerId', 'winnerUid', 'winnerName', 'finishedAtMs'
+        ])
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.visibility == resource.data.visibility
+        && request.resource.data.maxPlayers == resource.data.maxPlayers
+        && request.resource.data.mapId == resource.data.mapId
+        && request.resource.data.botDifficulty == resource.data.botDifficulty
+        && request.resource.data.botDifficulty in ['easy', 'medium', 'hard']
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.status in ['waiting', 'running', 'finished', 'cancelled']
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() <= resource.data.maxPlayers
+        && request.resource.data.currentPlayers == request.resource.data.playerUids.size()
+        && request.resource.data.slots is map
+        && request.resource.data.playerNames is map
+        && (
+          // Host startet, beendet oder schließt die Lobby.
+          resource.data.hostUid == request.auth.uid
+          ||
+          // Ein neuer Spieler hängt ausschließlich die eigene UID an.
+          (
+            resource.data.status == 'waiting'
+            && request.resource.data.status == 'waiting'
+            && !resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.playerUids.size() == resource.data.playerUids.size() + 1
+            && request.resource.data.playerUids.hasAll(resource.data.playerUids)
+            && request.resource.data.slots.diff(resource.data.slots).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.playerNames.diff(resource.data.playerNames).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.slots[request.auth.uid] is int
+            && request.resource.data.slots[request.auth.uid] >= 0
+            && request.resource.data.slots[request.auth.uid] < resource.data.maxPlayers
+            && request.resource.data.playerNames[request.auth.uid] is string
+            && request.resource.data.playerNames[request.auth.uid].size() > 0
+            && request.resource.data.playerNames[request.auth.uid].size() <= 40
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'playerUids', 'slots', 'playerNames', 'currentPlayers', 'updatedAtMs'
+            ])
+          )
+          ||
+          // Ein Nicht-Host entfernt beim Verlassen ausschließlich sich selbst.
+          (
+            resource.data.status == 'waiting'
+            && request.resource.data.status == 'waiting'
+            && resource.data.playerUids.hasAny([request.auth.uid])
+            && request.auth.uid != resource.data.hostUid
+            && !request.resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.playerUids.size() == resource.data.playerUids.size() - 1
+            && resource.data.playerUids.hasAll(request.resource.data.playerUids)
+            && request.resource.data.slots.diff(resource.data.slots).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.playerNames.diff(resource.data.playerNames).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'playerUids', 'slots', 'playerNames', 'currentPlayers', 'updatedAtMs'
+            ])
+          )
+        );
+
+      allow delete: if false;
+
+      match /participants/{uid} {
+        allow read: if signedIn()
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.playerUids.hasAny([request.auth.uid]);
+
+        allow create, update: if signedIn()
+          && uid == request.auth.uid
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.playerUids.hasAny([request.auth.uid])
+          && request.resource.data.keys().hasOnly([
+            'uid', 'name', 'slot', 'joinedAtMs', 'lastSeenMs',
+            'loadout', 'input', 'leftAtMs'
+          ])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 40
+          && request.resource.data.slot is int
+          && request.resource.data.slot >= 0
+          && request.resource.data.slot <= 3
+          && request.resource.data.joinedAtMs is int
+          && request.resource.data.lastSeenMs is int
+          && request.resource.data.loadout is map
+          && request.resource.data.loadout.keys().hasOnly(['laserColor', 'bandages', 'medipacks'])
+          && request.resource.data.loadout.laserColor is string
+          && request.resource.data.loadout.laserColor.size() <= 16
+          && request.resource.data.loadout.bandages is int
+          && request.resource.data.loadout.bandages >= 0
+          && request.resource.data.loadout.bandages <= 8
+          && request.resource.data.loadout.medipacks is int
+          && request.resource.data.loadout.medipacks >= 0
+          && request.resource.data.loadout.medipacks <= 5
+          && request.resource.data.input is map
+          && request.resource.data.input.keys().hasOnly([
+            'moveX', 'moveY', 'angle', 'firing', 'bandageSeq', 'medipackSeq', 'at'
+          ])
+          && (request.resource.data.input.moveX is int || request.resource.data.input.moveX is float)
+          && request.resource.data.input.moveX >= -1
+          && request.resource.data.input.moveX <= 1
+          && (request.resource.data.input.moveY is int || request.resource.data.input.moveY is float)
+          && request.resource.data.input.moveY >= -1
+          && request.resource.data.input.moveY <= 1
+          && (request.resource.data.input.angle is int || request.resource.data.input.angle is float)
+          && request.resource.data.input.firing is bool
+          && request.resource.data.input.bandageSeq is int
+          && request.resource.data.input.bandageSeq >= 0
+          && request.resource.data.input.medipackSeq is int
+          && request.resource.data.input.medipackSeq >= 0
+          && request.resource.data.input.at is int
+          && (!request.resource.data.keys().hasAny(['leftAtMs']) || request.resource.data.leftAtMs is int);
+
+        allow delete: if signedIn() && uid == request.auth.uid;
+      }
+
+      match /state/{stateId} {
+        allow read: if signedIn()
+          && stateId == 'live'
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.playerUids.hasAny([request.auth.uid]);
+
+        allow create, update: if signedIn()
+          && stateId == 'live'
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.hostUid == request.auth.uid
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.status in ['running', 'finished']
+          && request.resource.data.keys().hasOnly([
+            'version', 'mapId', 'updatedAtMs', 'players', 'bullets',
+            'finished', 'winnerId', 'winnerUid'
+          ])
+          && request.resource.data.version is string
+          && request.resource.data.version.size() <= 80
+          && request.resource.data.mapId == get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.mapId
+          && request.resource.data.updatedAtMs is int
+          && request.resource.data.players is list
+          && request.resource.data.players.size() >= 2
+          && request.resource.data.players.size() <= 4
+          && request.resource.data.bullets is list
+          && request.resource.data.bullets.size() <= 120
+          && request.resource.data.finished is bool
+          && (request.resource.data.winnerId == null || request.resource.data.winnerId is int)
+          && request.resource.data.winnerUid is string
+          && request.resource.data.winnerUid.size() <= 160;
+
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/arenaKlRooms/$(roomId)).data.hostUid == request.auth.uid;
+      }
+    }
+
+    // JK.Games V180: Mehrheitsfreigaben für Admin-Eigengutschriften.
+    match /moneyApprovalRequests/{requestId} {
+      allow read: if v180ActiveAdminOrOwner();
+
+      allow create: if v180ActiveAdminOrOwner()
+        && staffRoleData().role == 'admin'
+        && request.resource.data.keys().hasOnly([
+          'requestId', 'status', 'requesterUid', 'requesterName', 'requesterRole',
+          'targetUid', 'targetName', 'slot', 'command', 'reason',
+          'eligibleApproverUids', 'eligibleCount', 'threshold',
+          'approvals', 'rejections', 'createdAtMs', 'updatedAtMs', 'expiresAtMs'
+        ])
+        && request.resource.data.requestId == requestId
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterRole == 'admin'
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid.size() > 0
+        && request.resource.data.requesterName is string
+        && request.resource.data.requesterName.size() <= 100
+        && request.resource.data.targetName is string
+        && request.resource.data.targetName.size() <= 100
+        && request.resource.data.slot is int
+        && request.resource.data.slot >= 0
+        && request.resource.data.slot <= 3
+        && request.resource.data.command is map
+        && request.resource.data.command.keys().hasOnly(['kind', 'target', 'value'])
+        && request.resource.data.command.kind in ['addMoney', 'removeMoney', 'setMoney']
+        && request.resource.data.command.target in ['bank', 'cash', 'phoneCredit', 'dirtyMoney']
+        && request.resource.data.command.value is int
+        && request.resource.data.command.value >= 0
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 4
+        && request.resource.data.reason.size() <= 240
+        && request.resource.data.eligibleApproverUids is list
+        && request.resource.data.eligibleApproverUids.size() >= 1
+        && request.resource.data.eligibleApproverUids.size() <= 100
+        && !request.resource.data.eligibleApproverUids.hasAny([request.auth.uid])
+        && request.resource.data.eligibleCount == request.resource.data.eligibleApproverUids.size()
+        && request.resource.data.threshold is int
+        && request.resource.data.threshold == 1
+        && request.resource.data.eligibleCount >= 1
+        && request.resource.data.approvals is map
+        && request.resource.data.approvals.size() == 0
+        && request.resource.data.rejections is map
+        && request.resource.data.rejections.size() == 0
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs == request.resource.data.createdAtMs
+        && request.resource.data.expiresAtMs is int
+        && request.resource.data.expiresAtMs > request.resource.data.createdAtMs;
+
+      allow update: if v180ActiveOwner()
+        && request.resource.data.requestId == resource.data.requestId
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.requesterRole == resource.data.requesterRole
+        && request.resource.data.targetUid == resource.data.targetUid
+        && request.resource.data.slot == resource.data.slot
+        && request.resource.data.command == resource.data.command
+        && request.resource.data.eligibleApproverUids == resource.data.eligibleApproverUids
+        && request.resource.data.eligibleCount == resource.data.eligibleCount
+        && request.resource.data.threshold == resource.data.threshold
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.expiresAtMs == resource.data.expiresAtMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'approvals', 'rejections', 'approvalCount', 'rejectionCount',
+          'updatedAtMs', 'executingByUid', 'executedAtMs', 'executedByUid',
+          'executionError'
+        ])
+        && request.resource.data.status in ['pending', 'executing', 'approved', 'rejected']
+        && request.resource.data.updatedAtMs is int
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.resource.data.status in ['pending', 'rejected']
+            && resource.data.eligibleApproverUids.hasAny([request.auth.uid])
+            && request.resource.data.approvals is map
+            && request.resource.data.rejections is map
+            && request.resource.data.approvals.diff(resource.data.approvals).affectedKeys().hasOnly([request.auth.uid])
+            && request.resource.data.rejections.diff(resource.data.rejections).affectedKeys().hasOnly([request.auth.uid])
+          )
+          || (
+            resource.data.status in ['pending', 'executing']
+            && request.resource.data.status in ['pending', 'executing', 'approved']
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /staffNotifications/{uid}/items/{notificationId} {
+      allow read: if signedIn() && uid == request.auth.uid;
+      allow create: if v180ActiveAdminOrOwner()
+        && staffRoleData().role == 'admin'
+        && uid != request.auth.uid
+        && exists(/databases/$(database)/documents/staffRoles/$(uid))
+        && get(/databases/$(database)/documents/staffRoles/$(uid)).data.active == true
+        && get(/databases/$(database)/documents/staffRoles/$(uid)).data.role == 'owner'
+        && request.resource.data.keys().hasOnly([
+          'type', 'requestId', 'title', 'text', 'createdAtMs', 'read'
+        ])
+        && request.resource.data.type == 'money-approval'
+        && request.resource.data.requestId == notificationId
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 300
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.read == false;
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read is bool;
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+
+    // Auffällige Gegenüberweisungen werden nur zur manuellen Prüfung vorgemerkt.
+    match /moneyFraudAlerts/{alertId} {
+      allow read: if v180ActiveAdminOrOwner();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'alertId', 'status', 'senderUid', 'recipientUid',
+          'senderAccountUid', 'recipientAccountUid', 'senderName',
+          'recipientName', 'senderSlot', 'recipientSlot', 'amountCents',
+          'reverseTransferId', 'reverseAmountCents', 'deviceSessionId',
+          'previousDeviceUid', 'deviceSwitchDetected', 'reason', 'createdAtMs',
+          'updatedAtMs', 'evidenceTransferIds'
+        ])
+        && request.resource.data.alertId == alertId
+        && request.resource.data.status == 'open'
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.recipientUid != request.auth.uid
+        && request.resource.data.senderAccountUid == request.auth.uid
+        && request.resource.data.recipientAccountUid is string
+        && request.resource.data.recipientAccountUid != request.auth.uid
+        && request.resource.data.senderSlot is int
+        && request.resource.data.senderSlot >= 0
+        && request.resource.data.senderSlot <= 3
+        && request.resource.data.recipientSlot is int
+        && request.resource.data.recipientSlot >= 0
+        && request.resource.data.recipientSlot <= 3
+        && request.resource.data.senderName is string
+        && request.resource.data.senderName.size() <= 80
+        && request.resource.data.recipientName is string
+        && request.resource.data.recipientName.size() <= 80
+        && request.resource.data.senderSlot is int
+        && request.resource.data.senderSlot >= 0
+        && request.resource.data.senderSlot <= 3
+        && request.resource.data.recipientSlot is int
+        && request.resource.data.recipientSlot >= 0
+        && request.resource.data.recipientSlot <= 3
+        && request.resource.data.amountCents is int
+        && request.resource.data.amountCents > 0
+        && request.resource.data.reverseAmountCents is int
+        && request.resource.data.reverseAmountCents >= 0
+        && request.resource.data.deviceSessionId is string
+        && request.resource.data.deviceSessionId.size() <= 120
+        && request.resource.data.previousDeviceUid is string
+        && request.resource.data.previousDeviceUid.size() <= 128
+        && request.resource.data.deviceSwitchDetected is bool
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 240
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.evidenceTransferIds is list
+        && request.resource.data.evidenceTransferIds.size() >= 1
+        && request.resource.data.evidenceTransferIds.size() <= 4;
+
+      allow update: if (
+        signedIn()
+        && resource.data.senderUid == request.auth.uid
+        && resource.data.status == 'open'
+        && request.resource.data.status == 'open'
+        && request.resource.data.senderUid == resource.data.senderUid
+        && request.resource.data.recipientUid == resource.data.recipientUid
+        && request.resource.data.senderAccountUid == resource.data.senderAccountUid
+        && request.resource.data.recipientAccountUid == resource.data.recipientAccountUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'amountCents', 'reverseTransferId', 'reverseAmountCents',
+          'deviceSessionId', 'previousDeviceUid', 'deviceSwitchDetected',
+          'reason', 'updatedAtMs', 'evidenceTransferIds'
+        ])
+      ) || (
+        v180ActiveAdminOrOwner()
+        && request.resource.data.senderUid == resource.data.senderUid
+        && request.resource.data.recipientUid == resource.data.recipientUid
+        && request.resource.data.senderAccountUid == resource.data.senderAccountUid
+        && request.resource.data.recipientAccountUid == resource.data.recipientAccountUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolvedAtMs', 'resolvedByUid', 'resolvedByRole', 'updatedAtMs'
+        ])
+        && request.resource.data.status in ['confirmed', 'cleared']
+        && request.resource.data.resolvedByUid == request.auth.uid
+        && request.resource.data.resolvedByRole == staffRoleData().role
+        && request.resource.data.resolvedAtMs is int
+        && request.resource.data.updatedAtMs is int
+      );
+      allow delete: if false;
+    }
+
+    // JK.Games V180: revisionssichere Owner-Geldaktionen. Kein Client darf
+    // Einträge löschen oder nachträglich verändern. Direkte Writes sollten nur
+    // aus der serverseitigen staffAction-Function erfolgen.
+    match /ownerMoneyAudit/{auditId} {
+      allow read: if v180ActiveAdminOrOwner();
+      allow create: if v180ActiveOwner()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'ownerName', 'targetUid', 'targetName', 'slot',
+          'command', 'reason', 'appliedToCloud', 'createdAtMs'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerName is string
+        && request.resource.data.ownerName.size() <= 120
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid.size() > 0
+        && request.resource.data.targetName is string
+        && request.resource.data.targetName.size() <= 120
+        && request.resource.data.slot is int
+        && request.resource.data.slot >= 0
+        && request.resource.data.slot <= 3
+        && request.resource.data.command is map
+        && request.resource.data.command.keys().hasOnly(['kind', 'target', 'value'])
+        && request.resource.data.command.kind in ['addMoney', 'removeMoney', 'setMoney']
+        && request.resource.data.command.target in ['bank', 'cash', 'phoneCredit', 'dirtyMoney']
+        && request.resource.data.command.value is int
+        && request.resource.data.command.value >= 0
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 4
+        && request.resource.data.reason.size() <= 240
+        && request.resource.data.appliedToCloud is bool
+        && request.resource.data.createdAtMs is int;
+      allow update, delete: if false;
+    }
+
+    // JK.Games V58: sichere Spieler-zu-Spieler-Banküberweisungen.
+    // Normale Überweisungen werden als kleiner Firestore-Datensatz vorgemerkt
+    // und nach einer Stunde vom Empfänger gebucht. Blitzüberweisungen sind sofort fällig.
+    match /bankTransfers/{transferId} {
+      allow get, list: if signedIn()
+        && (
+          resource.data.senderUid == request.auth.uid
+          || resource.data.recipientUid == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'transferId', 'participantUids', 'senderUid', 'recipientUid',
+          'senderAccountUid', 'recipientAccountUid', 'senderSlot', 'recipientSlot',
+          'senderName', 'recipientName', 'senderIban', 'recipientIban',
+          'deviceSessionId', 'previousDeviceUid', 'deviceSwitchDetected',
+          'governanceVersion', 'amountCents', 'purpose', 'transferType', 'status',
+          'createdAt', 'createdAtMs', 'availableAt', 'availableAtMs', 'updatedAtMs'
+        ])
+        && request.resource.data.transferId == transferId
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.recipientUid != request.auth.uid
+        && request.resource.data.participantUids is list
+        && request.resource.data.participantUids.size() == 2
+        && request.resource.data.participantUids.hasAll([
+          request.resource.data.senderUid,
+          request.resource.data.recipientUid
+        ])
+        && request.resource.data.senderName is string
+        && request.resource.data.senderName.size() > 0
+        && request.resource.data.senderName.size() <= 80
+        && request.resource.data.recipientName is string
+        && request.resource.data.recipientName.size() > 0
+        && request.resource.data.recipientName.size() <= 80
+        && request.resource.data.senderIban is string
+        && request.resource.data.senderIban.size() <= 40
+        && request.resource.data.recipientIban is string
+        && request.resource.data.recipientIban.size() <= 40
+        && request.resource.data.deviceSessionId is string
+        && request.resource.data.deviceSessionId.size() > 0
+        && request.resource.data.deviceSessionId.size() <= 120
+        && request.resource.data.previousDeviceUid is string
+        && request.resource.data.previousDeviceUid.size() <= 128
+        && request.resource.data.deviceSwitchDetected is bool
+        && request.resource.data.governanceVersion is int
+        && request.resource.data.governanceVersion >= 179
+        && request.resource.data.amountCents is int
+        && request.resource.data.amountCents > 0
+        && request.resource.data.amountCents <= 100000000000
+        && request.resource.data.purpose is string
+        && request.resource.data.purpose.size() > 0
+        && request.resource.data.purpose.size() <= 100
+        && request.resource.data.transferType in ['normal', 'instant']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.availableAt is timestamp
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.availableAtMs is int
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.availableAtMs >= request.resource.data.createdAtMs
+        && (
+          (
+            request.resource.data.transferType == 'instant'
+            && request.resource.data.availableAtMs - request.resource.data.createdAtMs <= 5000
+            && request.resource.data.availableAt <= request.time + duration.value(2, 'm')
+          )
+          ||
+          (
+            request.resource.data.transferType == 'normal'
+            && request.resource.data.availableAtMs - request.resource.data.createdAtMs == 3600000
+            && request.resource.data.availableAt >= request.time + duration.value(58, 'm')
+            && request.resource.data.availableAt <= request.time + duration.value(62, 'm')
+          )
+        );
+
+      allow update: if signedIn()
+        && resource.data.recipientUid == request.auth.uid
+        && request.resource.data.transferId == resource.data.transferId
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.senderUid == resource.data.senderUid
+        && request.resource.data.recipientUid == resource.data.recipientUid
+        && request.resource.data.senderAccountUid == resource.data.senderAccountUid
+        && request.resource.data.recipientAccountUid == resource.data.recipientAccountUid
+        && request.resource.data.senderSlot == resource.data.senderSlot
+        && request.resource.data.recipientSlot == resource.data.recipientSlot
+        && request.resource.data.senderName == resource.data.senderName
+        && request.resource.data.recipientName == resource.data.recipientName
+        && request.resource.data.senderIban == resource.data.senderIban
+        && request.resource.data.recipientIban == resource.data.recipientIban
+        && request.resource.data.deviceSessionId == resource.data.deviceSessionId
+        && request.resource.data.previousDeviceUid == resource.data.previousDeviceUid
+        && request.resource.data.deviceSwitchDetected == resource.data.deviceSwitchDetected
+        && request.resource.data.governanceVersion == resource.data.governanceVersion
+        && request.resource.data.amountCents == resource.data.amountCents
+        && request.resource.data.purpose == resource.data.purpose
+        && request.resource.data.transferType == resource.data.transferType
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.availableAt == resource.data.availableAt
+        && request.resource.data.availableAtMs == resource.data.availableAtMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'processingAt', 'deliveredAt', 'updatedAtMs'
+        ])
+        && request.resource.data.updatedAtMs is int
+        && (
+          (
+            resource.data.status == 'pending'
+            && request.resource.data.status == 'processing'
+            && request.time >= resource.data.availableAt
+            && request.resource.data.processingAt is timestamp
+          )
+          ||
+          (
+            resource.data.status == 'processing'
+            && request.resource.data.status == 'processing'
+            && request.resource.data.processingAt is timestamp
+            && resource.data.processingAt is timestamp
+            && request.time >= resource.data.processingAt + duration.value(2, 'm')
+          )
+          ||
+          (
+            resource.data.status == 'processing'
+            && request.resource.data.status == 'delivered'
+            && request.resource.data.deliveredAt is timestamp
+          )
+        );
+
+      allow delete: if false;
+    }
+
+
+    // JK.Games V82 - Firebase-Online-Poker
+    match /casinoPokerRoomsV82/{roomId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.visibility == 'public';
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'roomId', 'version', 'visibility', 'hostUid', 'hostName',
+          'status', 'requiredVip', 'stakeCents', 'maxPlayers',
+          'playerUids', 'players', 'order', 'game', 'claims',
+          'createdAtMs', 'updatedAtMs'
+        ])
+        && request.resource.data.roomId == roomId
+        && roomId.matches('[A-Z0-9]{6}')
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.visibility in ['public', 'private']
+        && request.resource.data.requiredVip is int
+        && request.resource.data.requiredVip >= 0
+        && request.resource.data.requiredVip <= 3
+        && request.resource.data.stakeCents is int
+        && request.resource.data.stakeCents > 0
+        && request.resource.data.maxPlayers == 6
+        && request.resource.data.playerUids == [request.auth.uid]
+        && request.resource.data.order == [request.auth.uid]
+        && request.resource.data.players is map
+        && request.resource.data.players[request.auth.uid].uid == request.auth.uid
+        && request.resource.data.game == null
+        && request.resource.data.claims is map
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.updatedAtMs is int;
+
+      allow update: if signedIn()
+        && request.resource.data.roomId == resource.data.roomId
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.maxPlayers == resource.data.maxPlayers
+        && request.resource.data.requiredVip == resource.data.requiredVip
+        && request.resource.data.stakeCents == resource.data.stakeCents
+        && request.resource.data.status in ['lobby', 'playing', 'finished']
+        && request.resource.data.playerUids is list
+        && request.resource.data.playerUids.size() <= 6
+        && request.resource.data.order is list
+        && request.resource.data.order.size() <= 6
+        && request.resource.data.players is map
+        && request.resource.data.claims is map
+        && request.resource.data.updatedAtMs is int
+        && (
+          resource.data.playerUids.hasAny([request.auth.uid])
+          || (
+            resource.data.status == 'lobby'
+            && request.resource.data.status == 'lobby'
+            && !resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.playerUids.size() == resource.data.playerUids.size() + 1
+            && request.resource.data.playerUids.hasAll(resource.data.playerUids)
+            && request.resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.order.size() == resource.data.order.size() + 1
+            && request.resource.data.order.hasAll(resource.data.order)
+            && request.resource.data.order.hasAny([request.auth.uid])
+            && request.resource.data.players[request.auth.uid].uid == request.auth.uid
+          )
+        );
+
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+
+    // V86 MERGE-PATCH – NICHT ALS ALLEINIGE REGELDATEI VERÖFFENTLICHEN.
+    // Diesen Inhalt innerhalb des vorhandenen Blocks
+    // match /databases/{database}/documents { ... }
+    // der produktiven Firestore-Regeln für die Datenbank "gamekl" einfügen.
+
+    // JK_GAMES_V86_FIREBASE_PATCH_BEGIN
+    function v86SignedIn() {
+      return request.auth != null;
+    }
+
+    function v86StaffRoleDocument() {
+      return get(/databases/$(database)/documents/staffRoles/$(request.auth.uid));
+    }
+
+    function v86CanManageCharacterFiles() {
+      return v86SignedIn()
+        && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+        && v86StaffRoleDocument().data.active == true
+        && v86StaffRoleDocument().data.role in ["moderator", "admin", "owner"];
+    }
+
+    function v180CanWriteCharacterStatus() {
+      return v86SignedIn()
+        && exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+        && v86StaffRoleDocument().data.active == true
+        && v86StaffRoleDocument().data.role in ["admin", "owner"];
+    }
+
+    match /finsterMessages/{messageId} {
+      allow read: if v86SignedIn()
+        && resource.data.participantUids is list
+        && request.auth.uid in resource.data.participantUids;
+
+      allow create: if v86SignedIn()
+        && request.resource.data.keys().hasOnly([
+          "senderUid",
+          "recipientUid",
+          "participantUids",
+          "conversationId",
+          "text",
+          "createdAtMs"
+        ])
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.recipientUid != request.auth.uid
+        && request.resource.data.participantUids is list
+        && request.resource.data.participantUids.size() == 2
+        && request.resource.data.participantUids.hasAll([
+          request.auth.uid,
+          request.resource.data.recipientUid
+        ])
+        && request.resource.data.participantUids.hasOnly([
+          request.auth.uid,
+          request.resource.data.recipientUid
+        ])
+        && request.resource.data.conversationId is string
+        && request.resource.data.conversationId.size() >= 3
+        && request.resource.data.conversationId.size() <= 260
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 800
+        && request.resource.data.createdAtMs is int;
+
+      allow update, delete: if false;
+    }
+
+    match /characterStatusRecords/{recordId} {
+      allow read: if v86CanManageCharacterFiles();
+
+      allow create, update: if v180CanWriteCharacterStatus()
+        && request.resource.data.keys().hasOnly([
+          "targetUid",
+          "slot",
+          "status",
+          "lastReason",
+          "updatedAtMs",
+          "updatedByUid",
+          "updatedByRole",
+          "updatedByLabel"
+        ])
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid.size() >= 1
+        && request.resource.data.targetUid.size() <= 128
+        && request.resource.data.slot is int
+        && request.resource.data.slot >= 0
+        && request.resource.data.slot <= 3
+        && request.resource.data.status in ["clean", "hack", "mod"]
+        && request.resource.data.lastReason is string
+        && request.resource.data.lastReason.size() >= 4
+        && request.resource.data.lastReason.size() <= 240
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedByRole == v86StaffRoleDocument().data.role
+        && request.resource.data.updatedByLabel is string;
+
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow read: if v86CanManageCharacterFiles();
+
+        allow create: if v180CanWriteCharacterStatus()
+          && request.resource.data.keys().hasOnly([
+            "targetUid",
+            "slot",
+            "fromStatus",
+            "toStatus",
+            "status",
+            "reason",
+            "createdAtMs",
+            "actorUid",
+            "actorRole",
+            "actorLabel"
+          ])
+          && request.resource.data.targetUid is string
+          && request.resource.data.targetUid.size() >= 1
+          && request.resource.data.targetUid.size() <= 128
+          && request.resource.data.slot is int
+          && request.resource.data.slot >= 0
+          && request.resource.data.slot <= 3
+          && request.resource.data.fromStatus in ["clean", "hack", "mod"]
+          && request.resource.data.toStatus in ["clean", "hack", "mod"]
+          && request.resource.data.status == request.resource.data.toStatus
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() >= 4
+          && request.resource.data.reason.size() <= 240
+          && request.resource.data.createdAtMs is int
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorRole == v86StaffRoleDocument().data.role
+          && request.resource.data.actorLabel is string;
+
+        allow update, delete: if false;
+      }
+    }
+    // JK_GAMES_V86_FIREBASE_PATCH_END
+
+    // ===== JK.GAMES FIGHT.KL 1-4 PLAYER KOOP BEGIN =====
+    // V145: Wartelobbys und laufende Partien mit zwei bis vier Spielern.
+    function fightKlCoopMatchPath(matchId) {
+      return /databases/$(database)/documents/fightKlCoopMatches/$(matchId);
+    }
+
+    function fightKlCoopParticipant(matchId) {
+      return signedIn()
+        && exists(fightKlCoopMatchPath(matchId))
+        && get(fightKlCoopMatchPath(matchId)).data.participantUids is list
+        && get(fightKlCoopMatchPath(matchId)).data.participantUids.hasAny([request.auth.uid]);
+    }
+
+    function fightKlCoopHost(matchId) {
+      return fightKlCoopParticipant(matchId)
+        && get(fightKlCoopMatchPath(matchId)).data.hostUid == request.auth.uid;
+    }
+
+    function fightKlValidTeamSize(data) {
+      return data.teamSize is int
+        && data.teamSize >= 2
+        && data.teamSize <= 4;
+    }
+
+    function fightKlValidParticipants(data) {
+      return data.participantUids is list
+        && data.participantUids.size() >= 1
+        && data.participantUids.size() <= data.teamSize
+        && data.participantUids.hasAny([data.hostUid]);
+    }
+
+    // Öffentliche Warteschlangen je Teamgröße. Es werden keine Dokumente gelistet.
+    match /fightKlCoopSystem/{documentId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update, delete: if signedIn();
+    }
+
+    // Bleibt für ältere Fight.KL-Versionen kompatibel.
+    match /fightKlCoopInvites/{userId} {
+      allow get, delete: if signedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.matchId is string
+        && request.resource.data.matchId.size() > 0
+        && request.resource.data.matchId.size() <= 160
+        && request.resource.data.createdAtMs is int;
+    }
+
+    match /fightKlCoopMatches/{matchId} {
+      // Der Host eröffnet zunächst eine Wartelobby mit sich selbst.
+      // Auch ältere Zweier-Partien, die direkt auf "playing" erstellt werden,
+      // bleiben durch dieselben Größenprüfungen zulässig.
+      allow create: if signedIn()
+        && request.resource.data.hostUid == request.auth.uid
+        && fightKlValidTeamSize(request.resource.data)
+        && fightKlValidParticipants(request.resource.data)
+        && request.resource.data.profiles is map
+        && request.resource.data.profiles[request.auth.uid] is map
+        && (
+          request.resource.data.status == 'waiting'
+          || (
+            request.resource.data.status == 'playing'
+            && request.resource.data.participantUids.size() == request.resource.data.teamSize
+          )
+        );
+
+      // Eine offene Wartelobby muss vor dem Beitritt gelesen werden können.
+      // Laufende/abgeschlossene Partien bleiben auf Teilnehmer beschränkt.
+      allow get: if signedIn()
+        && (
+          resource.data.status == 'waiting'
+          || (
+            resource.data.participantUids is list
+            && resource.data.participantUids.hasAny([request.auth.uid])
+          )
+        );
+      allow list: if false;
+
+      allow update: if signedIn()
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.teamSize == resource.data.teamSize
+        && request.resource.data.startWave == resource.data.startWave
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && fightKlValidTeamSize(request.resource.data)
+        && fightKlValidParticipants(request.resource.data)
+        && request.resource.data.profiles is map
+        && (
+          // In der Wartelobby darf der Host Heartbeats/Status pflegen.
+          (
+            resource.data.status == 'waiting'
+            && request.auth.uid == resource.data.hostUid
+          )
+          // Ein neuer Spieler darf ausschließlich sich selbst hinzufügen.
+          || (
+            resource.data.status == 'waiting'
+            && resource.data.participantUids is list
+            && !resource.data.participantUids.hasAny([request.auth.uid])
+            && request.resource.data.participantUids.hasAny([request.auth.uid])
+            && request.resource.data.participantUids.hasAll(resource.data.participantUids)
+            && request.resource.data.participantUids.size() == resource.data.participantUids.size() + 1
+            && request.resource.data.profiles[request.auth.uid] is map
+            && (
+              request.resource.data.status == 'waiting'
+              || (
+                request.resource.data.status == 'playing'
+                && request.resource.data.participantUids.size() == request.resource.data.teamSize
+              )
+            )
+          )
+          // Ein wartender Gast darf nur sich selbst wieder aus der Lobby entfernen.
+          || (
+            resource.data.status == 'waiting'
+            && resource.data.participantUids.hasAny([request.auth.uid])
+            && request.auth.uid != resource.data.hostUid
+            && !request.resource.data.participantUids.hasAny([request.auth.uid])
+            && request.resource.data.participantUids.size() == resource.data.participantUids.size() - 1
+            && request.resource.data.status == 'waiting'
+          )
+          // Während des Kampfes schreibt ausschließlich der Host Weltzustand/Ende.
+          || (
+            resource.data.status == 'playing'
+            && request.auth.uid == resource.data.hostUid
+            && request.resource.data.participantUids == resource.data.participantUids
+            && request.resource.data.profiles == resource.data.profiles
+            && (
+              request.resource.data.status == 'playing'
+              || request.resource.data.status == 'ended'
+            )
+          )
+        );
+
+      allow delete: if false;
+
+      match /players/{userId} {
+        allow get: if fightKlCoopParticipant(matchId);
+        allow list: if false;
+        allow create, update, delete: if fightKlCoopParticipant(matchId)
+          && request.auth.uid == userId;
+
+        match /inputs/{frameId} {
+          allow get: if fightKlCoopParticipant(matchId);
+          allow list: if false;
+          allow create, update: if fightKlCoopParticipant(matchId)
+            && request.auth.uid == userId;
+          allow delete: if false;
+        }
+      }
+
+      match /frames/{frameId} {
+        allow get: if fightKlCoopParticipant(matchId);
+        allow list: if false;
+        allow create, update: if fightKlCoopHost(matchId);
+        allow delete: if false;
+      }
+    }
+    // ===== JK.GAMES FIGHT.KL 1-4 PLAYER KOOP END =====
+
+
+    // ===== JK.GAMES DUNGEON.KL V152 START =====
+    function dungeonKlPartyPath(code) {
+      return /databases/$(database)/documents/dungeonKlParties/$(code);
+    }
+
+    function dungeonKlPartyParticipant(code) {
+      return signedIn()
+        && exists(dungeonKlPartyPath(code))
+        && get(dungeonKlPartyPath(code)).data.playerUids is list
+        && get(dungeonKlPartyPath(code)).data.playerUids.hasAny([request.auth.uid]);
+    }
+
+    function dungeonKlPartyHost(code) {
+      return signedIn()
+        && exists(dungeonKlPartyPath(code))
+        && get(dungeonKlPartyPath(code)).data.hostUid == request.auth.uid;
+    }
+
+    function validDungeonKlParty(data, code) {
+      return data is map
+        && data.keys().hasAll([
+          'code', 'hostUid', 'maxPlayers', 'dungeonId', 'status',
+          'playerUids', 'profiles', 'seed', 'createdAtMs', 'updatedAtMs', 'version'
+        ])
+        && data.code == code
+        && code.matches('[A-Z2-9]{6}')
+        && data.hostUid is string
+        && data.maxPlayers is int
+        && data.maxPlayers >= 2
+        && data.maxPlayers <= 4
+        && data.dungeonId is string
+        && data.dungeonId.size() > 0
+        && data.dungeonId.size() <= 40
+        && data.status in ['lobby', 'playing', 'ended']
+        && data.playerUids is list
+        && data.playerUids.size() >= 1
+        && data.playerUids.size() <= data.maxPlayers
+        && data.playerUids.hasAny([data.hostUid])
+        && data.profiles is map
+        && data.seed is int
+        && data.createdAtMs is int
+        && data.updatedAtMs is int
+        && data.version is string
+        && data.version.size() > 0
+        && data.version.size() <= 120;
+    }
+
+    match /dungeonKlParties/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && validDungeonKlParty(request.resource.data, code)
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.playerUids.size() == 1
+        && request.resource.data.playerUids[0] == request.auth.uid
+        && request.resource.data.profiles[request.auth.uid] is map;
+
+      allow update: if signedIn()
+        && validDungeonKlParty(request.resource.data, code)
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.hostUid == resource.data.hostUid
+        && request.resource.data.maxPlayers == resource.data.maxPlayers
+        && request.resource.data.dungeonId == resource.data.dungeonId
+        && request.resource.data.seed == resource.data.seed
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.version == resource.data.version
+        && (
+          // Host verwaltet Lobby, startet und beendet den Dungeon.
+          (
+            request.auth.uid == resource.data.hostUid
+            && request.resource.data.playerUids.hasAll(resource.data.playerUids)
+            && request.resource.data.playerUids.size() >= resource.data.playerUids.size()
+          )
+          // Neuer Spieler fügt ausschließlich sich selbst hinzu.
+          || (
+            resource.data.status == 'lobby'
+            && !resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.status == 'lobby'
+            && request.resource.data.playerUids == resource.data.playerUids.concat([request.auth.uid])
+            && request.resource.data.profiles[request.auth.uid] is map
+            && request.resource.data.playerUids.size() <= resource.data.maxPlayers
+          )
+          // Gast verlässt vor dem Start ausschließlich seinen eigenen Platz.
+          || (
+            resource.data.status == 'lobby'
+            && resource.data.playerUids.hasAny([request.auth.uid])
+            && request.auth.uid != resource.data.hostUid
+            && !request.resource.data.playerUids.hasAny([request.auth.uid])
+            && request.resource.data.playerUids.size() == resource.data.playerUids.size() - 1
+            && request.resource.data.status == 'lobby'
+          )
+        );
+
+      allow delete: if signedIn()
+        && resource.data.hostUid == request.auth.uid
+        && resource.data.status == 'lobby';
+
+      match /players/{uid} {
+        allow get: if dungeonKlPartyParticipant(code);
+        allow list: if false;
+        allow create, update: if dungeonKlPartyParticipant(code)
+          && uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if dungeonKlPartyParticipant(code) && uid == request.auth.uid;
+      }
+
+      match /world/{worldId} {
+        allow get: if dungeonKlPartyParticipant(code);
+        allow list: if false;
+        allow create, update: if dungeonKlPartyHost(code) && worldId == 'current';
+        allow delete: if false;
+      }
+    }
+
+    match /dungeonKlAuctions/{auctionId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'sellerUid', 'sellerName', 'item', 'price', 'status',
+          'createdAtMs', 'version'
+        ])
+        && request.resource.data.sellerUid == request.auth.uid
+        && request.resource.data.sellerName is string
+        && request.resource.data.sellerName.size() > 0
+        && request.resource.data.sellerName.size() <= 40
+        && request.resource.data.item is map
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && request.resource.data.price <= 999999999
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.version is string;
+
+      allow update: if signedIn()
+        && request.resource.data.sellerUid == resource.data.sellerUid
+        && request.resource.data.sellerName == resource.data.sellerName
+        && request.resource.data.item == resource.data.item
+        && request.resource.data.price == resource.data.price
+        && request.resource.data.createdAtMs == resource.data.createdAtMs
+        && request.resource.data.version == resource.data.version
+        && (
+          (
+            resource.data.sellerUid == request.auth.uid
+            && resource.data.status == 'active'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'cancelledAtMs'
+            ])
+            && request.resource.data.cancelledAtMs is int
+          )
+          || (
+            resource.data.sellerUid != request.auth.uid
+            && resource.data.status == 'active'
+            && request.resource.data.status == 'sold'
+            && request.resource.data.buyerUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'buyerUid', 'soldAtMs'
+            ])
+            && request.resource.data.soldAtMs is int
+          )
+          || (
+            resource.data.sellerUid == request.auth.uid
+            && resource.data.status == 'sold'
+            && request.resource.data.status == 'claimed'
+            && request.resource.data.buyerUid == resource.data.buyerUid
+            && request.resource.data.soldAtMs == resource.data.soldAtMs
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'claimedAtMs'
+            ])
+            && request.resource.data.claimedAtMs is int
+          )
+        );
+
+      allow delete: if false;
+    }
+    // ===== JK.GAMES DUNGEON.KL V152 END =====
+
+
+    // ===== JK.GAMES JK/COIN REGELN BEGIN (V207 + V215 + V218) =====
+    // V207: Kaufanfragen für JK/Coin-Pakete.
+    function jkSignedIn() {
+      return request.auth != null;
+    }
+
+    function jkOwnerRoleValue(value) {
+      return value == "owner" || value == "Owner";
+    }
+
+    function jkIsOwner() {
+      return jkSignedIn()
+        && (
+          request.auth.token.get("owner", false) == true
+          || jkOwnerRoleValue(request.auth.token.get("role", ""))
+          || (
+            exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+            && (
+              jkOwnerRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("role", ""))
+              || jkOwnerRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleKey", ""))
+              || jkOwnerRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("staffRole", ""))
+              || jkOwnerRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("teamRole", ""))
+              || get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleLabel", "") == "Owner"
+            )
+          )
+        );
+    }
+
+    match /jkCoinPurchaseRequests/{requestId} {
+      allow create: if jkSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.coins is int
+        && request.resource.data.coins > 0
+        && request.resource.data.eurCents is int
+        && request.resource.data.eurCents > 0;
+
+      allow get: if jkSignedIn()
+        && (resource.data.uid == request.auth.uid || jkIsOwner());
+      allow list: if jkIsOwner();
+      allow update: if jkIsOwner();
+      // V222: Der Owner darf alte/erledigte Kaufanfragen aus der Verwaltung löschen.
+      allow delete: if jkIsOwner();
+    }
+
+    // V215: manuelle Owner-Gutschriften/Abzüge und Claim durch den jeweiligen Spieler.
+    function jkV215SignedIn() {
+      return request.auth != null;
+    }
+
+    function jkV215IsOwner() {
+      return jkV215SignedIn() && jkIsOwner();
+    }
+
+    match /jkCoinGrants/{uid}/items/{grantId} {
+      allow get, list: if jkV215SignedIn()
+        && (request.auth.uid == uid || jkV215IsOwner());
+      allow create: if jkV215IsOwner();
+      allow update: if jkV215IsOwner()
+        || (jkV215SignedIn()
+          && request.auth.uid == uid
+          && resource.data.status == "ready"
+          && request.resource.data.status == "claimed"
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["status", "claimedAtMs", "appliedCoins"]));
+      allow delete: if false;
+    }
+
+    // V222: Neue Fight.KL-Rangliste. Die neue Collection startet leer und ersetzt
+    // den alten Cloud-Function-Ranglistenstand. Jeder Spieler schreibt nur sein
+    // eigenes Profil; Lesen ist für angemeldete JK.Games-Spieler erlaubt.
+    match /fightKlLeaderboardV222/{uid} {
+      allow get, list: if jkSignedIn();
+      allow create, update: if jkSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          "uid", "season", "name", "bestWave", "bestScore",
+          "level", "power", "updatedAtMs"
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.season == "v222"
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.bestWave is int
+        && request.resource.data.bestWave >= 0
+        && request.resource.data.bestWave <= 1000000
+        && request.resource.data.bestScore is int
+        && request.resource.data.bestScore >= 0
+        && request.resource.data.bestScore <= 1000000000000000
+        && request.resource.data.level is int
+        && request.resource.data.level >= 1
+        && request.resource.data.level <= 100
+        && request.resource.data.power is int
+        && request.resource.data.power >= 0
+        && request.resource.data.power <= 1000000000000
+        && request.resource.data.updatedAtMs is int;
+      allow delete: if jkSignedIn() && (request.auth.uid == uid || jkIsOwner());
+    }
+    // V236: Öffentliche Hype-Rangliste ausschließlich für Lucky Boxes; Hype kann 0,5-Schritte enthalten.
+    // Jeder angemeldete Spieler darf die Rangliste lesen und nur seinen eigenen
+    // Hype-/Boxenzähler aktualisieren. Die Hype-Punkte haben bewusst kein Spiel-Limit.
+    match /jkHypeLeaderboard/{uid} {
+      allow get, list: if jkSignedIn();
+      allow create, update: if jkSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          "uid", "displayName", "hype", "totalBoxes",
+          "euroBoxes", "jkBoxes", "updatedAtMs"
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.hype is number
+        && request.resource.data.hype >= 0
+        && request.resource.data.totalBoxes is int
+        && request.resource.data.totalBoxes >= 0
+        && request.resource.data.euroBoxes is int
+        && request.resource.data.euroBoxes >= 0
+        && request.resource.data.jkBoxes is int
+        && request.resource.data.jkBoxes >= 0
+        && request.resource.data.totalBoxes == request.resource.data.euroBoxes + request.resource.data.jkBoxes
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.updatedAtMs > 0;
+      allow delete: if jkSignedIn() && (request.auth.uid == uid || jkIsOwner());
+    }
+
+    // V248: Egoshoot.KL Online-Welt. Presence bleibt pro Spieler auf einen
+    // kompakten Datensatz beschränkt. Treffer werden als kurzlebige Events unter
+    // dem Zielspieler abgelegt und können nur vom Ziel gelesen/entfernt werden.
+    function egoStaffRoleValue(value) {
+      return value == "owner" || value == "Owner" || value == "admin" || value == "Admin";
+    }
+
+    function egoIsStaff() {
+      return jkSignedIn()
+        && (
+          request.auth.token.get("owner", false) == true
+          || request.auth.token.get("admin", false) == true
+          || egoStaffRoleValue(request.auth.token.get("role", ""))
+          || (
+            exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
+            && (
+              egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("role", ""))
+              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleKey", ""))
+              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("staffRole", ""))
+              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("teamRole", ""))
+              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleLabel", ""))
+            )
+          )
+        );
+    }
+
+    function egoMeleeWeapon(value) {
+      return value == "knife" || value == "baseball" || value == "katana";
+    }
+
+    function egoSidearmWeapon(value) {
+      return value == "glock" || value == "sand-pistol" || value == "revolver"
+        || value == "desert-eagle" || value == "mini-uzi" || value == "uzi" || value == "ump9";
+    }
+
+    function egoLongWeapon(value) {
+      return value == "tommy" || value == "m4" || value == "ak12" || value == "an94"
+        || value == "scar" || value == "suppressed" || value == "ak47"
+        || value == "shotgun" || value == "barrett" || value == "raygun";
+    }
+
+    // Obergrenzen entsprechen der maximal legitimen Level-10-Trefferstaerke.
+    // Dadurch kann ein normaler Client nicht einfach 9999 Schaden als Glock-Treffer schreiben.
+    function egoBodyDamageLimit(value) {
+      return value == "knife" || value == "baseball" || value == "katana" ? 50
+        : value == "glock" ? 41
+        : value == "sand-pistol" ? 47
+        : value == "revolver" ? 66
+        : value == "desert-eagle" ? 77
+        : value == "mini-uzi" ? 24
+        : value == "uzi" ? 26
+        : value == "ump9" ? 30
+        : value == "tommy" ? 37
+        : value == "m4" ? 44
+        : value == "ak12" ? 48
+        : value == "an94" ? 49
+        : value == "scar" ? 54
+        : value == "suppressed" ? 51
+        : value == "ak47" ? 59
+        : value == "shotgun" ? 18
+        : value == "barrett" ? 126
+        : value == "raygun" ? 9999
+        : 0;
+    }
+
+    function egoHeadDamageLimit(value) {
+      return value == "knife" || value == "baseball" || value == "katana" ? 50
+        : value == "glock" ? 72
+        : value == "sand-pistol" ? 81
+        : value == "revolver" ? 115
+        : value == "desert-eagle" ? 134
+        : value == "mini-uzi" ? 38
+        : value == "uzi" ? 42
+        : value == "ump9" ? 49
+        : value == "tommy" ? 59
+        : value == "m4" ? 70
+        : value == "ak12" ? 77
+        : value == "an94" ? 79
+        : value == "scar" ? 85
+        : value == "suppressed" ? 81
+        : value == "ak47" ? 94
+        : value == "shotgun" ? 29
+        : value == "barrett" ? 257
+        : value == "raygun" ? 9999
+        : 0;
+    }
+
+    match /egoshootKlOnline/{uid} {
+      allow get, list: if jkSignedIn();
+      allow create, update: if jkSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          "uid", "displayName", "gender", "x", "y", "z", "yaw", "speed",
+          "weaponId", "meleeId", "sidearmId", "longId", "activeSlot",
+          "hp", "shield", "alive", "vanish", "flight", "updatedAtMs"
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 50
+        && (request.resource.data.gender == "man" || request.resource.data.gender == "woman")
+        && request.resource.data.x is number
+        && request.resource.data.x >= -200
+        && request.resource.data.x <= 200
+        && request.resource.data.y is number
+        && request.resource.data.y >= 0
+        && request.resource.data.y <= 100
+        && request.resource.data.z is number
+        && request.resource.data.z >= -200
+        && request.resource.data.z <= 200
+        && request.resource.data.yaw is number
+        && request.resource.data.yaw >= -100
+        && request.resource.data.yaw <= 100
+        && request.resource.data.speed is number
+        && request.resource.data.speed >= 0
+        && request.resource.data.speed <= 100
+        && request.resource.data.weaponId is string
+        && request.resource.data.weaponId.size() > 0
+        && request.resource.data.weaponId.size() <= 32
+        && request.resource.data.meleeId is string
+        && request.resource.data.meleeId.size() > 0
+        && request.resource.data.meleeId.size() <= 32
+        && request.resource.data.sidearmId is string
+        && request.resource.data.sidearmId.size() > 0
+        && request.resource.data.sidearmId.size() <= 32
+        && request.resource.data.longId is string
+        && request.resource.data.longId.size() <= 32
+        && egoMeleeWeapon(request.resource.data.meleeId)
+        && egoSidearmWeapon(request.resource.data.sidearmId)
+        && (request.resource.data.longId == "" || egoLongWeapon(request.resource.data.longId))
+        && (egoMeleeWeapon(request.resource.data.weaponId)
+            || egoSidearmWeapon(request.resource.data.weaponId)
+            || egoLongWeapon(request.resource.data.weaponId))
+        && request.resource.data.activeSlot is string
+        && (request.resource.data.activeSlot == "melee"
+            || request.resource.data.activeSlot == "sidearm"
+            || request.resource.data.activeSlot == "long")
+        && request.resource.data.hp is int
+        && request.resource.data.hp >= 0
+        && request.resource.data.hp <= 100
+        && request.resource.data.shield is int
+        && request.resource.data.shield >= 0
+        && request.resource.data.shield <= 200
+        && request.resource.data.alive is bool
+        && request.resource.data.vanish is bool
+        && request.resource.data.flight is bool
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.updatedAtMs > 0
+        && (!request.resource.data.vanish || egoIsStaff())
+        && (!request.resource.data.flight || egoIsStaff())
+        && (request.resource.data.weaponId != "raygun" || egoIsStaff())
+        && (request.resource.data.meleeId != "raygun" || egoIsStaff())
+        && (request.resource.data.sidearmId != "raygun" || egoIsStaff())
+        && (request.resource.data.longId != "raygun" || egoIsStaff());
+      allow delete: if jkSignedIn() && (request.auth.uid == uid || egoIsStaff());
+    }
+
+    match /egoshootKlHits/{targetUid}/events/{eventId} {
+      allow get, list: if jkSignedIn() && request.auth.uid == targetUid;
+      allow create: if jkSignedIn()
+        && request.resource.data.keys().hasOnly([
+          "shooterUid", "targetUid", "damage", "ignoreShield", "headshot", "weaponId", "createdAtMs"
+        ])
+        && request.resource.data.shooterUid == request.auth.uid
+        && request.resource.data.targetUid == targetUid
+        && targetUid != request.auth.uid
+        && request.resource.data.damage is int
+        && request.resource.data.damage >= 1
+        && request.resource.data.damage <= 9999
+        && (egoMeleeWeapon(request.resource.data.weaponId)
+            || egoSidearmWeapon(request.resource.data.weaponId)
+            || egoLongWeapon(request.resource.data.weaponId))
+        && request.resource.data.damage <= (request.resource.data.headshot
+            ? egoHeadDamageLimit(request.resource.data.weaponId)
+            : egoBodyDamageLimit(request.resource.data.weaponId))
+        && request.resource.data.ignoreShield is bool
+        && request.resource.data.headshot is bool
+        && request.resource.data.weaponId is string
+        && request.resource.data.weaponId.size() > 0
+        && request.resource.data.weaponId.size() <= 32
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.createdAtMs > 0
+        && (!request.resource.data.ignoreShield
+            || request.resource.data.weaponId == "knife"
+            || request.resource.data.weaponId == "katana"
+            || request.resource.data.weaponId == "baseball")
+        && (request.resource.data.weaponId != "raygun"
+            || (egoIsStaff() && request.resource.data.damage == 9999));
+      allow delete: if jkSignedIn() && request.auth.uid == targetUid;
+    }
+
+    // Der getötete Spieler bestätigt dem Killer den Kill. Dadurch kann ein Client
+    // nicht einfach seine eigene Kill-Rangfolge über direkte Self-Writes erhöhen.
+    match /egoshootKlRewards/{killerUid}/events/{eventId} {
+      allow get, list, delete: if jkSignedIn() && request.auth.uid == killerUid;
+      allow create: if jkSignedIn()
+        && request.resource.data.keys().hasOnly([
+          "killerUid", "victimUid", "headshot", "weaponId", "createdAtMs"
+        ])
+        && request.resource.data.killerUid == killerUid
+        && request.resource.data.victimUid == request.auth.uid
+        && killerUid != request.auth.uid
+        && request.resource.data.headshot is bool
+        && request.resource.data.weaponId is string
+        && request.resource.data.weaponId.size() <= 32
+        && request.resource.data.createdAtMs is int
+        && request.resource.data.createdAtMs > 0;
+    }
+
+    // V242: Speed Car.KL Open-Lobby. Ein einziger kompakter Presence-Datensatz
+    // pro angemeldetem Spieler; jeder schreibt ausschließlich seine eigene Position.
+    // Owner-Fahrzeuge, Flugmodus und extreme Größen bleiben serverseitig Owner-only.
+    match /speedCarKlLobby/{uid} {
+      allow get, list: if jkSignedIn();
+      allow create, update: if jkSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          "uid", "displayName", "carId", "x", "y", "z", "rot",
+          "speed", "health", "tune", "size", "mode", "updatedAtMs"
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 50
+        && request.resource.data.carId is string
+        && request.resource.data.carId.size() > 0
+        && request.resource.data.carId.size() <= 40
+        && request.resource.data.x is number
+        && request.resource.data.x >= -5000
+        && request.resource.data.x <= 5000
+        && request.resource.data.y is number
+        && request.resource.data.y >= -20
+        && request.resource.data.y <= 500
+        && request.resource.data.z is number
+        && request.resource.data.z >= -5000
+        && request.resource.data.z <= 5000
+        && request.resource.data.rot is number
+        && request.resource.data.rot >= -100
+        && request.resource.data.rot <= 100
+        && request.resource.data.speed is int
+        && request.resource.data.speed >= 0
+        && request.resource.data.speed <= 5000
+        && request.resource.data.health is int
+        && request.resource.data.health >= 0
+        && request.resource.data.health <= 20000
+        && request.resource.data.tune is int
+        && request.resource.data.tune >= 0
+        && request.resource.data.tune <= 30
+        && request.resource.data.size is number
+        && request.resource.data.size >= 0.25
+        && request.resource.data.size <= 4
+        && request.resource.data.mode is string
+        && (request.resource.data.mode == "drive" || request.resource.data.mode == "flight")
+        && request.resource.data.updatedAtMs is int
+        && request.resource.data.updatedAtMs > 0
+        && (!request.resource.data.carId.matches('owner-.*') || jkIsOwner())
+        && (request.resource.data.mode != "flight" || jkIsOwner())
+        && (request.resource.data.size <= 1.5 || jkIsOwner());
+      allow delete: if jkSignedIn() && (request.auth.uid == uid || jkIsOwner());
+    }
+
+    // ===== JK.GAMES JK/COIN REGELN END =====
+
+  }
+}

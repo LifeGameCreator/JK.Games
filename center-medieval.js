@@ -72,7 +72,6 @@ const MODEL_PATHS = Object.freeze({
   owner: `${ASSET_ROOT}player-owner.glb`
 });
 const CENTER_ASSET_PATHS = Object.freeze({
-  eternalFlame: `${CENTER_ASSET_ROOT}admin-ewige-flamme.glb`,
   basicTools: `${CENTER_ASSET_ROOT}basic-tools.glb`,
   naturePack: `${CENTER_ASSET_ROOT}baum-wolken-pack.glb`,
   firewood: `${CENTER_ASSET_ROOT}feuerholz.glb`,

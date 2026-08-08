@@ -6720,12 +6720,31 @@ function openAchievementInfoDialog() {
   if (!els.dialog.open) els.dialog.showModal();
 }
 
+const THE_REAL_GALAXY_SKIN_NAME = "The Real Galaxy Skin";
+
+function isNonSellableJkExclusiveSkinName(name) {
+  return String(name || "").trim().toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase();
+}
+
 function isJkExclusiveSkinName(name) {
-  return /^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #\d+$/i.test(String(name || "").trim());
+  const raw = String(name || "").trim();
+  return raw.toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase()
+    || /^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #\d+$/i.test(raw);
 }
 
 function jkExclusiveSkinInfo(name) {
   const raw = String(name || "").trim();
+  if (raw.toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase()) {
+    return {
+      name: THE_REAL_GALAXY_SKIN_NAME,
+      tier: "galaxy",
+      label: THE_REAL_GALAXY_SKIN_NAME,
+      number: 1000,
+      sellable: false,
+      sellValue: 0,
+      asset: "assets/skins/the-real-galaxy-skin.png"
+    };
+  }
   const match = raw.match(/^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #(\d+)$/i);
   if (!match) return null;
   const tier = match[1].toLowerCase();
@@ -6736,12 +6755,21 @@ function jkExclusiveSkinInfo(name) {
 }
 
 function jkExclusiveSkinSellValue(name) {
-  return jkExclusiveSkinInfo(name)?.sellValue || 0;
+  const info = jkExclusiveSkinInfo(name);
+  return info?.sellable === false ? 0 : info?.sellValue || 0;
 }
 
 function jkExclusiveSkinHtml(name, size = "") {
   const info = jkExclusiveSkinInfo(name);
   if (!info) return "";
+  if (info.asset) {
+    return `
+      <div class="avatar-card ${size} jk-exclusive-card jk-exclusive-galaxy jk-real-galaxy-card" data-jk-exclusive-skin="${escapeHtml(info.name)}">
+        <span class="jk-real-galaxy-starfield" aria-hidden="true"></span>
+        <img class="avatar-svg jk-real-galaxy-image" src="${escapeHtml(info.asset)}?v=20260808-jkgames-v263-real-galaxy-skin" alt="${escapeHtml(info.name)}" decoding="async" draggable="false">
+      </div>
+    `;
+  }
   const seed = info.number * 97 + info.tier.length * 131;
   const hue = seed % 360;
   const secondaryHue = (hue + 58 + (info.number % 47)) % 360;
@@ -7164,6 +7192,7 @@ function sellWardrobeItem(itemName) {
   const wardrobe = state.wardrobe || [];
   const index = wardrobe.indexOf(itemName);
   if (index < 0) return addFeed("Dieses Kleidungsstück ist nicht mehr im Kleiderschrank.");
+  if (isNonSellableJkExclusiveSkinName(itemName)) return addFeed(`${itemName} ist dauerhaft an dein Konto gebunden und nicht verkäuflich.`);
   const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
   const value = inventorySellValue(itemName);
   if (!value) return addFeed("Dieses Basis-Kleidungsstück kann nicht verkauft werden.");
@@ -7217,8 +7246,9 @@ function openWardrobeDialog(previewItemName = "") {
         const item = exclusive ? null : shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
         const equipped = exclusive ? activeExclusiveSkin === itemName : !!item && isClothingEquipped(item) && !activeExclusiveSkin;
         const value = inventorySellValue(itemName);
+        const nonSellable = exclusive?.sellable === false;
         const description = exclusive
-          ? `Exklusiver JK.Games-Hauptcharakter-Skin · ${exclusive.label}. Ersetzt beim Aktivieren den normalen Charakter-Look vollständig.${itemIdBadge(itemName)}`
+          ? `Exklusiver JK.Games-Hauptcharakter-Skin · ${exclusive.label}. Ersetzt beim Aktivieren den normalen Charakter-Look vollständig.${nonSellable ? " Dauerhaft kontogebunden und nicht verkäuflich." : ""}${itemIdBadge(itemName)}`
           : `${item?.text || "Kleidung aus deiner Garderobe."}${itemIdBadge(itemName)}`;
         return `
           <article class="item-card wardrobe-card ${equipped ? "equipped" : ""} ${exclusive ? `jk-exclusive-wardrobe-card tier-${exclusive.tier}` : ""}">
@@ -7229,7 +7259,7 @@ function openWardrobeDialog(previewItemName = "") {
             <div class="wardrobe-actions">
               <button data-wardrobe-preview="${index}">Beobachten</button>
               <button class="${equipped ? "danger" : ""}" data-wardrobe-toggle="${index}">${equipped ? "AUS" : "AN"}</button>
-              <button class="mini-button" data-wardrobe-sell="${index}" title="Verkaufen für ${euro.format(value)}" ${value <= 0 ? "disabled" : ""}>Verkaufen</button>
+              <button class="mini-button" data-wardrobe-sell="${index}" title="${nonSellable ? "Dauerhaft unverkäuflich" : `Verkaufen für ${euro.format(value)}`}" ${value <= 0 ? "disabled" : ""}>${nonSellable ? "Nicht verkäuflich" : "Verkaufen"}</button>
             </div>
           </article>
         `;
