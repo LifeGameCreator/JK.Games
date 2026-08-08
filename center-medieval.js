@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v278-smooth-wings-unified-galaxy-design';
+const CENTER_VERSION = '2026-08-08-jkgames-v279-galaxy-theme-separation-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -37,13 +37,13 @@ const STAFF_ROLE_LEVELS = Object.freeze({ player: 0, supporter: 1, moderator: 2,
 const STAFF_ROLE_LABELS = Object.freeze({ player:'Spieler', member:'Teammitglied', supporter:'Supporter', moderator:'Moderator', admin:'Admin', owner:'Owner', testsupporter:'Testsupporter', testmoderator:'Testmoderator', testmember:'Testmitglied' });
 const STAFF_THEME_IDS = Object.freeze(['owner','admin','moderator','supporter','member']);
 const STAFF_THEME_CONFIG = Object.freeze({
-  // V278: Alle Staff-Sets benutzen exakt denselben Galaxy-Aufbau. Nur die Palette
-  // ändert sich je Rang, damit Skin, Wings, Krone, Stab, Schwert und Flamme wie
-  // eine zusammengehörige Ausrüstung wirken statt wie einzelne Farbrecolors.
-  owner:Object.freeze({label:'Owner Galaxy',primary:0x8c49ff,secondary:0x315dff,accent:0x8fe7ff,dark:0x080313,emissive:0x5320ad,css:'owner'}),
-  admin:Object.freeze({label:'Admin Red Galaxy',primary:0xff2448,secondary:0x8f001c,accent:0xff8f9e,dark:0x050005,emissive:0x8b0827,css:'admin'}),
-  moderator:Object.freeze({label:'Moderator Grün',primary:0x21e66f,secondary:0x087a3b,accent:0xa0ffca,dark:0x010d07,emissive:0x08743a,css:'moderator'}),
-  supporter:Object.freeze({label:'Supporter Blau',primary:0x218cff,secondary:0x073eaa,accent:0x81eaff,dark:0x010817,emissive:0x0a4d9f,css:'supporter'}),
+  // V279: Klar getrennte Galaxy-Paletten mit schwarzen Tiefen und deutlich echteren
+  // Nebeln. Owner bleibt sichtbar lila/violett, Supporter klar blau – keine gleiche
+  // Farblogik mehr zwischen beiden Rängen.
+  owner:Object.freeze({label:'Owner Galaxy',primary:0xb046ff,secondary:0x5e1dcb,accent:0xff9cff,dark:0x04010a,emissive:0x6a23c8,css:'owner'}),
+  admin:Object.freeze({label:'Admin Red Galaxy',primary:0xff294f,secondary:0x961229,accent:0xffb0ba,dark:0x070103,emissive:0xa50f30,css:'admin'}),
+  moderator:Object.freeze({label:'Moderator Grün',primary:0x27e06d,secondary:0x0d7d3d,accent:0xb4ffd3,dark:0x010805,emissive:0x0b7d40,css:'moderator'}),
+  supporter:Object.freeze({label:'Supporter Blau',primary:0x1996ff,secondary:0x0a4ecf,accent:0x86ddff,dark:0x01050d,emissive:0x0c59c4,css:'supporter'}),
   member:Object.freeze({label:'Team Weiß',primary:0xf0f2f4,secondary:0xbec5cc,accent:0xffffff,dark:0x24282c,emissive:0x686f76,css:'member'})
 });
 const ANIMAL_FORM_IDS = Object.freeze(['fox','shark','cow','orca','horse','owl','wolf1','wolf2','spider','clownfish','bird']);
@@ -2875,20 +2875,32 @@ buildChunkGrass(chunk) {
     const hex=(value)=>`#${Number(value).toString(16).padStart(6,'0')}`;
     const primary=new THREE.Color(cfg.primary),secondary=new THREE.Color(cfg.secondary),accent=new THREE.Color(cfg.accent),dark=new THREE.Color(cfg.dark),white=new THREE.Color(0xffffff);
     const rgb=(c,a)=>`rgba(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)},${a})`;
-    // V278: Ein einziges Galaxy-Muster für ALLE Staff-Ränge. Die Positionen der
-    // Nebel und Sterne sind absichtlich rangunabhängig; ausschließlich die Palette
-    // wechselt zwischen Owner-Lila/Blau, Admin-Rot/Schwarz, Mod-Grün und Support-Blau.
-    const space=ctx.createLinearGradient(0,0,width,height);space.addColorStop(0,hex(cfg.dark));space.addColorStop(.32,rgb(dark.clone().lerp(primary,.18),1));space.addColorStop(.68,hex(cfg.dark));space.addColorStop(1,rgb(dark.clone().lerp(secondary,.16),1));ctx.fillStyle=space;ctx.fillRect(0,0,width,height);
-    const paintNebula=(x,y,r,inner,mid,alpha=.72)=>{const g=ctx.createRadialGradient(width*x,height*y,1,width*x,height*y,Math.max(width,height)*r);g.addColorStop(0,rgb(inner,alpha));g.addColorStop(.22,rgb(mid,alpha*.62));g.addColorStop(.58,rgb(primary,alpha*.28));g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);};
-    paintNebula(.23,.25,.60,secondary,primary,.78);paintNebula(.77,.55,.52,primary,accent,.68);paintNebula(.40,.88,.44,accent,secondary,.46);
-    // Feine diagonale Galaxie-Bänder geben allen Gegenständen dieselbe erkennbare Struktur.
-    ctx.save();ctx.globalCompositeOperation='screen';ctx.lineCap='round';for(let i=0;i<3;i++){ctx.beginPath();ctx.strokeStyle=rgb(i===0?secondary:i===1?primary:accent,.16-i*.025);ctx.lineWidth=Math.max(2,width*(.075-i*.012));ctx.moveTo(-width*.15,height*(.18+i*.27));ctx.bezierCurveTo(width*.28,height*(.02+i*.18),width*.62,height*(.72-i*.10),width*1.15,height*(.48+i*.18));ctx.stroke();}ctx.restore();
-    // Fixer Seed = dieselbe Sternenkarte in jeder Rangfarbe.
-    const rnd=seededRandom(2780808);const starCount=Math.max(150,Math.min(360,Math.round((width*height)/155)));
-    ctx.save();ctx.globalCompositeOperation='screen';for(let i=0;i<starCount;i+=1){const x=rnd()*width,y=rnd()*height,bright=rnd(),r=bright>.965?1.7+rnd()*2.1:bright>.82?.75+rnd()*1.0:.28+rnd()*.55;const starColor=bright>.76?accent:(bright>.42?white:secondary);ctx.beginPath();ctx.fillStyle=rgb(starColor,.62+bright*.36);ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();if(bright>.975){ctx.strokeStyle=rgb(accent,.52);ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(x-r*3.4,y);ctx.lineTo(x+r*3.4,y);ctx.moveTo(x,y-r*3.4);ctx.lineTo(x,y+r*3.4);ctx.stroke();}}
-    // Staubsterne zwischen den großen Sternen.
-    for(let i=0;i<100;i++){const x=rnd()*width,y=rnd()*height;ctx.fillStyle=rgb(primary,.18+rnd()*.24);ctx.fillRect(x,y,.45,.45);}ctx.restore();
-    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.userData.__centerStaffTheme=theme;texture.userData.__centerGalaxyPattern='v278-unified';texture.needsUpdate=true;return texture;
+    // V279: Deutlich galaxiehafter mit schwarzen Tiefen, Staubbahnen, Spiral-Armen
+    // und derselben Sternenkarte für alle Staff-Ränge. Nur die Farbpalette wechselt.
+    const space=ctx.createLinearGradient(0,0,width,height);
+    space.addColorStop(0,hex(cfg.dark));
+    space.addColorStop(.18,rgb(dark.clone().lerp(primary,.10),1));
+    space.addColorStop(.46,'#020205');
+    space.addColorStop(.74,rgb(dark.clone().lerp(secondary,.14),1));
+    space.addColorStop(1,hex(cfg.dark));
+    ctx.fillStyle=space;ctx.fillRect(0,0,width,height);
+    const paintNebula=(x,y,r,inner,mid,alpha=.72)=>{const g=ctx.createRadialGradient(width*x,height*y,1,width*x,height*y,Math.max(width,height)*r);g.addColorStop(0,rgb(inner,alpha));g.addColorStop(.16,rgb(mid,alpha*.66));g.addColorStop(.34,rgb(primary,alpha*.42));g.addColorStop(.66,rgb(secondary,alpha*.18));g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);};
+    paintNebula(.18,.24,.60,primary,accent,.88);paintNebula(.76,.54,.56,secondary,primary,.76);paintNebula(.42,.84,.48,accent,secondary,.58);
+    // Schwarze Staubbahnen / dunkle Risse fuer mehr echten Galaxie-Look.
+    ctx.save();ctx.globalCompositeOperation='multiply';ctx.lineCap='round';
+    for(let i=0;i<4;i+=1){ctx.beginPath();ctx.strokeStyle=`rgba(0,0,0,${.22-i*.035})`;ctx.lineWidth=Math.max(5,width*(.10-i*.014));ctx.moveTo(-width*.10,height*(.16+i*.18));ctx.bezierCurveTo(width*.20,height*(-.04+i*.16),width*.56,height*(.82-i*.10),width*1.05,height*(.48+i*.10));ctx.stroke();}
+    ctx.restore();
+    // Leuchtende Spiral-/Galaxy-Baender.
+    ctx.save();ctx.globalCompositeOperation='screen';ctx.lineCap='round';
+    for(let i=0;i<4;i++){ctx.beginPath();ctx.strokeStyle=rgb(i===0?accent:i===1?primary:i===2?secondary:white,.18-i*.025);ctx.lineWidth=Math.max(2,width*(.070-i*.010));ctx.moveTo(-width*.15,height*(.20+i*.17));ctx.bezierCurveTo(width*.28,height*(.02+i*.12),width*.62,height*(.72-i*.08),width*1.14,height*(.44+i*.12));ctx.stroke();}
+    // zentraler heller Kern
+    const core=ctx.createRadialGradient(width*.52,height*.48,1,width*.52,height*.48,Math.max(width,height)*.18);core.addColorStop(0,rgb(white,.72));core.addColorStop(.22,rgb(accent,.52));core.addColorStop(.48,rgb(primary,.18));core.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=core;ctx.fillRect(0,0,width,height);
+    ctx.restore();
+    const rnd=seededRandom(2790901);const starCount=Math.max(170,Math.min(420,Math.round((width*height)/140)));
+    ctx.save();ctx.globalCompositeOperation='screen';
+    for(let i=0;i<starCount;i+=1){const x=rnd()*width,y=rnd()*height,bright=rnd(),r=bright>.975?1.8+rnd()*2.2:bright>.84?.78+rnd()*1.12:.24+rnd()*.55;const starColor=bright>.78?accent:(bright>.46?white:secondary);ctx.beginPath();ctx.fillStyle=rgb(starColor,.60+bright*.38);ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();if(bright>.978){ctx.strokeStyle=rgb(accent,.56);ctx.lineWidth=.65;ctx.beginPath();ctx.moveTo(x-r*3.6,y);ctx.lineTo(x+r*3.6,y);ctx.moveTo(x,y-r*3.6);ctx.lineTo(x,y+r*3.6);ctx.stroke();}}
+    for(let i=0;i<130;i++){const x=rnd()*width,y=rnd()*height;ctx.fillStyle=rgb(primary,.12+rnd()*.24);ctx.fillRect(x,y,.42,.42);}ctx.restore();
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.userData.__centerStaffTheme=theme;texture.userData.__centerGalaxyPattern='v279-real-galaxy';texture.needsUpdate=true;return texture;
   }
 
 createGalaxyAuraGroup(compact=false,theme='owner') {
@@ -2914,10 +2926,13 @@ updateOwnerAura(delta=.016,now=performance.now()) {
 
 
   applyStaffTheme(root,theme='owner'){
-    theme=normalizeStaffTheme(theme);if(theme==='owner')return root;const cfg=staffThemeConfig(theme);root?.traverse?.((object)=>{
+    theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme);root?.traverse?.((object)=>{
       if(object.isLight){object.color?.set?.(cfg.primary);return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;
-      const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;if(material.map?.userData?.__centerRuntimeGalaxyTexture){const tex=this.createGalaxyTexture(material.map.image?.width||96,material.map.image?.height||192,theme);tex.repeat.copy?.(material.map.repeat);material.map=tex;if('emissiveMap'in material)material.emissiveMap=tex;}
-        material.color?.set?.(object.isPoints?cfg.accent:0xffffff);material.emissive?.set?.(cfg.emissive);if('emissiveIntensity'in material)material.emissiveIntensity=Math.max(.7,Number(material.emissiveIntensity)||0);material.needsUpdate=true;this.sanitizeMaterialUniformCompatibility(material);}
+      const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;
+        // V279: Auch der Owner wird konsequent mit der violetten Galaxy-Palette neu eingefärbt.
+        // Dadurch teilen sich Owner und Supporter nicht länger denselben blauen Basis-Look.
+        if(material.map?.userData?.__centerRuntimeGalaxyTexture){const tex=this.createGalaxyTexture(material.map.image?.width||96,material.map.image?.height||192,theme);tex.repeat.copy?.(material.map.repeat);material.map=tex;if('emissiveMap'in material)material.emissiveMap=tex;}
+        material.color?.set?.(object.isPoints?cfg.accent:0xffffff);material.emissive?.set?.(cfg.emissive);if('emissiveIntensity'in material)material.emissiveIntensity=Math.max(.78,Number(material.emissiveIntensity)||0);material.needsUpdate=true;this.sanitizeMaterialUniformCompatibility(material);}
     });root.userData.staffTheme=theme;return root;
   }
   applyAdminGrayTheme(root){return this.applyStaffTheme(root,'member');}
@@ -3313,9 +3328,9 @@ applyOwnerWearables(){
 
   smoothWingFlightPose(cape,target,delta=.016){
     if(!cape)return target;const data=cape.userData||(cape.userData={}),previous=Number.isFinite(data.wingOpenBlend)?data.wingOpenBlend:0,wantsOpen=target.open>=.5;
-    // Öffnen beim langsamen Abheben bewusst weich; beim Landen ebenso langsam zurück
-    // in die hängende Ruheposition. Exponentielles Damping bleibt FPS-unabhängig.
-    const rate=wantsOpen?1.55:1.35,alpha=1-Math.exp(-Math.max(.001,Number(delta)||.016)*rate);data.wingOpenBlend=THREE.MathUtils.lerp(previous,wantsOpen?1:0,alpha);
+    // Öffnen beim langsamen Abheben bewusst weich; beim Landen jetzt nochmals
+    // deutlich langsamer zurück in die hängende Ruheposition. Exponentielles Damping bleibt FPS-unabhängig.
+    const rate=wantsOpen?1.55:.38,alpha=1-Math.exp(-Math.max(.001,Number(delta)||.016)*rate);data.wingOpenBlend=THREE.MathUtils.lerp(previous,wantsOpen?1:0,alpha);
     const b=clamp(data.wingOpenBlend,0,1),eased=b*b*(3-2*b),spread=THREE.MathUtils.lerp(.96,target.spread,eased),sweep=target.sweep*eased;
     return {spread,sweep,open:b};
   }
