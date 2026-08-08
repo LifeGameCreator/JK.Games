@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v247-center-assets-wildlife-owner-upgrade';
+const CENTER_VERSION = '2026-08-08-jkgames-v258-center-openworld-overhaul';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -27,6 +27,7 @@ const CONTROLS_HINT_DURATION_MS = 6500;
 const GRAPHICS_QUALITIES = Object.freeze(['low','medium','high','ultra']);
 const SHADOW_MODES = Object.freeze(['off','character','world']);
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
+const OWNER_MAX_SPEED_MULTIPLIER = 12;
 const DEFAULT_KEYBINDS = Object.freeze({ overview:'KeyM', inventory:'KeyI', crafting:'KeyC', building:'KeyB', perspective:'KeyV', interact:'KeyE', jump:'Space', staffMenu:'Period', vanish:'KeyG', god:'KeyH', fly:'KeyF' });
 const KEYBIND_OPTIONS = Object.freeze(['KeyM','KeyI','KeyC','KeyB','KeyV','KeyE','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','KeyO','KeyP','KeyR','KeyT','KeyU','KeyY','Period','NumpadDecimal','Space']);
 const KEYBIND_LABELS = Object.freeze({KeyM:'M',KeyI:'I',KeyC:'C',KeyB:'B',KeyV:'V',KeyE:'E',KeyF:'F',KeyG:'G',KeyH:'H',KeyJ:'J',KeyK:'K',KeyL:'L',KeyO:'O',KeyP:'P',KeyR:'R',KeyT:'T',KeyU:'U',KeyY:'Y',Period:'.',NumpadDecimal:'Numpad .',Space:'Leertaste'});
@@ -90,12 +91,12 @@ const CENTER_ASSET_PATHS = Object.freeze({
 const ANIMAL_PROFILES = Object.freeze({
   fox:{label:'Fuchs',asset:'fox',size:1.55,speed:2.4,run:4.9,zone:'land',idle:/idle|look|sit/i,move:/walk|trot|run/i},
   cow:{label:'Kuh',asset:'cow',size:2.45,speed:1.2,run:2.1,zone:'land',idle:/idle|eating/i,move:/idle|eating/i},
-  horse:{label:'Reitpferd',asset:'horse',size:2.5,speed:2.6,run:7.2,zone:'land',idle:null,move:null},
+  horse:{label:'Reitpferd',asset:'horse',size:2.5,speed:2.6,run:7.2,zone:'land',idle:null,move:null,yawOffset:Math.PI/2},
   owl:{label:'Uhu',asset:'owl',size:1.25,speed:4.3,run:6.2,zone:'air',idle:/idle|headtwist/i,move:/fly/i},
   wolf1:{label:'Wolf Baby I',asset:'wolf1',size:1.15,speed:2.35,run:4.6,zone:'land',idle:/idle|look|sit/i,move:/walk|run/i},
   wolf2:{label:'Wolf Baby II',asset:'wolf2',size:1.15,speed:2.45,run:4.8,zone:'land',idle:/idle|look|sit/i,move:/walk|run/i},
   shark:{label:'Hai',asset:'shark',size:4.2,speed:3.4,run:5.1,zone:'water',idle:/swim/i,move:/swim/i,predator:true},
-  orca:{label:'Orka',asset:'orca',size:4.9,speed:3.2,run:5.4,zone:'water',idle:/berenang|swim/i,move:/berenang|swim/i,predator:true}
+  orca:{label:'Orka',asset:'orca',size:4.9,speed:3.2,run:5.4,zone:'water',idle:/berenang|swim/i,move:/berenang|swim/i,predator:true,yawOffset:-Math.PI/2}
 });
 const SEASONS = Object.freeze([
   { id: 'spring', name: 'Frühling', icon: '🌱', ground: 0x6d8f4d, foliage: 0x4f823f, fog: 0xb8d4c1, sky: 0x78a9cf, temp: 13 },
@@ -516,7 +517,7 @@ class CenterDynastyGame {
     this.centerAssetTemplates = new Map();
     this.centerAssetLoadPromise = null;
     this.natureTreeNames = ['ARVORE_SEM','Branches01','Componen12','Group23','Group27','Group4','Group5','Group6'];
-    this.natureCloudNames = ['NUVEM1','NUVEM_0201','NUVEM_02_1','NUVEM_1_1','NUVEM_2_1'];
+    this.natureCloudNames = [];
     this.ownerScooterObject = null;
     this.mountAnimal = null;
     this.mountedHorse = null;
@@ -531,6 +532,8 @@ class CenterDynastyGame {
     this.onlineHeartbeatTimer = 0;
     this.onlinePublishTimer = 0;
     this.onlineRetryTimer = 0;
+    this.onlineRefreshTimer = 0;
+    this.onlineRefreshInFlight = false;
     this.onlineRetryAttempt = 0;
     this.onlineCompatibilityMode = false;
     this.onlineConnected = false;
@@ -546,8 +549,9 @@ class CenterDynastyGame {
     this.ownerVerificationChecked = false;
     this.ownerVerifiedByFirebase = false;
     this.verifiedStaffRole = 'player';
-    this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, freezeTime: false };
+    this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, speedMultiplier: 1, freezeTime: false };
     this.ownerAura = null;
+    this.transformationEffects = [];
     this.ownerPanel = null;
     this.ownerPanelBody = null;
     this.ownerMenuButton = null;
@@ -1022,6 +1026,7 @@ class CenterDynastyGame {
     document.body.style.overflow = this.bodyOverflow;
     clearInterval(this.rolePollTimer);
     this.rolePollTimer = 0;
+    for(const effect of this.transformationEffects.splice(0))this.disposeTransformationEffect(effect);
   }
 
   async initialize() {
@@ -1116,11 +1121,17 @@ class CenterDynastyGame {
   createAnimalVisual(type){
     const profile=ANIMAL_PROFILES[type];if(!profile)return null;
     const nodeName=type==='horse'?'Cylinder':'';
-    const root=this.cloneCenterAsset(profile.asset,{nodeName,targetSize:profile.size,bottomAlign:profile.zone==='land',rotateY:type==='horse'?Math.PI/2:0});
-    if(!root)return null;
+    const raw=this.cloneCenterAsset(profile.asset,{nodeName,targetSize:profile.size,bottomAlign:profile.zone==='land'});
+    if(!raw)return null;
+    // V258: Die Modellorientierung bleibt exakt so, wie sie aus der GLB kommt.
+    // Zusätzliche Richtungs-Korrekturen liegen auf einem separaten Yaw-Wrapper.
+    // Dadurch kippt das Reitpferd nicht mehr auf die Seite und Wasser-Tiere lassen
+    // sich drehen, ohne ihre interne Up-Achse zu zerstören.
+    const root=new THREE.Group();root.name=`center-animal-visual-${type}`;root.add(raw);
+    root.rotation.y=Number(profile.yawOffset||0);
     const template=this.centerAssetTemplates.get(profile.asset);let mixer=null,idleAction=null,moveAction=null;
-    if(!nodeName&&template?.animations?.length){mixer=new THREE.AnimationMixer(root);const clips=template.animations.map((clip)=>this.makeAnimalClipInPlace(clip));const idleClip=clips.find((clip)=>profile.idle?.test?.(clip.name||''))||clips[0];const moveClip=clips.find((clip)=>profile.move?.test?.(clip.name||''))||idleClip;if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.play();}if(moveClip){moveAction=mixer.clipAction(moveClip);if(moveAction!==idleAction){moveAction.play();moveAction.enabled=false;}}}
-    root.userData.centerAnimalType=type;root.userData.mixer=mixer;root.userData.idleAction=idleAction;root.userData.moveAction=moveAction;return root;
+    if(!nodeName&&template?.animations?.length){mixer=new THREE.AnimationMixer(raw);const clips=template.animations.map((clip)=>this.makeAnimalClipInPlace(clip));const idleClip=clips.find((clip)=>profile.idle?.test?.(clip.name||''))||clips[0];const moveClip=clips.find((clip)=>profile.move?.test?.(clip.name||''))||idleClip;if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.play();}if(moveClip){moveAction=mixer.clipAction(moveClip);if(moveAction!==idleAction){moveAction.play();moveAction.enabled=false;}}}
+    root.userData.centerAnimalType=type;root.userData.assetRoot=raw;root.userData.mixer=mixer;root.userData.idleAction=idleAction;root.userData.moveAction=moveAction;return root;
   }
 
   setAnimalAnimation(animal,moving=true,delta=.016){
@@ -1130,8 +1141,29 @@ class CenterDynastyGame {
   }
 
   installNatureClouds(){
-    if(!this.cloudGroup)return;this.cloudGroup.clear();const ready=this.centerAssetTemplates.has('naturePack');if(!ready)return;
-    const rnd=seededRandom(WORLD_SEED+7401);for(let i=0;i<15;i+=1){const name=this.natureCloudNames[i%this.natureCloudNames.length],cloud=this.cloneCenterAsset('naturePack',{nodeName:name,targetSize:18+rnd()*17,bottomAlign:false});if(!cloud)continue;cloud.position.set(-290+rnd()*580,72+rnd()*72,-235+rnd()*470);cloud.rotation.y=rnd()*Math.PI*2;cloud.userData.baseOpacity=.32+rnd()*.22;cloud.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=cloud.userData.baseOpacity;mat.depthWrite=false;mat.roughness=1;mat.metalness=0;mat.color?.lerp?.(new THREE.Color(0xf3f5f8),.72);}});this.cloudGroup.add(cloud);}
+    if(!this.cloudGroup)return;
+    this.cloudGroup.clear();
+    // V258: Keine Cloud-Nodes mehr aus dem Baum/Wolken-Pack. Einige davon
+    // enthielten importierte Zweige/Objekte und erschienen als schwebende Stöcke.
+    // Die Wolken werden vollständig prozedural und damit sauber kontrollierbar gebaut.
+    const rnd=seededRandom(WORLD_SEED+7401);
+    const cloudGeo=new THREE.IcosahedronGeometry(1,2);
+    for(let i=0;i<13;i+=1){
+      const cloud=new THREE.Group();cloud.name='center-procedural-cloud';cloud.userData.baseOpacity=.28+rnd()*.16;
+      const puffCount=4+Math.floor(rnd()*4);
+      for(let p=0;p<puffCount;p+=1){
+        const mat=new THREE.MeshStandardMaterial({color:0xf0f3f5,roughness:1,metalness:0,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
+        const puff=new THREE.Mesh(cloudGeo,mat);
+        const sx=4.8+rnd()*5.8,sy=1.7+rnd()*2.4,sz=3.2+rnd()*4.8;
+        puff.scale.set(sx,sy,sz);
+        puff.position.set((p-(puffCount-1)/2)*(3.8+rnd()*1.4)+(rnd()-.5)*2.2,(rnd()-.5)*1.7,(rnd()-.5)*4.2);
+        cloud.add(puff);
+      }
+      cloud.position.set(-305+rnd()*610,78+rnd()*58,-245+rnd()*490);
+      cloud.rotation.y=rnd()*Math.PI*2;
+      cloud.scale.setScalar(.72+rnd()*.58);
+      this.cloudGroup.add(cloud);
+    }
   }
 
   decorateChunkWithAssetTrees(chunk){
@@ -2302,12 +2334,12 @@ class CenterDynastyGame {
       bone.userData.__centerIdleQuaternion=q;
       bone.userData.__centerIdlePosition=bone.userData.__centerBindPosition?.clone?.()||bone.position.clone();
     };
-    // V247: Mixamo- und Bip-Figuren verlassen im Stand die T-Pose weich und gehen
-    // in eine lockere, leicht asymmetrische Ruhehaltung zurück.
-    setTarget(this.playerBones.upperRight,{x:.05,y:.03,z:1.28});
-    setTarget(this.playerBones.upperLeft,{x:.04,y:-.03,z:-1.28});
-    setTarget(this.playerBones.lowerRight,{x:-.16,y:-.02,z:.08});
-    setTarget(this.playerBones.lowerLeft,{x:-.14,y:.02,z:-.08});
+    // V258: Arme deutlich enger am Körper. Der weiße Owner-Skin und die
+    // Standardfiguren stehen damit entspannt statt breit/T-Pose-artig.
+    setTarget(this.playerBones.upperRight,{x:.025,y:.018,z:1.49});
+    setTarget(this.playerBones.upperLeft,{x:.025,y:-.018,z:-1.49});
+    setTarget(this.playerBones.lowerRight,{x:-.075,y:-.012,z:.025});
+    setTarget(this.playerBones.lowerLeft,{x:-.075,y:.012,z:-.025});
     setTarget(this.playerBones.shoulderRight,{z:.01});
     setTarget(this.playerBones.shoulderLeft,{z:-.01});
     setTarget(this.playerBones.chest,{x:.01});
@@ -2410,9 +2442,9 @@ class CenterDynastyGame {
     this.flightEffects.root.visible=flying;
     for(const holder of [this.flightEffects.left,this.flightEffects.right])holder.visible=flying;
     if(!flying)return;
-    const speedLevel=Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1));
+    const speedMultiplier=clamp(Number(this.ownerFlags.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER);
     const inputBoost=moving?.22:0;
-    const strength=.74+speedLevel*.48+(sprint?.38:0)+inputBoost+Math.min(.36,Math.abs(this.flightVerticalVelocity)*.04);
+    const strength=.74+Math.min(2.2,(speedMultiplier-1)*.22)+(sprint?.38:0)+inputBoost+Math.min(.36,Math.abs(this.flightVerticalVelocity)*.04);
     const pulse=1+Math.sin(performance.now()*.018)*.08;
     for(const holder of [this.flightEffects.left,this.flightEffects.right]){
       if(holder.userData.worldDown&&holder.parent){
@@ -2489,25 +2521,36 @@ class CenterDynastyGame {
   }
 
   createGalaxyAuraGroup(compact=false) {
+    // V258: Ruhigere, erwachsenere Galaxy-Aura. Weniger bunte Partikel,
+    // dafür dunkle Sternenstaub-Wirbel, zwei Energie-Orbits und ein dezentes Bodenhalo.
     const root=new THREE.Group();root.name=compact?'remote-owner-galaxy-aura':'owner-galaxy-aura';root.userData.compact=compact;
-    const particleCount=compact?42:96,positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*4);
-    const palette=[new THREE.Color(0x7f58c9),new THREE.Color(0x43306f),new THREE.Color(0x6688c7),new THREE.Color(0xd9d4ee),new THREE.Color(0x9b83d2)];const rnd=seededRandom(compact?9941:24706);
-    for(let i=0;i<particleCount;i+=1){const radius=.42+rnd()*.72,angle=rnd()*Math.PI*2,height=.06+rnd()*2.05;positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=height;positions[i*3+2]=Math.sin(angle)*radius;const c=palette[Math.floor(rnd()*palette.length)];colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;seeds[i*4]=radius;seeds[i*4+1]=angle;seeds[i*4+2]=height;seeds[i*4+3]=.45+rnd()*.72;}
+    const particleCount=compact?30:58,positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*4);
+    const palette=[new THREE.Color(0x6f49c8),new THREE.Color(0x362260),new THREE.Color(0x4b78b7),new THREE.Color(0xb8c9ef),new THREE.Color(0x9e4f88)];
+    const rnd=seededRandom(compact?9941:24706);
+    for(let i=0;i<particleCount;i+=1){
+      const radius=.34+rnd()*.72,angle=rnd()*Math.PI*2,height=.04+rnd()*2.02;
+      positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=height;positions[i*3+2]=Math.sin(angle)*radius;
+      const c=palette[Math.floor(rnd()*palette.length)];colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
+      seeds[i*4]=radius;seeds[i*4+1]=angle;seeds[i*4+2]=height;seeds[i*4+3]=.32+rnd()*.52;
+    }
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
-    const material=new THREE.PointsMaterial({size:compact?.028:.04,vertexColors:true,transparent:true,opacity:.68,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true});const points=new THREE.Points(geometry,material);root.add(points);
-    const ringMat=new THREE.MeshBasicMaterial({color:0x8063c6,transparent:true,opacity:compact?.18:.25,depthWrite:false,blending:THREE.AdditiveBlending});root.userData.rings=[];
-    for(let i=0;i<(compact?1:3);i+=1){const ring=new THREE.Mesh(new THREE.TorusGeometry(.62+i*.11,.009+(i*.002),6,64),ringMat.clone());ring.position.y=.08+i*.68;ring.rotation.x=Math.PI/2+(i-1)*.12;ring.rotation.z=i*.38;root.add(ring);root.userData.rings.push(ring);}
-    const shell=new THREE.Mesh(new THREE.SphereGeometry(.72,24,16),new THREE.MeshBasicMaterial({color:0x2b1848,transparent:true,opacity:.025,depthWrite:false,side:THREE.BackSide,blending:THREE.AdditiveBlending}));shell.position.y=1.05;shell.scale.set(.92,1.48,.92);root.add(shell);
-    const light=new THREE.PointLight(0x7150ae,compact?.55:1.35,compact?4.5:7.5,2);light.position.set(0,1.05,.05);root.add(light);
-    root.userData.points=points;root.userData.seeds=seeds;root.userData.shell=shell;root.userData.light=light;root.visible=false;return root;
+    const material=new THREE.PointsMaterial({size:compact?.018:.026,vertexColors:true,transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true});
+    const points=new THREE.Points(geometry,material);root.add(points);
+    const orbitMat=new THREE.MeshBasicMaterial({color:0x6a4cae,transparent:true,opacity:compact?.12:.17,depthWrite:false,blending:THREE.AdditiveBlending});
+    const orbitA=new THREE.Mesh(new THREE.TorusGeometry(.66,.008,6,72),orbitMat.clone());orbitA.position.y=.82;orbitA.rotation.set(1.22,.28,.18);root.add(orbitA);
+    const orbitB=new THREE.Mesh(new THREE.TorusGeometry(.54,.006,6,72),orbitMat.clone());orbitB.material.color.set(0x456ea8);orbitB.position.y=1.42;orbitB.rotation.set(.78,-.46,-.24);root.add(orbitB);
+    const ground=new THREE.Mesh(new THREE.TorusGeometry(.58,.012,6,72),new THREE.MeshBasicMaterial({color:0x46306f,transparent:true,opacity:compact?.1:.16,depthWrite:false,blending:THREE.AdditiveBlending}));ground.rotation.x=Math.PI/2;ground.position.y=.035;root.add(ground);
+    const light=new THREE.PointLight(0x6948a4,compact?.34:.72,compact?3.6:5.6,2);light.position.set(0,1.05,.05);root.add(light);
+    root.userData.points=points;root.userData.seeds=seeds;root.userData.orbitA=orbitA;root.userData.orbitB=orbitB;root.userData.ground=ground;root.userData.light=light;root.visible=false;return root;
   }
 
   animateGalaxyAura(aura,delta=.016,now=performance.now()) {
     if(!aura?.visible)return;const points=aura.userData.points,seeds=aura.userData.seeds;
-    if(points&&seeds){const arr=points.geometry.attributes.position.array;for(let i=0;i<seeds.length/4;i+=1){const radius=seeds[i*4],baseAngle=seeds[i*4+1],baseHeight=seeds[i*4+2],speed=seeds[i*4+3],angle=baseAngle+now*.00022*speed,rise=(baseHeight+now*.00008*speed)%2.08,pulse=1+Math.sin(now*.0015+baseAngle*2.2)*.045;arr[i*3]=Math.cos(angle)*radius*pulse;arr[i*3+1]=.05+rise;arr[i*3+2]=Math.sin(angle)*radius*pulse;}points.geometry.attributes.position.needsUpdate=true;points.rotation.y+=delta*.045;points.material.opacity=.54+Math.sin(now*.0022)*.09;}
-    for(let i=0;i<(aura.userData.rings||[]).length;i+=1){const ring=aura.userData.rings[i];ring.rotation.z+=(i%2?-.11:.08)*delta;ring.rotation.y+=(i%2?.06:-.045)*delta;ring.material.opacity=(aura.userData.compact?.14:.2)+Math.sin(now*.0018+i)*.035;}
-    if(aura.userData.shell){const pulse=1+Math.sin(now*.0017)*.018;aura.userData.shell.scale.set(.92*pulse,1.48*pulse,.92*pulse);aura.userData.shell.material.opacity=.018+Math.sin(now*.0015)*.006;}
-    if(aura.userData.light)aura.userData.light.intensity=(aura.userData.compact?.5:1.2)+Math.sin(now*.0025)*.18;
+    if(points&&seeds){const arr=points.geometry.attributes.position.array;for(let i=0;i<seeds.length/4;i+=1){const radius=seeds[i*4],baseAngle=seeds[i*4+1],baseHeight=seeds[i*4+2],speed=seeds[i*4+3],angle=baseAngle+now*.00016*speed,rise=(baseHeight+now*.000045*speed)%2.04,pulse=1+Math.sin(now*.0011+baseAngle*1.8)*.025;arr[i*3]=Math.cos(angle)*radius*pulse;arr[i*3+1]=.03+rise;arr[i*3+2]=Math.sin(angle)*radius*pulse;}points.geometry.attributes.position.needsUpdate=true;points.rotation.y+=delta*.025;points.material.opacity=.42+Math.sin(now*.0017)*.055;}
+    if(aura.userData.orbitA){aura.userData.orbitA.rotation.z+=delta*.085;aura.userData.orbitA.rotation.y+=delta*.035;aura.userData.orbitA.material.opacity=(aura.userData.compact?.09:.145)+Math.sin(now*.0015)*.018;}
+    if(aura.userData.orbitB){aura.userData.orbitB.rotation.z-=delta*.065;aura.userData.orbitB.rotation.y-=delta*.028;aura.userData.orbitB.material.opacity=(aura.userData.compact?.075:.12)+Math.sin(now*.0013+1.1)*.016;}
+    if(aura.userData.ground){const p=1+Math.sin(now*.0014)*.025;aura.userData.ground.scale.setScalar(p);aura.userData.ground.material.opacity=(aura.userData.compact?.075:.12)+Math.sin(now*.0018)*.02;}
+    if(aura.userData.light)aura.userData.light.intensity=(aura.userData.compact?.3:.64)+Math.sin(now*.002)*.08;
   }
 
   ensureOwnerAura() {
@@ -2544,8 +2587,19 @@ class CenterDynastyGame {
       const segments=7,geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segments*6),3));const lightning=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xa88bdb,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending}));lightning.position.y=1.08;group.add(lightning);group.userData.lightning=lightning;
       const pCount=20,pPos=new Float32Array(pCount*3);for(let i=0;i<pCount;i+=1){const a=i/pCount*Math.PI*2,r=.2+(i%4)*.018;pPos[i*3]=Math.cos(a)*r;pPos[i*3+1]=(i%5-2)*.035;pPos[i*3+2]=Math.sin(a)*r;}const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));const sparkles=new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xd9d0ea,size:.025,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending}));sparkles.position.y=1.08;group.add(sparkles);group.userData.sparkles=sparkles;group.rotation.set(.02,0,-.13);
     }else if(kind==='eternalFlame'){
-      const asset=this.cloneCenterAsset('eternalFlame',{targetSize:1.4,bottomAlign:true});if(asset){asset.position.y=-.18;asset.traverse((object)=>{if(!object.isMesh)return;const flame=/flame/i.test(object.name||'');const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(flame){mat.emissive?.set?.(0xff5a16);mat.emissiveIntensity=3.4;mat.transparent=true;mat.opacity=.96;}}});group.add(asset);group.userData.flameAsset=asset;group.userData.assetBased=true;}
-      const glow=new THREE.PointLight(0xff7428,5.6,22,2);glow.position.set(0,.82,.05);group.add(glow);group.userData.light=glow;const red=new THREE.PointLight(0xff2e18,1.5,8,2);red.position.set(0,.9,.1);group.add(red);group.userData.redLight=red;group.rotation.set(.02,0,-.1);
+      // V258: Die fehlerhaft exportierte GLB wird absichtlich nicht mehr gerendert.
+      // Stattdessen entsteht die Ewige Flamme vollständig im Galaxy-Design.
+      const galaxyTexture=this.createGalaxyTexture(96,220);
+      const handleMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x2e174e,emissiveIntensity:.75,metalness:.82,roughness:.2});
+      const trimMat=new THREE.MeshStandardMaterial({color:0x15131c,emissive:0x251638,emissiveIntensity:.38,metalness:.9,roughness:.18});
+      addCylinder(.038,.05,.92,handleMat,-.15,18);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.085,1),new THREE.MeshStandardMaterial({color:0x7657a7,emissive:0x5b2f93,emissiveIntensity:1.45,metalness:.35,roughness:.12}));pommel.position.y=-.67;group.add(pommel);
+      const cup=new THREE.Mesh(new THREE.CylinderGeometry(.16,.11,.16,16),trimMat);cup.position.y=.38;group.add(cup);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,8,36),new THREE.MeshBasicMaterial({color:0x8c6acb,transparent:true,opacity:.72,blending:THREE.AdditiveBlending,depthWrite:false}));ring.position.y=.48;ring.rotation.x=Math.PI/2;group.add(ring);group.userData.flameRing=ring;
+      const flameParts=[];
+      const makeFlame=(radius,height,y,color,emissive,opacity,scaleZ=1)=>{const mat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:3.2,transparent:true,opacity,roughness:.18,metalness:0,depthWrite:false,blending:THREE.AdditiveBlending});const flame=new THREE.Mesh(new THREE.ConeGeometry(radius,height,14),mat);flame.position.y=y;flame.scale.z=scaleZ;group.add(flame);flameParts.push(flame);return flame;};
+      makeFlame(.18,.68,.82,0x7e51d9,0x4c1fa2,.82,.8);makeFlame(.12,.56,.9,0x55b9ff,0x2677d6,.72,.72);makeFlame(.075,.44,.98,0xff557f,0xb52358,.6,.7);
+      const core=new THREE.Mesh(new THREE.SphereGeometry(.085,12,8),new THREE.MeshBasicMaterial({color:0xe3d8ff,transparent:true,opacity:.82,blending:THREE.AdditiveBlending,depthWrite:false}));core.position.y=.68;group.add(core);group.userData.flameCore=core;group.userData.flameParts=flameParts;
+      const glow=new THREE.PointLight(0x8e62ff,4.4,20,2);glow.position.set(0,.82,.05);group.add(glow);group.userData.light=glow;const blue=new THREE.PointLight(0x4ca6ff,1.65,9,2);blue.position.set(0,.92,.12);group.add(blue);group.userData.blueLight=blue;group.rotation.set(.02,0,-.08);
     }else if(kind==='torch'){
       addCylinder(.05,.07,1.02,wood,.18);const wrap=new THREE.Mesh(new THREE.CylinderGeometry(.1,.085,.26,8),new THREE.MeshStandardMaterial({color:0x3b2719,roughness:1}));wrap.position.y=.76;group.add(wrap);const flameMat=new THREE.MeshStandardMaterial({color:0xffd45c,emissive:0xff4a00,emissiveIntensity:3,transparent:true,opacity:.94});const flame=new THREE.Mesh(new THREE.ConeGeometry(.13,.43,10),flameMat);flame.position.y=1.04;group.add(flame);group.userData.flame=flame;const light=new THREE.PointLight(0xff8b32,4.2,18,2);light.position.y=1.02;group.add(light);group.userData.light=light;group.rotation.set(.02,0,-.12);
     }else if(kind==='spear'){
@@ -2553,7 +2607,7 @@ class CenterDynastyGame {
     }else if(kind==='bow'){
       const curve=new THREE.Mesh(new THREE.TorusGeometry(.48,.025,8,40,Math.PI*1.45),wood);curve.rotation.z=.78;curve.position.y=.52;group.add(curve);const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.31,.13,0),new THREE.Vector3(.32,.91,0)]);group.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd9d2c6})));group.rotation.set(.03,0,-.08);
     }
-    const scale={staff:.9,sword:.58,axe:.82,pickaxe:.82,hammer:.82,eternalFlame:.78,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});return group;
+    const scale={staff:.74,sword:.50,axe:.82,pickaxe:.82,hammer:.82,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});return group;
   }
 
   createOwnerForm(kind='ball') {
@@ -2591,7 +2645,16 @@ class CenterDynastyGame {
   }
 
   applyScooterPose(delta=.016){
-    if(!this.playerModel)return;this.applyIdlePose(delta,false);const alpha=1-Math.exp(-Math.max(.001,delta)*9),q=(bone,euler)=>{if(!bone)return;const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;if(!base)return;const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};q(this.playerBones.upperRight,{x:-.78,z:-.08});q(this.playerBones.upperLeft,{x:-.78,z:.08});q(this.playerBones.lowerRight,{x:-.52});q(this.playerBones.lowerLeft,{x:-.52});q(this.playerBones.upperLegRight,{x:.04});q(this.playerBones.upperLegLeft,{x:.04});
+    if(!this.playerModel)return;
+    this.applyIdlePose(delta,false);
+    const alpha=1-Math.exp(-Math.max(.001,delta)*10),q=(bone,euler)=>{if(!bone)return;const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;if(!base)return;const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};
+    // Beide Arme greifen nach vorne zum Lenker.
+    q(this.playerBones.upperRight,{x:-1.08,y:-.08,z:-.04});q(this.playerBones.upperLeft,{x:-1.08,y:.08,z:.04});
+    q(this.playerBones.lowerRight,{x:-.72,y:-.04,z:.02});q(this.playerBones.lowerLeft,{x:-.72,y:.04,z:-.02});
+    // Beide Füße bleiben mittig auf dem Trittbrett, ein Fuß leicht vor dem anderen.
+    q(this.playerBones.upperLegRight,{x:-.12,z:.015});q(this.playerBones.lowerLegRight,{x:.12});q(this.playerBones.footRight,{x:-.05});
+    q(this.playerBones.upperLegLeft,{x:.14,z:-.015});q(this.playerBones.lowerLegLeft,{x:.08});q(this.playerBones.footLeft,{x:-.04});
+    q(this.playerBones.chest,{x:-.035});
   }
 
   applyStaffVehicle(){
@@ -2658,25 +2721,42 @@ class CenterDynastyGame {
     const mesh=this.createHeldItemMesh(kind);if(!mesh)return;
     const hand=this.playerBones.handRight;
     if(hand){
-      const anchor=new THREE.Group();anchor.name='center-held-item-grip';hand.add(anchor);anchor.add(mesh);
-      // V217: Die prozeduralen Items werden an der Hand aufgerichtet und leicht in
-      // Blickrichtung geneigt. Der Griff sitzt näher in der Hand; Axt/Hammer bleiben
-      // kompakt, sind aber deutlich sichtbar.
-      const grips={
-        sword:{p:[.015,-.07,.07],r:[Math.PI-.18,.05,-.16]},
-        axe:{p:[.012,-.08,.07],r:[Math.PI-.22,.04,-.18]},
-        hammer:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
-        pickaxe:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
-        staff:{p:[.015,-.09,.09],r:[Math.PI+.16,.04,-.16]},
-        eternalFlame:{p:[.012,-.08,.072],r:[Math.PI-.16,.02,-.12]},
-        torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},
-        spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},
-        bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}
-      };
-      const tr=grips[kind]||grips.sword;anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;
+      const anchor=new THREE.Group();anchor.name='center-held-item-grip';anchor.userData.kind=kind;
+      // V258: Galaxy-Schwert, Galaxy-Stab und Ewige Flamme folgen der Handposition,
+      // ihre Richtung wird aber relativ zur Figur fixiert. So können Rig-Animationen
+      // die langen Owner-Items nicht mehr nach hinten oder quer durch die Welt drehen.
+      if(['sword','staff','eternalFlame'].includes(kind)){
+        anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);
+      }else{
+        hand.add(anchor);
+        const grips={
+          axe:{p:[.012,-.08,.07],r:[Math.PI-.22,.04,-.18]},
+          hammer:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
+          pickaxe:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
+          torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},
+          spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},
+          bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}
+        };
+        const tr=grips[kind]||{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]};anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);
+      }
+      anchor.add(mesh);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;
     }else this.modelPivot.add(mesh);
     this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;
+    this.syncOwnerHeldAnchorPose();
     this.createFirstPersonHeldItem(kind);this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();
+  }
+
+  syncOwnerHeldAnchorPose(){
+    const anchor=this.ownerHeldAnchor;if(!anchor?.userData?.worldLockedGrip||!this.modelPivot)return;
+    const hand=this.playerBones.handRight;if(!hand)return;
+    this.modelPivot.updateWorldMatrix?.(true,false);hand.updateWorldMatrix?.(true,false);hand.getWorldPosition(this.tmpVector);this.modelPivot.worldToLocal(this.tmpVector);anchor.position.copy(this.tmpVector);
+    const kind=anchor.userData.kind||this.ownerHeldObject?.userData?.kind||'sword';
+    const transforms={
+      sword:{p:[.02,-.025,.055],r:[.70,.02,-.08]},
+      staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
+      eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]}
+    };
+    const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
 
   animateHeldItemEffects(item,now=performance.now()) {
@@ -2688,11 +2768,12 @@ class CenterDynastyGame {
       if(item.userData.orbitA){item.userData.orbitA.rotation.z=now*.00065;item.userData.orbitA.rotation.y=now*.00032;}if(item.userData.orbitB){item.userData.orbitB.rotation.z=-now*.00052;item.userData.orbitB.rotation.y=-now*.0004;}
       if(item.userData.sparkles)item.userData.sparkles.rotation.y=now*.001;if(item.userData.light)item.userData.light.intensity=2.05+Math.sin(now*.003)*.28;
     }
-    if(kind==='eternalFlame'){const pulse=.88+Math.sin(now*.011)*.12;if(item.userData.flameAsset)item.userData.flameAsset.scale.y=pulse;if(item.userData.light)item.userData.light.intensity=5+Math.sin(now*.013)*1.1;if(item.userData.redLight)item.userData.redLight.intensity=1.15+Math.sin(now*.017+1.2)*.35;}
+    if(kind==='eternalFlame'){const parts=item.userData.flameParts||[];parts.forEach((flame,index)=>{const pulse=1+Math.sin(now*.009+index*1.7)*(.08+index*.02);flame.scale.y=pulse;flame.rotation.y=now*(.0014+index*.0005)*(index%2?-1:1);flame.rotation.z=Math.sin(now*.006+index)*.045;});if(item.userData.flameRing){item.userData.flameRing.rotation.z=now*.0012;item.userData.flameRing.material.opacity=.56+Math.sin(now*.004)*.12;}if(item.userData.flameCore)item.userData.flameCore.scale.setScalar(.92+Math.sin(now*.012)*.12);if(item.userData.light)item.userData.light.intensity=4.1+Math.sin(now*.01)*.65;if(item.userData.blueLight)item.userData.blueLight.intensity=1.35+Math.sin(now*.014+1)*.28;}
     if(kind==='torch'&&item.userData.flame){item.userData.flame.scale.y=.82+Math.sin(now*.018)*.18;item.userData.flame.rotation.y=now*.004;if(item.userData.light)item.userData.light.intensity=3.6+Math.sin(now*.02)*.7;}
   }
 
   updateHeldItemTransform(now=performance.now()) {
+    this.syncOwnerHeldAnchorPose();
     this.animateHeldItemEffects(this.ownerHeldObject,now);this.animateHeldItemEffects(this.firstPersonHeldObject,now);
   }
 
@@ -2710,13 +2791,40 @@ class CenterDynastyGame {
   applyOwnerWearables(){
     this.ownerCapeObject?.removeFromParent?.();this.ownerHatObject?.removeFromParent?.();this.ownerCapeObject=null;this.ownerHatObject=null;
     if(!this.isOwnerActive||!['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal'))return;
-    if(this.state.ownerAppearance?.cape){const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);cape.position.set(0,1.68,-.19);cape.rotation.set(.06,0,0);this.ownerCapeObject=cape;}
-    if(this.state.ownerAppearance?.hat){const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);hat.position.set(0,2.05,0);hat.rotation.set(0,0,0);this.ownerHatObject=hat;}
+    if(this.state.ownerAppearance?.cape){const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);cape.position.set(0,1.62,-.075);cape.rotation.set(.035,0,0);this.ownerCapeObject=cape;}
+    if(this.state.ownerAppearance?.hat){const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);hat.position.set(0,1.82,0);hat.rotation.set(0,0,0);this.ownerHatObject=hat;}
   }
 
   updateOwnerWearables(delta=.016,now=performance.now()){
     if(this.ownerCapeObject?.userData?.segments){const speed=this.walking?.12:0,fly=(this.isStaffActive&&this.ownerFlags.fly)?.28:0;this.ownerCapeObject.userData.segments.forEach((segment,index)=>{segment.rotation.x=.08+index*.025+Math.sin(now*.0026-index*.42)*(.035+speed)+fly;segment.rotation.z=Math.sin(now*.0018+index)*.018;});}
     if(this.ownerHatObject)this.ownerHatObject.rotation.y=Math.sin(now*.0009)*.035;
+  }
+
+  spawnTransformationEffectAt(position,compact=false){
+    if(!this.scene||!position)return;
+    const group=new THREE.Group();group.name='center-transformation-cloud';group.position.copy(position);group.position.y+=compact?.68:.88;
+    const radius=compact?.52:.7,puffSize=compact?.11:.15,colors=[0xe8e4ff,0xa36cff,0x6dd7ff,0xff7bd5];
+    const geometry=new THREE.IcosahedronGeometry(puffSize,1),puffs=[];
+    for(let i=0;i<14;i+=1){
+      const angle=(i/14)*Math.PI*2+Math.random()*.35,up=(Math.random()-.15)*.5;
+      const material=new THREE.MeshBasicMaterial({color:colors[i%colors.length],transparent:true,opacity:.58,depthWrite:false,blending:THREE.AdditiveBlending});
+      const puff=new THREE.Mesh(geometry,material),r=.12+Math.random()*radius*.35;
+      puff.position.set(Math.cos(angle)*r,(Math.random()-.35)*.34,Math.sin(angle)*r);
+      puff.scale.setScalar(.65+Math.random()*.75);group.add(puff);
+      puffs.push({mesh:puff,velocity:new THREE.Vector3(Math.cos(angle)*(radius*.78+Math.random()*.35),up+.34+Math.random()*.28,Math.sin(angle)*(radius*.78+Math.random()*.35)),spin:(Math.random()-.5)*3});
+    }
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(compact?.34:.46,.025,8,32),new THREE.MeshBasicMaterial({color:0xb96cff,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending}));ring.rotation.x=Math.PI/2;ring.position.y=-.42;group.add(ring);
+    const light=new THREE.PointLight(0x8a4cff,compact?.6:1.05,compact?2.4:3.6,2);light.position.y=.1;group.add(light);
+    this.scene.add(group);this.transformationEffects.push({group,puffs,ring,light,geometry,start:performance.now(),duration:compact?620:760});
+    while(this.transformationEffects.length>10){const old=this.transformationEffects.shift();this.disposeTransformationEffect(old);}
+  }
+
+  disposeTransformationEffect(effect){
+    if(!effect)return;effect.group?.removeFromParent?.();effect.group?.traverse?.((object)=>{if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats)mat?.dispose?.();}if(object.geometry&&object.geometry!==effect.geometry)object.geometry.dispose?.();});effect.geometry?.dispose?.();
+  }
+
+  updateTransformationEffects(delta=.016,now=performance.now()){
+    for(let i=this.transformationEffects.length-1;i>=0;i-=1){const effect=this.transformationEffects[i],t=clamp((now-effect.start)/effect.duration,0,1),fade=1-t;for(const puff of effect.puffs){puff.mesh.position.addScaledVector(puff.velocity,delta);puff.mesh.rotation.y+=puff.spin*delta;puff.mesh.rotation.x+=puff.spin*.45*delta;puff.mesh.scale.multiplyScalar(1+delta*.55);puff.mesh.material.opacity=.58*fade*fade;}if(effect.ring){const scale=1+t*1.7;effect.ring.scale.setScalar(scale);effect.ring.material.opacity=.45*fade;}if(effect.light)effect.light.intensity=(1-t)*(effect.duration<700?.6:1.05);if(t>=1){this.disposeTransformationEffect(effect);this.transformationEffects.splice(i,1);}}
   }
 
   applyOwnerAppearance() {
@@ -2795,7 +2903,7 @@ class CenterDynastyGame {
     if(!(caps.vehicles||['none']).includes(appearance.vehicle))appearance.vehicle='none';
     if(!this.isOwnerActive){appearance.aura=false;appearance.cape=false;appearance.hat=false;if(appearance.skin==='galaxy')appearance.skin='normal';}
     for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;
-    if(!caps.speed)this.ownerFlags.speedLevel=0;
+    if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1;
     if(!this.isStaffActive)this.closeOwnerMenu();
     const after=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}`;
     if(previousRole!==activeRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
@@ -2930,7 +3038,7 @@ class CenterDynastyGame {
     const owner=this.isStaffActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god,scooter=owner&&this.state.ownerAppearance?.vehicle==='scooter'&&!!this.ownerScooterObject,mounted=!!this.mountedHorse;
     const inWater=!fly&&!mounted&&!scooter&&this.isInWater(this.player.position.x,this.player.position.z);
     const sprint=input.sprint&&(god||this.state.needs.stamina>2)&&!inWater;
-    const speedBoost=owner?OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]:1;
+    const speedBoost=owner?clamp(Number(this.ownerFlags.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER):1;
     const baseSpeed=scooter?11.11:mounted?(sprint?13.2:8.9):(sprint?8.8:5.1);
     const speed=baseSpeed*(inWater?.48:1)*((this.state.needs.health<25&&!god)?.72:1)*(scooter?1:speedBoost);
     let movedDistance=0;
@@ -3904,8 +4012,11 @@ class CenterDynastyGame {
     this.onlineConnecting=false;
     clearInterval(this.onlineHeartbeatTimer);
     clearInterval(this.onlinePublishTimer);
+    clearInterval(this.onlineRefreshTimer);
     this.onlineHeartbeatTimer=0;
     this.onlinePublishTimer=0;
+    this.onlineRefreshTimer=0;
+    this.onlineRefreshInFlight=false;
     try{this.onlineUnsubscribe?.();}catch{}
     this.onlineUnsubscribe=null;
     const permission=isFirebasePermissionError(error);
@@ -3934,7 +4045,10 @@ class CenterDynastyGame {
       this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);
       await this.verifyLocalOwnerRole();
       await this.publishPresence(true);
-      const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));
+      // V258: Der Raum wird ueber die Map-ID abonniert. Der alte reine
+      // globale online==true-Abfrage konnte durch das Limit Spieler aus anderen Maps
+      // liefern und echte Center-Teammitglieder aus dem Ergebnis verdrängen.
+      const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.mapId','==',ONLINE_MAP_ID),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));
       try{this.onlineUnsubscribe?.();}catch{}
       this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>{
         this.onlineConnected=true;
@@ -3943,8 +4057,14 @@ class CenterDynastyGame {
       },(error)=>this.handleOnlineListenerError(error));
       clearInterval(this.onlineHeartbeatTimer);
       clearInterval(this.onlinePublishTimer);
+      clearInterval(this.onlineRefreshTimer);
       this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_HEARTBEAT_MS);
       this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_WRITE_INTERVAL_MS);
+      this.onlineRefreshTimer=setInterval(async()=>{
+        if(!this.opened||!this.onlineConnected||this.onlineRefreshInFlight)return;
+        this.onlineRefreshInFlight=true;
+        try{const snapshot=await fb.getDocs(q);await this.applyPresenceSnapshot(snapshot);}catch(error){if(!isFirebasePermissionError(error))console.warn('Center Online-Abgleich',error);}finally{this.onlineRefreshInFlight=false;}
+      },15000);
       this.onlineConnected=true;
       this.onlineConnecting=false;
       this.onlineRetryAttempt=0;
@@ -4002,8 +4122,11 @@ class CenterDynastyGame {
     if(userInitiated)this.clearOnlineReconnect();
     clearInterval(this.onlineHeartbeatTimer);
     clearInterval(this.onlinePublishTimer);
+    clearInterval(this.onlineRefreshTimer);
     this.onlineHeartbeatTimer=0;
     this.onlinePublishTimer=0;
+    this.onlineRefreshTimer=0;
+    this.onlineRefreshInFlight=false;
     try{this.onlineUnsubscribe?.();}catch{}
     this.onlineUnsubscribe=null;
     const fb=this.onlineFb,ref=this.onlineDocRef;
@@ -4041,9 +4164,11 @@ class CenterDynastyGame {
   async verifiedRemoteSkin(uid,live){const gender=live.gender==='female'?'female':'male';if(!live.ownerClaim||!this.onlineFb)return gender;const cached=this.remoteRoleCache.get(uid);if(cached&&Date.now()-cached.checkedAt<60000)return cached.isOwner?'owner':gender;let isOwner=false;try{const snap=await this.onlineFb.getDoc(this.onlineFb.doc(this.onlineFb.db,'staffRoles',uid));isOwner=snap.exists()&&String(snap.data()?.role||'').toLowerCase()==='owner';}catch{}this.remoteRoleCache.set(uid,{isOwner,checkedAt:Date.now()});return isOwner?'owner':gender;}
 
   async upsertRemotePlayer(uid,profile,live){
-    let remote=this.remotePlayers.get(uid);const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
+    let remote=this.remotePlayers.get(uid);const existed=!!remote,previousAppearance=remote?.appearanceSkin||'';const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
     if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,renderedAppearanceSkin:'',renderedVehicle:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
-    remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');remote.vehicle=String(live.vehicle||'none');remote.ownerAura=Object.prototype.hasOwnProperty.call(live,'ownerAura')?!!live.ownerAura:remote.appearanceSkin==='galaxy';remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
+    remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');
+    if(existed&&previousAppearance&&previousAppearance!==remote.appearanceSkin)this.spawnTransformationEffectAt(remote.group.position,true);
+    remote.vehicle=String(live.vehicle||'none');remote.ownerAura=Object.prototype.hasOwnProperty.call(live,'ownerAura')?!!live.ownerAura:remote.appearanceSkin==='galaxy';remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
     remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=Number(live.y||terrainHeightAt(remote.targetX,Number(live.z||0)));remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=Number(live.updatedAtMs||Date.now());
     const skin=await this.verifiedRemoteSkin(uid,live);if(remote.skin!==skin)await this.installRemoteModel(remote,skin);
     this.applyRemoteFormAndVehicle(remote);this.applyRemoteOwnerAura(remote);
@@ -4075,8 +4200,8 @@ class CenterDynastyGame {
     remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(mat.userData.__remoteAuraColor===undefined){mat.userData.__remoteAuraColor=mat.color?.getHex?.();mat.userData.__remoteAuraEmissive=mat.emissive?.getHex?.();mat.userData.__remoteAuraIntensity=mat.emissiveIntensity;}if(active){mat.color?.set?.(0x3b1268);mat.emissive?.set?.(0x6f1ac7);mat.emissiveIntensity=1.15;mat.transparent=true;mat.opacity=.74;}else{if(mat.userData.__remoteAuraColor!==undefined)mat.color?.setHex?.(mat.userData.__remoteAuraColor);if(mat.userData.__remoteAuraEmissive!==undefined)mat.emissive?.setHex?.(mat.userData.__remoteAuraEmissive);if(mat.userData.__remoteAuraIntensity!==undefined)mat.emissiveIntensity=mat.userData.__remoteAuraIntensity;mat.transparent=false;mat.opacity=1;}mat.needsUpdate=true;}});
     if(active&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=active;
     const ownerVisible=remote.skin==='owner'&&!remote.vanished&&!remote.formObject;
-    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.cape.position.set(0,1.58,-.16);remote.pivot.add(remote.cape);}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
-    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.hat.position.set(0,2.08,0);remote.pivot.add(remote.hat);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
+    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.cape.position.set(0,1.54,-.07);remote.pivot.add(remote.cape);}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
+    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.hat.position.set(0,1.82,0);remote.pivot.add(remote.hat);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
   }
 
   updateRemotePlayers(delta){
@@ -4095,21 +4220,26 @@ class CenterDynastyGame {
   ownerToggleButton(action,label,enabled,description=''){return `<button class="mdc-owner-toggle ${enabled?'active':''}" data-owner-action="${action}"><span>${enabled?'✓':'○'}</span><b>${label}</b><small>${description}</small></button>`;}
 
   renderOwnerMenu(){
-    if(!this.staffOnly())return;const f=this.ownerFlags,caps=this.staffCapabilities,speedNames=['Normal','Schnell','Extrem'],roleLabel=STAFF_ROLE_LABELS[this.activeStaffRole]||'Team';
+    if(!this.staffOnly())return;
+    const f=this.ownerFlags,caps=this.staffCapabilities,roleLabel=STAFF_ROLE_LABELS[this.activeStaffRole]||'Team';
     const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none',cape:false,hat:false,aura:false,vehicle:'none'};
+    const speedMultiplier=clamp(Number(f.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(f.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER);
     const onlinePlayers=[...this.remotePlayers.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
     const villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
     const landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
-    const movement=[caps.vanish&&this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Für andere vollständig unsichtbar'),caps.god&&this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Alle Überlebenswerte bleiben voll'),caps.noclip&&this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen'),caps.fly&&this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter'),caps.speed&&this.ownerToggleButton('cycle-speed',`Geschwindigkeit: ${speedNames[f.speedLevel]}`,f.speedLevel>0,'Normal, schnell oder extrem'),caps.freezeTime&&this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Nur deine lokale Weltzeit einfrieren')].filter(Boolean).join('');
+    const movement=[caps.vanish&&this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Für andere vollständig unsichtbar'),caps.god&&this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Alle Überlebenswerte bleiben voll'),caps.noclip&&this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen'),caps.fly&&this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter'),caps.freezeTime&&this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Nur deine lokale Weltzeit einfrieren')].filter(Boolean).join('');
     const utility=[caps.heal&&'<button data-owner-action="heal">❤ Alles heilen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="ground">↓ Sicher landen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="unstuck">↺ Befreien</button>',caps.world&&'<button data-owner-action="reveal">⌖ Orte aufdecken</button>'].filter(Boolean).join('');
-    const forms=(caps.forms||['normal']).map((id)=>[id,{normal:'Normal',galaxy:'Owner-Galaxy-Skin',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II'}[id]||id]);
-    const itemLabels={none:'Leer',sword:'Galaxy-Owner-Schwert',axe:'Axt · Basic Tools',staff:'Galaxy-Owner-Stab',hammer:'Hammer · Basic Tools',eternalFlame:'Ewige Flamme'};
+    const formLabels={normal:'Normal',galaxy:'Owner-Galaxy-Skin',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II'};
+    const forms=(caps.forms||['normal']).filter((id)=>!(this.isOwnerActive&&id==='galaxy')).map((id)=>[id,formLabels[id]||id]);
+    const itemLabels={none:'Leer',sword:'Galaxy-Owner-Schwert',axe:'Axt · Basic Tools',staff:'Galaxy-Owner-Stab',hammer:'Hammer · Basic Tools',eternalFlame:'Galaxy-Ewige-Flamme'};
+    const teamToolIds=['none',...(caps.items||[]).filter((id)=>['axe','hammer','eternalFlame'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index);
     const sections=[];
     sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div><h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
-    if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}${/galaxy/i.test(label)?'mdc-galaxy-action':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
-    if((caps.items||[]).length>1)sections.push(`<h3 class="${this.isOwnerActive?'mdc-galaxy-heading':''}">${this.isOwnerActive?'Galaxy-Owner-Ausrüstung':'Admin-Items'}</h3><div class="mdc-owner-actions three">${caps.items.map((id)=>{const label=itemLabels[id]||id;return `<button class="${appearance.heldItem===id?'active ':''}${/galaxy/i.test(label)?'mdc-galaxy-action':''}" data-owner-action="admin-item" data-owner-item="${id}">${label}</button>`;}).join('')}</div>`);
+    if(caps.speed)sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label><p class="mdc-note">Stufenlos von normal bis extrem schnell. Wirkt auf Laufen und Fly.</p></div>`);
+    if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
+    if(teamToolIds.length>1)sections.push(`<h3>Team-Werkzeuge</h3><div class="mdc-owner-actions three">${teamToolIds.map((id)=>`<button class="${appearance.heldItem===id?'active ':''}" data-owner-action="admin-item" data-owner-item="${id}">${itemLabels[id]||id}</button>`).join('')}</div>`);
+    if(this.isOwnerActive)sections.push(`<h3 class="mdc-galaxy-heading">Owner-Galaxy-Bereich</h3><div class="mdc-owner-actions three"><button class="mdc-galaxy-action ${appearance.skin==='galaxy'?'active':''}" data-owner-action="toggle-owner-galaxy-skin">${appearance.skin==='galaxy'?'✓ Galaxy-Skin AN':'○ Galaxy-Skin AUS'}</button><button class="mdc-galaxy-action ${appearance.heldItem==='sword'?'active':''}" data-owner-action="admin-item" data-owner-item="sword">Galaxy-Owner-Schwert</button><button class="mdc-galaxy-action ${appearance.heldItem==='staff'?'active':''}" data-owner-action="admin-item" data-owner-item="staff">Galaxy-Owner-Stab</button><button class="mdc-galaxy-action ${appearance.aura?'active':''}" data-owner-action="toggle-aura">${appearance.aura?'✓ Aura AN':'○ Aura AUS'}</button><button class="mdc-galaxy-action ${appearance.cape?'active':''}" data-owner-action="toggle-cape">${appearance.cape?'✓ Cape AN':'○ Cape AUS'}</button><button class="mdc-galaxy-action ${appearance.hat?'active':''}" data-owner-action="toggle-hat">${appearance.hat?'✓ Hut AN':'○ Hut AUS'}</button></div>`);
     if((caps.vehicles||[]).includes('scooter'))sections.push(`<h3>Team-Fahrzeuge</h3><div class="mdc-owner-actions"><button class="${appearance.vehicle==='scooter'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="scooter">🛴 Electro Scooter Weiß · 40 km/h</button>${appearance.vehicle==='scooter'?'<button data-owner-action="admin-vehicle" data-owner-vehicle="none">Scooter abstellen</button>':''}</div><p class="mdc-note">Nur Admin und Owner. Beim Fahren werden Hand-Items ausgeblendet und die Figur greift an den Lenker.</p>`);
-    if(this.isOwnerActive)sections.push(`<h3 class="mdc-galaxy-heading">Owner-Auftritt</h3><div class="mdc-owner-actions three"><button class="mdc-galaxy-action ${appearance.aura?'active':''}" data-owner-action="toggle-aura">${appearance.aura?'✓ Aura AN':'○ Aura AUS'}</button><button class="mdc-galaxy-action ${appearance.cape?'active':''}" data-owner-action="toggle-cape">${appearance.cape?'✓ Cape AN':'○ Cape AUS'}</button><button class="mdc-galaxy-action ${appearance.hat?'active':''}" data-owner-action="toggle-hat">${appearance.hat?'✓ Hut AN':'○ Hut AUS'}</button></div>`);
     if(caps.world)sections.push(`<h3>Welt und Zeit</h3><div class="mdc-owner-actions three"><button data-owner-action="time-day">☀ Tag</button><button data-owner-action="time-night">☾ Nacht</button><button data-owner-action="weather-clear">Klar</button><button data-owner-action="weather-rain">Regen</button><button data-owner-action="weather-snow">Schnee</button><button data-owner-action="season-next">Jahreszeit +</button></div>`);
     if(caps.resources)sections.push(`<h3>Ressourcen und Fortschritt</h3><div class="mdc-owner-grant"><select data-owner-resource>${Object.entries(RESOURCE_LABELS).map(([id,name])=>`<option value="${id}">${escapeHtml(name)}</option>`).join('')}</select><input data-owner-amount type="number" min="1" max="9999" value="100"><button data-owner-action="grant-resource">Hinzufügen</button></div><div class="mdc-owner-actions"><button data-owner-action="grant-all">Alle Ressourcen +100</button><button data-owner-action="grant-tools">Alle Werkzeuge 100 %</button><button data-owner-action="grant-skills">Skills und XP</button><button data-owner-action="respawn-resources">Ressourcen regenerieren</button></div>`);
     const staffBindRows=[['staffMenu','Team-Menü'],caps.vanish&&['vanish','Vanish'],caps.god&&['god','Unbesiegbar'],caps.fly&&['fly','Fly']].filter(Boolean);
@@ -4125,15 +4255,48 @@ class CenterDynastyGame {
   handleKeybindChange(event){const select=event.target.closest?.('[data-keybind-action]');if(!select)return;const action=select.dataset.keybindAction,code=select.value;if(!(action in DEFAULT_KEYBINDS)||!KEYBIND_OPTIONS.includes(code))return;this.state.keybinds[action]=code;this.saveState(true);this.toast(`Tastenbelegung gespeichert: ${KEYBIND_LABELS[code]||code}`);}
   toggleStaffFlag(key){if(!this.isStaffActive)return;const capability={vanish:'vanish',god:'god',fly:'fly'}[key];if(!capability||!this.canStaff(capability))return;this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,floor);this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}else{this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightLean=0;this.flightRoll=0;if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=0;this.flightVisualPivot.rotation.z=0;}}}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});}
 
-  handleOwnerInput(event){if(!this.staffOnly())return;const sizeInput=event.target.closest?.('[data-owner-size]');if(sizeInput&&this.canStaff('size')){this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});}}
+  handleOwnerInput(event){
+    if(!this.staffOnly())return;
+    const speedInput=event.target.closest?.('[data-owner-speed]');
+    if(speedInput&&this.canStaff('speed')){
+      this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);
+      this.ownerFlags.speedLevel=0;
+      const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;
+      return;
+    }
+    const sizeInput=event.target.closest?.('[data-owner-size]');
+    if(sizeInput&&this.canStaff('size')){
+      this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);
+      const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;
+      this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});
+    }
+  }
 
   handleOwnerAction(event){
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.staffOnly())return;const action=button.dataset.ownerAction,caps=this.staffCapabilities;
-    const required={ ground:'fly',unstuck:'fly','toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime','cycle-speed':'speed',heal:'heal',reveal:'world','time-day':'world','time-night':'world','weather-clear':'world','weather-rain':'world','weather-snow':'world','season-next':'world','grant-resource':'resources','grant-all':'resources','grant-tools':'resources','grant-skills':'resources','respawn-resources':'resources','tp-spawn':'teleport','tp-river':'teleport','tp-random':'teleport','tp-player':'teleport','tp-village':'teleport','tp-landmark':'teleport'}[action];
+    const required={ ground:'fly',unstuck:'fly','toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime',heal:'heal',reveal:'world','time-day':'world','time-night':'world','weather-clear':'world','weather-rain':'world','weather-snow':'world','season-next':'world','grant-resource':'resources','grant-all':'resources','grant-tools':'resources','grant-skills':'resources','respawn-resources':'resources','tp-spawn':'teleport','tp-river':'teleport','tp-random':'teleport','tp-player':'teleport','tp-village':'teleport','tp-landmark':'teleport'}[action];
     if(required&&!caps[required]){this.toast('Deine Teamrolle darf diese Funktion nicht verwenden.');return;}
     if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'},key=map[action];if(key){if(['vanish','god','fly'].includes(key)){this.toggleStaffFlag(key);return;}this.ownerFlags[key]=!this.ownerFlags[key];this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}}
-    if(action==='cycle-speed'){this.ownerFlags.speedLevel=(this.ownerFlags.speedLevel+1)%OWNER_SPEED_LEVELS.length;this.renderOwnerMenu();return;}
-    if(action.startsWith('skin-')){const skin=action.replace('skin-','')==='shadow'?'galaxy':action.replace('skin-','');if(!caps.forms.includes(skin)){this.toast('Diese Form ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);if(ANIMAL_FORM_IDS.includes(skin))this.state.ownerAppearance.vehicle='none';this.state.ownerAppearance.skin=skin;if(skin==='owl'&&caps.fly&&!this.ownerFlags.fly){this.ownerFlags.fly=true;this.velocityY=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action==='toggle-owner-galaxy-skin'){
+      if(!this.ownerOnly())return;
+      const next=this.state.ownerAppearance.skin==='galaxy'?'normal':'galaxy';
+      this.spawnTransformationEffectAt(this.player.position);
+      if(this.mountedHorse)this.dismountHorse(true);
+      this.state.ownerAppearance.vehicle='none';
+      this.state.ownerAppearance.skin=next;
+      this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;
+    }
+    if(action.startsWith('skin-')){
+      const skin=action.replace('skin-','')==='shadow'?'galaxy':action.replace('skin-','');
+      if(!caps.forms.includes(skin)){this.toast('Diese Form ist für deine Teamrolle gesperrt.');return;}
+      const changed=this.state.ownerAppearance.skin!==skin;
+      if(changed)this.spawnTransformationEffectAt(this.player.position);
+      if(this.mountedHorse)this.dismountHorse(true);
+      if(ANIMAL_FORM_IDS.includes(skin))this.state.ownerAppearance.vehicle='none';
+      this.state.ownerAppearance.skin=skin;
+      if(skin==='owl'&&caps.fly&&!this.ownerFlags.fly){this.ownerFlags.fly=true;this.velocityY=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}
+      this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;
+    }
     if(action==='admin-item'){const item=button.dataset.ownerItem||'none';if(!caps.items.includes(item)){this.toast('Dieses Item ist ausschließlich für eine höhere Teamrolle.');return;}this.state.ownerAppearance.heldItem=item!=='none'&&this.state.ownerAppearance.heldItem===item?'none':item;this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-vehicle'){const vehicle=button.dataset.ownerVehicle||'none';if(!(caps.vehicles||['none']).includes(vehicle)){this.toast('Dieses Fahrzeug ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);if(vehicle==='scooter'){this.state.ownerAppearance.skin=['normal','galaxy'].includes(this.state.ownerAppearance.skin)?this.state.ownerAppearance.skin:'normal';this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;this.state.ownerAppearance.vehicle='scooter';this.toast('🛴 Electro Scooter aktiviert · ca. 40 km/h.');}else{this.state.ownerAppearance.vehicle='none';this.toast('Scooter abgestellt.');}this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='toggle-aura'||action==='toggle-cape'||action==='toggle-hat'){if(!this.ownerOnly())return;const key=action==='toggle-aura'?'aura':action==='toggle-cape'?'cape':'hat';this.state.ownerAppearance[key]=!this.state.ownerAppearance[key];this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
@@ -4163,7 +4326,7 @@ class CenterDynastyGame {
 
   startLoop() {
     cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
+    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
     this.raf=requestAnimationFrame(frame);
   }
 
