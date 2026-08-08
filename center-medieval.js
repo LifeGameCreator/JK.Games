@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v272-staff-beam-hold-attack';
+const CENTER_VERSION = '2026-08-08-jkgames-v275-wings-back-position-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3218,7 +3218,17 @@ applyHeldItemVisual() {
 
 createGalaxyOwnerCape(theme='owner',compact=false){
     theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),root=new THREE.Group();root.name=compact?`remote-${theme}-angel-wings`:`${theme}-angel-wings`;root.userData.theme=theme;root.userData.compact=compact;const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
-    const source=cloneSkeleton(template.root),box=new THREE.Box3().setFromObject(source),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());source.position.sub(center);source.scale.multiplyScalar((compact?1.58:1.72)/Math.max(.01,size.x,size.y));source.rotation.set(0,Math.PI,0);root.add(source);
+    // V275: Angel-Wings korrekt um ihren NACH dem Skalieren berechneten Mittelpunkt zentrieren.
+    // Vorher wurde der unskalierte GLB-Mittelpunkt abgezogen und danach skaliert. Da die
+    // angel_wings.glb ihren Ursprung deutlich unterhalb ihres geometrischen Zentrums hat,
+    // rutschte das sichtbare Flügelpaar dadurch trotz korrekter Rücken-Root-Position bis an
+    // Hüfte/Hände. Jetzt wird zuerst skaliert, danach die echte skalierte Bounding-Box neu
+    // berechnet und exakt um (0,0,0) zentriert. Die Root-Position 0 / 1.46 / -0.24 bleibt
+    // dadurch wirklich die Mitte des Flügelpaares am oberen Rücken.
+    const source=cloneSkeleton(template.root),sourceBox=new THREE.Box3().setFromObject(source),sourceSize=sourceBox.getSize(new THREE.Vector3());
+    source.scale.multiplyScalar((compact?1.58:1.72)/Math.max(.01,sourceSize.x,sourceSize.y));source.updateMatrixWorld(true);
+    const scaledBox=new THREE.Box3().setFromObject(source),scaledCenter=scaledBox.getCenter(new THREE.Vector3());source.position.sub(scaledCenter);
+    source.rotation.set(0,Math.PI,0);root.add(source);
     let texture=null;const makeMat=()=>{texture||=this.createGalaxyTexture(compact?96:256,compact?144:384,theme);texture.repeat.set(1.15,2.35);return new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.82:1.7,metalness:.22,roughness:.24,side:THREE.DoubleSide,transparent:true,opacity:.94});};source.traverse?.((object)=>{if(object.isMesh){object.material=makeMat();object.castShadow=!compact;object.receiveShadow=false;}});
     const sparkleCount=compact?(['minimal','performance'].includes(this.state.world?.graphicsQuality)?2:6):(this.performanceTier==='low'?10:18);if(sparkleCount>0){const pos=new Float32Array(sparkleCount*3),rnd=seededRandom(26488+STAFF_THEME_IDS.indexOf(theme)*80);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:cfg.accent,size:.024,transparent:true,opacity:compact?.42:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;}if(!compact){const light=new THREE.PointLight(cfg.primary,.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;}root.rotation.x=.02;return root;
   }
