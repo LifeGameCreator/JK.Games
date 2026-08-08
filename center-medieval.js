@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v263-orientation-tools-fix';
+const CENTER_VERSION = '2026-08-08-jkgames-v264-wings-plane-render-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -37,8 +37,8 @@ const ANIMAL_FORM_IDS = Object.freeze(['fox','shark','cow','orca','horse','owl',
 const STAFF_CAPABILITY_MATRIX = Object.freeze({
   supporter: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:false, noclip:false, speed:false, freezeTime:false, size:false, forms:Object.freeze(['normal']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
   moderator: Object.freeze({ menu:true, vanish:true, god:true, heal:false, online:true, teleport:true, fly:true, noclip:false, speed:true, freezeTime:false, size:false, forms:Object.freeze(['normal','crystal','bush','tree','rock','grass']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
-  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:false }),
-  owner: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer','sword','staff','eternalFlame']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:true })
+  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer']), vehicles:Object.freeze(['none','scooter','plane']), world:true, resources:true, ownerCosmetics:false }),
+  owner: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer','sword','staff','eternalFlame']), vehicles:Object.freeze(['none','scooter','plane']), world:true, resources:true, ownerCosmetics:true })
 });
 function canonicalStaffRole(value='') {
   const compact=String(value||'').toLowerCase().replace(/[\s._-]+/g,'');
@@ -90,7 +90,9 @@ const CENTER_ASSET_PATHS = Object.freeze({
   clownfish: `${CENTER_ASSET_ROOT}clownfisch-nemo.glb`,
   birds: `${CENTER_ASSET_ROOT}voegel.glb`,
   firstPersonArms: `./assets/shared/arme-first-person.glb`,
-  scooter: `${CENTER_ASSET_ROOT}electro-scooter-weiss.glb`
+  scooter: `${CENTER_ASSET_ROOT}electro-scooter-weiss.glb`,
+  ownerWings: `${CENTER_ASSET_ROOT}angel_wings.glb?v=20260808-v264`,
+  staffPlane: `${CENTER_ASSET_ROOT}saegelflugzeug.glb?v=20260808-v264`
 });
 const ANIMAL_PROFILES = Object.freeze({
   fox:{label:'Fuchs',asset:'fox',size:1.55,speed:2.4,run:4.9,zone:'land',idle:/idle|look|sit/i,move:/walk|trot|run/i},
@@ -295,7 +297,7 @@ function normalizeSaveState(raw) {
   state.ownerAppearance.heldItem = ['none','sword','shovel','pickaxe','hoe','axe','staff','torch','hammer','eternalFlame'].includes(state.ownerAppearance.heldItem) ? state.ownerAppearance.heldItem : 'none';
   state.ownerAppearance.cape = !!state.ownerAppearance.cape;
   state.ownerAppearance.hat = !!state.ownerAppearance.hat;
-  state.ownerAppearance.vehicle = ['none','scooter'].includes(state.ownerAppearance.vehicle) ? state.ownerAppearance.vehicle : 'none';
+  state.ownerAppearance.vehicle = ['none','scooter','plane'].includes(state.ownerAppearance.vehicle) ? state.ownerAppearance.vehicle : 'none';
   state.ownerAppearance.scooterTuning = Math.floor(clamp(Number(state.ownerAppearance.scooterTuning)||0,0,3));
   state.ownerAppearance.quickForm = ['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS].includes(state.ownerAppearance.quickForm) ? state.ownerAppearance.quickForm : 'fox';
   state.ownerAppearance.treeVariant = Math.max(0,Math.floor(Number(state.ownerAppearance.treeVariant)||0))%8;
@@ -468,6 +470,11 @@ class CenterDynastyGame {
     this.ownerFormObject = null;
     this.ownerCapeObject = null;
     this.ownerHatObject = null;
+    this.ownerPlaneObject = null;
+    this.ownerPlaneMixer = null;
+    this.ownerPlaneAction = null;
+    this.webglContextLost = false;
+    this.webglContextRestoreAt = 0;
     this.ownerItemLight = null;
     this.ownerThrownObjects = [];
     this.flightEffects = null;
@@ -1063,6 +1070,8 @@ class CenterDynastyGame {
     this.camera.rotation.order = 'YXZ';
     this.scene.add(this.camera);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, powerPreference: 'high-performance', alpha: false });
+    this.canvas.addEventListener('webglcontextlost',(event)=>{event.preventDefault();this.webglContextLost=true;this.webglContextRestoreAt=performance.now();console.warn('Center WebGL-Kontext kurzzeitig verloren – Rendering wird bis zur Wiederherstellung pausiert.');},{passive:false});
+    this.canvas.addEventListener('webglcontextrestored',()=>{this.webglContextLost=false;this.webglContextRestoreAt=performance.now();this.renderer?.resetState?.();this.refreshSceneMaterialsAfterContextRestore();console.info('Center WebGL-Kontext wiederhergestellt.');});
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
@@ -2508,20 +2517,21 @@ class CenterDynastyGame {
   }
 
   updatePlayerAnimation(delta,moving,sprint) {
-    const flying=this.isStaffActive&&this.ownerFlags.fly,appearance=this.state.ownerAppearance||{},scooter=this.isStaffActive&&appearance.vehicle==='scooter'&&!!this.ownerScooterObject,mounted=!!this.mountedHorse,animalForm=this.isStaffActive&&ANIMAL_FORM_IDS.includes(appearance.skin),humanMoving=moving&&!flying&&!scooter&&!mounted&&!animalForm;
+    const flying=this.isStaffActive&&this.ownerFlags.fly,appearance=this.state.ownerAppearance||{},scooter=this.isStaffActive&&appearance.vehicle==='scooter'&&!!this.ownerScooterObject,plane=this.isStaffActive&&appearance.vehicle==='plane'&&!!this.ownerPlaneObject,mounted=!!this.mountedHorse,animalForm=this.isStaffActive&&ANIMAL_FORM_IDS.includes(appearance.skin),humanMoving=moving&&!flying&&!scooter&&!plane&&!mounted&&!animalForm;
     if(this.playerMixer&&this.playerAction){
       if(humanMoving){if(!this.playerActionWasMoving){this.playerAction.paused=false;this.playerAction.enabled=true;this.playerAction.play();}const size=this.isStaffActive&&this.staffCapabilities?.size?clamp(Number(appearance.size)||1,.45,2.5):1;this.playerMixer.timeScale=(sprint?1.45:1)/Math.sqrt(size);this.playerMixer.update(delta);this.playerActionWasMoving=true;this.idleBlend=0;}
-      else{if(this.playerActionWasMoving){this.playerAction.paused=true;this.playerActionWasMoving=false;this.idleStartedAt=performance.now();this.idleBlend=0;}if(!flying&&!scooter&&!mounted)this.applyIdlePose(delta,false);}
-    }else if(!humanMoving&&!flying&&!scooter&&!mounted)this.applyIdlePose(delta,false);
+      else{if(this.playerActionWasMoving){this.playerAction.paused=true;this.playerActionWasMoving=false;this.idleStartedAt=performance.now();this.idleBlend=0;}if(!flying&&!scooter&&!plane&&!mounted)this.applyIdlePose(delta,false);}
+    }else if(!humanMoving&&!flying&&!scooter&&!plane&&!mounted)this.applyIdlePose(delta,false);
     const now=performance.now(),airborne=!this.onGround&&!flying,isBall=this.isStaffActive&&appearance.skin==='ball';
     this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.0022)*.045:airborne?0:Math.sin(now*.0016)*.008);
-    const lift=mounted?1.05:scooter?.08:0;if(this.flightVisualPivot)this.flightVisualPivot.position.y+=(lift-this.flightVisualPivot.position.y)*(1-Math.exp(-delta*12));
+    const lift=mounted?1.05:scooter?.08:plane?.34:0;if(this.flightVisualPivot)this.flightVisualPivot.position.y+=(lift-this.flightVisualPivot.position.y)*(1-Math.exp(-delta*12));
     this.modelPivot.rotation.x+=(0-this.modelPivot.rotation.x)*(1-Math.exp(-delta*10));
     const forwardInput=flying?clamp(this.flightForwardInput||0,-1,1):0,rightInput=flying?clamp(this.flightRightInput||0,-1,1):0;
     const targetLean=flying?(Math.max(0,forwardInput)*(.62+(sprint?.26:0))-Math.max(0,-forwardInput)*.26):0,targetRoll=flying?(rightInput*(.38+(sprint?.08:0))):0;
     this.flightLean+=(targetLean-this.flightLean)*(1-Math.exp(-delta*(flying?5.8:8.5)));this.flightRoll+=(targetRoll-this.flightRoll)*(1-Math.exp(-delta*(flying?6.4:9)));
     if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=this.flightLean;this.flightVisualPivot.rotation.z=this.flightRoll;}
-    if(scooter)this.applyScooterPose(delta);else if(mounted)this.applyRidingPose(delta);else if(flying&&!animalForm)this.applyFlyingPose(delta,moving,sprint);
+    if(scooter)this.applyScooterPose(delta);else if(mounted)this.applyRidingPose(delta);else if(flying&&!animalForm&&!plane)this.applyFlyingPose(delta,moving,sprint);
+    this.updateStaffPlane(delta,moving);
     this.updateOwnerFormAnimation(delta,moving);if(animalForm&&this.ownerFormObject){if(appearance.skin==='owl'&&flying){this.ownerFormObject.rotation.x=this.flightLean*.45;this.ownerFormObject.rotation.z=this.flightRoll*.55;}else{this.ownerFormObject.rotation.x*=Math.exp(-delta*8);this.ownerFormObject.rotation.z*=Math.exp(-delta*8);}}
     this.updateFlightEffects(delta,moving,sprint);this.applyActionAnimation(now);this.updateHeldItemTransform(now);this.updateFirstPersonArms(delta);this.updateOwnerAura(delta,now);this.updateOwnerWearables(delta,now);
   }
@@ -2564,7 +2574,7 @@ class CenterDynastyGame {
   updateFlightEffects(delta,moving,sprint) {
     this.ensureFlightEffects();
     if(!this.flightEffects)return;
-    const flying=this.isStaffActive&&this.ownerFlags.fly&&!this.ownerFlags.vanish&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal');
+    const flying=this.isStaffActive&&this.ownerFlags.fly&&!this.ownerFlags.vanish&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&this.state.ownerAppearance?.vehicle!=='plane';
     this.flightEffects.root.visible=flying;
     for(const holder of [this.flightEffects.left,this.flightEffects.right])holder.visible=flying;
     if(!flying)return;
@@ -2643,7 +2653,7 @@ class CenterDynastyGame {
     nebula2.addColorStop(0,'rgba(255,52,62,.58)');nebula2.addColorStop(.38,'rgba(92,42,255,.32)');nebula2.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=nebula2;ctx.fillRect(0,0,width,height);
     const rnd=seededRandom(20060806);
     for(let i=0;i<260;i+=1){const x=rnd()*width,y=rnd()*height,r=rnd()<.08?1.5+rnd()*1.8:.35+rnd()*.8;ctx.beginPath();ctx.fillStyle=rnd()<.18?'rgba(255,99,128,.95)':rnd()<.52?'rgba(209,169,255,.98)':'rgba(255,255,255,.96)';ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
-    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.needsUpdate=true;return texture;
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.needsUpdate=true;return texture;
   }
 
   createGalaxyAuraGroup(compact=false) {
@@ -2675,10 +2685,15 @@ class CenterDynastyGame {
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
     if(['shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
-      const toolHeight={shovel:1.16,pickaxe:1.02,hoe:1.12,axe:1.04,hammer:.96}[kind]||1.04;
-      const gripOffset={shovel:-.21,pickaxe:-.18,hoe:-.2,axe:-.19,hammer:-.17}[kind]||-.18;
-      const asset=this.cloneCenterAsset('basicTools',{nodeName:kind,targetHeight:toolHeight,bottomAlign:true});if(!asset)return null;asset.position.y=gripOffset;group.add(asset);group.userData.assetBased=true;
-      group.rotation.set(.02,0,-.08);
+      // V264: Basic-Tools werden über ihre echte Gesamtlänge skaliert. Die Modelle
+      // liegen intern überwiegend auf der Z-Achse; targetHeight hatte Axt/Hammer
+      // deshalb extrem vergrößert. Jetzt liegen sie größenmäßig beim Galaxy-Stab.
+      const toolSize={shovel:1.32,pickaxe:1.24,hoe:1.27,axe:1.28,hammer:1.13}[kind]||1.22;
+      const gripOffset={shovel:-.12,pickaxe:-.105,hoe:-.11,axe:-.105,hammer:-.09}[kind]||-.1;
+      const asset=this.cloneCenterAsset('basicTools',{nodeName:kind,targetSize:toolSize,bottomAlign:false});if(!asset)return null;
+      asset.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(asset),c=b.getCenter(new THREE.Vector3());asset.position.y-=c.y;asset.position.z-=c.z;asset.position.y+=gripOffset;
+      group.add(asset);group.userData.assetBased=true;
+      group.rotation.set(.06,0,-.10);
     }else if(kind==='sword'){
       const galaxyTexture=this.createGalaxyTexture(96,256),galaxyMetal=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x3f0c72,emissiveIntensity:1.25,metalness:.86,roughness:.14});
       const violetGlow=new THREE.MeshStandardMaterial({color:0xdac9ef,emissive:0x6e35a4,emissiveIntensity:1.8,metalness:.68,roughness:.12});addCylinder(.04,.05,.34,galaxyMetal,-.02);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.075,1),violetGlow);pommel.position.y=-.22;group.add(pommel);const guard=new THREE.Mesh(new THREE.BoxGeometry(.45,.055,.085),galaxyMetal);guard.position.y=.18;group.add(guard);const blade=new THREE.Mesh(new THREE.ConeGeometry(.105,1.38,4),galaxyMetal);blade.position.y=.85;blade.rotation.y=Math.PI/4;group.add(blade);const ridge=new THREE.Mesh(new THREE.BoxGeometry(.016,1.05,.025),violetGlow);ridge.position.y=.77;group.add(ridge);const light=new THREE.PointLight(0x7650b8,1.55,6,2);light.position.y=.8;group.add(light);group.userData.light=light;group.rotation.set(.06,0,-.24);
@@ -2798,10 +2813,21 @@ class CenterDynastyGame {
 
   currentFirstPersonArmsIdle(){const kind=this.ownerHeldObject?.userData?.kind||this.firstPersonHeldObject?.userData?.kind||'';return kind==='sword'||kind==='shovel'||kind==='hoe'||kind==='axe'||kind==='hammer'||kind==='pickaxe'||kind==='eternalFlame'||kind==='torch'||kind==='spear'?'knife_idle':'guard_idle';}
   playFirstPersonArmsAction(name,loop=false){const action=this.firstPersonArmsActions?.get?.(String(name||'').toLowerCase());if(!action)return;for(const other of this.firstPersonArmsActions.values())if(other!==action)other.fadeOut?.(.08);action.reset();action.enabled=true;action.setLoop(loop?THREE.LoopRepeat:THREE.LoopOnce,loop?Infinity:1);action.clampWhenFinished=!loop;action.fadeIn?.(.08).play();this.firstPersonArmsCurrent=name;}
-  updateFirstPersonArms(delta=.016){if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!this.ownerFlags.vanish&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&this.state.ownerAppearance?.vehicle!=='scooter';if(this.firstPersonArmsMixer)this.firstPersonArmsMixer.update(delta);}
+  updateFirstPersonArms(delta=.016){if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!this.ownerFlags.vanish&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&!['scooter','plane'].includes(this.state.ownerAppearance?.vehicle);if(this.firstPersonArmsMixer)this.firstPersonArmsMixer.update(delta);}
+
+  createStaffPlaneVisual(){
+    const template=this.centerAssetTemplates.get('staffPlane');if(!template?.root)return null;const root=this.cloneCenterAsset('staffPlane',{targetSize:4.85,bottomAlign:false,center:true});if(!root)return null;root.name='center-admin-owner-plane';root.rotation.y=Math.PI;root.position.set(0,.55,0);root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.18,Number(mat.metalness)||0);mat.roughness=Math.min(.68,Number(mat.roughness)||.5);}}});
+    const mixer=new THREE.AnimationMixer(root),clip=(template.animations||[]).find((c)=>/helice|prop|rotor/i.test(c.name||''))||(template.animations||[])[0]||null,action=clip?mixer.clipAction(clip):null;if(action){action.setLoop(THREE.LoopRepeat,Infinity);action.play();action.paused=true;}root.userData.mixer=mixer;root.userData.propellerAction=action;return root;
+  }
+
+  updateStaffPlane(delta=.016,moving=false){
+    const plane=this.ownerPlaneObject;if(!plane)return;const action=plane.userData?.propellerAction,mixer=plane.userData?.mixer,flying=this.isStaffActive&&this.ownerFlags.fly,vertical=Math.abs(this.flightVerticalVelocity||0)>.05,shouldSpin=flying||!this.onGround||moving||vertical;if(action){action.paused=!shouldSpin;action.timeScale=shouldSpin?(flying?1.65:1.15):0;}if(mixer&&shouldSpin)mixer.update(delta);const targetPitch=flying?this.flightLean*.55:0,targetRoll=flying?this.flightRoll*.72:0;plane.rotation.x+=(targetPitch-plane.rotation.x)*(1-Math.exp(-delta*5.2));plane.rotation.z+=(targetRoll-plane.rotation.z)*(1-Math.exp(-delta*5.8));
+  }
 
   applyStaffVehicle(){
-    this.ownerScooterObject?.removeFromParent?.();this.ownerScooterObject=null;if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{};const allowed=this.staffCapabilities?.vehicles||['none'];if(!this.isStaffActive||appearance.vehicle!=='scooter'||!allowed.includes('scooter')||!['normal','galaxy'].includes(appearance.skin))return;const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;
+    this.disposeGeneratedVisual(this.ownerScooterObject);this.disposeGeneratedVisual(this.ownerPlaneObject);this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{},allowed=this.staffCapabilities?.vehicles||['none'];if(!this.isStaffActive||!['normal','galaxy'].includes(appearance.skin))return;
+    if(appearance.vehicle==='scooter'&&allowed.includes('scooter')){const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;return;}
+    if(appearance.vehicle==='plane'&&allowed.includes('plane')){const plane=this.createStaffPlaneVisual();if(!plane)return;this.modelPivot.add(plane);this.ownerPlaneObject=plane;this.ownerPlaneMixer=plane.userData.mixer||null;this.ownerPlaneAction=plane.userData.propellerAction||null;}
   }
 
   cacheOriginalMaterial(material) {
@@ -2845,7 +2871,7 @@ class CenterDynastyGame {
     this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
     if(!this.camera||kind==='none')return;
     const item=this.createHeldItemMesh(kind);if(!item)return;
-    item.name='center-first-person-held-item';item.scale.multiplyScalar(kind==='staff'?.42:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
+    item.name='center-first-person-held-item';item.scale.multiplyScalar(kind==='staff'?.42:['shovel','pickaxe','hoe','axe','hammer'].includes(kind)?.46:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
     const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};
     const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
   }
@@ -2855,7 +2881,7 @@ class CenterDynastyGame {
     this.ownerHeldObject=null;this.ownerItemLight=null;
     this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
     const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'};
-    const formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(appearance.skin))&&appearance.vehicle!=='scooter';
+    const formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(appearance.skin))&&!['scooter','plane'].includes(appearance.vehicle);
     if(!formAllowsItems)return;
     const selectedKind=this.isStaffActive?appearance.heldItem:'none';
     const allowedItems=this.staffCapabilities?.items||['none'];
@@ -2896,11 +2922,11 @@ class CenterDynastyGame {
       sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
       staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
       eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},
-      shovel:{p:[.015,-.035,.025],r:[.10,.03,-.18]},
-      pickaxe:{p:[.015,-.035,.025],r:[.08,.03,-.20]},
-      hoe:{p:[.015,-.035,.025],r:[.10,.03,-.18]},
-      axe:{p:[.015,-.03,.022],r:[.08,.03,-.20]},
-      hammer:{p:[.015,-.03,.022],r:[.08,.03,-.18]}
+      shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},
+      pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},
+      hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},
+      axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},
+      hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}
     };
     const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
@@ -2946,10 +2972,33 @@ class CenterDynastyGame {
     object.quaternion.copy(localQ).multiply(rotationCorrection);
   }
 
+  disposeGeneratedVisual(object){
+    if(!object)return;const geometries=new Set(),materials=new Set(),textures=new Set();
+    object.traverse?.((child)=>{if(child.geometry)geometries.add(child.geometry);const mats=Array.isArray(child.material)?child.material:[child.material];for(const mat of mats){if(!mat)continue;materials.add(mat);for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap']){const tex=mat[key];if(tex?.userData?.__centerRuntimeGalaxyTexture)textures.add(tex);}}});
+    object.removeFromParent?.();for(const geo of geometries)geo.dispose?.();for(const mat of materials)mat.dispose?.();for(const tex of textures)tex.dispose?.();
+  }
+
+  refreshSceneMaterialsAfterContextRestore(){
+    if(!this.scene)return;this.scene.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.needsUpdate=true;for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap'])if(mat[key])mat[key].needsUpdate=true;}});
+  }
+
+  splitAngelWingGeometry(sourceMesh){
+    if(!sourceMesh?.geometry)return null;sourceMesh.updateWorldMatrix?.(true,false);let geometry=sourceMesh.geometry.clone();geometry.applyMatrix4(sourceMesh.matrixWorld);geometry=geometry.toNonIndexed();geometry.computeBoundingBox();const box=geometry.boundingBox,center=box.getCenter(new THREE.Vector3());geometry.translate(-center.x,-center.y,-center.z);
+    const pos=geometry.getAttribute('position'),normal=geometry.getAttribute('normal'),uv=geometry.getAttribute('uv');if(!pos)return null;
+    const sides={left:{p:[],n:[],u:[]},right:{p:[],n:[],u:[]}};
+    for(let i=0;i<pos.count;i+=3){const cx=(pos.getX(i)+pos.getX(i+1)+pos.getX(i+2))/3,target=cx<0?sides.left:sides.right;for(let j=0;j<3;j++){const k=i+j;target.p.push(pos.getX(k),pos.getY(k),pos.getZ(k));if(normal)target.n.push(normal.getX(k),normal.getY(k),normal.getZ(k));if(uv)target.u.push(uv.getX(k),uv.getY(k));}}
+    geometry.dispose();const make=(data)=>{if(!data.p.length)return null;const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.p,3));if(data.n.length)g.setAttribute('normal',new THREE.Float32BufferAttribute(data.n,3));else g.computeVertexNormals();if(data.u.length)g.setAttribute('uv',new THREE.Float32BufferAttribute(data.u,2));g.computeBoundingBox();g.computeBoundingSphere();return g;};
+    return {left:make(sides.left),right:make(sides.right)};
+  }
+
   createGalaxyOwnerCape(){
-    const root=new THREE.Group();root.name='galaxy-owner-wings';const texture=this.createGalaxyTexture(256,256),mat=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,emissive:0x371068,emissiveIntensity:1.55,metalness:.18,roughness:.28,side:THREE.DoubleSide,transparent:true,opacity:.96});
-    const makeWing=(side)=>{const pivot=new THREE.Group();pivot.position.set(side*.16,-.04,.02);const feathers=[];for(let i=0;i<7;i++){const h=.48+i*.075,w=.17+i*.018,feather=new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,4),mat.clone());feather.position.set(side*(.10+i*.09),-.12-i*.035,.02+i*.006);feather.rotation.z=side*(-.18-i*.055);feather.rotation.x=-.08;feather.castShadow=true;pivot.add(feather);feathers.push(feather);}root.add(pivot);return {pivot,feathers};};
-    root.userData.left=makeWing(-1);root.userData.right=makeWing(1);const light=new THREE.PointLight(0x8147ff,.82,4.6,2);light.position.set(0,-.2,.18);root.add(light);root.userData.light=light;return root;
+    const root=new THREE.Group();root.name='galaxy-owner-angel-wings';const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
+    const raw=this.cloneCenterAsset('ownerWings',{targetSize:2.72,bottomAlign:false,center:true});if(!raw)return root;raw.updateMatrixWorld(true);let sourceMesh=null;raw.traverse((o)=>{if(!sourceMesh&&(o.isMesh||o.isSkinnedMesh))sourceMesh=o;});const split=this.splitAngelWingGeometry(sourceMesh);this.disposeGeneratedVisual(raw);if(!split?.left||!split?.right)return root;
+    const texture=this.createGalaxyTexture(256,384);texture.repeat.set(1.15,2.35);const makeMat=()=>new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xe9ddff,emissive:0x4d168c,emissiveIntensity:1.9,metalness:.22,roughness:.24,side:THREE.DoubleSide,transparent:true,opacity:.96});
+    const makeWing=(side,geometry)=>{const pivot=new THREE.Group();pivot.name=side<0?'angel-wing-left':'angel-wing-right';const hinge=side*.12;geometry.translate(-hinge,0,0);const mesh=new THREE.Mesh(geometry,makeMat());mesh.castShadow=!!this.state.world?.shadows;mesh.receiveShadow=false;pivot.position.x=hinge;pivot.add(mesh);root.add(pivot);return {pivot,mesh};};
+    root.userData.left=makeWing(-1,split.left);root.userData.right=makeWing(1,split.right);root.userData.galaxyTexture=texture;
+    const sparkleCount=26,pos=new Float32Array(sparkleCount*3),rnd=seededRandom(26488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:0xeedcff,size:.026,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;
+    const light=new THREE.PointLight(0x7b42e8,.72,4.4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;root.rotation.x=.02;return root;
   }
 
   createGalaxyOwnerHat(){
@@ -2958,22 +3007,27 @@ class CenterDynastyGame {
   }
 
   applyOwnerWearables(){
-    this.ownerCapeObject?.removeFromParent?.();this.ownerHatObject?.removeFromParent?.();this.ownerCapeObject=null;this.ownerHatObject=null;
+    this.disposeGeneratedVisual(this.ownerCapeObject);this.disposeGeneratedVisual(this.ownerHatObject);this.ownerCapeObject=null;this.ownerHatObject=null;
     if(!this.isOwnerActive||!['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal'))return;
     if(this.state.ownerAppearance?.cape){
       const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);this.ownerCapeObject=cape;
       const chest=this.playerBones.chest||this.playerBones.neck;
-      if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.48,-.22),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI,0)))){cape.position.set(0,1.48,-.22);cape.rotation.y=Math.PI;}
+      if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,0)))){cape.position.set(0,1.46,-.24);}
     }
     if(this.state.ownerAppearance?.hat){
       const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);this.ownerHatObject=hat;
       const head=this.playerBones.head||this.playerBones.neck;
-      if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.78,.005),new THREE.Quaternion()))hat.position.set(0,1.78,.005);
+      if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);
     }
   }
 
   updateOwnerWearables(delta=.016,now=performance.now()){
-    if(this.ownerCapeObject){this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),descending=flying&&this.flightVerticalVelocity<-.22,speed=clamp(Number(this.ownerFlags.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER);let flap=0;if(flying&&motion>.04&&!descending)flap=Math.sin(now*(.0045+.00065*speed))*(.18+motion*.30);const spread=flying?(descending?.18:.34):.72;if(left){left.rotation.y=-.16;left.rotation.z=spread+flap;}if(right){right.rotation.y=.16;right.rotation.z=-spread-flap;}if(this.ownerCapeObject.userData?.light)this.ownerCapeObject.userData.light.intensity=.72+Math.sin(now*.003)*.12;}
+    if(this.ownerCapeObject){
+      this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),vertical=this.flightVerticalVelocity||0,ascending=flying&&vertical>.22,descending=flying&&vertical<-.22;
+      let z=.16,y=.04;if(flying){if(descending){z=.08+Math.sin(now*.0022)*.025;y=.055+Math.sin(now*.0017)*.02;}else if(ascending){z=.20+Math.sin(now*.0105)*.27;y=.06+Math.sin(now*.008)*.055;}else if(motion>.06){z=.18+Math.sin(now*.009)*(.20+motion*.13);y=.055+Math.sin(now*.0074)*.05;}else{z=.15+Math.sin(now*.0042)*.10;y=.045+Math.sin(now*.0031)*.035;}}else{z=.12+Math.sin(now*.0018)*.02;y=.035;}
+      if(left){left.rotation.x=.015;left.rotation.y=-y;left.rotation.z=z;}if(right){right.rotation.x=.015;right.rotation.y=y;right.rotation.z=-z;}
+      if(this.ownerCapeObject.userData?.sparkles)this.ownerCapeObject.userData.sparkles.rotation.y=Math.sin(now*.0013)*.08;if(this.ownerCapeObject.userData?.light)this.ownerCapeObject.userData.light.intensity=.66+Math.sin(now*.003)*.11;
+    }
     if(this.ownerHatObject){this.updateWearableFollower(this.ownerHatObject);if(this.ownerHatObject.userData?.halo)this.ownerHatObject.userData.halo.rotation.z=now*.00055;if(this.ownerHatObject.userData?.light)this.ownerHatObject.userData.light.intensity=.44+Math.sin(now*.002)*.07;}
   }
 
@@ -3013,9 +3067,9 @@ class CenterDynastyGame {
     const requestedSkin=this.isStaffActive?appearance.skin:'normal';
     const skin=caps.forms?.includes(requestedSkin)?requestedSkin:'normal';
     if(appearance.skin!==skin)appearance.skin=skin;
-    if(!['normal','galaxy'].includes(skin)&&appearance.vehicle==='scooter')appearance.vehicle='none';
+    if(!['normal','galaxy'].includes(skin)&&appearance.vehicle!=='none')appearance.vehicle='none';
     this.setShadowCharacterMode(this.isOwnerActive&&skin==='galaxy');
-    this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(skin);
+    this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(skin)&&appearance.vehicle!=='plane';
     if(this.isStaffActive&&!['normal','galaxy'].includes(skin)){const form=this.createOwnerForm(skin);this.modelPivot.add(form);this.ownerFormObject=form;form.visible=!this.firstPerson;}
     this.ensureOwnerAura();this.applyStaffVehicle();this.applyHeldItemVisual();this.applyOwnerWearables();this.applyOwnerVisualState();this.updateOwnerAura(.016,performance.now());
   }
@@ -3026,12 +3080,14 @@ class CenterDynastyGame {
     if(this.ownerFormObject)this.ownerFormObject.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=vanished||mat.transparent;mat.opacity=vanished?.24:(mat.userData.__formOpacity??mat.opacity??1);mat.depthWrite=!vanished;mat.needsUpdate=true;}});
     if(this.ownerAura)this.ownerAura.visible=this.isOwnerActive&&!!appearance.aura&&!vanished&&!this.firstPerson;
     const applyItem=(root)=>root?.traverse?.((object)=>{if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?0:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;material.needsUpdate=true;}});
-    applyItem(this.ownerHeldObject);applyItem(this.firstPersonHeldObject);applyItem(this.ownerCapeObject);applyItem(this.ownerHatObject);applyItem(this.ownerScooterObject);
+    applyItem(this.ownerHeldObject);applyItem(this.firstPersonHeldObject);applyItem(this.ownerCapeObject);applyItem(this.ownerHatObject);applyItem(this.ownerScooterObject);applyItem(this.ownerPlaneObject);
     if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!vanished;
     if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!vanished;
-    if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.cape;
-    if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.hat;
+    if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.cape&&appearance.vehicle!=='plane';
+    if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.hat&&appearance.vehicle!=='plane';
     if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&appearance.vehicle==='scooter';
+    if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&appearance.vehicle==='plane';
+    if(this.playerModel&&appearance.vehicle==='plane')this.playerModel.visible=false;
   }
 
   async ensureCorrectPlayerModel() {
@@ -3041,7 +3097,7 @@ class CenterDynastyGame {
     if(this.playerSkin===skin&&this.playerModel) { this.updateRoleHud(); return; }
     this.modelPivot.clear();
     this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);
-    this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
+    this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
     try {
       const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);
       const root=gltf.scene;
@@ -3142,8 +3198,8 @@ class CenterDynastyGame {
     else { try{localStorage.setItem('jk-games-center-medieval',JSON.stringify(this.state));}catch{} }
   }
 
-  togglePerspective() { this.firstPerson=!this.firstPerson; this.applyPerspectiveVisibility(); if(this.firstPerson)this.ensureFirstPersonArms().catch(()=>{}); this.toast(this.firstPerson?'Ego-Perspektive':'Außenperspektive'); }
-  applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson);this.overlay.classList.toggle('is-third-person',!this.firstPerson);if(this.playerModel)this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal');if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson;if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.cape;if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.hat;if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&this.isStaffActive&&this.state.ownerAppearance?.vehicle==='scooter';if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish)&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&this.state.ownerAppearance?.vehicle!=='scooter';if(this.firstPerson)this.ensureFirstPersonArms().catch(()=>{});this.applyOwnerAppearance(); }
+  togglePerspective() { this.firstPerson=!this.firstPerson; this.applyPerspectiveVisibility(); if(this.firstPerson&&this.state.ownerAppearance?.vehicle!=='plane')this.ensureFirstPersonArms().catch(()=>{}); this.toast(this.firstPerson?'Ego-Perspektive':'Außenperspektive'); }
+  applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson);this.overlay.classList.toggle('is-third-person',!this.firstPerson);const vehicle=this.state.ownerAppearance?.vehicle||'none';if(this.playerModel)this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&vehicle!=='plane';if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson;if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.cape&&vehicle!=='plane';if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.hat&&vehicle!=='plane';if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='scooter';if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='plane';if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish)&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&!['scooter','plane'].includes(vehicle);if(this.firstPerson&&vehicle!=='plane')this.ensureFirstPersonArms().catch(()=>{});this.applyOwnerAppearance(); }
   requestJump() {
     if(this.isStaffActive&&this.ownerFlags.fly)return;
     const god=this.isStaffActive&&this.ownerFlags.god;
@@ -3216,13 +3272,13 @@ class CenterDynastyGame {
   updateMovement(delta) {
     if(this.deathScreenOpen)return;
     const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05;
-    const owner=this.isStaffActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god,scooter=owner&&this.state.ownerAppearance?.vehicle==='scooter'&&!!this.ownerScooterObject,mounted=!!this.mountedHorse;
-    const inWater=!fly&&!mounted&&!scooter&&this.isInWater(this.player.position.x,this.player.position.z);
+    const owner=this.isStaffActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god,scooter=owner&&this.state.ownerAppearance?.vehicle==='scooter'&&!!this.ownerScooterObject,plane=owner&&this.state.ownerAppearance?.vehicle==='plane'&&!!this.ownerPlaneObject,mounted=!!this.mountedHorse;
+    const inWater=!fly&&!mounted&&!scooter&&!plane&&this.isInWater(this.player.position.x,this.player.position.z);
     const sprint=input.sprint&&(god||this.state.needs.stamina>2)&&!inWater;
     const speedBoost=owner?clamp(Number(this.ownerFlags.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER):1;
     const scooterKmh=[40,80,120,150][Math.floor(clamp(Number(this.state.ownerAppearance?.scooterTuning)||0,0,3))]||40;
-    const baseSpeed=scooter?scooterKmh/3.6:mounted?(sprint?13.2:8.9):(sprint?8.8:5.1);
-    const speed=baseSpeed*(inWater?.48:1)*((this.state.needs.health<25&&!god)?.72:1)*(scooter?1:speedBoost);
+    const baseSpeed=plane?(fly?(sprint?27:20):7.2):scooter?scooterKmh/3.6:mounted?(sprint?13.2:8.9):(sprint?8.8:5.1);
+    const speed=baseSpeed*(inWater?.48:1)*((this.state.needs.health<25&&!god)?.72:1)*((scooter||plane)?1:speedBoost);
     let movedDistance=0;
     if(moving){
       const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length),sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
@@ -3236,7 +3292,7 @@ class CenterDynastyGame {
       }
       movedDistance=Math.hypot(movedX-oldX,movedZ-oldZ);this.player.position.x=movedX;this.player.position.z=movedZ;this.state.stats.distance+=movedDistance;
       if(movedDistance>.0005&&!fly){const targetYaw=Math.atan2(movedX-oldX,movedZ-oldZ);this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*9));}
-      if(!fly&&!god&&!scooter){if(sprint){this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*(mounted?5.2:10.5));if(this.state.needs.stamina<=.05)this.exhaustSprint();}else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}else if(scooter)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*4.5);
+      if(!fly&&!god&&!scooter&&!plane){if(sprint){this.state.needs.stamina=Math.max(0,this.state.needs.stamina-delta*(mounted?5.2:10.5));if(this.state.needs.stamina<=.05)this.exhaustSprint();}else this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*3.2);}else if(scooter||plane)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*4.5);
       if(owner&&this.state.ownerAppearance?.skin==='ball'&&this.ownerFormObject?.userData?.rollingMesh){const ball=this.ownerFormObject.userData.rollingMesh;ball.rotation.x-=movedDistance*1.4;ball.rotation.z+=movedDistance*.35;ball.position.y=.72;}
     }else if(!fly&&!god)this.state.needs.stamina=Math.min(100,this.state.needs.stamina+delta*6.3);
 
@@ -4390,11 +4446,11 @@ class CenterDynastyGame {
   async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.renderedAppearanceSkin='';remote.renderedVehicle='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
 
   applyRemoteFormAndVehicle(remote) {
-    if(!remote?.model)return;const visibleForms=['ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS],appearance=visibleForms.includes(remote.appearanceSkin)?remote.appearanceSkin:['normal','galaxy'].includes(remote.appearanceSkin)?remote.appearanceSkin:'normal',vehicle=remote.vehicle==='scooter'?'scooter':'none';
+    if(!remote?.model)return;const visibleForms=['ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS],appearance=visibleForms.includes(remote.appearanceSkin)?remote.appearanceSkin:['normal','galaxy'].includes(remote.appearanceSkin)?remote.appearanceSkin:'normal',vehicle=['scooter','plane'].includes(remote.vehicle)?remote.vehicle:'none';
     if(remote.renderedAppearanceSkin!==appearance){remote.formObject?.removeFromParent?.();remote.formObject=null;remote.renderedAppearanceSkin=appearance;if(visibleForms.includes(appearance)){const form=this.createOwnerForm(appearance);if(form){remote.pivot.add(form);remote.formObject=form;}}}
     if(remote.model)remote.model.visible=!remote.formObject&&!remote.vanished;
-    if(remote.renderedVehicle!==vehicle){remote.vehicleObject?.removeFromParent?.();remote.vehicleObject=null;remote.renderedVehicle=vehicle;if(vehicle==='scooter'&&!remote.formObject){const scooter=this.createScooterVisual();if(scooter){remote.pivot.add(scooter);remote.vehicleObject=scooter;}}}
-    if(remote.model)remote.model.position.y=remote.vehicleObject?.08:0;
+    if(remote.renderedVehicle!==vehicle){this.disposeGeneratedVisual(remote.vehicleObject);remote.vehicleObject=null;remote.renderedVehicle=vehicle;if(vehicle==='scooter'&&!remote.formObject){const scooter=this.createScooterVisual();if(scooter){remote.pivot.add(scooter);remote.vehicleObject=scooter;}}else if(vehicle==='plane'&&!remote.formObject){const plane=this.createStaffPlaneVisual();if(plane){remote.pivot.add(plane);remote.vehicleObject=plane;}}}
+    if(remote.model){remote.model.position.y=remote.vehicleObject?.08:0;remote.model.visible=!remote.formObject&&!remote.vanished&&vehicle!=='plane';}
     if(remote.vehicleObject)remote.vehicleObject.visible=!remote.vanished;
     if(remote.formObject)remote.formObject.visible=!remote.vanished;
   }
@@ -4408,9 +4464,9 @@ class CenterDynastyGame {
     const active=(remote.skin==='owner'||remote.ownerVisual)&&remote.ownerAura&&!remote.vanished;
     remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(mat.userData.__remoteAuraColor===undefined){mat.userData.__remoteAuraColor=mat.color?.getHex?.();mat.userData.__remoteAuraEmissive=mat.emissive?.getHex?.();mat.userData.__remoteAuraIntensity=mat.emissiveIntensity;}if(active){mat.color?.set?.(0x3b1268);mat.emissive?.set?.(0x6f1ac7);mat.emissiveIntensity=1.15;mat.transparent=true;mat.opacity=.74;}else{if(mat.userData.__remoteAuraColor!==undefined)mat.color?.setHex?.(mat.userData.__remoteAuraColor);if(mat.userData.__remoteAuraEmissive!==undefined)mat.emissive?.setHex?.(mat.userData.__remoteAuraEmissive);if(mat.userData.__remoteAuraIntensity!==undefined)mat.emissiveIntensity=mat.userData.__remoteAuraIntensity;mat.transparent=false;mat.opacity=1;}mat.needsUpdate=true;}});
     if(active&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=active;
-    const ownerVisible=(remote.skin==='owner'||remote.ownerVisual)&&!remote.vanished&&!remote.formObject;
-    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.48,-.22),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI,0)))){remote.cape.position.set(0,1.49,-.2);remote.cape.rotation.y=Math.PI;}}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
-    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.78,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.81,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
+    const ownerVisible=(remote.skin==='owner'||remote.ownerVisual)&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';
+    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion())){remote.cape.position.set(0,1.46,-.24);}}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
+    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
   }
 
   updateRemotePlayers(delta){
@@ -4421,7 +4477,8 @@ class CenterDynastyGame {
       const groundY=terrainHeightAt(remote.group.position.x,remote.group.position.z),airborne=!remote.flying&&remote.targetY>groundY+.24,targetY=(remote.flying||airborne)?remote.targetY:groundY;
       remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));
       if(remote.aura?.visible)this.animateGalaxyAura(remote.aura,delta,now);
-      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,flap=remote.flying&&remote.walking?Math.sin(now*.006)*.24:0,spread=remote.flying?.34:.72;if(l)l.rotation.z=spread+flap;if(r)r.rotation.z=-spread-flap;}
+      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot;let z=remote.flying?(remote.walking?.18+Math.sin(now*.009)*.25:.15+Math.sin(now*.0042)*.10):.12,y=remote.flying?.05+Math.sin(now*.0031)*.03:.035;if(l){l.rotation.y=-y;l.rotation.z=z;}if(r){r.rotation.y=y;r.rotation.z=-z;}}
+      if(remote.vehicleObject?.userData?.mixer){const a=remote.vehicleObject.userData.propellerAction,spin=remote.flying||remote.walking||remote.targetY>terrainHeightAt(remote.group.position.x,remote.group.position.z)+.24;if(a){a.paused=!spin;a.timeScale=remote.flying?1.5:1.05;}if(spin)remote.vehicleObject.userData.mixer.update(delta);}
       if(remote.hat?.visible)this.updateWearableFollower(remote.hat);
       this.updateRemoteAnimalForm(remote,delta);
       const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
@@ -4431,7 +4488,7 @@ class CenterDynastyGame {
     }
   }
 
-  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.mixer?.stopAllAction?.();this.remotePlayers.delete(uid);}
+  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();this.remotePlayers.delete(uid);}
 
   ownerOnly(silent=false){if(this.isOwnerActive)return true;if(!silent)this.toast('Diese Funktion ist ausschließlich für den Owner.');return false;}
   staffOnly(silent=false){if(this.isStaffActive)return true;if(!silent)this.toast('Dieses Center-Teammenü ist nur für Supporter, Moderatoren, Admins und den Owner.');return false;}
@@ -4462,7 +4519,7 @@ class CenterDynastyGame {
     if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
     if(teamToolIds.length>1)sections.push(`<h3>Team-Werkzeuge</h3><div class="mdc-owner-actions three">${teamToolIds.map((id)=>`<button class="${appearance.heldItem===id?'active ':''}" data-owner-action="admin-item" data-owner-item="${id}">${itemLabels[id]||id}</button>`).join('')}</div>`);
     if(this.isOwnerActive)sections.push(`<h3 class="mdc-galaxy-heading">Owner-Galaxy-Bereich</h3><div class="mdc-owner-actions three"><button class="mdc-galaxy-action ${appearance.skin==='galaxy'?'active':''}" data-owner-action="toggle-owner-galaxy-skin">${appearance.skin==='galaxy'?'✓ Galaxy-Skin AN':'○ Galaxy-Skin AUS'}</button><button class="mdc-galaxy-action ${appearance.heldItem==='sword'?'active':''}" data-owner-action="admin-item" data-owner-item="sword">Galaxy-Owner-Schwert</button><button class="mdc-galaxy-action ${appearance.heldItem==='staff'?'active':''}" data-owner-action="admin-item" data-owner-item="staff">Galaxy-Owner-Stab</button><button class="mdc-galaxy-action ${appearance.heldItem==='eternalFlame'?'active':''}" data-owner-action="admin-item" data-owner-item="eternalFlame">Galaxy-Ewige-Flamme</button><button class="mdc-galaxy-action ${appearance.aura?'active':''}" data-owner-action="toggle-aura">${appearance.aura?'✓ Aura AN':'○ Aura AUS'}</button><button class="mdc-galaxy-action ${appearance.cape?'active':''}" data-owner-action="toggle-cape">${appearance.cape?'✓ Wings AN':'○ Wings AUS'}</button><button class="mdc-galaxy-action ${appearance.hat?'active':''}" data-owner-action="toggle-hat">${appearance.hat?'✓ Galaxy-Krone AN':'○ Galaxy-Krone AUS'}</button></div>`);
-    if((caps.vehicles||[]).includes('scooter'))sections.push(`<h3>Team-Fahrzeuge</h3><div class="mdc-owner-actions"><button class="${appearance.vehicle==='scooter'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="scooter">🛴 Electro Scooter Weiß · 40–150 km/h</button>${appearance.vehicle==='scooter'?'<button data-owner-action="admin-vehicle" data-owner-vehicle="none">Scooter abstellen</button>':''}</div><p class="mdc-note">Nur Admin und Owner. Beim Fahren werden Hand-Items ausgeblendet und die Figur greift an den Lenker.</p>`);
+    if((caps.vehicles||[]).some((id)=>id==='scooter'||id==='plane'))sections.push(`<h3>Team-Fahrzeuge</h3><div class="mdc-owner-actions">${(caps.vehicles||[]).includes('scooter')?`<button class="${appearance.vehicle==='scooter'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="scooter">🛴 Electro Scooter Weiß · 40–150 km/h</button>`:''}${(caps.vehicles||[]).includes('plane')?`<button class="${appearance.vehicle==='plane'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="plane">✈ Sägelflugzeug · Admin/Owner</button>`:''}${appearance.vehicle!=='none'?'<button data-owner-action="admin-vehicle" data-owner-vehicle="none">Fahrzeug abstellen</button>':''}</div><p class="mdc-note">Nur Admin und Owner. Das Flugzeug aktiviert Fly automatisch. Der Propeller läuft in der Luft oder bei Bewegung und stoppt am Boden im Stand.</p>`);
     if(caps.world)sections.push(`<h3>Welt und Zeit</h3><div class="mdc-owner-actions three"><button data-owner-action="time-day">☀ Tag</button><button data-owner-action="time-night">☾ Nacht</button><button data-owner-action="weather-clear">Klar</button><button data-owner-action="weather-rain">Regen</button><button data-owner-action="weather-snow">Schnee</button><button data-owner-action="season-next">Jahreszeit +</button></div>`);
     if(caps.resources)sections.push(`<h3>Ressourcen und Fortschritt</h3><div class="mdc-owner-grant"><select data-owner-resource>${Object.entries(RESOURCE_LABELS).map(([id,name])=>`<option value="${id}">${escapeHtml(name)}</option>`).join('')}</select><input data-owner-amount type="number" min="1" max="9999" value="100"><button data-owner-action="grant-resource">Hinzufügen</button></div><div class="mdc-owner-actions"><button data-owner-action="grant-all">Alle Ressourcen +100</button><button data-owner-action="grant-tools">Alle Werkzeuge 100 %</button><button data-owner-action="grant-skills">Skills und XP</button><button data-owner-action="respawn-resources">Ressourcen regenerieren</button></div>`);
     const staffBindRows=[['staffMenu','Team-Menü'],caps.vanish&&['vanish','Vanish'],caps.god&&['god','Unbesiegbar'],caps.fly&&['fly','Fly']].filter(Boolean);
@@ -4528,7 +4585,7 @@ class CenterDynastyGame {
     }
     if(action.startsWith('skin-')){const skin=action.replace('skin-','')==='shadow'?'galaxy':action.replace('skin-','');this.applyStaffForm(skin,{cycleTree:true});return;}
     if(action==='admin-item'){const item=button.dataset.ownerItem||'none';if(!caps.items.includes(item)){this.toast('Dieses Item ist ausschließlich für eine höhere Teamrolle.');return;}this.state.ownerAppearance.heldItem=item!=='none'&&this.state.ownerAppearance.heldItem===item?'none':item;this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
-    if(action==='admin-vehicle'){const vehicle=button.dataset.ownerVehicle||'none';if(!(caps.vehicles||['none']).includes(vehicle)){this.toast('Dieses Fahrzeug ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);if(vehicle==='scooter'){this.state.ownerAppearance.skin=['normal','galaxy'].includes(this.state.ownerAppearance.skin)?this.state.ownerAppearance.skin:'normal';this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;this.state.ownerAppearance.vehicle='scooter';this.toast(`🛴 Electro Scooter aktiviert · ${[40,80,120,150][this.state.ownerAppearance.scooterTuning||0]} km/h.`);}else{this.state.ownerAppearance.vehicle='none';this.toast('Scooter abgestellt.');}this.applyOwnerAppearance();this.renderScooterTuningBar();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action==='admin-vehicle'){const vehicle=button.dataset.ownerVehicle||'none';if(!(caps.vehicles||['none']).includes(vehicle)){this.toast('Dieses Fahrzeug ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);const previousVehicle=this.state.ownerAppearance.vehicle||'none';this.state.ownerAppearance.skin=['normal','galaxy'].includes(this.state.ownerAppearance.skin)?this.state.ownerAppearance.skin:'normal';if(vehicle==='scooter'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;this.state.ownerAppearance.vehicle='scooter';this.toast(`🛴 Electro Scooter aktiviert · ${[40,80,120,150][this.state.ownerAppearance.scooterTuning||0]} km/h.`);}else if(vehicle==='plane'){this.state.ownerAppearance.vehicle='plane';this.ownerFlags.fly=true;this.velocityY=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;this.flightTakeoffTargetY=floor+2.4;this.flightTakeoffActive=true;this.toast('✈ Sägelflugzeug aktiviert · Fly automatisch AN.');}else{this.state.ownerAppearance.vehicle='none';if(previousVehicle==='plane'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;}this.toast('Fahrzeug abgestellt.');}this.applyOwnerAppearance();this.renderScooterTuningBar();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='toggle-aura'||action==='toggle-cape'||action==='toggle-hat'){if(!this.ownerOnly())return;const key=action==='toggle-aura'?'aura':action==='toggle-cape'?'cape':'hat';this.state.ownerAppearance[key]=!this.state.ownerAppearance[key];this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
@@ -4556,7 +4613,7 @@ class CenterDynastyGame {
 
   startLoop() {
     cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateAmbientCreatures(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
+    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateAmbientCreatures(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();this.refreshSceneMaterialsAfterContextRestore();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Rendererzustand wurde nach einem Material-/WebGL-Fehler neu synchronisiert:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
     this.raf=requestAnimationFrame(frame);
   }
 
