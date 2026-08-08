@@ -19637,7 +19637,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card speedcar" data-open-speed-car-kl><b>Speed Car.KL</b><small>Endlose Polizeiflucht, Online-Lobby, 3D-Autos, Damage, Tankstellen, Tuning, Werkstatt und Owner-Fahrzeuge.</small></button>
-        <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield, Waffenleveln und Owner/Admin-Mod-Menü.</small></button>
+        <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
     </div>`;
   if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;

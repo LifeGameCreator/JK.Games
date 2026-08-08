@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import { EGOSHOOT_ASSETS } from './egoshoot-assets.js?v=20260808-egoshoot-assets-v249-bundle';
 
 (() => {
   'use strict';
 
-  const VERSION = '2026-08-08-egoshoot-kl-v248-first-release';
+  const VERSION = '2026-08-08-egoshoot-kl-v249-bundled-assets-text-fix';
   const ASSET = 'assets/egoshoot-kl/';
   const STORAGE_KEY = 'jk-games-egoshoot-kl-v248';
   const MAX_REMOTE = 64;
@@ -49,6 +50,7 @@ import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
   const loader = new GLTFLoader();
   const glbCache = new Map();
+  const assetObjectUrls = new Map();
   const characterCache = new Map();
   const UI = { overlay:null, body:null, sourcePhone:'', session:null, keys:Object.create(null), mouse:{down:false,ads:false}, touch:{forward:false,back:false,left:false,right:false,fire:false,run:false}, modal:null, toastTimer:0 };
   let stateCache = null;
@@ -91,7 +93,22 @@ import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
   function weaponState(id){const s=state();if(!s.weaponState[id])s.weaponState[id]={owned:false,level:1,durability:100};return s.weaponState[id];}
   function weaponStats(id){const w=WEAPON_MAP[id]||WEAPON_MAP.glock,ws=weaponState(w.id),lvl=clamp(ws.level,1,10),damage=w.damage*(1+(lvl-1)*.04),stability=clamp(w.stability+(lvl-1)*2.1,0,99.5),rate=Math.max(.045,w.rate*(1-(lvl-1)*.012));return {...w,level:lvl,damage,stability,rate,durability:ws.durability};}
 
-  function loadGLB(url){if(!glbCache.has(url))glbCache.set(url,new Promise((resolve,reject)=>loader.load(url,g=>resolve(g),undefined,reject)));return glbCache.get(url);}
+  function bundledAssetKey(url){return String(url||'').split(/[?#]/,1)[0].split('/').pop()||'';}
+  function bundledAssetUrl(url){
+    const key=bundledAssetKey(url),b64=EGOSHOOT_ASSETS[key];
+    if(!b64)throw new Error(`Egoshoot.KL Asset fehlt im V249-Bundle: ${key||url}`);
+    if(assetObjectUrls.has(key))return assetObjectUrls.get(key);
+    const raw=atob(b64),bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    const objectUrl=URL.createObjectURL(new Blob([bytes],{type:'model/gltf-binary'}));assetObjectUrls.set(key,objectUrl);return objectUrl;
+  }
+  function loadGLB(url){
+    const key=bundledAssetKey(url);
+    if(!glbCache.has(key))glbCache.set(key,new Promise((resolve,reject)=>{
+      let source='';try{source=bundledAssetUrl(url);}catch(err){reject(err);return;}
+      loader.load(source,g=>resolve(g),undefined,err=>reject(new Error(`Egoshoot.KL konnte ${key} nicht laden: ${String(err?.message||err)}`)));
+    }));
+    return glbCache.get(key);
+  }
   async function characterTemplate(gender){
     if(characterCache.has(gender))return characterCache.get(gender);
     const p=(async()=>{const walk=await loadGLB(`${ASSET}${gender==='woman'?'woman-walk':'man-walk'}.glb`),run=await loadGLB(`${ASSET}${gender==='woman'?'woman-run':'man-run'}.glb`);return {walkScene:walk.scene,runScene:run.scene,walk:walk.animations?.[0]||null,run:run.animations?.[0]||null};})();
@@ -133,9 +150,9 @@ import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
   function refreshHeader(){if(!UI.overlay)return;UI.overlay.querySelector('[data-eskl-kills]').textContent=fmt(state().totalKills);UI.overlay.querySelector('[data-eskl-tokens]').textContent=fmt(state().killTokens);}
   function toast(message,tone=''){const el=UI.overlay?.querySelector('[data-eskl-toast]');if(!el)return;clearTimeout(UI.toastTimer);el.textContent=message;el.className=`eskl-toast show ${tone}`;UI.toastTimer=setTimeout(()=>el.className='eskl-toast',2600);}
 
-  function renderGenderChoice(){stopWorld();UI.body.innerHTML=`<section class="eskl-choice"><small>CHARAKTER FESTLEGEN</small><h2>Wähle deinen Egoshoot.KL-Charakter</h2><p>Die Wahl wird in deinem normalen JK.Games-Spielstand gespeichert. Danach musst du sie nicht erneut auswählen.</p><div class="eskl-choice-grid"><button data-gender="man"><b>♂ Mann</b><small>Lauf- und Rennanimation aus deiner Datei</small></button><button data-gender="woman"><b>♀ Frau</b><small>Lauf- und Rennanimation aus deiner Datei</small></button></div></section>`;UI.body.querySelectorAll('[data-gender]').forEach(b=>b.onclick=()=>{state().gender=b.dataset.gender;persist();startLobby();});}
+  function renderGenderChoice(){stopWorld();UI.body.innerHTML=`<section class="eskl-choice"><small>CHARAKTER FESTLEGEN</small><h2>Wähle deinen Egoshoot.KL-Charakter</h2><p>Die Wahl wird in deinem normalen JK.Games-Spielstand gespeichert. Danach musst du sie nicht erneut auswählen.</p><div class="eskl-choice-grid"><button data-gender="man"><b>♂ Mann</b></button><button data-gender="woman"><b>♀ Frau</b></button></div></section>`;UI.body.querySelectorAll('[data-gender]').forEach(b=>b.onclick=()=>{state().gender=b.dataset.gender;persist();startLobby();});}
 
-  function openInfo(){showModal(`<div class="eskl-modal-head"><div><small>SPIELINFO</small><h2>Egoshoot.KL</h2></div><button data-modal-close>×</button></div><div class="eskl-info-grid"><article><b>🎯 Kampf</b><p>Standard ist Ego-Perspektive. V wechselt zwischen Ego und Third Person. Linksklick schießt, Rechtsklick zielt, R lädt nach. 1/2/3 wechseln Nahkampf, Pistole/SMG und Langwaffe.</p></article><article><b>❤️ Leben & Shield</b><p>100 Leben. Shield gibt +100, +150 oder +200 blaue Schutzpunkte. Kugeln treffen zuerst Shield. Messer, Katana und Baseballschläger ignorieren Shield und benötigen zwei Treffer auf volle 100 Leben.</p></article><article><b>🌐 Online</b><p>Der Online-Teleport setzt dich zufällig an einen von mehreren Spawnpunkten. Andere eingeloggte Spieler sind sichtbar und können bekämpft werden.</p></article><article><b>🤖 Bot-Teleport</b><p>10 Bots kämpfen gegeneinander und gegen dich. Ideal zum Trainieren und Sammeln von Kills.</p></article><article><b>🛠 Waffen</b><p>Alle 20 Waffen besitzen Schaden, Stabilität, Feuerrate, Haltbarkeit und Level. Waffen können bis Level 10 verbessert und im Shop repariert werden.</p></article><article><b>◆ Staff</b><p>Owner/Admin: Raygun-One-Shot, Flug, Vanish, Godmode, Speed und Waffenfreigabe über das Mod-Menü.</p></article></div>`);}
+  function openInfo(){showModal(`<div class="eskl-modal-head"><div><small>SPIELINFO</small><h2>Egoshoot.KL</h2></div><button data-modal-close>×</button></div><div class="eskl-info-grid"><article><b>🎯 Kampf</b><p>Standard ist Ego-Perspektive. V wechselt zwischen Ego und Third Person. Linksklick schießt, Rechtsklick zielt, R lädt nach. 1/2/3 wechseln Nahkampf, Pistole/SMG und Langwaffe.</p></article><article><b>❤️ Leben & Shield</b><p>100 Leben. Shield gibt +100, +150 oder +200 blaue Schutzpunkte. Kugeln treffen zuerst Shield. Messer, Katana und Baseballschläger ignorieren Shield und benötigen zwei Treffer auf volle 100 Leben.</p></article><article><b>🌐 Online</b><p>Der Online-Teleport setzt dich zufällig an einen von mehreren Spawnpunkten. Andere eingeloggte Spieler sind sichtbar und können bekämpft werden.</p></article><article><b>🤖 Bot-Teleport</b><p>10 Bots kämpfen gegeneinander und gegen dich. Ideal zum Trainieren und Sammeln von Kills.</p></article><article><b>🛠 Waffen</b><p>Alle 20 Waffen besitzen Schaden, Stabilität, Feuerrate, Haltbarkeit und Level. Waffen können bis Level 10 verbessert und im Shop repariert werden.</p></article><article><b>🏆 Fortschritt</b><p>Kills schalten nach und nach neue Waffen frei. Waffen lassen sich bis Level 10 verbessern, müssen gepflegt und bei Bedarf repariert werden.</p></article></div>`);}
 
   function openShop(){const s=state();showModal(`<div class="eskl-modal-head"><div><small>LOBBY SHOP</small><h2>Waffen, Schutz & Versorgung</h2><p>${fmt(s.totalKills)} Kills · ${fmt(s.killTokens)} verfügbare Kill-Punkte</p></div><button data-modal-close>×</button></div><div class="eskl-shop-tabs"><button class="active" data-shop-tab="weapons">Waffen</button><button data-shop-tab="supply">Versorgung</button><button data-shop-tab="repair">Reparatur/Level</button></div><div data-shop-body></div>`);const render=()=>renderShopTab(UI.modal?.querySelector('.eskl-shop-tabs .active')?.dataset.shopTab||'weapons');UI.modal.querySelectorAll('[data-shop-tab]').forEach(b=>b.onclick=()=>{UI.modal.querySelectorAll('[data-shop-tab]').forEach(x=>x.classList.toggle('active',x===b));renderShopTab(b.dataset.shopTab);});render();}
   function renderShopTab(tab){const host=UI.modal?.querySelector('[data-shop-body]');if(!host)return;const s=state();if(tab==='weapons')host.innerHTML=`<div class="eskl-shop-grid">${WEAPONS.filter(w=>!w.staffOnly||isStaff()).map(w=>{const ws=weaponState(w.id),locked=s.totalKills<w.minKills;return `<article class="${w.staffOnly?'staff':''}"><small>${w.slot.toUpperCase()} · ${w.type.toUpperCase()}</small><h3>${esc(w.name)}</h3><p>${esc(w.desc)}</p><div class="eskl-mini-stats"><span>DMG <b>${Math.round(weaponStats(w.id).damage)}</b></span><span>STAB <b>${Math.round(weaponStats(w.id).stability)}%</b></span><span>${w.type==='melee'?'TEMPO':'RPM'} <b>${w.type==='melee'?(1/weaponStats(w.id).rate).toFixed(1):Math.round(60/weaponStats(w.id).rate)}</b></span>${w.mag?`<span>MAG <b>${w.mag}</b></span>`:''}<span>LVL <b>${ws.level}/10</b></span></div>${ws.owned?`<button disabled>Besitzt du</button>`:locked?`<button disabled>🔒 ab ${fmt(w.minKills)} Kills</button>`:`<button data-buy-weapon="${w.id}">${w.cost} Kill-Punkte · kaufen</button>`}</article>`;}).join('')}</div>`;
