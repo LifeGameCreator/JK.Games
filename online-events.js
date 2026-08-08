@@ -1594,10 +1594,22 @@
     try {
       const fb = await loadOnlineFirebase();
       const audit = evaluateAudit(onlineUser.uid);
-      const batch = fb.writeBatch(fb.db);
-      batch.set(fb.doc(fb.db, "playerProfiles", onlineUser.uid), publicProfilePayload(audit, true), { merge: true });
-      batch.set(fb.doc(fb.db, "playerPrivate", onlineUser.uid), privateProfilePayload(audit), { merge: true });
-      await batch.commit();
+      // V273: Öffentliche und private Profilsynchronisierung getrennt schreiben.
+      // Ein historisches/inkompatibles Presence-Feld in playerProfiles darf dadurch
+      // nicht mehr gleichzeitig die private Spielersynchronisierung blockieren.
+      const publicRef = fb.doc(fb.db, "playerProfiles", onlineUser.uid);
+      const privateRef = fb.doc(fb.db, "playerPrivate", onlineUser.uid);
+      const results = await Promise.allSettled([
+        fb.setDoc(publicRef, publicProfilePayload(audit, true), { merge: true }),
+        fb.setDoc(privateRef, privateProfilePayload(audit), { merge: true })
+      ]);
+      const rejected = results.filter((entry) => entry.status === "rejected");
+      if (rejected.length) {
+        const permissionOnly = rejected.every((entry) => String(entry.reason?.code || "").includes("permission-denied") || /missing or insufficient permissions/i.test(String(entry.reason?.message || entry.reason || "")));
+        if (!permissionOnly) console.warn("Player sync Teilfehler", rejected.map((entry) => entry.reason));
+      }
+      // Auch wenn nur einer der beiden optionalen Profilschreibvorgänge abgelehnt wird,
+      // nicht im 15-Sekunden-Takt eine Konsolen-Fehlerschleife erzeugen.
       playerSyncLastAt = Date.now();
       if (force) updateOnlineStatusBadge();
     } finally {
