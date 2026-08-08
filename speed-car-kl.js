@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 (() => {
   'use strict';
 
-  const VERSION = '2026-08-08-speed-car-kl-v250-touch-countdown-cop-ramp-fix';
+  const VERSION = '2026-08-08-speed-car-kl-v251-webgl-owner-cache-fix';
   const STORAGE_KEY = 'jk-games-speed-car-kl-v242';
   const ASSET = 'assets/speed-car-kl/';
   const PACK_URL = `${ASSET}low_poly_cars.glb`;
@@ -50,6 +50,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   const MODEL_CACHE = new Map();
   let PACK_SCENE_PROMISE = null;
   let STATE_CACHE = null;
+  let ACTIVE_RENDERER = null;
 
   function createGameTimer(){
     const timer = new THREE.Timer();
@@ -277,8 +278,23 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
   function disposeObject(obj){obj?.traverse?.(n=>{if(n.geometry?.dispose)n.geometry.dispose();if(n.material){const mats=Array.isArray(n.material)?n.material:[n.material];mats.forEach(m=>{if(m.map?.dispose)m.map.dispose();m.dispose?.();});}});}
 
+  function releaseRenderer(renderer){
+    if(!renderer)return;
+    try{renderer.setAnimationLoop?.(null);}catch{}
+    try{renderer.renderLists?.dispose?.();}catch{}
+    try{renderer.dispose?.();}catch{}
+    try{renderer.forceContextLoss?.();}catch{}
+    try{renderer.domElement?.remove?.();}catch{}
+    if(ACTIVE_RENDERER===renderer)ACTIVE_RENDERER=null;
+  }
+
   function baseRenderer(host){
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,window.innerWidth<700?1.35:1.75));renderer.shadowMap.enabled=window.innerWidth>700;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;host.append(renderer.domElement);return renderer;
+    // Speed Car.KL darf immer nur einen eigenen WebGL-Kontext gleichzeitig halten.
+    // Das verhindert, dass wiederholtes Lobby/Chase-Oeffnen alte Kontexte im Browser stapelt.
+    if(ACTIVE_RENDERER)releaseRenderer(ACTIVE_RENDERER);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
+    ACTIVE_RENDERER=renderer;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,window.innerWidth<700?1.35:1.75));renderer.shadowMap.enabled=window.innerWidth>700;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;host.append(renderer.domElement);return renderer;
   }
   function baseScene(){const scene=new THREE.Scene();scene.background=new THREE.Color(0x050a13);scene.fog=new THREE.FogExp2(0x07101d,.012);scene.add(new THREE.HemisphereLight(0xaac8ff,0x07120f,2.1));const moon=new THREE.DirectionalLight(0xffffff,2.2);moon.position.set(20,40,15);moon.castShadow=true;scene.add(moon);return scene;}
 
@@ -286,10 +302,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     return `<div class="sckl-game"><div class="sckl-canvas-wrap" data-sckl-canvas></div><div class="sckl-hud top"><div><small>${mode==='chase'?'VERFOLGUNG':'OPEN LOBBY'}</small><b data-sckl-hud-speed>0 km/h</b></div><div><small>${mode==='chase'?'DISTANZ':'SPEED COINS'}</small><b data-sckl-hud-secondary>0</b></div><div><small>HP</small><b data-sckl-hud-hp>100/100</b></div><div><small>TANK</small><b data-sckl-hud-fuel>100%</b></div></div><div class="sckl-hud-message" data-sckl-message></div><div class="sckl-countdown" data-sckl-countdown hidden></div><div class="sckl-side-panel" data-sckl-side></div><div class="sckl-consume-hud"><button data-sckl-consume="repair">🧰 <span data-sckl-repair-count>0</span></button><button data-sckl-consume="fuel">⛽ <span data-sckl-fuel-count>0</span></button>${isOwner()?'<button class="owner" data-sckl-owner-ingame>◆ MOD</button>':''}</div><div class="sckl-touch-controls"><div class="steer"><button data-touch="left">◀</button><button data-touch="right">▶</button></div><div class="pedals"><button class="brake" data-touch="brake">BREMSE / R</button><button class="nitro" data-touch="nitro">NITRO</button><button class="gas" data-touch="gas">GAS</button></div></div><button class="sckl-world-exit" data-sckl-world-exit>×</button></div>`;
   }
 
+  function ownerRuntimeState(seed={}){
+    return {
+      speedMult:Number(seed?.speedMult)||1,
+      size:Number(seed?.size)||1,
+      noclip:!!seed?.noclip,
+      godmode:!!seed?.godmode,
+      flight:!!seed?.flight
+    };
+  }
+  function ensureOwnerRuntime(s){
+    if(!s)return ownerRuntimeState();
+    s.owner=ownerRuntimeState(s.owner);
+    return s.owner;
+  }
+
   async function startLobby(options={}){
     stopWorld();const data=state();if(carById(data.selectedCar).ownerOnly&&!isOwner()){data.selectedCar='street-01';persist(data);}if(options.owner&&isOwner()){data.selectedCar='owner-bugatti';data.owned['owner-bugatti']=true;persist(data);}UI.body.innerHTML=worldMarkup('lobby');
     const host=UI.body.querySelector('[data-sckl-canvas]'),scene=baseScene(),camera=new THREE.PerspectiveCamera(62,1,.1,520),renderer=baseRenderer(host);
-    const session={mode:'lobby',scene,camera,renderer,host,timer:createGameTimer(),raf:0,player:null,carId:(options.flight&&isOwner())?'owner-f22':data.selectedCar,x:0,y:0,z:18,heading:0,speed:0,hp:0,fuel:0,remote:new Map(),remoteObjects:new Map(),remoteUnsub:null,remoteRetryTimer:0,remoteWriteBusy:false,lastRemoteWrite:0,lastRemotePayloadKey:'',lastRamAt:0,safe:false,nearPlace:'',owner:{speedMult:1,size:1,noclip:false,godmode:false,flight:!!(options.flight&&isOwner())}};UI.session=session;
+    const session={mode:'lobby',scene,camera,renderer,host,timer:createGameTimer(),raf:0,player:null,carId:(options.flight&&isOwner())?'owner-f22':data.selectedCar,x:0,y:0,z:18,heading:0,speed:0,hp:0,fuel:0,remote:new Map(),remoteObjects:new Map(),remoteUnsub:null,remoteRetryTimer:0,remoteWriteBusy:false,lastRemoteWrite:0,lastRemotePayloadKey:'',lastRamAt:0,safe:false,nearPlace:'',owner:ownerRuntimeState({flight:!!(options.flight&&isOwner())})};UI.session=session;
     const sp=specs(data,session.carId);session.hp=sp.maxHp;session.fuel=sp.maxFuel;
     createLobbyMap(session);bindWorldControls(session);resizeWorld();
     try{session.player=await makeVehicleModel(session.carId);if(UI.session!==session)return;scene.add(session.player);session.player.scale.setScalar(session.owner.size);}catch(err){console.error('Speed Car.KL Fahrzeug',err);toast('Fahrzeugmodell konnte nicht geladen werden.','error');}
@@ -400,7 +431,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
   async function startChase(){
     stopWorld();const data=state(),car=carById(data.selectedCar);if(car.ownerOnly&&!isOwner()){data.selectedCar='street-01';persist(data);}UI.body.innerHTML=worldMarkup('chase');const host=UI.body.querySelector('[data-sckl-canvas]'),scene=baseScene(),camera=new THREE.PerspectiveCamera(66,1,.1,500),renderer=baseRenderer(host),sp=specs(data,data.selectedCar);const police=POLICE_CATALOG[Math.floor(Math.random()*POLICE_CATALOG.length)];
-    const s={mode:'chase',scene,camera,renderer,host,timer:createGameTimer(),raf:0,player:null,police:null,policeDef:police,x:0,heading:0,speed:0,copSpeed:1,gap:46,distance:0,elapsed:0,countdownActive:true,countdownRemaining:5,hp:sp.maxHp,fuel:sp.maxFuel,gasAt:950+Math.random()*650,gasGroup:null,traffic:[],arrest:0,nitroActive:false,nitroConsumed:false,finished:false};UI.session=s;createChaseWorld(s);bindWorldControls(s);resizeWorld();
+    const s={mode:'chase',scene,camera,renderer,host,timer:createGameTimer(),raf:0,player:null,police:null,policeDef:police,carId:data.selectedCar,x:0,heading:0,speed:0,copSpeed:1,gap:46,distance:0,elapsed:0,countdownActive:true,countdownRemaining:5,hp:sp.maxHp,fuel:sp.maxFuel,gasAt:950+Math.random()*650,gasGroup:null,traffic:[],arrest:0,nitroActive:false,nitroConsumed:false,finished:false,owner:ownerRuntimeState()};UI.session=s;createChaseWorld(s);bindWorldControls(s);resizeWorld();
     try{const [player,cop]=await Promise.all([makeVehicleModel(data.selectedCar),makePoliceModel(police)]);if(UI.session!==s)return;s.player=player;s.police=cop;scene.add(player,cop);player.position.set(0,0,0);cop.position.set(0,0,-s.gap);}catch(err){console.error('Speed Car.KL Modelle',err);toast('3D-Automodelle konnten nicht geladen werden.','error');}
     data.stats.chases++;persist(data);const countdownEl=UI.body?.querySelector('[data-sckl-countdown]');if(countdownEl){countdownEl.hidden=false;countdownEl.textContent='5';}s.raf=requestAnimationFrame((timestamp)=>animateChase(s,timestamp));
   }
@@ -422,7 +453,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   }
 
   function animateChase(s,timestamp){
-    if(UI.session!==s||s.finished)return;s.timer.update(timestamp);const dt=Math.min(.05,s.timer.getDelta()),data=state(),carId=data.selectedCar,sp=specs(data,carId),gas=input('gas'),reverse=input('brake'),left=input('left'),right=input('right'),nitro=input('nitro');
+    if(UI.session!==s||s.finished)return;s.timer.update(timestamp);const dt=Math.min(.05,s.timer.getDelta()),data=state(),carId=s.carId||data.selectedCar,sp=specs(data,carId),gas=input('gas'),reverse=input('brake'),left=input('left'),right=input('right'),nitro=input('nitro');
     if(s.countdownActive){
       s.speed=0;s.copSpeed=1;s.arrest=0;
       if(s.player){s.player.position.set(s.x,0,0);s.player.rotation.set(0,s.heading,0);const visual=s.player.userData?.vehicleVisual;if(visual){visual.rotation.x=0;visual.rotation.z=0;}animateVisual(s.player,performance.now()/1000);}
@@ -435,7 +466,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
       s.renderer.render(s.scene,s.camera);s.raf=requestAnimationFrame((nextTimestamp)=>animateChase(s,nextTimestamp));return;
     }
     s.elapsed+=dt;
-    let maxForward=sp.maxSpeed;const maxReverse=Math.min(70,maxForward*.34),brakeForce=sp.accel*2.55,reverseAccel=sp.accel*.78;
+    const owner=ensureOwnerRuntime(s);let maxForward=sp.maxSpeed*(isOwner()?(owner.speedMult||1):1);const maxReverse=Math.min(70,maxForward*.34),brakeForce=sp.accel*2.55,reverseAccel=sp.accel*.78;
     if(gas&&!reverse){if(s.speed<0)s.speed=approach(s.speed,0,brakeForce*dt);else s.speed+=sp.accel*dt;}else if(reverse&&!gas){if(s.speed>4)s.speed=approach(s.speed,0,brakeForce*dt);else s.speed-=reverseAccel*dt;}else if(gas&&reverse){s.speed=approach(s.speed,0,brakeForce*dt);}else{s.speed=approach(s.speed,0,Math.max(7,Math.abs(s.speed)*.09)*dt);}
     if(nitro&&Number(data.consumables.nitro||0)>0&&s.speed>0){if(!s.nitroConsumed){data.consumables.nitro--;persist(data);s.nitroConsumed=true;toast('Nitro gezündet!','good');}maxForward*=1.34;s.speed+=sp.accel*1.8*dt;}else s.nitroConsumed=false;
     s.speed=clamp(s.speed,-maxReverse,maxForward);const steer=(right?1:0)-(left?1:0),moving=Math.abs(s.speed)>1.2;if(moving&&steer){const speedFactor=Math.min(1,Math.abs(s.speed)/Math.max(55,sp.maxSpeed*.5)),turnRate=1.55*(.22+speedFactor*.78);s.heading+=steer*turnRate*dt*Math.sign(s.speed||1);s.heading=clamp(s.heading,-.62,.62);}
@@ -488,8 +519,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   function onKeyUp(e){UI.keys[e.code]=false;}
   function interactWorld(s){if(s.mode!=='lobby')return;if(s.nearPlace==='shop'){stopWorld();renderGarage();}else if(s.nearPlace==='tune'){stopWorld();renderTuning();}}
 
-  function showOwnerIngameMenu(s){if(!isOwner()||document.querySelector('[data-sckl-owner-float]'))return;const pop=document.createElement('div');pop.className='sckl-owner-float';pop.dataset.scklOwnerFloat='1';pop.innerHTML=`<header><b>OWNER MOD</b><button data-close>×</button></header><label>Speed <select data-mod-speed><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label><label>Größe <select data-mod-size><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button data-mod-god>Godmode: AUS</button><button data-mod-noclip>Noclip: AUS</button><button class="owner" data-mod-bugatti>Owner Bugatti</button><button class="owner" data-mod-flight>F-22 Flugmodus</button><small>Flug: Leertaste hoch · Shift runter</small>`;UI.overlay.append(pop);pop.querySelector('[data-close]').onclick=()=>pop.remove();pop.querySelector('[data-mod-speed]').value=String(s.owner.speedMult||1);pop.querySelector('[data-mod-speed]').onchange=e=>s.owner.speedMult=Number(e.target.value)||1;pop.querySelector('[data-mod-size]').value=String(s.owner.size||1);pop.querySelector('[data-mod-size]').onchange=e=>s.owner.size=Number(e.target.value)||1;pop.querySelector('[data-mod-god]').onclick=e=>{s.owner.godmode=!s.owner.godmode;e.currentTarget.textContent=`Godmode: ${s.owner.godmode?'AN':'AUS'}`;};pop.querySelector('[data-mod-noclip]').onclick=e=>{s.owner.noclip=!s.owner.noclip;e.currentTarget.textContent=`Noclip: ${s.owner.noclip?'AN':'AUS'}`;};pop.querySelector('[data-mod-bugatti]').onclick=()=>replaceOwnerVehicle(s,'owner-bugatti',false);pop.querySelector('[data-mod-flight]').onclick=()=>replaceOwnerVehicle(s,'owner-f22',true);}
-  async function replaceOwnerVehicle(s,carId,flight){if(!isOwner()||UI.session!==s)return;try{const model=await makeVehicleModel(carId);if(UI.session!==s)return;if(s.player)s.scene.remove(s.player);s.player=model;s.scene.add(model);s.carId=carId;s.owner.flight=flight;s.owner.noclip=flight||s.owner.noclip;s.hp=specs(state(),carId).maxHp;s.fuel=specs(state(),carId).maxFuel;toast(flight?'F-22 Flugmodus aktiv.':'Owner Bugatti aktiv.','good');}catch{toast('Owner-Fahrzeug konnte nicht geladen werden.','error');}}
+  function showOwnerIngameMenu(s){if(!isOwner()||UI.session!==s||document.querySelector('[data-sckl-owner-float]'))return;const owner=ensureOwnerRuntime(s),pop=document.createElement('div');pop.className='sckl-owner-float';pop.dataset.scklOwnerFloat='1';pop.innerHTML=`<header><b>OWNER MOD</b><button data-close>×</button></header><label>Speed <select data-mod-speed><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label><label>Größe <select data-mod-size><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><button data-mod-god>Godmode: ${owner.godmode?'AN':'AUS'}</button><button data-mod-noclip>Noclip: ${owner.noclip?'AN':'AUS'}</button><button class="owner" data-mod-bugatti>Owner Bugatti</button><button class="owner" data-mod-flight>F-22 Flugmodus</button><small>Flug: Leertaste hoch · Shift runter</small>`;UI.overlay?.append(pop);pop.querySelector('[data-close]').onclick=()=>pop.remove();pop.querySelector('[data-mod-speed]').value=String(owner.speedMult||1);pop.querySelector('[data-mod-speed]').onchange=e=>owner.speedMult=Number(e.target.value)||1;pop.querySelector('[data-mod-size]').value=String(owner.size||1);pop.querySelector('[data-mod-size]').onchange=e=>{owner.size=Number(e.target.value)||1;if(s.player)s.player.scale.setScalar(owner.size);};pop.querySelector('[data-mod-god]').onclick=e=>{owner.godmode=!owner.godmode;e.currentTarget.textContent=`Godmode: ${owner.godmode?'AN':'AUS'}`;};pop.querySelector('[data-mod-noclip]').onclick=e=>{owner.noclip=!owner.noclip;e.currentTarget.textContent=`Noclip: ${owner.noclip?'AN':'AUS'}`;};pop.querySelector('[data-mod-bugatti]').onclick=()=>replaceOwnerVehicle(s,'owner-bugatti',false);pop.querySelector('[data-mod-flight]').onclick=()=>replaceOwnerVehicle(s,'owner-f22',true);}
+  async function replaceOwnerVehicle(s,carId,flight){if(!isOwner()||UI.session!==s)return;const owner=ensureOwnerRuntime(s);try{const model=await makeVehicleModel(carId);if(UI.session!==s)return;if(s.player)s.scene.remove(s.player);s.player=model;s.scene.add(model);s.carId=carId;owner.flight=flight;owner.noclip=flight||owner.noclip;model.scale.setScalar(owner.size||1);s.hp=specs(state(),carId).maxHp;s.fuel=specs(state(),carId).maxFuel;toast(flight?'F-22 Flugmodus aktiv.':'Owner Bugatti aktiv.','good');}catch{toast('Owner-Fahrzeug konnte nicht geladen werden.','error');}}
 
   function updateConsumableHud(){const data=state();setHud('[data-sckl-repair-count]',fmt(data.consumables.repairKit));setHud('[data-sckl-fuel-count]',fmt(data.consumables.fuelCan));}
   function useConsumable(s,kind){if(!s||UI.session!==s)return;const data=state(),sp=specs(data,s.carId||data.selectedCar);if(kind==='repair'){if(Number(data.consumables.repairKit||0)<=0)return toast('Kein Repair-Kit vorhanden.','error');if(s.hp>=sp.maxHp-1)return toast('Dein Fahrzeug ist bereits vollständig repariert.');data.consumables.repairKit--;s.hp=Math.min(sp.maxHp,s.hp+sp.maxHp*.6);persist(data);toast('Repair-Kit benutzt.','good');}else if(kind==='fuel'){if(Number(data.consumables.fuelCan||0)<=0)return toast('Kein Reservekanister vorhanden.','error');if(s.fuel>=sp.maxFuel-1)return toast('Der Tank ist bereits voll.');data.consumables.fuelCan--;s.fuel=Math.min(sp.maxFuel,s.fuel+sp.maxFuel*.55);persist(data);toast('Reservekanister benutzt.','good');}updateConsumableHud();}
@@ -499,7 +530,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   function resizeWorld(){const s=UI.session;if(!s?.renderer||!s.host)return;const w=Math.max(1,s.host.clientWidth),h=Math.max(1,s.host.clientHeight);s.renderer.setSize(w,h,false);s.camera.aspect=w/h;s.camera.updateProjectionMatrix();}
 
   function stopWorld(){
-    const s=UI.session;if(!s)return;UI.session=null;cancelAnimationFrame(s.raf);clearTimeout(s.remoteRetryTimer);try{s.timer?.dispose?.();}catch{}try{s.remoteUnsub?.();}catch{}if(s.fb&&s.user){s.fb.deleteDoc(s.fb.doc(s.fb.db,'speedCarKlLobby',s.user.uid)).catch(()=>{});}s.remoteObjects?.clear?.();try{s.renderer?.dispose?.();}catch{}UI.touch={gas:false,brake:false,left:false,right:false,nitro:false};UI.overlay?.querySelector('[data-sckl-owner-float]')?.remove();
+    const s=UI.session;UI.session=null;
+    if(s){cancelAnimationFrame(s.raf);clearTimeout(s.remoteRetryTimer);try{s.timer?.dispose?.();}catch{}try{s.remoteUnsub?.();}catch{}if(s.fb&&s.user){s.fb.deleteDoc(s.fb.doc(s.fb.db,'speedCarKlLobby',s.user.uid)).catch(()=>{});}s.remoteObjects?.clear?.();releaseRenderer(s.renderer);}
+    // Falls eine asynchrone, bereits abgebrochene Session ihren Renderer hinterlassen hat,
+    // wird auch dieser Kontext hier garantiert freigegeben.
+    if(ACTIVE_RENDERER)releaseRenderer(ACTIVE_RENDERER);
+    UI.touch={gas:false,brake:false,left:false,right:false,nitro:false};UI.overlay?.querySelector('[data-sckl-owner-float]')?.remove();
   }
 
   function grantJkCoinPurchase(kind,amount=1){const data=state(),qty=Math.max(1,Math.floor(Number(amount)||1));if(kind==='nitro')data.consumables.nitro+=qty;else if(kind==='repairKit')data.consumables.repairKit+=qty;else if(kind==='fuelCan')data.consumables.fuelCan+=qty;else if(kind==='tuneToken')data.consumables.tuneToken+=qty;else if(kind==='speedCoins')data.coins+=50000*qty;else return false;persist(data);if(UI.overlay){toast(`JK/Coin Extra erhalten: ${kind} ×${qty}`,'good');refreshHeader();}return true;}
