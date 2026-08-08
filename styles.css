@@ -20454,6 +20454,52 @@ body.gfx-minimum .wardrobe-card.jk-exclusive-wardrobe-card {
   box-shadow: none !important;
 }
 
+/* V263 · The Real Galaxy Skin · Qualitätsstufen Minimum bis Ultra */
+.jk-exclusive-card.jk-exclusive-realgalaxy {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(95,225,255,.24), transparent 25%),
+    radial-gradient(circle at 28% 56%, rgba(187,67,255,.26), transparent 38%),
+    radial-gradient(circle at 76% 70%, rgba(255,72,157,.20), transparent 36%),
+    linear-gradient(180deg, rgba(19,5,40,.99), rgba(4,4,18,.995));
+  border-color: rgba(132,226,255,.58);
+  box-shadow: inset 0 0 46px rgba(144,74,255,.18), 0 0 30px rgba(93,208,255,.16);
+}
+.jk-exclusive-card.jk-exclusive-realgalaxy::before {
+  content: ""; position: absolute; inset: -30%; pointer-events: none; z-index: -1;
+  background: conic-gradient(from 0deg, transparent, rgba(92,218,255,.10), transparent 30%, rgba(216,82,255,.12), transparent 63%, rgba(255,81,157,.08), transparent);
+  animation: jkRealGalaxyBackdrop 18s linear infinite;
+}
+.real-galaxy-svg { filter: drop-shadow(0 0 8px rgba(100,218,255,.16)); }
+.real-galaxy-orbits { transform-origin: 111px 45px; animation: jkRealGalaxyOrbit 8.5s linear infinite; }
+.real-galaxy-orbits .orbit-b { transform-origin: 111px 45px; animation: jkRealGalaxyOrbitReverse 6.8s linear infinite; }
+.real-galaxy-orb { animation: jkRealGalaxyPulse 1.9s ease-in-out infinite alternate; }
+.real-galaxy-eyes,.real-galaxy-core { animation: jkRealGalaxyGlow 1.7s ease-in-out infinite alternate; }
+.real-galaxy-nebula { animation: jkRealGalaxyNebula 5.8s ease-in-out infinite alternate; }
+.real-galaxy-body-star-hd,.real-galaxy-star-hd,.real-galaxy-star-ultra { animation: jkRealGalaxyTwinkle 2.4s ease-in-out infinite alternate; }
+.real-galaxy-ultra { display: none; }
+body.gfx-diamond .real-galaxy-ultra, body.gfx-ultra .real-galaxy-ultra { display: initial; }
+body.gfx-minimum .real-galaxy-hd, body.gfx-medium .real-galaxy-ultra { display: none !important; }
+body.gfx-minimum .jk-exclusive-card.jk-exclusive-realgalaxy { box-shadow: none; background: linear-gradient(180deg, #17072d, #050711); }
+body.gfx-minimum .real-galaxy-orbits, body.gfx-minimum .real-galaxy-orb, body.gfx-minimum .real-galaxy-eyes, body.gfx-minimum .real-galaxy-core { animation: none !important; }
+body.gfx-medium .real-galaxy-hd { opacity: .72; }
+body.gfx-ultra .jk-exclusive-card.jk-exclusive-realgalaxy { box-shadow: inset 0 0 58px rgba(137,72,255,.24), 0 0 36px rgba(75,216,255,.22); }
+.wardrobe-card.jk-exclusive-wardrobe-card.tier-realgalaxy {
+  background: radial-gradient(circle at 18% 18%, rgba(78,220,255,.20), transparent 32%), radial-gradient(circle at 82% 80%, rgba(222,72,255,.20), transparent 38%), linear-gradient(135deg, rgba(26,7,53,.98), rgba(4,7,20,.99));
+  border-color: rgba(112,224,255,.40);
+  box-shadow: inset 0 0 26px rgba(145,74,255,.12);
+}
+@keyframes jkRealGalaxyBackdrop { to { transform: rotate(360deg); } }
+@keyframes jkRealGalaxyOrbit { to { transform: rotate(360deg); } }
+@keyframes jkRealGalaxyOrbitReverse { to { transform: rotate(-360deg); } }
+@keyframes jkRealGalaxyPulse { from { opacity: .55; transform: scale(.82); } to { opacity: 1; transform: scale(1.15); } }
+@keyframes jkRealGalaxyGlow { from { opacity: .76; } to { opacity: 1; } }
+@keyframes jkRealGalaxyNebula { from { opacity: .10; transform: scale(.92); } to { opacity: .22; transform: scale(1.08); } }
+@keyframes jkRealGalaxyTwinkle { from { opacity: .42; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .jk-exclusive-card.jk-exclusive-realgalaxy::before,.real-galaxy-orbits,.real-galaxy-orbits .orbit-b,.real-galaxy-orb,.real-galaxy-eyes,.real-galaxy-core,.real-galaxy-nebula,.real-galaxy-body-star-hd,.real-galaxy-star-hd,.real-galaxy-star-ultra { animation: none !important; }
+}
+
 /* V235: Hype ersetzt den alten Casino-Schnellzugriff im Hauptdashboard. */
 .dashboard-shortcut.hype {
   background:
@@ -20474,53 +20520,3 @@ body.gfx-minimum .wardrobe-card.jk-exclusive-wardrobe-card {
 
 /* V237 · Fragmente in täglichen Geschenken */
 .daily-gift-fragments{display:block;margin-top:4px;color:#7fe8ff!important;font-size:9px!important;font-weight:900;letter-spacing:.02em!important}
-
-/* V263 · hochauflösender Lucky-Box-Skin „The Real Galaxy Skin“ */
-.jk-real-galaxy-card {
-  min-height: 210px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(93, 236, 255, .22), transparent 31%),
-    radial-gradient(circle at 35% 28%, rgba(218, 78, 255, .25), transparent 38%),
-    linear-gradient(180deg, #17072f 0%, #070313 72%, #020207 100%);
-  box-shadow: inset 0 0 45px rgba(112, 72, 255, .16), 0 16px 32px rgba(0, 0, 0, .34);
-}
-.jk-real-galaxy-card::before,
-.jk-real-galaxy-card::after,
-.jk-real-galaxy-starfield {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.jk-real-galaxy-card::before {
-  background-image:
-    radial-gradient(circle at 18% 22%, #fff 0 1px, transparent 1.7px),
-    radial-gradient(circle at 76% 18%, #8feaff 0 1.2px, transparent 1.9px),
-    radial-gradient(circle at 83% 63%, #f0a8ff 0 1px, transparent 1.8px),
-    radial-gradient(circle at 27% 76%, #fff 0 .8px, transparent 1.6px),
-    radial-gradient(circle at 62% 86%, #8dbaff 0 1px, transparent 1.8px);
-  opacity: .78;
-}
-.jk-real-galaxy-card::after {
-  inset: 9% 16%;
-  border: 1px solid rgba(126, 226, 255, .16);
-  border-radius: 50%;
-  transform: rotate(-18deg);
-  box-shadow: 0 0 24px rgba(111, 104, 255, .18);
-}
-.jk-real-galaxy-starfield {
-  background: radial-gradient(circle at 50% 52%, rgba(171, 83, 255, .20), transparent 46%);
-}
-.jk-real-galaxy-image {
-  position: relative;
-  z-index: 2;
-  width: min(98%, 260px);
-  max-height: 300px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 10px rgba(82, 223, 255, .48)) drop-shadow(0 18px 22px rgba(0, 0, 0, .48));
-  user-select: none;
-}
-.avatar-card.large .jk-real-galaxy-image { width: min(100%, 300px); max-height: 340px; }
-.avatar-card.mini .jk-real-galaxy-image { width: 132px; max-height: 156px; }
-body.gfx-minimum .jk-real-galaxy-image { filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }

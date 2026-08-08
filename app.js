@@ -2759,9 +2759,9 @@ window.JKGamesResetV180 = Object.freeze({
 });
 window.JKGamesResetV179 = window.JKGamesResetV180;
 
-// Kleine, bewusst begrenzte Brücke für die begehbare Cottbus-3D-Karte.
+// Kleine, bewusst begrenzte Brücke für die begehbare Center-3D-Welt.
 // Der Owner-Skin wird nicht über den Spielstand freigeschaltet, sondern ausschließlich
-// in cottbus-3d.js anhand der echten Online-Teamrolle geprüft.
+// im aktiven Center-Modul anhand der echten Online-Teamrolle geprüft.
 window.JKGamesCottbus3DBridge = Object.freeze({
   getPlayer() {
     if (!state) return null;
@@ -3966,13 +3966,8 @@ function improveSkill(name, amount = 1) {
   state.skills[name] = Math.min(10, (state.skills[name] || 1) + amount);
 }
 
-const MAIN_MAX_LEVEL = 10000;
-
 function xpNeeded(level = state.level || 0) {
-  const safeLevel = Math.max(0, Math.min(MAIN_MAX_LEVEL - 1, Math.floor(Number(level) || 0)));
-  // Bewusst sehr lange Hauptlevel-Kurve: Jedes Level kostet 100 EP mehr als das vorherige.
-  // Dadurch steigt der Bedarf bis auf 1.000.000 EP kurz vor Level 10.000.
-  return Math.min(1000000, Math.max(100, (safeLevel + 1) * 100));
+  return Math.min(1000000, Math.max(100, (level + 1) * 100));
 }
 
 const experienceToastQueue = [];
@@ -4062,25 +4057,17 @@ function addXp(amount, reason = "", options = {}) {
   const earned = Math.max(0, Math.round(Number(amount) || 0));
   if (!earned) return 0;
   const { toast = true, toastReason = reason } = options;
-  state.level = Math.max(0, Math.min(MAIN_MAX_LEVEL, Math.floor(Number(state.level || 0))));
-  state.xp = Math.max(0, Number(state.xp || 0));
+  state.level ||= 0;
+  state.xp ||= 0;
   const levelBefore = state.level;
-  if (state.level >= MAIN_MAX_LEVEL) {
-    state.xp = 0;
-    if (toast) queueExperienceToast(earned, toastReason || reason || "Erfahrung erhalten", `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht`);
-    return earned;
-  }
   state.xp += earned;
-  while (state.level < MAIN_MAX_LEVEL && state.xp >= xpNeeded(state.level)) {
+  while (state.level < 100 && state.xp >= xpNeeded(state.level)) {
     state.xp -= xpNeeded(state.level);
     state.level += 1;
     state.skillPoints = (state.skillPoints || 0) + 1;
     addFeed(`Level ${state.level} erreicht. +1 Skillpunkt.`);
   }
-  if (state.level >= MAIN_MAX_LEVEL) state.xp = 0;
-  const levelText = state.level > levelBefore
-    ? (state.level >= MAIN_MAX_LEVEL ? `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht · +1 Skillpunkt` : `Level ${state.level} erreicht · +1 Skillpunkt`)
-    : "";
+  const levelText = state.level > levelBefore ? `Level ${state.level} erreicht · +1 Skillpunkt` : "";
   if (toast) queueExperienceToast(earned, toastReason || reason || "Erfahrung erhalten", levelText);
   return earned;
 }
@@ -4140,7 +4127,7 @@ window.JKGamesTopGameXpStatus = () => {
     earned: Math.max(0, Number(ledger.total || 0)),
     cap: null,
     unlimited: true,
-    level: Math.max(0, Math.min(MAIN_MAX_LEVEL, Number(state?.level || 0))),
+    level: Math.max(0, Math.min(100, Number(state?.level || 0))),
     byGame: { ...(ledger.byGame || {}) }
   };
 };
@@ -5837,19 +5824,15 @@ const tattooMotifs = [
 function openLevelInfoDialog() {
   if (!state) return;
   clearDialogDynamic();
-  const level = Math.max(0, Math.min(MAIN_MAX_LEVEL, Math.floor(Number(state.level || 0))));
-  const atMax = level >= MAIN_MAX_LEVEL;
-  const need = atMax ? 0 : xpNeeded(level);
-  const current = atMax ? 0 : Math.max(0, Number(state.xp || 0));
-  const remaining = atMax ? 0 : Math.max(0, need - current);
-  const percent = atMax ? 100 : Math.max(0, Math.min(100, Math.round(current / Math.max(1, need) * 100)));
-  els.dialogTitle.textContent = `Level ${level.toLocaleString("de-DE")}`;
-  els.dialogText.textContent = atMax
-    ? `Maximallevel ${MAIN_MAX_LEVEL.toLocaleString("de-DE")} erreicht.`
-    : `${current.toLocaleString("de-DE")} von ${need.toLocaleString("de-DE")} EP gesammelt.`;
+  const need = xpNeeded(state.level || 0);
+  const current = Math.max(0, Number(state.xp || 0));
+  const remaining = Math.max(0, need - current);
+  const percent = Math.max(0, Math.min(100, Math.round(current / Math.max(1, need) * 100)));
+  els.dialogTitle.textContent = `Level ${state.level || 0}`;
+  els.dialogText.textContent = `${current.toLocaleString("de-DE")} von ${need.toLocaleString("de-DE")} EP gesammelt.`;
   const panel = document.createElement("div");
   panel.className = "profile-info-scroll level-info-panel";
-  panel.innerHTML = `<section class="profile-info-card"><small>${atMax ? "MAXIMALLEVEL" : "FORTSCHRITT ZUM NÄCHSTEN LEVEL"}</small><strong>${atMax ? MAIN_MAX_LEVEL.toLocaleString("de-DE") : `${percent}%`}</strong><div class="profile-info-bar"><i style="width:${percent}%"></i></div><p>${atMax ? `Du hast das höchste Hauptlevel von <b>${MAIN_MAX_LEVEL.toLocaleString("de-DE")}</b> erreicht.` : `Noch <b>${remaining.toLocaleString("de-DE")} EP</b> bis Level ${(level + 1).toLocaleString("de-DE")}.`}</p></section><section class="profile-tip-list"><h3>So erhältst du EP</h3><article>✓ Arbeiten, Lernen und Training abschließen</article><article>✓ Games spielen und Erfolge abholen</article><article>✓ Tägliche Quests und Events erledigen</article></section>`;
+  panel.innerHTML = `<section class="profile-info-card"><small>FORTSCHRITT ZUM NÄCHSTEN LEVEL</small><strong>${percent}%</strong><div class="profile-info-bar"><i style="width:${percent}%"></i></div><p>Noch <b>${remaining.toLocaleString("de-DE")} EP</b> bis Level ${(state.level || 0) + 1}.</p></section><section class="profile-tip-list"><h3>So erhältst du EP</h3><article>✓ Arbeiten, Lernen und Training abschließen</article><article>✓ Games spielen und Erfolge abholen</article><article>✓ Tägliche Quests und Events erledigen</article></section>`;
   els.dialog.append(panel);
   if (!els.dialog.open) els.dialog.showModal();
 }
@@ -6737,30 +6720,18 @@ function openAchievementInfoDialog() {
   if (!els.dialog.open) els.dialog.showModal();
 }
 
-const THE_REAL_GALAXY_SKIN_NAME = "The Real Galaxy Skin";
-
-function isNonSellableJkExclusiveSkinName(name) {
-  return String(name || "").trim().toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase();
-}
+const THE_REAL_GALAXY_SKIN = "The Real Galaxy Skin";
 
 function isJkExclusiveSkinName(name) {
   const raw = String(name || "").trim();
-  return raw.toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase()
+  return raw.toLowerCase() === THE_REAL_GALAXY_SKIN.toLowerCase()
     || /^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #\d+$/i.test(raw);
 }
 
 function jkExclusiveSkinInfo(name) {
   const raw = String(name || "").trim();
-  if (raw.toLowerCase() === THE_REAL_GALAXY_SKIN_NAME.toLowerCase()) {
-    return {
-      name: THE_REAL_GALAXY_SKIN_NAME,
-      tier: "galaxy",
-      label: THE_REAL_GALAXY_SKIN_NAME,
-      number: 1000,
-      sellable: false,
-      sellValue: 0,
-      asset: "assets/skins/the-real-galaxy-skin.png"
-    };
+  if (raw.toLowerCase() === THE_REAL_GALAXY_SKIN.toLowerCase()) {
+    return { name: THE_REAL_GALAXY_SKIN, tier: "realgalaxy", label: "The Real Galaxy", number: 7777, sellValue: 15000000, special: true };
   }
   const match = raw.match(/^JK Exclusive (Premium|Legend|Universe|Galaxy) Skin #(\d+)$/i);
   if (!match) return null;
@@ -6771,22 +6742,84 @@ function jkExclusiveSkinInfo(name) {
   return { name: raw, tier, label: labels[tier] || match[1], number, sellValue: sellValues[tier] || 125000 };
 }
 
+function realGalaxySkinHtml(info, size = "") {
+  const uid = `jk-real-galaxy-${String(size || "base").replace(/[^a-z0-9]/gi, "") || "base"}`;
+  const seed = 260808;
+  const makeStars = (count, offset = 0, cls = "") => Array.from({ length: count }, (_, index) => {
+    const n = index + offset;
+    const x = 22 + ((seed + n * 47 + n * n * 3) % 176);
+    const y = 18 + ((seed * 3 + n * 71 + n * n * 5) % 318);
+    const r = .65 + ((n * 17) % 7) * .16;
+    const palette = ["#ffffff", "#8eeaff", "#d9a1ff", "#ff78b6"];
+    return `<circle class="${cls}" cx="${x}" cy="${y}" r="${r.toFixed(2)}" fill="${palette[n % palette.length]}" opacity="${(.48 + (n % 5) * .1).toFixed(2)}"/>`;
+  }).join("");
+  const lowStars = makeStars(22, 0, "real-galaxy-star-low");
+  const hdStars = makeStars(42, 30, "real-galaxy-hd real-galaxy-star-hd");
+  const ultraStars = makeStars(34, 90, "real-galaxy-ultra real-galaxy-star-ultra");
+  return `
+    <div class="avatar-card ${size} jk-exclusive-card jk-exclusive-realgalaxy real-galaxy-card" data-jk-exclusive-skin="${escapeHtml(info.name)}">
+      <svg class="avatar-svg jk-exclusive-svg real-galaxy-svg" viewBox="0 0 220 360" role="img" aria-label="${escapeHtml(info.name)}">
+        <defs>
+          <linearGradient id="${uid}-space" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070515"/><stop offset=".24" stop-color="#3f156f"/><stop offset=".47" stop-color="#131739"/><stop offset=".68" stop-color="#79286f"/><stop offset="1" stop-color="#071020"/></linearGradient>
+          <linearGradient id="${uid}-space2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#56dbff" stop-opacity=".9"/><stop offset=".27" stop-color="#6c52ff" stop-opacity=".34"/><stop offset=".61" stop-color="#ff4ca7" stop-opacity=".46"/><stop offset="1" stop-color="#10031e" stop-opacity=".9"/></linearGradient>
+          <linearGradient id="${uid}-metal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#101326"/><stop offset=".48" stop-color="#eafcff"/><stop offset=".6" stop-color="#7ca6c9"/><stop offset="1" stop-color="#0b0a18"/></linearGradient>
+          <radialGradient id="${uid}-aura"><stop offset="0" stop-color="#f06dff" stop-opacity=".46"/><stop offset=".37" stop-color="#6b43ff" stop-opacity=".25"/><stop offset=".7" stop-color="#54d9ff" stop-opacity=".12"/><stop offset="1" stop-color="#13051f" stop-opacity="0"/></radialGradient>
+          <radialGradient id="${uid}-eye"><stop offset="0" stop-color="#ffffff"/><stop offset=".42" stop-color="#bff6ff"/><stop offset="1" stop-color="#52ccff"/></radialGradient>
+          <filter id="${uid}-glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="${uid}-soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+          <clipPath id="${uid}-bodyclip"><path d="M75 98 C86 86 98 81 110 81 C123 81 136 87 146 100 L154 194 C143 211 128 220 110 220 C92 220 77 211 66 194Z M68 106 C53 122 48 155 45 202 C44 221 58 226 64 207 L79 132Z M152 106 C167 122 172 155 175 202 C176 221 162 226 156 207 L141 132Z M78 199 C88 213 101 220 110 220 C119 220 132 213 142 199 L140 320 L116 320 L111 224 L109 224 L104 320 L80 320Z"/></clipPath>
+        </defs>
+        <ellipse class="real-galaxy-aura" cx="110" cy="188" rx="108" ry="174" fill="url(#${uid}-aura)"/>
+        <ellipse class="real-galaxy-hd real-galaxy-nebula" cx="112" cy="186" rx="72" ry="136" fill="#a447ff" opacity=".13" filter="url(#${uid}-soft)"/>
+        ${lowStars}${hdStars}${ultraStars}
+        <g class="real-galaxy-orbits" fill="none" stroke-linecap="round">
+          <ellipse cx="111" cy="45" rx="50" ry="14" stroke="#47dcff" stroke-width="3" opacity=".9" transform="rotate(-9 111 45)"/>
+          <ellipse class="real-galaxy-hd orbit-b" cx="111" cy="45" rx="58" ry="10" stroke="#a375ff" stroke-width="1.8" opacity=".64" transform="rotate(18 111 45)"/>
+          <circle class="real-galaxy-orb" cx="160" cy="36" r="4.5" fill="#d8fbff" stroke="#64eaff" stroke-width="1" filter="url(#${uid}-glow)"/>
+        </g>
+        <ellipse cx="110" cy="343" rx="63" ry="11" fill="rgba(0,0,0,.50)"/>
+        <path class="real-galaxy-cape real-galaxy-hd" d="M78 105 C57 137 54 245 72 303 C85 287 97 267 108 243 L101 108Z" fill="url(#${uid}-space2)" opacity=".28"/>
+        <path class="real-galaxy-cape real-galaxy-hd" d="M142 105 C163 137 166 245 148 303 C135 287 123 267 112 243 L119 108Z" fill="url(#${uid}-space2)" opacity=".22"/>
+        <g clip-path="url(#${uid}-bodyclip)">
+          <rect x="35" y="75" width="150" height="260" fill="url(#${uid}-space)"/>
+          <ellipse class="real-galaxy-hd" cx="82" cy="170" rx="65" ry="94" fill="#c23cff" opacity=".22" filter="url(#${uid}-soft)"/>
+          <ellipse class="real-galaxy-hd" cx="147" cy="250" rx="54" ry="86" fill="#34d3ff" opacity=".16" filter="url(#${uid}-soft)"/>
+          ${makeStars(26, 140, "real-galaxy-body-star")}${makeStars(28, 190, "real-galaxy-hd real-galaxy-body-star-hd")}
+          <path class="real-galaxy-ultra" d="M43 158 C78 132 100 160 126 142 C149 126 166 139 183 120" fill="none" stroke="#ff70b7" stroke-width="7" opacity=".22" filter="url(#${uid}-soft)"/>
+          <path class="real-galaxy-ultra" d="M48 260 C78 223 101 251 132 225 C151 209 166 216 179 199" fill="none" stroke="#62e6ff" stroke-width="6" opacity=".2" filter="url(#${uid}-soft)"/>
+        </g>
+        <path d="M75 98 C86 86 98 81 110 81 C123 81 136 87 146 100 L154 194 C143 211 128 220 110 220 C92 220 77 211 66 194Z" fill="none" stroke="url(#${uid}-metal)" stroke-width="2.4"/>
+        <path d="M68 106 C53 122 48 155 45 202 C44 221 58 226 64 207 L79 132Z" fill="none" stroke="#8aeaff" stroke-width="2" opacity=".8"/>
+        <path d="M152 106 C167 122 172 155 175 202 C176 221 162 226 156 207 L141 132Z" fill="none" stroke="#d17dff" stroke-width="2" opacity=".8"/>
+        <circle cx="53" cy="214" r="11" fill="#0a0b17" stroke="#58e0ff" stroke-width="2.2"/><circle cx="167" cy="214" r="11" fill="#0a0b17" stroke="#bd72ff" stroke-width="2.2"/>
+        <path d="M78 199 C88 213 101 220 110 220 C119 220 132 213 142 199 L140 320 L116 320 L111 224 L109 224 L104 320 L80 320Z" fill="none" stroke="url(#${uid}-metal)" stroke-width="2.1"/>
+        <path d="M70 317 C82 312 99 313 108 321 L107 338 H63 C62 328 66 321 70 317Z" fill="#080914" stroke="#69ddff" stroke-width="2.4"/>
+        <path d="M150 317 C138 312 121 313 112 321 L113 338 H157 C158 328 154 321 150 317Z" fill="#080914" stroke="#d67cff" stroke-width="2.4"/>
+        <path d="M82 112 L98 97 L110 105 L124 97 L140 112 L136 186 C125 195 95 195 84 186Z" fill="rgba(4,6,16,.38)" stroke="#9e76ff" stroke-width="1.7"/>
+        <path class="real-galaxy-core" d="M110 116 L126 138 L110 160 L94 138Z" fill="#070817" stroke="#6ee6ff" stroke-width="2.5" filter="url(#${uid}-glow)"/><circle cx="110" cy="138" r="7" fill="#f0fbff" opacity=".95"/>
+        <path d="M94 82 L126 82 L131 101 C124 111 96 111 89 101Z" fill="url(#${uid}-metal)" stroke="#8eeaff" stroke-width="1.8"/>
+        <path d="M76 49 C76 20 93 7 111 7 C130 7 146 21 146 50 C146 78 132 92 111 92 C90 92 76 77 76 49Z" fill="url(#${uid}-space)" stroke="#c9f5ff" stroke-width="2.6"/>
+        <path d="M78 39 C82 17 96 5 112 5 C128 5 142 17 148 40 C137 29 88 28 78 39Z" fill="url(#${uid}-metal)" opacity=".9"/>
+        <path d="M83 42 C90 34 101 31 111 31 C122 31 133 35 140 44 L137 64 C125 72 97 72 84 64Z" fill="#070817" stroke="#8deaff" stroke-width="2.1"/>
+        <path class="real-galaxy-eyes" d="M91 49 C98 45 103 45 107 48 C103 54 96 55 91 51Z M131 49 C124 45 119 45 115 48 C119 54 126 55 131 51Z" fill="url(#${uid}-eye)" filter="url(#${uid}-glow)"/>
+        <path class="real-galaxy-hd" d="M89 69 C98 76 122 76 133 68" fill="none" stroke="#ff7ac3" stroke-width="1.5" opacity=".65"/>
+        <path d="M80 259 L102 259 M118 259 L140 259" stroke="#65e2ff" stroke-width="3" stroke-linecap="round" opacity=".76"/>
+        <path d="M82 298 L102 298 M118 298 L138 298" stroke="#cf79ff" stroke-width="2.5" stroke-linecap="round" opacity=".72"/>
+        <g class="real-galaxy-ultra real-galaxy-glints" stroke="#fff" stroke-linecap="round" opacity=".82"><path d="M62 132 h10 M67 127 v10"/><path d="M150 175 h12 M156 169 v12"/><path d="M93 246 h9 M97.5 241.5 v9"/><path d="M132 283 h8 M136 279 v8"/></g>
+        <text x="110" y="238" text-anchor="middle" fill="#e8fbff" font-size="8.5" font-weight="900" letter-spacing="1.35">THE REAL GALAXY</text>
+      </svg>
+    </div>
+  `;
+}
+
 function jkExclusiveSkinSellValue(name) {
-  const info = jkExclusiveSkinInfo(name);
-  return info?.sellable === false ? 0 : info?.sellValue || 0;
+  return jkExclusiveSkinInfo(name)?.sellValue || 0;
 }
 
 function jkExclusiveSkinHtml(name, size = "") {
   const info = jkExclusiveSkinInfo(name);
   if (!info) return "";
-  if (info.asset) {
-    return `
-      <div class="avatar-card ${size} jk-exclusive-card jk-exclusive-galaxy jk-real-galaxy-card" data-jk-exclusive-skin="${escapeHtml(info.name)}">
-        <span class="jk-real-galaxy-starfield" aria-hidden="true"></span>
-        <img class="avatar-svg jk-real-galaxy-image" src="${escapeHtml(info.asset)}?v=20260808-jkgames-v263-real-galaxy-skin" alt="${escapeHtml(info.name)}" decoding="async" draggable="false">
-      </div>
-    `;
-  }
+  if (info.tier === "realgalaxy") return realGalaxySkinHtml(info, size);
   const seed = info.number * 97 + info.tier.length * 131;
   const hue = seed % 360;
   const secondaryHue = (hue + 58 + (info.number % 47)) % 360;
@@ -7209,7 +7242,6 @@ function sellWardrobeItem(itemName) {
   const wardrobe = state.wardrobe || [];
   const index = wardrobe.indexOf(itemName);
   if (index < 0) return addFeed("Dieses Kleidungsstück ist nicht mehr im Kleiderschrank.");
-  if (isNonSellableJkExclusiveSkinName(itemName)) return addFeed(`${itemName} ist dauerhaft an dein Konto gebunden und nicht verkäuflich.`);
   const item = shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
   const value = inventorySellValue(itemName);
   if (!value) return addFeed("Dieses Basis-Kleidungsstück kann nicht verkauft werden.");
@@ -7263,9 +7295,8 @@ function openWardrobeDialog(previewItemName = "") {
         const item = exclusive ? null : shopMarketCatalog.clothing.find((entry) => entry.item === itemName || entry.name === itemName);
         const equipped = exclusive ? activeExclusiveSkin === itemName : !!item && isClothingEquipped(item) && !activeExclusiveSkin;
         const value = inventorySellValue(itemName);
-        const nonSellable = exclusive?.sellable === false;
         const description = exclusive
-          ? `Exklusiver JK.Games-Hauptcharakter-Skin · ${exclusive.label}. Ersetzt beim Aktivieren den normalen Charakter-Look vollständig.${nonSellable ? " Dauerhaft kontogebunden und nicht verkäuflich." : ""}${itemIdBadge(itemName)}`
+          ? `Exklusiver JK.Games-Hauptcharakter-Skin · ${exclusive.label}. Ersetzt beim Aktivieren den normalen Charakter-Look vollständig.${itemIdBadge(itemName)}`
           : `${item?.text || "Kleidung aus deiner Garderobe."}${itemIdBadge(itemName)}`;
         return `
           <article class="item-card wardrobe-card ${equipped ? "equipped" : ""} ${exclusive ? `jk-exclusive-wardrobe-card tier-${exclusive.tier}` : ""}">
@@ -7276,7 +7307,7 @@ function openWardrobeDialog(previewItemName = "") {
             <div class="wardrobe-actions">
               <button data-wardrobe-preview="${index}">Beobachten</button>
               <button class="${equipped ? "danger" : ""}" data-wardrobe-toggle="${index}">${equipped ? "AUS" : "AN"}</button>
-              <button class="mini-button" data-wardrobe-sell="${index}" title="${nonSellable ? "Dauerhaft unverkäuflich" : `Verkaufen für ${euro.format(value)}`}" ${value <= 0 ? "disabled" : ""}>${nonSellable ? "Nicht verkäuflich" : "Verkaufen"}</button>
+              <button class="mini-button" data-wardrobe-sell="${index}" title="Verkaufen für ${euro.format(value)}" ${value <= 0 ? "disabled" : ""}>Verkaufen</button>
             </div>
           </article>
         `;
