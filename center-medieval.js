@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v265-owner-material-online-wings-fix';
+const CENTER_VERSION = '2026-08-08-jkgames-v267-performance-admin-gray-disguise-ego-skins';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -14,6 +14,7 @@ const ONLINE_WRITE_INTERVAL_MS = 1250;
 const ONLINE_HEARTBEAT_MS = 10000;
 const ONLINE_STALE_MS = 26000;
 const ONLINE_QUERY_LIMIT = 32;
+const PERF_TASK_INTERVALS = Object.freeze({ world:100, needs:250, animals:55, ambient:60, npcs:105, death:450, thrown:34, effects:34, weather:40, hotspots:110 });
 const MAX_REMOTE_PLAYERS = 16;
 const CHARACTER_MODEL_YAW = 0;
 const COLLIDER_CELL_SIZE = 16;
@@ -37,7 +38,7 @@ const ANIMAL_FORM_IDS = Object.freeze(['fox','shark','cow','orca','horse','owl',
 const STAFF_CAPABILITY_MATRIX = Object.freeze({
   supporter: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:false, noclip:false, speed:false, freezeTime:false, size:false, forms:Object.freeze(['normal']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
   moderator: Object.freeze({ menu:true, vanish:true, god:true, heal:false, online:true, teleport:true, fly:true, noclip:false, speed:true, freezeTime:false, size:false, forms:Object.freeze(['normal','crystal','bush','tree','rock','grass']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
-  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer']), vehicles:Object.freeze(['none','scooter','plane']), world:true, resources:true, ownerCosmetics:false }),
+  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer','sword','staff','eternalFlame']), vehicles:Object.freeze(['none','scooter','plane']), world:true, resources:true, ownerCosmetics:true }),
   owner: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer','sword','staff','eternalFlame']), vehicles:Object.freeze(['none','scooter','plane']), world:true, resources:true, ownerCosmetics:true })
 });
 function canonicalStaffRole(value='') {
@@ -49,6 +50,14 @@ function canonicalStaffRole(value='') {
   return 'player';
 }
 function staffCapabilities(role='player') { return STAFF_CAPABILITY_MATRIX[canonicalStaffRole(role)] || Object.freeze({ menu:false, forms:Object.freeze(['normal']), items:Object.freeze(['none']) }); }
+function detectPerformanceTier(isMobile=false){
+  const cores=Math.max(1,Number(navigator.hardwareConcurrency)||4),memory=Math.max(1,Number(navigator.deviceMemory)||4);
+  if(isMobile)return memory<=4||cores<=4?'low':'balanced';
+  if(memory<=4||cores<=4)return 'low';
+  if(memory>=8&&cores>=8)return 'high';
+  return 'balanced';
+}
+function isFirestoreIndexError(error){const code=String(error?.code||'').toLowerCase(),message=String(error?.message||'').toLowerCase();return code.includes('failed-precondition')||message.includes('index')&&message.includes('firestore');}
 const installJkPointerLockGuard = () => {
   if (window.__jkPointerLockGuardInstalled) return;
   window.__jkPointerLockGuardInstalled = true;
@@ -67,9 +76,11 @@ const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
 const ASSET_ROOT = './assets/cottbus/';
 const CENTER_ASSET_ROOT = './assets/center-open-world/';
 const MODEL_PATHS = Object.freeze({
-  male: `${ASSET_ROOT}player-male.glb`,
-  female: `${ASSET_ROOT}player-female.glb`,
-  owner: `${ASSET_ROOT}player-owner.glb`
+  // V267: Normale Spieler benutzen die Mann-/Frau-Charaktere aus Ego-Shooter.
+  male: `./man-walk.glb?v=20260808-v267`,
+  female: `./woman-walk.glb?v=20260808-v267`,
+  // Admin und Owner teilen sich bewusst denselben weißen Staff-Skin.
+  owner: `${ASSET_ROOT}player-owner.glb?v=20260808-v267`
 });
 const CENTER_ASSET_PATHS = Object.freeze({
   basicTools: `${CENTER_ASSET_ROOT}basic-tools.glb`,
@@ -227,9 +238,9 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 6,
+    version: 7,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
-    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 3, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
+    world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 2, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
     day: 1,
     season: 0,
     time: 8.25,
@@ -240,7 +251,7 @@ function defaultSaveState() {
     inventory: { wood: 0, firewood: 0, logs: 0, stone: 0, berries: 0, mushrooms: 0, meat: 0, cookedMeat: 0, water: 1, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 0 },
     tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
     equippedTool: '',
-    ownerAppearance: { skin: 'normal', aura: false, size: 1, heldItem: 'none', cape: false, hat: false, vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0 },
+    ownerAppearance: { skin: 'normal', aura: false, size: 1, heldItem: 'none', cape: false, hat: false, vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0, publicMode: 'staff', publicGender: 'male', publicAlias: 'Center Spieler' },
     keybinds: { ...DEFAULT_KEYBINDS },
     deathLoot: null,
     tutorial: { done: false, step: 'sticks', sticks: 0, stones: 0, berries: 0, mushrooms: 0, treeChopped: false },
@@ -301,6 +312,9 @@ function normalizeSaveState(raw) {
   state.ownerAppearance.scooterTuning = Math.floor(clamp(Number(state.ownerAppearance.scooterTuning)||0,0,3));
   state.ownerAppearance.quickForm = ['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS].includes(state.ownerAppearance.quickForm) ? state.ownerAppearance.quickForm : 'fox';
   state.ownerAppearance.treeVariant = Math.max(0,Math.floor(Number(state.ownerAppearance.treeVariant)||0))%8;
+  state.ownerAppearance.publicMode = ['staff','player'].includes(state.ownerAppearance.publicMode) ? state.ownerAppearance.publicMode : 'staff';
+  state.ownerAppearance.publicGender = state.ownerAppearance.publicGender === 'female' ? 'female' : 'male';
+  state.ownerAppearance.publicAlias = String(state.ownerAppearance.publicAlias || 'Center Spieler').trim().slice(0,30) || 'Center Spieler';
   state.horseTamed = !!raw.horseTamed;
   state.keybinds = { ...DEFAULT_KEYBINDS, ...(raw.keybinds || {}) };
   for (const [action, fallback] of Object.entries(DEFAULT_KEYBINDS)) if (!KEYBIND_OPTIONS.includes(state.keybinds[action])) state.keybinds[action] = fallback;
@@ -438,6 +452,11 @@ class CenterDynastyGame {
     this.opened = false;
     this.opening = false;
     this.isMobile = window.matchMedia(MOBILE_QUERY).matches;
+    this.performanceTier = detectPerformanceTier(this.isMobile);
+    this.perfTaskAt = Object.create(null);
+    this.frameCostEma = 0;
+    this.performanceScale = 1;
+    this.performanceLastAdjustAt = 0;
     const initialPlayer = bridgeSnapshot();
     this.currentSlot = initialPlayer.slot;
     this.state = normalizeSaveState(initialPlayer.centerState);
@@ -603,6 +622,37 @@ class CenterDynastyGame {
     this.bindGlobalEvents();
   }
 
+
+  isPublicPlayerMode(){return !!(this.isStaffActive&&['owner','admin'].includes(this.activeStaffRole)&&this.state.ownerAppearance?.publicMode==='player');}
+  staffVisualTheme(){return this.activeStaffRole==='admin'?'admin':'owner';}
+  effectiveRenderDistance(){
+    const requested=Math.floor(clamp(this.state.world?.renderDistance||2,MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE)),quality=this.state.world?.graphicsQuality||'medium';
+    const qualityCap=quality==='low'?2:quality==='medium'?2:quality==='high'?3:4;
+    const hardwareCap=this.performanceTier==='low'?2:this.performanceTier==='balanced'?3:4;
+    return Math.max(MIN_RENDER_DISTANCE,Math.min(requested,qualityCap,hardwareCap));
+  }
+  maxVisibleRemotePlayers(){return this.performanceTier==='low'?8:this.performanceTier==='balanced'?12:MAX_REMOTE_PLAYERS;}
+  performanceDensityFactor(){
+    const quality=this.state.world?.graphicsQuality||'medium';
+    const q=quality==='low'?.58:quality==='medium'?.75:quality==='high'?.9:1;
+    const h=this.performanceTier==='low'?.76:this.performanceTier==='balanced'?.9:1;
+    return clamp(q*h,.42,1);
+  }
+  performancePixelRatio(){
+    const quality=this.state.world?.graphicsQuality||'medium',device=Math.max(1,Number(window.devicePixelRatio)||1);
+    const qualityCap=quality==='low'?.70:quality==='medium'?.90:quality==='high'?1.16:1.42;
+    const hardwareCap=this.performanceTier==='low'?.80:this.performanceTier==='balanced'?1.02:1.34;
+    return Math.max(.58,Math.min(device,qualityCap,hardwareCap)*this.performanceScale);
+  }
+  runPerfTask(name,now,interval,callback){
+    const previous=Number(this.perfTaskAt[name]||0);if(previous&&now-previous<interval)return;this.perfTaskAt[name]=now;const dt=previous?Math.min(.25,Math.max(.001,(now-previous)/1000)):.016;callback(dt);
+  }
+  recordFrameCost(cost,now){
+    this.frameCostEma=this.frameCostEma?this.frameCostEma*.9+cost*.1:cost;if(now-this.performanceLastAdjustAt<3500)return;this.performanceLastAdjustAt=now;
+    const old=this.performanceScale;if(this.frameCostEma>27)this.performanceScale=Math.max(.70,this.performanceScale-.08);else if(this.frameCostEma<14)this.performanceScale=Math.min(1,this.performanceScale+.035);
+    if(Math.abs(old-this.performanceScale)>.001)this.resize();
+  }
+
   ensureOpenWorldState() {
     this.state.world ||= { spawnAssigned: false, spawnIndex: -1, renderDistance: this.isMobile ? 2 : 3, density: 'normal' };
     this.state.world.renderDistance = Math.floor(clamp(this.state.world.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
@@ -615,7 +665,7 @@ class CenterDynastyGame {
     this.state.world.onlineEnabled = !!(this.state.world.onlineEnabled ?? this.state.world.onlineKoop);
     delete this.state.world.onlineKoop;
     const needsSpawn = !this.state.world.spawnAssigned;
-    if (Number(this.state.version || 0) < 5) this.state.version = 5;
+    if (Number(this.state.version || 0) < 7) this.state.version = 7;
     if (!needsSpawn) return;
     const maxAttempts = 900;
     const randomIndex = Math.floor((crypto?.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : Math.random()) * maxAttempts);
@@ -636,7 +686,7 @@ class CenterDynastyGame {
     this.state.world.spawnIndex = selected.index;
     this.state.world.spawnX = Number(selected.x.toFixed(2));
     this.state.world.spawnZ = Number(selected.z.toFixed(2));
-    this.state.version = 4;
+    this.state.version = 7;
     this.state.discovered = ['Unbekannte Wildnis'];
   }
 
@@ -1108,7 +1158,7 @@ class CenterDynastyGame {
     this.initialized = true;
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.overlay);
-    this.setLoading(88, 'Streaming, Überleben und Dorfverwaltung werden aktiviert.');
+    this.setLoading(88, `Performanceprofil ${this.performanceTier} · Streaming und Online-System werden aktiviert.`);
   }
 
 
@@ -1271,8 +1321,8 @@ class CenterDynastyGame {
     }
   }
 
-  decorateChunkWithAssetTrees(chunk){
-    if(!this.centerAssetTemplates.has('naturePack'))return;const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+991))>>>0);const count=this.isMobile?2:4;
+decorateChunkWithAssetTrees(chunk){
+    if(!this.centerAssetTemplates.has('naturePack'))return;const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+991))>>>0),quality=this.state.world?.graphicsQuality||'medium';const count=quality==='ultra'&&this.performanceTier==='high'?4:quality==='high'?3:2;
     for(let i=0;i<count;i+=1){const lx=18+rnd()*(CHUNK_SIZE-36),lz=18+rnd()*(CHUNK_SIZE-36),x=chunk.originX+lx,z=chunk.originZ+lz;if(Math.abs(x-riverCenter(z))<27||this.pointNearChunkRoad(chunk,x,z,4)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<48))continue;const y=terrainHeightAt(x,z);if(y>58)continue;const name=this.natureTreeNames[Math.floor(rnd()*this.natureTreeNames.length)],tree=this.cloneCenterAsset('naturePack',{nodeName:name,targetSize:5.6+rnd()*4.8,bottomAlign:true});if(!tree)continue;tree.position.set(lx,y,lz);tree.rotation.y=rnd()*Math.PI*2;tree.name='asset-tree';chunk.group.add(tree);const radius=.75+(rnd()*.55);const collider=this.registerCollider(x,z,radius,'decorative-tree',chunk.key,tree);chunk.colliders.push(collider);}
   }
 
@@ -1318,15 +1368,12 @@ class CenterDynastyGame {
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
   }
 
-  applyGraphicsQuality() {
+applyGraphicsQuality() {
     const quality = GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality) ? this.state.world.graphicsQuality : 'medium';
-    const device = Math.max(1, Number(window.devicePixelRatio) || 1);
-    const ratio = quality === 'low' ? .75 : quality === 'medium' ? Math.min(device, 1.1) : quality === 'high' ? Math.min(device, 1.45) : Math.min(device, 2);
-    this.renderer?.setPixelRatio?.(ratio);
-    if (this.renderer) {
-      this.renderer.toneMappingExposure = quality === 'ultra' ? 1.06 : quality === 'high' ? 1.03 : 1;
-    }
+    this.renderer?.setPixelRatio?.(this.performancePixelRatio());
+    if (this.renderer) this.renderer.toneMappingExposure = quality === 'ultra' ? 1.06 : quality === 'high' ? 1.03 : 1;
     this.applyShadowSettings();
+    this.applyWorldRenderSettings(true);
     this.resize();
   }
 
@@ -1364,42 +1411,33 @@ class CenterDynastyGame {
     this.lastChunkCenter = '';
   }
 
-  applyWorldRenderSettings(force = false) {
-    const distance = Math.floor(clamp(this.state.world?.renderDistance || (this.isMobile ? 2 : 3), MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
-    if (this.camera) this.camera.far = Math.max(520, distance * CHUNK_SIZE * 2.25);
+applyWorldRenderSettings(force = false) {
+    const distance = this.effectiveRenderDistance();
+    if (this.camera) this.camera.far = Math.max(500, distance * CHUNK_SIZE * 2.15);
     if (this.camera) this.camera.updateProjectionMatrix();
-    if (this.scene?.fog) this.scene.fog.density = clamp(.00325 - distance * .00043, .00072, .0028);
+    if (this.scene?.fog) this.scene.fog.density = clamp(.00335 - distance * .00045, .00082, .0029);
     if (force) this.lastChunkCenter = '';
   }
 
-  async updateChunkStreaming(force = false) {
+async updateChunkStreaming(force = false) {
     if (!this.player || !this.scene) return;
     const now = performance.now();
-    if (!force && now - this.chunkUpdateAt < 260) return;
+    const interval=this.performanceTier==='low'?390:this.performanceTier==='balanced'?310:260;
+    if (!force && now - this.chunkUpdateAt < interval) return;
     this.chunkUpdateAt = now;
-    const cx = worldToChunk(this.player.position.x);
-    const cz = worldToChunk(this.player.position.z);
-    const centerKey = chunkKey(cx, cz);
-    const radius = Math.floor(clamp(this.state.world?.renderDistance || 2, MIN_RENDER_DISTANCE, MAX_RENDER_DISTANCE));
+    const cx = worldToChunk(this.player.position.x), cz = worldToChunk(this.player.position.z), centerKey = chunkKey(cx, cz);
+    const radius = this.effectiveRenderDistance();
     if (!force && centerKey === this.lastChunkCenter && this.chunks.size) return;
     this.lastChunkCenter = centerKey;
-    const wanted = new Set();
-    const candidates = [];
-    for (let dz = -radius; dz <= radius; dz += 1) {
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        const tx = cx + dx, tz = cz + dz;
-        if (chunkOrigin(tx) < -WORLD_HALF || chunkOrigin(tx) >= WORLD_HALF || chunkOrigin(tz) < -WORLD_HALF || chunkOrigin(tz) >= WORLD_HALF) continue;
-        const key = chunkKey(tx, tz);
-        wanted.add(key);
-        if (!this.chunks.has(key)) candidates.push({ cx: tx, cz: tz, key, distance: Math.hypot(dx, dz) });
-      }
+    const wanted = new Set(), candidates = [];
+    for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+      const tx = cx + dx, tz = cz + dz;
+      if (chunkOrigin(tx) < -WORLD_HALF || chunkOrigin(tx) >= WORLD_HALF || chunkOrigin(tz) < -WORLD_HALF || chunkOrigin(tz) >= WORLD_HALF) continue;
+      const key = chunkKey(tx, tz);wanted.add(key);if (!this.chunks.has(key)) candidates.push({ cx: tx, cz: tz, key, distance: Math.hypot(dx, dz) });
     }
     candidates.sort((a,b) => a.distance - b.distance);
     for (const [key, chunk] of [...this.chunks]) if (!wanted.has(key)) this.unloadWorldChunk(key, chunk);
-    for (const candidate of candidates) {
-      this.loadWorldChunk(candidate.cx, candidate.cz);
-      if (force && candidate.distance <= 1.5) await nextPaint();
-    }
+    for (const candidate of candidates) { this.loadWorldChunk(candidate.cx, candidate.cz); if (force && candidate.distance <= 1.5) await nextPaint(); }
     this.loadedVillageCount = [...this.chunks.values()].reduce((sum, chunk) => sum + (chunk.villages?.length || 0), 0);
   }
 
@@ -1502,7 +1540,7 @@ class CenterDynastyGame {
 
   buildChunkForest(chunk) {
     const random = seededRandom((Math.imul(chunk.cx + 8192, 83492791) ^ Math.imul(chunk.cz + 8192, 2971215073) ^ (WORLD_SEED + 77)) >>> 0);
-    const density = densityMultiplier(this.state.world?.density);
+    const density = densityMultiplier(this.state.world?.density)*this.performanceDensityFactor();
     const forestProfile=hash2(chunk.cx,chunk.cz,WORLD_SEED+8811);
     const localDensity=forestProfile>.72?1.34:forestProfile<.2?.7:1;
     const minTreeSpacing=forestProfile>.72?4.15:forestProfile<.2?7.2:5.35;
@@ -1581,7 +1619,7 @@ class CenterDynastyGame {
 
   buildChunkRocksAndBushes(chunk) {
     const random = seededRandom((Math.imul(chunk.cx + 2048, 2654435761) ^ Math.imul(chunk.cz + 2048, 1597334677) ^ (WORLD_SEED + 129)) >>> 0);
-    const density = densityMultiplier(this.state.world?.density);
+    const density = densityMultiplier(this.state.world?.density)*this.performanceDensityFactor();
     const create = (type, count) => {
       const nodes=[];
       for(let i=0;i<count;i+=1){
@@ -1610,31 +1648,15 @@ class CenterDynastyGame {
     create('bush',Math.floor((16+random()*20)*density));
   }
 
-  buildChunkGrass(chunk) {
-    const random=seededRandom((Math.imul(chunk.cx+7001,1103515245)^Math.imul(chunk.cz+9001,12345)^(WORLD_SEED+333))>>>0);
-    const density=densityMultiplier(this.state.world?.density);const count=Math.floor((this.isMobile?150:330)*density);
-    const seasonColors=[0x5f8a45,0x5c8b43,0x718044,0x9aa58f];
-    const matA=new THREE.MeshStandardMaterial({color:seasonColors[this.state.season]||seasonColors[0],roughness:1,side:THREE.DoubleSide,transparent:true,opacity:.94});
-    const matB=matA.clone();matB.color.offsetHSL(.02,-.03,.035);
-    const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);
-    const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=new THREE.InstancedMesh(geo,matA.clone(),count);
+buildChunkGrass(chunk) {
+    const random=seededRandom((Math.imul(chunk.cx+7001,1103515245)^Math.imul(chunk.cz+9001,12345)^(WORLD_SEED+333))>>>0),quality=this.state.world?.graphicsQuality||'medium';
+    const density=densityMultiplier(this.state.world?.density)*this.performanceDensityFactor(),grassBase=quality==='low'?105:quality==='medium'?165:quality==='high'?245:310,count=Math.floor(grassBase*density);
+    if(count<1)return;
+    const seasonColors=[0x5f8a45,0x5c8b43,0x718044,0x9aa58f],matA=new THREE.MeshStandardMaterial({color:seasonColors[this.state.season]||seasonColors[0],roughness:1,side:THREE.DoubleSide,transparent:true,opacity:.94}),matB=matA.clone();matB.color.offsetHSL(.02,-.03,.035);
+    const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=quality==='low'?null:new THREE.InstancedMesh(geo,matA.clone(),count);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),q2=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
-    for(let i=0;i<count*4&&used<count;i+=1){
-      const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
-      if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;
-      const yaw=random()*Math.PI*2,sc=.55+random()*.65;
-      q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));
-      q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));
-      scale.set(sc*(.8+random()*.35),sc,sc);
-      const pos=new THREE.Vector3(lx,y+.012,lz);
-      matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);
-      matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);
-      q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);
-      used++;
-    }
-    meshA.count=used;meshB.count=used;meshC.count=used;meshA.instanceMatrix.needsUpdate=true;meshB.instanceMatrix.needsUpdate=true;meshC.instanceMatrix.needsUpdate=true;
-    meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';meshC.name='grass-clumps-c';chunk.group.add(meshA,meshB,meshC);
-    this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
+    for(let i=0;i<count*4&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;const yaw=random()*Math.PI*2,sc=.55+random()*.65;q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));scale.set(sc*(.8+random()*.35),sc,sc);const pos=new THREE.Vector3(lx,y+.012,lz);matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);if(meshC){q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);}used++;}
+    for(const mesh of [meshA,meshB,meshC].filter(Boolean)){mesh.count=used;mesh.instanceMatrix.needsUpdate=true;}meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';chunk.group.add(meshA,meshB);if(meshC){meshC.name='grass-clumps-c';chunk.group.add(meshC);}this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
   }
 
   async prepareNpcWhiteTemplate() {
@@ -2656,31 +2678,37 @@ class CenterDynastyGame {
     const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.needsUpdate=true;return texture;
   }
 
-  createGalaxyAuraGroup(compact=false) {
-    const root=new THREE.Group();root.name=compact?'remote-owner-galaxy-aura':'owner-galaxy-aura';root.userData.compact=compact;
-    const particleCount=compact?48:96,positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*5);const palette=[0x6c31ff,0x9c5cff,0x3ebdff,0xff4fa3,0xf4ecff].map(c=>new THREE.Color(c)),rnd=seededRandom(compact?2621:2622);
+createGalaxyAuraGroup(compact=false,theme='owner') {
+    const admin=theme==='admin',root=new THREE.Group();root.name=admin?(compact?'remote-admin-gray-aura':'admin-gray-aura'):(compact?'remote-owner-galaxy-aura':'owner-galaxy-aura');root.userData.compact=compact;root.userData.theme=theme;
+    const particleCount=compact?(this.performanceTier==='low'?22:34):(this.performanceTier==='low'?42:72),positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*5),palette=(admin?[0x8a8f94,0xbcc0c4,0x656a70,0xe1e3e5]:[0x6c31ff,0x9c5cff,0x3ebdff,0xff4fa3,0xf4ecff]).map(c=>new THREE.Color(c)),rnd=seededRandom((compact?2621:2622)+(admin?80:0));
     for(let i=0;i<particleCount;i+=1){const radius=.22+rnd()*.82,angle=rnd()*Math.PI*2,height=.02+rnd()*2.12,twinkle=.55+rnd()*1.35;positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=height;positions[i*3+2]=Math.sin(angle)*radius;const c=palette[Math.floor(rnd()*palette.length)];colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;seeds[i*5]=radius;seeds[i*5+1]=angle;seeds[i*5+2]=height;seeds[i*5+3]=.35+rnd()*.8;seeds[i*5+4]=twinkle;}
-    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));const material=new THREE.PointsMaterial({size:compact?.022:.035,vertexColors:true,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true});const points=new THREE.Points(geometry,material);root.add(points);
-    const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array((compact?12:26)*3);for(let i=0;i<starPos.length/3;i++){const a=rnd()*Math.PI*2,r=.28+rnd()*.72;starPos[i*3]=Math.cos(a)*r;starPos[i*3+1]=.12+rnd()*1.9;starPos[i*3+2]=Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));const stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:0xffffff,size:compact?.028:.044,transparent:true,opacity:.68,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(stars);
-    const light=new THREE.PointLight(0x6e3cff,compact?.42:.9,compact?4.2:6.8,2);light.position.set(0,1.05,.05);root.add(light);root.userData.points=points;root.userData.stars=stars;root.userData.seeds=seeds;root.userData.light=light;root.visible=false;return root;
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));const material=new THREE.PointsMaterial({size:compact?.021:.032,vertexColors:true,transparent:true,opacity:admin?.58:.68,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true}),points=new THREE.Points(geometry,material);root.add(points);
+    const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array((compact?8:18)*3);for(let i=0;i<starPos.length/3;i++){const a=rnd()*Math.PI*2,r=.28+rnd()*.72;starPos[i*3]=Math.cos(a)*r;starPos[i*3+1]=.12+rnd()*1.9;starPos[i*3+2]=Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));const stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:admin?0xd9dde0:0xffffff,size:compact?.026:.04,transparent:true,opacity:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(stars);
+    const light=new THREE.PointLight(admin?0xb7bcc0:0x6e3cff,compact?.30:.62,compact?3.4:5.2,2);light.position.set(0,1.05,.05);root.add(light);root.userData.points=points;root.userData.stars=stars;root.userData.seeds=seeds;root.userData.light=light;root.visible=false;return root;
   }
 
   animateGalaxyAura(aura,delta=.016,now=performance.now()) {
     if(!aura?.visible)return;const points=aura.userData.points,seeds=aura.userData.seeds;if(points&&seeds){const arr=points.geometry.attributes.position.array;for(let i=0;i<seeds.length/5;i++){const radius=seeds[i*5],baseAngle=seeds[i*5+1],baseHeight=seeds[i*5+2],speed=seeds[i*5+3],twinkle=seeds[i*5+4],angle=baseAngle+now*.00022*speed,rise=(baseHeight+now*.000055*speed)%2.14,pulse=1+Math.sin(now*.0021*twinkle+baseAngle)*.055;arr[i*3]=Math.cos(angle)*radius*pulse;arr[i*3+1]=.02+rise;arr[i*3+2]=Math.sin(angle)*radius*pulse;}points.geometry.attributes.position.needsUpdate=true;points.material.opacity=.60+Math.sin(now*.0023)*.10;}if(aura.userData.stars){aura.userData.stars.rotation.y+=delta*.11;aura.userData.stars.material.opacity=.54+Math.sin(now*.004)*.16;}if(aura.userData.light)aura.userData.light.intensity=(aura.userData.compact?.38:.82)+Math.sin(now*.002)*.12;
   }
 
-  ensureOwnerAura() {
-    if(this.ownerAura||!this.modelPivot)return this.ownerAura;
-    this.ownerAura=this.createGalaxyAuraGroup(false);this.modelPivot.add(this.ownerAura);return this.ownerAura;
+ensureOwnerAura() {
+    if(!this.modelPivot)return null;const active=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&this.state.ownerAppearance?.aura);if(!active){if(this.ownerAura)this.ownerAura.visible=false;return this.ownerAura;}const theme=this.staffVisualTheme();if(this.ownerAura&&this.ownerAura.userData?.theme!==theme){this.disposeGeneratedVisual(this.ownerAura);this.ownerAura=null;}if(this.ownerAura)return this.ownerAura;this.ownerAura=this.createGalaxyAuraGroup(false,theme);this.modelPivot.add(this.ownerAura);return this.ownerAura;
   }
 
-  updateOwnerAura(delta=.016,now=performance.now()) {
-    const aura=this.ensureOwnerAura();if(!aura)return;
-    const active=this.isOwnerActive&&!!this.state.ownerAppearance?.aura&&!this.ownerFlags.vanish&&!this.firstPerson;
-    aura.visible=active;if(active)this.animateGalaxyAura(aura,delta,now);
+updateOwnerAura(delta=.016,now=performance.now()) {
+    const active=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&this.state.ownerAppearance?.aura&&!this.ownerFlags.vanish&&!this.firstPerson);if(!active){if(this.ownerAura)this.ownerAura.visible=false;return;}const aura=this.ensureOwnerAura();if(!aura)return;aura.visible=true;this.animateGalaxyAura(aura,delta,now);
   }
 
-  createHeldItemMesh(kind='none') {
+
+  applyAdminGrayTheme(root){
+    const runtimeTextures=new Set();root?.traverse?.((object)=>{
+      if(object.isLight){object.color?.set?.(0xd6d9dc);object.intensity=Math.min(Number(object.intensity)||0,1.2);return;}
+      if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;
+      const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;for(const key of ['map','emissiveMap']){const texture=material[key];if(texture?.userData?.__centerRuntimeGalaxyTexture)runtimeTextures.add(texture);if(key in material)material[key]=null;}material.color?.set?.(object.isPoints?0xe0e3e6:0x9da3a8);material.emissive?.set?.(0x202326);if('emissiveIntensity' in material)material.emissiveIntensity=.55;if('metalness' in material)material.metalness=Math.max(.35,Number(material.metalness)||0);if('roughness' in material)material.roughness=.34;material.needsUpdate=true;this.sanitizeMaterialUniformCompatibility(material);}
+    });for(const texture of runtimeTextures)texture.dispose?.();root.userData.adminGray=true;return root;
+  }
+
+  createHeldItemMesh(kind='none',theme='owner') {
     if(kind==='none')return null;const group=new THREE.Group();group.userData.kind=kind;
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
@@ -2730,7 +2758,7 @@ class CenterDynastyGame {
     }else if(kind==='bow'){
       const curve=new THREE.Mesh(new THREE.TorusGeometry(.48,.025,8,40,Math.PI*1.45),wood);curve.rotation.z=.78;curve.position.y=.52;group.add(curve);const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.31,.13,0),new THREE.Vector3(.32,.91,0)]);group.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd9d2c6})));group.rotation.set(.03,0,-.08);
     }
-    const scale={staff:.74,sword:.50,shovel:1,pickaxe:1,hoe:1,axe:1,hammer:1,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});return group;
+    const scale={staff:.74,sword:.50,shovel:1,pickaxe:1,hoe:1,axe:1,hammer:1,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});if(theme==='admin'&&['sword','staff','eternalFlame'].includes(kind))this.applyAdminGrayTheme(group);group.userData.theme=theme;return group;
   }
 
   createOwnerForm(kind='ball') {
@@ -2824,13 +2852,9 @@ class CenterDynastyGame {
     const plane=this.ownerPlaneObject;if(!plane)return;const action=plane.userData?.propellerAction,mixer=plane.userData?.mixer,flying=this.isStaffActive&&this.ownerFlags.fly,vertical=Math.abs(this.flightVerticalVelocity||0)>.05,shouldSpin=flying||!this.onGround||moving||vertical;if(action){action.paused=!shouldSpin;action.timeScale=shouldSpin?(flying?1.65:1.15):0;}if(mixer&&shouldSpin)mixer.update(delta);const targetPitch=flying?this.flightLean*.55:0,targetRoll=flying?this.flightRoll*.72:0;plane.rotation.x+=(targetPitch-plane.rotation.x)*(1-Math.exp(-delta*5.2));plane.rotation.z+=(targetRoll-plane.rotation.z)*(1-Math.exp(-delta*5.8));
   }
 
-  applyStaffVehicle(){
-    if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{},allowed=this.staffCapabilities?.vehicles||['none'];const desired=this.isStaffActive&&['normal','galaxy'].includes(appearance.skin)&&allowed.includes(appearance.vehicle)?appearance.vehicle:'none',current=this.ownerPlaneObject?'plane':this.ownerScooterObject?'scooter':'none';
-    // V265: Bei Aura/Wings/Krone nicht jedes Mal das aktive Fahrzeug neu klonen.
-    if(current===desired)return;
-    this.disposeGeneratedVisual(this.ownerScooterObject);this.disposeGeneratedVisual(this.ownerPlaneObject);this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;
-    if(desired==='scooter'){const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;return;}
-    if(desired==='plane'){const plane=this.createStaffPlaneVisual();if(!plane)return;this.modelPivot.add(plane);this.ownerPlaneObject=plane;this.ownerPlaneMixer=plane.userData.mixer||null;this.ownerPlaneAction=plane.userData.propellerAction||null;}
+applyStaffVehicle(){
+    if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{},allowed=this.staffCapabilities?.vehicles||['none'],disguised=this.isPublicPlayerMode(),desired=!disguised&&this.isStaffActive&&['normal','galaxy'].includes(appearance.skin)&&allowed.includes(appearance.vehicle)?appearance.vehicle:'none',current=this.ownerPlaneObject?'plane':this.ownerScooterObject?'scooter':'none';if(current===desired)return;
+    this.disposeGeneratedVisual(this.ownerScooterObject);this.disposeGeneratedVisual(this.ownerPlaneObject);this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;if(desired==='scooter'){const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;return;}if(desired==='plane'){const plane=this.createStaffPlaneVisual();if(!plane)return;this.modelPivot.add(plane);this.ownerPlaneObject=plane;this.ownerPlaneMixer=plane.userData.mixer||null;this.ownerPlaneAction=plane.userData.propellerAction||null;}
   }
 
   cacheOriginalMaterial(material) {
@@ -2891,27 +2915,18 @@ class CenterDynastyGame {
 
   disposeHeldVisual(object){this.disposeGeneratedVisual(object);}
 
-  createFirstPersonHeldItem(kind){
-    this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
-    if(!this.camera||kind==='none')return;
-    const item=this.createHeldItemMesh(kind);if(!item)return;
-    item.name='center-first-person-held-item';item.scale.multiplyScalar(kind==='staff'?.42:['shovel','pickaxe','hoe','axe','hammer'].includes(kind)?.46:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
-    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};
-    const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
+createFirstPersonHeldItem(kind){
+    this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;if(!this.camera||kind==='none')return;const theme=this.staffVisualTheme(),item=this.createHeldItemMesh(kind,theme);if(!item)return;
+    item.name='center-first-person-held-item';item.userData.theme=theme;item.scale.multiplyScalar(kind==='staff'?.42:['shovel','pickaxe','hoe','axe','hammer'].includes(kind)?.46:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
+    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
   }
 
-  applyHeldItemVisual() {
-    const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'},formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(appearance.skin))&&!['scooter','plane'].includes(appearance.vehicle),selectedKind=this.isStaffActive?appearance.heldItem:'none',allowedItems=this.staffCapabilities?.items||['none'],staffKind=allowedItems.includes(selectedKind)?selectedKind:'none',toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'pickaxe':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'spear':this.state.equippedTool==='bow'?'bow':'none',kind=formAllowsItems?(staffKind&&staffKind!=='none'?staffKind:toolKind):'none',currentKind=this.ownerHeldObject?.userData?.kind||'none';
-    if(kind==='none'){
-      this.disposeHeldVisual(this.ownerHeldObject);this.ownerHeldObject=null;this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;this.ownerItemLight=null;this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;return;
-    }
-    // V265: Beim Umschalten von Aura/Wings/Krone bleibt dasselbe Item bestehen.
-    // Dadurch werden Galaxy-Texturen und GLB-Materialien nicht unnötig neu erzeugt.
-    if(currentKind===kind&&this.ownerHeldAnchor){if(!this.firstPersonHeldObject||this.firstPersonHeldObject.userData?.kind!==kind)this.createFirstPersonHeldItem(kind);this.syncOwnerHeldAnchorPose();this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();return;}
+applyHeldItemVisual() {
+    const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'},disguised=this.isPublicPlayerMode(),effectiveSkin=disguised?'normal':appearance.skin,effectiveVehicle=disguised?'none':appearance.vehicle,formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(effectiveSkin))&&!['scooter','plane'].includes(effectiveVehicle),selectedKind=this.isStaffActive&&!disguised?appearance.heldItem:'none',allowedItems=this.staffCapabilities?.items||['none'],staffKind=allowedItems.includes(selectedKind)?selectedKind:'none',toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'pickaxe':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'spear':this.state.equippedTool==='bow'?'bow':'none',kind=formAllowsItems?(staffKind&&staffKind!=='none'?staffKind:toolKind):'none',theme=this.staffVisualTheme(),currentKind=this.ownerHeldObject?.userData?.kind||'none',currentTheme=this.ownerHeldObject?.userData?.theme||'owner';
+    if(kind==='none'){this.disposeHeldVisual(this.ownerHeldObject);this.ownerHeldObject=null;this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;this.ownerItemLight=null;this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;return;}
+    if(currentKind===kind&&currentTheme===theme&&this.ownerHeldAnchor){if(!this.firstPersonHeldObject||this.firstPersonHeldObject.userData?.kind!==kind||this.firstPersonHeldObject.userData?.theme!==theme)this.createFirstPersonHeldItem(kind);this.syncOwnerHeldAnchorPose();this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();return;}
     this.disposeHeldVisual(this.ownerHeldObject);this.ownerHeldObject=null;this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;this.ownerItemLight=null;this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
-    const mesh=this.createHeldItemMesh(kind);if(!mesh)return;const hand=this.playerBones.handRight;
-    if(hand){const anchor=new THREE.Group();anchor.name='center-held-item-grip';anchor.userData.kind=kind;if(['sword','staff','eternalFlame','shovel','pickaxe','hoe','axe','hammer'].includes(kind)){anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);}else{hand.add(anchor);const grips={torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}};const tr=grips[kind]||{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]};anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);}anchor.add(mesh);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;}else this.modelPivot.add(mesh);
-    this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;this.syncOwnerHeldAnchorPose();this.createFirstPersonHeldItem(kind);if(this.firstPerson)this.ensureFirstPersonArms().then(()=>this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true)).catch(()=>{});this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();
+    const mesh=this.createHeldItemMesh(kind,theme);if(!mesh)return;const hand=this.playerBones.handRight;if(hand){const anchor=new THREE.Group();anchor.name='center-held-item-grip';anchor.userData.kind=kind;anchor.userData.theme=theme;if(['sword','staff','eternalFlame','shovel','pickaxe','hoe','axe','hammer'].includes(kind)){anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);}else{hand.add(anchor);const grips={torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}};const tr=grips[kind]||{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]};anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);}anchor.add(mesh);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;}else this.modelPivot.add(mesh);this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;this.syncOwnerHeldAnchorPose();this.createFirstPersonHeldItem(kind);if(this.firstPerson)this.ensureFirstPersonArms().then(()=>this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true)).catch(()=>{});this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();
   }
 
   syncOwnerHeldAnchorPose(){
@@ -2979,6 +2994,10 @@ class CenterDynastyGame {
     object.removeFromParent?.();for(const geo of geometries)geo.dispose?.();for(const mat of materials)mat.dispose?.();for(const tex of textures)tex.dispose?.();
   }
 
+  disposeClonedModelMaterials(object){
+    if(!object)return;const materials=new Set(),textures=new Set();object.traverse?.((child)=>{const mats=Array.isArray(child.material)?child.material:[child.material];for(const mat of mats){if(!mat)continue;materials.add(mat);for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap']){const tex=mat[key];if(tex?.userData?.__centerRuntimeGalaxyTexture)textures.add(tex);}}});for(const mat of materials)mat.dispose?.();for(const tex of textures)tex.dispose?.();
+  }
+
   refreshSceneMaterialsAfterContextRestore(){
     if(!this.scene)return;this.scene.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.sanitizeMaterialUniformCompatibility(mat);for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap']){const tex=mat[key];if(tex?.userData?.__centerRuntimeGalaxyTexture)tex.needsUpdate=true;}}});
   }
@@ -2992,29 +3011,25 @@ class CenterDynastyGame {
     return {left:make(sides.left),right:make(sides.right)};
   }
 
-  createGalaxyOwnerCape(){
-    const root=new THREE.Group();root.name='galaxy-owner-angel-wings';const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
+createGalaxyOwnerCape(theme='owner'){
+    const admin=theme==='admin',root=new THREE.Group();root.name=admin?'admin-gray-angel-wings':'galaxy-owner-angel-wings';root.userData.theme=theme;const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
     const raw=this.cloneCenterAsset('ownerWings',{targetSize:2.72,bottomAlign:false,center:true});if(!raw)return root;raw.updateMatrixWorld(true);let sourceMesh=null;raw.traverse((o)=>{if(!sourceMesh&&(o.isMesh||o.isSkinnedMesh))sourceMesh=o;});const split=this.splitAngelWingGeometry(sourceMesh);this.disposeGeneratedVisual(raw);if(!split?.left||!split?.right)return root;
-    const texture=this.createGalaxyTexture(256,384);texture.repeat.set(1.15,2.35);const makeMat=()=>new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xe9ddff,emissive:0x4d168c,emissiveIntensity:1.9,metalness:.22,roughness:.24,side:THREE.DoubleSide,transparent:true,opacity:.96});
-    const makeWing=(side,geometry)=>{const pivot=new THREE.Group();pivot.name=side<0?'angel-wing-left':'angel-wing-right';const hinge=side*.12;geometry.translate(-hinge,0,0);const mesh=new THREE.Mesh(geometry,makeMat());mesh.castShadow=!!this.state.world?.shadows;mesh.receiveShadow=false;pivot.position.x=hinge;pivot.add(mesh);root.add(pivot);return {pivot,mesh};};
-    root.userData.left=makeWing(-1,split.left);root.userData.right=makeWing(1,split.right);root.userData.galaxyTexture=texture;
-    const sparkleCount=26,pos=new Float32Array(sparkleCount*3),rnd=seededRandom(26488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:0xeedcff,size:.026,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;
-    const light=new THREE.PointLight(0x7b42e8,.72,4.4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;root.rotation.x=.02;return root;
+    let texture=null;const makeMat=()=>{if(admin)return new THREE.MeshStandardMaterial({color:0xa8adb2,emissive:0x25292d,emissiveIntensity:.58,metalness:.42,roughness:.3,side:THREE.DoubleSide,transparent:true,opacity:.96});texture||=this.createGalaxyTexture(256,384);texture.repeat.set(1.15,2.35);return new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xe9ddff,emissive:0x4d168c,emissiveIntensity:1.7,metalness:.22,roughness:.24,side:THREE.DoubleSide,transparent:true,opacity:.96});};
+    const makeWing=(side,geometry)=>{const pivot=new THREE.Group();pivot.name=side<0?'angel-wing-left':'angel-wing-right';const hinge=side*.12;geometry.translate(-hinge,0,0);const mesh=new THREE.Mesh(geometry,makeMat());mesh.castShadow=!!this.state.world?.shadows;mesh.receiveShadow=false;pivot.position.x=hinge;pivot.add(mesh);root.add(pivot);return {pivot,mesh};};root.userData.left=makeWing(-1,split.left);root.userData.right=makeWing(1,split.right);if(texture)root.userData.galaxyTexture=texture;
+    const sparkleCount=this.performanceTier==='low'?10:18,pos=new Float32Array(sparkleCount*3),rnd=seededRandom(admin?26568:26488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:admin?0xd7dbde:0xeedcff,size:.024,transparent:true,opacity:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;const light=new THREE.PointLight(admin?0xc6cacf:0x7b42e8,admin?.38:.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;root.rotation.x=.02;return root;
   }
 
-  createGalaxyOwnerHat(){
-    const group=new THREE.Group();group.name='galaxy-owner-crown';const texture=this.createGalaxyTexture(192,96),metal=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,emissive:0x45117e,emissiveIntensity:1.7,metalness:.58,roughness:.2});const glow=new THREE.MeshBasicMaterial({color:0xb98cff,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending});
-    const band=new THREE.Mesh(new THREE.TorusGeometry(.205,.025,8,36),metal);band.rotation.x=Math.PI/2;group.add(band);for(let i=0;i<5;i++){const a=(i/5)*Math.PI*2,crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.055+i%2*.012,1),metal.clone());crystal.position.set(Math.cos(a)*.19,.06+((i%2)*.025),Math.sin(a)*.19);crystal.rotation.y=a;group.add(crystal);}const halo=new THREE.Mesh(new THREE.TorusGeometry(.25,.008,6,42),glow);halo.rotation.x=Math.PI/2;halo.position.y=.08;group.add(halo);const light=new THREE.PointLight(0x934cff,.48,2.8,2);light.position.y=.1;group.add(light);group.userData.light=light;group.userData.halo=halo;return group;
+createGalaxyOwnerHat(theme='owner'){
+    const admin=theme==='admin',group=new THREE.Group();group.name=admin?'admin-gray-crown':'galaxy-owner-crown';group.userData.theme=theme;let texture=null;const metal=admin?new THREE.MeshStandardMaterial({color:0x9ca1a6,emissive:0x22262a,emissiveIntensity:.5,metalness:.75,roughness:.25}):(()=>{texture=this.createGalaxyTexture(192,96);return new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,emissive:0x45117e,emissiveIntensity:1.55,metalness:.58,roughness:.2});})(),glow=new THREE.MeshBasicMaterial({color:admin?0xd7dade:0xb98cff,transparent:true,opacity:.58,depthWrite:false,blending:THREE.AdditiveBlending});
+    const band=new THREE.Mesh(new THREE.TorusGeometry(.205,.025,8,36),metal);band.rotation.x=Math.PI/2;group.add(band);for(let i=0;i<5;i++){const a=(i/5)*Math.PI*2,crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.055+i%2*.012,1),metal.clone());crystal.position.set(Math.cos(a)*.19,.06+((i%2)*.025),Math.sin(a)*.19);crystal.rotation.y=a;group.add(crystal);}const halo=new THREE.Mesh(new THREE.TorusGeometry(.25,.008,6,42),glow);halo.rotation.x=Math.PI/2;halo.position.y=.08;group.add(halo);const light=new THREE.PointLight(admin?0xc9cdd0:0x934cff,admin?.28:.42,2.6,2);light.position.y=.1;group.add(light);group.userData.light=light;group.userData.halo=halo;if(texture)group.userData.galaxyTexture=texture;return group;
   }
 
-  applyOwnerWearables(){
-    const allowed=!!(this.isOwnerActive&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')),wantCape=allowed&&!!this.state.ownerAppearance?.cape,wantHat=allowed&&!!this.state.ownerAppearance?.hat;
-    // V265: Wearables nur bei echter Statusänderung neu erzeugen. Das vermeidet
-    // unnötige CanvasTexture-/Material-Neuerstellungen beim Umschalten anderer Owner-Funktionen.
-    if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}
-    if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
-    if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);this.ownerCapeObject=cape;const chest=this.playerBones.chest||this.playerBones.neck;if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,0))))cape.position.set(0,1.46,-.24);}
-    if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
+applyOwnerWearables(){
+    const appearance=this.state.ownerAppearance||{},theme=this.staffVisualTheme(),allowed=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&['normal','galaxy'].includes(appearance.skin||'normal')),wantCape=allowed&&!!appearance.cape,wantHat=allowed&&!!appearance.hat;
+    if(this.ownerCapeObject&&this.ownerCapeObject.userData?.theme!==theme){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(this.ownerHatObject&&this.ownerHatObject.userData?.theme!==theme){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
+    if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
+    if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape(theme);this.modelPivot.add(cape);this.ownerCapeObject=cape;const chest=this.playerBones.chest||this.playerBones.neck;if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion()))cape.position.set(0,1.46,-.24);}
+    if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat(theme);this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
   }
 
   wingFlightPose(flying=false,motion=0,vertical=0,now=performance.now()){
@@ -3066,59 +3081,25 @@ class CenterDynastyGame {
     for(let i=this.transformationEffects.length-1;i>=0;i-=1){const effect=this.transformationEffects[i],t=clamp((now-effect.start)/effect.duration,0,1),fade=1-t;for(const puff of effect.puffs){puff.mesh.position.addScaledVector(puff.velocity,delta);puff.mesh.rotation.y+=puff.spin*delta;puff.mesh.rotation.x+=puff.spin*.45*delta;puff.mesh.scale.multiplyScalar(1+delta*.55);puff.mesh.material.opacity=.58*fade*fade;}if(effect.ring){const scale=1+t*1.7;effect.ring.scale.setScalar(scale);effect.ring.material.opacity=.45*fade;}if(effect.light)effect.light.intensity=(1-t)*(effect.duration<700?.6:1.05);if(t>=1){this.disposeTransformationEffect(effect);this.transformationEffects.splice(i,1);}}
   }
 
-  applyOwnerAppearance() {
-    if(!this.playerModel)return;
-    const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none'};
-    const caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole);
-    const size=this.isStaffActive&&caps.size?clamp(Number(appearance.size)||1,.45,2.5):1;this.modelPivot.scale.setScalar(size);
-    this.ownerFormObject?.removeFromParent?.();this.ownerFormObject=null;
-    const requestedSkin=this.isStaffActive?appearance.skin:'normal';
-    const skin=caps.forms?.includes(requestedSkin)?requestedSkin:'normal';
-    if(appearance.skin!==skin)appearance.skin=skin;
-    if(!['normal','galaxy'].includes(skin)&&appearance.vehicle!=='none')appearance.vehicle='none';
-    this.setShadowCharacterMode(this.isOwnerActive&&skin==='galaxy');
-    this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(skin)&&appearance.vehicle!=='plane';
-    if(this.isStaffActive&&!['normal','galaxy'].includes(skin)){const form=this.createOwnerForm(skin);this.modelPivot.add(form);this.ownerFormObject=form;form.visible=!this.firstPerson;}
-    this.ensureOwnerAura();this.applyStaffVehicle();this.applyHeldItemVisual();this.applyOwnerWearables();this.applyOwnerVisualState();this.updateOwnerAura(.016,performance.now());
+applyOwnerAppearance() {
+    if(!this.playerModel)return;const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none'},caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole),disguised=this.isPublicPlayerMode(),size=!disguised&&this.isStaffActive&&caps.size?clamp(Number(appearance.size)||1,.45,2.5):1;this.modelPivot.scale.setScalar(size);
+    this.ownerFormObject?.removeFromParent?.();this.ownerFormObject=null;const requestedSkin=disguised?'normal':this.isStaffActive?appearance.skin:'normal',skin=caps.forms?.includes(requestedSkin)?requestedSkin:'normal';if(!disguised&&appearance.skin!==skin)appearance.skin=skin;if(!disguised&&!['normal','galaxy'].includes(skin)&&appearance.vehicle!=='none')appearance.vehicle='none';this.setShadowCharacterMode(this.isOwnerActive&&!disguised&&skin==='galaxy');const effectiveVehicle=disguised?'none':appearance.vehicle;this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(skin)&&effectiveVehicle!=='plane';if(this.isStaffActive&&!disguised&&!['normal','galaxy'].includes(skin)){const form=this.createOwnerForm(skin);this.modelPivot.add(form);this.ownerFormObject=form;form.visible=!this.firstPerson;}this.applyStaffVehicle();this.applyHeldItemVisual();this.applyOwnerWearables();this.applyOwnerVisualState();this.updateOwnerAura(.016,performance.now());
   }
 
-  applyOwnerVisualState() {
-    if(!this.playerModel)return;const appearance=this.state.ownerAppearance||{skin:'normal'};const auraMode=this.isOwnerActive&&appearance.skin==='galaxy';const vanished=this.isStaffActive&&this.ownerFlags.vanish;
+applyOwnerVisualState() {
+    if(!this.playerModel)return;const appearance=this.state.ownerAppearance||{skin:'normal'},disguised=this.isPublicPlayerMode(),skin=disguised?'normal':appearance.skin,vehicle=disguised?'none':appearance.vehicle,auraMode=this.isOwnerActive&&!disguised&&skin==='galaxy',vanished=this.isStaffActive&&this.ownerFlags.vanish,cosmeticAllowed=this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!disguised;
     this.playerModel.traverse((object)=>{if(!object.isMesh)return;const materials=Array.isArray(object.material)?object.material:[object.material];for(const material of materials){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;const opacity=vanished?.24:auraMode?.72:(original.opacity??1);material.transparent=vanished||auraMode||!!original.transparent||opacity<1;material.opacity=opacity;material.depthWrite=!(vanished||auraMode)&&original.depthWrite!==false;}});
     if(this.ownerFormObject)this.ownerFormObject.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=vanished||mat.transparent;mat.opacity=vanished?.24:(mat.userData.__formOpacity??mat.opacity??1);mat.depthWrite=!vanished;}});
-    if(this.ownerAura)this.ownerAura.visible=this.isOwnerActive&&!!appearance.aura&&!vanished&&!this.firstPerson;
-    const applyItem=(root)=>root?.traverse?.((object)=>{if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?0:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;}});
-    applyItem(this.ownerHeldObject);applyItem(this.firstPersonHeldObject);applyItem(this.ownerCapeObject);applyItem(this.ownerHatObject);applyItem(this.ownerScooterObject);applyItem(this.ownerPlaneObject);
-    if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!vanished;
-    if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!vanished;
-    if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.cape&&appearance.vehicle!=='plane';
-    if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&!vanished&&this.isOwnerActive&&!!appearance.hat&&appearance.vehicle!=='plane';
-    if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&appearance.vehicle==='scooter';
-    if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&appearance.vehicle==='plane';
-    if(this.playerModel&&appearance.vehicle==='plane')this.playerModel.visible=false;
+    if(this.ownerAura)this.ownerAura.visible=cosmeticAllowed&&!!appearance.aura&&!vanished&&!this.firstPerson;
+    const applyItem=(root)=>root?.traverse?.((object)=>{if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?0:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;}});applyItem(this.ownerHeldObject);applyItem(this.firstPersonHeldObject);applyItem(this.ownerCapeObject);applyItem(this.ownerHatObject);applyItem(this.ownerScooterObject);applyItem(this.ownerPlaneObject);
+    if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!vanished;if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!vanished;if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&!vanished&&cosmeticAllowed&&!!appearance.cape&&vehicle!=='plane';if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&!vanished&&cosmeticAllowed&&!!appearance.hat&&vehicle!=='plane';if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&vehicle==='scooter';if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&!vanished&&this.isStaffActive&&vehicle==='plane';if(this.playerModel&&vehicle==='plane')this.playerModel.visible=false;
   }
 
-  async ensureCorrectPlayerModel() {
-    const role=roleSnapshot();
-    const player=bridgeSnapshot();
-    const skin=role.isOwner?'owner':player.gender;
-    if(this.playerSkin===skin&&this.playerModel) { this.updateRoleHud(); return; }
-    this.modelPivot.clear();
-    this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);
-    this.playerModel=null; this.playerMixer=null; this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
-    try {
-      const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);
-      const root=gltf.scene;
-      root.updateMatrixWorld(true);
-      const box=new THREE.Box3().setFromObject(root); const height=Math.max(.01,box.max.y-box.min.y);
-      root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height); root.updateMatrixWorld(true);
-      const scaled=new THREE.Box3().setFromObject(root); const center=scaled.getCenter(new THREE.Vector3());
-      root.position.x-=center.x; root.position.z-=center.z; root.position.y-=scaled.min.y-.035; root.rotation.y=CHARACTER_MODEL_YAW;
-      root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});
-      this.playerModel=root; this.flightVisualPivot.add(root);
-      this.cachePlayerBones(root);const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.resetLocomotionToIdle(true);}
-    } catch(error) { console.warn('Center-Charaktermodell konnte nicht geladen werden',error); this.playerModel=this.makeFallbackCharacter(skin); this.flightVisualPivot.add(this.playerModel); }
-    this.playerSkin=skin; this.updateRoleHud(); this.applyPerspectiveVisibility(); this.applyOwnerAppearance();
+async ensureCorrectPlayerModel() {
+    const player=bridgeSnapshot(),staffWhite=['owner','admin'].includes(this.activeStaffRole)&&!this.isPublicPlayerMode(),skin=staffWhite?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:player.gender;if(this.playerSkin===skin&&this.playerModel){this.updateRoleHud();return;}
+    this.modelPivot.clear();this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);this.playerModel=null;this.playerMixer=null;this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
+    try{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male),root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});this.playerModel=root;this.flightVisualPivot.add(root);this.cachePlayerBones(root);const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.resetLocomotionToIdle(true);}}
+    catch(error){console.warn('Center-Charaktermodell konnte nicht geladen werden',error);this.playerModel=this.makeFallbackCharacter(skin);this.flightVisualPivot.add(this.playerModel);}this.playerSkin=skin;this.updateRoleHud();this.applyPerspectiveVisibility();this.applyOwnerAppearance();
   }
 
   makeFallbackCharacter(skin='male',variant=0) {
@@ -3131,23 +3112,11 @@ class CenterDynastyGame {
     return group;
   }
 
-  updateRoleHud() {
-    const previousRole=this.activeStaffRole,local=roleSnapshot();let activeRole=local.role;
-    if(this.onlineUser&&this.ownerVerificationChecked){const verified=canonicalStaffRole(this.verifiedStaffRole);activeRole=verified!=='player'?verified:'player';}
-    this.activeStaffRole=activeRole;this.staffCapabilities=staffCapabilities(activeRole);this.isStaffActive=(STAFF_ROLE_LEVELS[activeRole]||0)>0;this.isOwnerActive=activeRole==='owner';
-    this.overlay.classList.toggle('is-owner',this.isOwnerActive);this.overlay.classList.toggle('is-staff',this.isStaffActive);this.overlay.dataset.staffRole=activeRole;
-    if(this.ownerMenuButton){this.ownerMenuButton.hidden=!this.isStaffActive;this.ownerMenuButton.title=`${STAFF_ROLE_LABELS[activeRole]||'Team'}-Menü (Punkt)`;}
-    const caps=this.staffCapabilities,appearance=this.state.ownerAppearance,before=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}`;
-    if(!caps.size)appearance.size=1;
-    if(!caps.forms.includes(appearance.skin))appearance.skin='normal';
-    if(!caps.items.includes(appearance.heldItem))appearance.heldItem='none';
-    if(!(caps.vehicles||['none']).includes(appearance.vehicle))appearance.vehicle='none';
-    if(!this.isOwnerActive){appearance.aura=false;appearance.cape=false;appearance.hat=false;if(appearance.skin==='galaxy')appearance.skin='normal';}
-    for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;
-    if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1;
-    if(!this.isStaffActive)this.closeOwnerMenu();
-    const after=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}`;
-    if(previousRole!==activeRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
+updateRoleHud() {
+    const previousRole=this.activeStaffRole,local=roleSnapshot();let activeRole=local.role;if(this.onlineUser&&this.ownerVerificationChecked){const verified=canonicalStaffRole(this.verifiedStaffRole);activeRole=verified!=='player'?verified:'player';}this.activeStaffRole=activeRole;this.staffCapabilities=staffCapabilities(activeRole);this.isStaffActive=(STAFF_ROLE_LEVELS[activeRole]||0)>0;this.isOwnerActive=activeRole==='owner';
+    this.overlay.classList.toggle('is-owner',this.isOwnerActive);this.overlay.classList.toggle('is-staff',this.isStaffActive);this.overlay.dataset.staffRole=activeRole;if(this.ownerMenuButton){this.ownerMenuButton.hidden=!this.isStaffActive;this.ownerMenuButton.title=`${STAFF_ROLE_LABELS[activeRole]||'Team'}-Menü (Punkt)`;}
+    const caps=this.staffCapabilities,appearance=this.state.ownerAppearance,before=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(!caps.size)appearance.size=1;if(!caps.forms.includes(appearance.skin))appearance.skin='normal';if(!caps.items.includes(appearance.heldItem))appearance.heldItem='none';if(!(caps.vehicles||['none']).includes(appearance.vehicle))appearance.vehicle='none';if(!caps.ownerCosmetics){appearance.aura=false;appearance.cape=false;appearance.hat=false;}if(!this.isOwnerActive&&appearance.skin==='galaxy')appearance.skin='normal';if(!['owner','admin'].includes(activeRole))appearance.publicMode='staff';
+    for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1;if(!this.isStaffActive)this.closeOwnerMenu();const after=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(previousRole!==activeRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
   }
 
   async verifyLocalOwnerRole() {
@@ -3193,12 +3162,12 @@ class CenterDynastyGame {
     this.updateChunkStreaming(true);
   }
 
-  saveState(force=false) {
+saveState(force=false) {
     if(!this.player) return;
     const now=Date.now();
     if(!force&&now-this.lastSaveAt<5000) return;
     this.lastSaveAt=now;
-    this.state.version=5;
+    this.state.version=7;
     this.state.position={x:Number(this.player.position.x.toFixed(2)),z:Number(this.player.position.z.toFixed(2)),yaw:Number(this.yaw.toFixed(4)),view:this.firstPerson?'first':'third'};
     this.state.lastSavedAt=now;
     const bridge=window.JKGamesCenterBridge;
@@ -3207,7 +3176,7 @@ class CenterDynastyGame {
   }
 
   togglePerspective() { this.firstPerson=!this.firstPerson; this.applyPerspectiveVisibility(); if(this.firstPerson&&this.state.ownerAppearance?.vehicle!=='plane')this.ensureFirstPersonArms().catch(()=>{}); this.toast(this.firstPerson?'Ego-Perspektive':'Außenperspektive'); }
-  applyPerspectiveVisibility() { this.overlay.classList.toggle('is-first-person',this.firstPerson);this.overlay.classList.toggle('is-third-person',!this.firstPerson);const vehicle=this.state.ownerAppearance?.vehicle||'none';if(this.playerModel)this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&vehicle!=='plane';if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson;if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.cape&&vehicle!=='plane';if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&this.isOwnerActive&&!!this.state.ownerAppearance?.hat&&vehicle!=='plane';if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='scooter';if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='plane';if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish)&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&!['scooter','plane'].includes(vehicle);if(this.firstPerson&&vehicle!=='plane')this.ensureFirstPersonArms().catch(()=>{});this.applyOwnerAppearance(); }
+applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',this.firstPerson);this.overlay.classList.toggle('is-third-person',!this.firstPerson);const disguised=this.isPublicPlayerMode(),appearance=this.state.ownerAppearance||{},skin=disguised?'normal':appearance.skin||'normal',vehicle=disguised?'none':appearance.vehicle||'none',cosmeticAllowed=this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!disguised;if(this.playerModel)this.playerModel.visible=!this.firstPerson&&['normal','galaxy'].includes(skin)&&vehicle!=='plane';if(this.ownerFormObject)this.ownerFormObject.visible=!this.firstPerson&&!disguised;if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish);if(this.ownerCapeObject)this.ownerCapeObject.visible=!this.firstPerson&&cosmeticAllowed&&!!appearance.cape&&vehicle!=='plane';if(this.ownerHatObject)this.ownerHatObject.visible=!this.firstPerson&&cosmeticAllowed&&!!appearance.hat&&vehicle!=='plane';if(this.ownerScooterObject)this.ownerScooterObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='scooter';if(this.ownerPlaneObject)this.ownerPlaneObject.visible=!this.firstPerson&&this.isStaffActive&&vehicle==='plane';if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!(this.isStaffActive&&this.ownerFlags.vanish)&&['normal','galaxy'].includes(skin)&&!['scooter','plane'].includes(vehicle);if(this.firstPerson&&vehicle!=='plane')this.ensureFirstPersonArms().catch(()=>{});this.applyOwnerAppearance();}
   requestJump() {
     if(this.isStaffActive&&this.ownerFlags.fly)return;
     const god=this.isStaffActive&&this.ownerFlags.god;
@@ -4192,46 +4161,10 @@ class CenterDynastyGame {
   setOnlineUi(state,text,count=1){const cls=state==='online'?'is-online':state==='offline'?'is-offline':'is-connecting';for(const el of [this.onlineCard,this.loadingOnline]){if(!el)continue;el.classList.remove('is-connecting','is-online','is-offline');el.classList.add(cls);}if(this.onlineCount)this.onlineCount.textContent=String(Math.min(4,Math.max(1,Math.floor(count||1))));if(this.onlineStatus)this.onlineStatus.textContent=text||'';}
   toast(message){clearTimeout(this.toastTimer);this.toastElement.textContent=message;this.toastElement.classList.add('show');this.toastTimer=setTimeout(()=>this.toastElement.classList.remove('show'),2800);}
 
-  presencePayload(online=true, compatibility=this.onlineCompatibilityMode) {
-    const player=bridgeSnapshot();
-    const vanished=!!(this.isStaffActive&&this.ownerFlags.vanish);
-    const base={
-      online:!!online&&!vanished,
-      mapId:ONLINE_MAP_ID,
-      sessionId:this.onlineSessionId,
-      x:Number((this.player?.position.x||0).toFixed(3)),
-      z:Number((this.player?.position.z||0).toFixed(3)),
-      yaw:Number(this.yaw.toFixed(4)),
-      bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),
-      walking:!!this.walking,
-      view:this.firstPerson?'first':'third',
-      gender:player.gender,
-      firstName:player.firstName.slice(0,30),
-      lastName:player.lastName.slice(0,30),
-      level:player.level,
-      slot:player.slot,
-      ownerClaim:!!this.isOwnerActive,
-      updatedAtMs:Date.now(),
-      version:CENTER_VERSION
-    };
-    if(compatibility)return {cottbus3D:base};
-    return {cottbus3D:{
-      ...base,
-      mode:'center',
-      y:Number((this.player?.position.y||0).toFixed(3)),
-      staffRole:this.activeStaffRole,
-      vanished,
-      flying:!!(this.isStaffActive&&this.ownerFlags.fly),
-      season:this.state.season,
-      day:this.state.day,
-      appearanceSkin:this.isStaffActive?this.state.ownerAppearance.skin:'normal',
-      appearanceSize:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,
-      heldItem:this.isStaffActive?this.state.ownerAppearance.heldItem:'none',
-      vehicle:this.isStaffActive?this.state.ownerAppearance.vehicle:'none',
-      ownerCape:!!(this.isOwnerActive&&this.state.ownerAppearance.cape),
-      ownerHat:!!(this.isOwnerActive&&this.state.ownerAppearance.hat),
-      ownerAura:!!(this.isOwnerActive&&this.state.ownerAppearance.aura)
-    }};
+presencePayload(online=true, compatibility=this.onlineCompatibilityMode) {
+    const player=bridgeSnapshot(),disguised=this.isPublicPlayerMode(),publicAlias=String(this.state.ownerAppearance?.publicAlias||'Center Spieler').trim().slice(0,30)||'Center Spieler',publicGender=this.state.ownerAppearance?.publicGender==='female'?'female':'male',visibleStaffRole=disguised?'player':this.activeStaffRole,staffVisualClaim=!disguised&&['owner','admin'].includes(this.activeStaffRole),vanished=!!(this.isStaffActive&&this.ownerFlags.vanish);
+    const base={online:!!online&&!vanished,mapId:ONLINE_MAP_ID,sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,view:this.firstPerson?'first':'third',gender:disguised?publicGender:player.gender,firstName:disguised?publicAlias:player.firstName.slice(0,30),lastName:disguised?'':player.lastName.slice(0,30),level:player.level,slot:player.slot,ownerClaim:staffVisualClaim,updatedAtMs:Date.now(),version:CENTER_VERSION};if(compatibility)return {cottbus3D:base};
+    return {cottbus3D:{...base,mode:'center',y:Number((this.player?.position.y||0).toFixed(3)),staffRole:visibleStaffRole,vanished,flying:!!(this.isStaffActive&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,appearanceSkin:disguised?'normal':this.isStaffActive?this.state.ownerAppearance.skin:'normal',appearanceSize:disguised?1:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,heldItem:disguised?'none':this.isStaffActive?this.state.ownerAppearance.heldItem:'none',vehicle:disguised?'none':this.isStaffActive?this.state.ownerAppearance.vehicle:'none',ownerCape:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.cape),ownerHat:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.hat),ownerAura:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.aura)}};
   }
 
   async prepareMultiplayer(){
@@ -4283,69 +4216,15 @@ class CenterDynastyGame {
     this.scheduleOnlineReconnect(permission?'Online bleibt aktiviert. Firebase-Zugriff wird erneut geprüft.':'Online bleibt aktiviert. Verbindung wurde kurz unterbrochen.');
   }
 
-  async connectMultiplayer(prepared=null) {
-    if(!this.state.world?.onlineEnabled)return false;
-    if(this.onlineConnected)return true;
-    if(this.onlineConnecting)return false;
-    this.clearOnlineReconnect();
-    this.onlineConnecting=true;
-    this.setOnlineUi('connecting','Online-Spieler werden geladen …',1+this.remotePlayers.size);
-    try{
-      const resolved=prepared||await this.prepareMultiplayer();
-      const fb=resolved?.fb,user=resolved?.user;
-      if(!fb||!user?.uid){
-        this.onlineConnecting=false;
-        this.scheduleOnlineReconnect('Online ist aktiviert. Anmeldung wird noch geladen.',3500);
-        return false;
-      }
-      this.onlineFb=fb;
-      this.onlineUser=user;
-      this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);
-      await this.verifyLocalOwnerRole();
-      await this.publishPresence(true);
-      // V258: Der Raum wird ueber die Map-ID abonniert. Der alte reine
-      // globale online==true-Abfrage konnte durch das Limit Spieler aus anderen Maps
-      // liefern und echte Center-Teammitglieder aus dem Ergebnis verdrängen.
-      const q=fb.query(fb.collection(fb.db,'playerProfiles'),fb.where('cottbus3D.mapId','==',ONLINE_MAP_ID),fb.where('cottbus3D.online','==',true),fb.limit(ONLINE_QUERY_LIMIT));
-      try{this.onlineUnsubscribe?.();}catch{}
-      this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>{
-        this.onlineConnected=true;
-        this.onlineRetryAttempt=0;
-        this.applyPresenceSnapshot(snapshot).catch(()=>{});
-      },(error)=>this.handleOnlineListenerError(error));
-      clearInterval(this.onlineHeartbeatTimer);
-      clearInterval(this.onlinePublishTimer);
-      clearInterval(this.onlineRefreshTimer);
-      this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_HEARTBEAT_MS);
-      this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_WRITE_INTERVAL_MS);
-      this.onlineRefreshTimer=setInterval(async()=>{
-        if(!this.opened||!this.onlineConnected||this.onlineRefreshInFlight)return;
-        this.onlineRefreshInFlight=true;
-        try{const snapshot=await fb.getDocs(q);await this.applyPresenceSnapshot(snapshot);}catch(error){if(!isFirebasePermissionError(error))console.warn('Center Online-Abgleich',error);}finally{this.onlineRefreshInFlight=false;}
-      },15000);
-      this.onlineConnected=true;
-      this.onlineConnecting=false;
-      this.onlineRetryAttempt=0;
-      this.setOnlineUi('online','Online verbunden.',1+this.remotePlayers.size);
-      return true;
-    }catch(error){
-      const permission=isFirebasePermissionError(error);
-      if(permission&&!this.onlineCompatibilityMode){
-        this.onlineCompatibilityMode=true;
-        this.onlineConnecting=false;
-        this.setOnlineUi('connecting','Online bleibt aktiviert. Kompatibler Verbindungsmodus wird gestartet.',1+this.remotePlayers.size);
-        this.scheduleOnlineReconnect('Kompatibler Online-Modus wird verbunden.',650);
-        return false;
-      }
-      if(!permission)console.warn('Center-Online-Verbindung konnte nicht gestartet werden',error);
-      this.onlineConnected=false;
-      this.onlineConnecting=false;
-      this.ownerVerificationChecked=false;
-      this.ownerVerifiedByFirebase=false;
-      this.updateRoleHud();
-      this.scheduleOnlineReconnect(permission?'Online bleibt aktiviert. Firebase-Berechtigung wird erneut geprüft.':'Online bleibt aktiviert. Verbindung wird erneut hergestellt.');
-      return false;
-    }
+async connectMultiplayer(prepared=null) {
+    if(!this.state.world?.onlineEnabled)return false;if(this.onlineConnected)return true;if(this.onlineConnecting)return false;this.clearOnlineReconnect();this.onlineConnecting=true;this.setOnlineUi('connecting','Online-Spieler werden geladen …',1+this.remotePlayers.size);
+    try{const resolved=prepared||await this.prepareMultiplayer(),fb=resolved?.fb,user=resolved?.user;if(!fb||!user?.uid){this.onlineConnecting=false;this.scheduleOnlineReconnect('Online ist aktiviert. Anmeldung wird noch geladen.',3500);return false;}this.onlineFb=fb;this.onlineUser=user;this.onlineDocRef=fb.doc(fb.db,'playerProfiles',user.uid);await this.verifyLocalOwnerRole();await this.publishPresence(true);
+      const base=[fb.where('cottbus3D.mapId','==',ONLINE_MAP_ID),fb.where('cottbus3D.online','==',true)],optimized=fb.query(fb.collection(fb.db,'playerProfiles'),...base,fb.orderBy('cottbus3D.updatedAtMs','desc'),fb.limit(ONLINE_QUERY_LIMIT)),fallback=fb.query(fb.collection(fb.db,'playerProfiles'),...base);let q=optimized;
+      try{await fb.getDocs(optimized);}catch(error){if(isFirestoreIndexError(error)){q=fallback;console.info('Center Online nutzt bis zur Bereitstellung des V267-Firestore-Indexes den kompatiblen Listener.');}else throw error;}
+      try{this.onlineUnsubscribe?.();}catch{}this.onlineUnsubscribe=fb.onSnapshot(q,(snapshot)=>{this.onlineConnected=true;this.onlineRetryAttempt=0;this.applyPresenceSnapshot(snapshot).catch(()=>{});},(error)=>this.handleOnlineListenerError(error));clearInterval(this.onlineHeartbeatTimer);clearInterval(this.onlinePublishTimer);clearInterval(this.onlineRefreshTimer);this.onlineHeartbeatTimer=setInterval(()=>this.publishPresence(true).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_HEARTBEAT_MS);this.onlinePublishTimer=setInterval(()=>this.publishPresence(false).catch((error)=>this.handleOnlineListenerError(error)),ONLINE_WRITE_INTERVAL_MS);
+      // Kein zweiter kompletter Firestore-Read mehr alle 15 Sekunden. Nur lokale Stale-Bereinigung.
+      this.onlineRefreshTimer=setInterval(()=>{const now=Date.now();for(const [uid,remote] of this.remotePlayers)if(now-Number(remote.lastSeenAt||0)>ONLINE_STALE_MS)this.removeRemotePlayer(uid);},5000);this.onlineConnected=true;this.onlineConnecting=false;this.onlineRetryAttempt=0;this.setOnlineUi('online','Online verbunden.',1+this.remotePlayers.size);return true;
+    }catch(error){const permission=isFirebasePermissionError(error);if(permission&&!this.onlineCompatibilityMode){this.onlineCompatibilityMode=true;this.onlineConnecting=false;this.setOnlineUi('connecting','Online bleibt aktiviert. Kompatibler Verbindungsmodus wird gestartet.',1+this.remotePlayers.size);this.scheduleOnlineReconnect('Kompatibler Online-Modus wird verbunden.',650);return false;}if(!permission)console.warn('Center-Online-Verbindung konnte nicht gestartet werden',error);this.onlineConnected=false;this.onlineConnecting=false;this.ownerVerificationChecked=false;this.ownerVerifiedByFirebase=false;this.updateRoleHud();this.scheduleOnlineReconnect(permission?'Online bleibt aktiviert. Firebase-Berechtigung wird erneut geprüft.':'Online bleibt aktiviert. Verbindung wird erneut hergestellt.');return false;}
   }
 
   async publishPresence(force=false){
@@ -4407,31 +4286,22 @@ class CenterDynastyGame {
     this.setOnlineUi('offline',userInitiated?'Online ausgeschaltet.':'Online-Verbindung beendet.',1);
   }
 
-  async applyPresenceSnapshot(snapshot){
-    if(!this.opened)return;const active=new Set(),ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=roleSnapshot().isOwner;
-    for(const docSnap of snapshot.docs||[]){
-      if(active.size>=MAX_REMOTE_PLAYERS)break;const uid=docSnap.id;if(!uid||uid===ownUid)continue;const data=docSnap.data?.()||{},live=data.cottbus3D||{};
-      if(!live.online||live.mapId!==ONLINE_MAP_ID||now-Number(live.updatedAtMs||0)>ONLINE_STALE_MS)continue;
-      if(live.vanished&&!viewerIsOwner){this.removeRemotePlayer(uid);continue;}
-      active.add(uid);await this.upsertRemotePlayer(uid,data,live);
-    }
-    for(const uid of [...this.remotePlayers.keys()])if(!active.has(uid))this.removeRemotePlayer(uid);
-    this.setOnlineUi(this.onlineConnected?'online':'connecting',`${1+this.remotePlayers.size} Spieler im Center.`,1+this.remotePlayers.size);if(this.ownerPanel?.classList.contains('is-open')&&this.isStaffActive)this.renderOwnerMenu();
+async applyPresenceSnapshot(snapshot){
+    if(!this.opened)return;const ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=this.isOwnerActive||roleSnapshot().isOwner,candidates=[];for(const docSnap of snapshot.docs||[]){const uid=docSnap.id;if(!uid||uid===ownUid)continue;const data=docSnap.data?.()||{},live=data.cottbus3D||{},updated=Number(live.updatedAtMs||0);if(!live.online||live.mapId!==ONLINE_MAP_ID||now-updated>ONLINE_STALE_MS)continue;if(live.vanished&&!viewerIsOwner){this.removeRemotePlayer(uid);continue;}const dx=Number(live.x||0)-this.player.position.x,dz=Number(live.z||0)-this.player.position.z;candidates.push({uid,data,live,updated,dist2:dx*dx+dz*dz});}
+    candidates.sort((a,b)=>a.dist2-b.dist2||b.updated-a.updated);const selected=candidates.slice(0,this.maxVisibleRemotePlayers()),active=new Set(selected.map((entry)=>entry.uid));await Promise.allSettled(selected.map(({uid,data,live})=>this.upsertRemotePlayer(uid,data,live)));for(const uid of [...this.remotePlayers.keys()])if(!active.has(uid))this.removeRemotePlayer(uid);this.setOnlineUi(this.onlineConnected?'online':'connecting',`${1+this.remotePlayers.size} Spieler im Center.`,1+this.remotePlayers.size);if(this.ownerPanel?.classList.contains('is-open')&&this.isStaffActive)this.renderOwnerMenu();
   }
 
-  async verifiedRemoteSkin(uid,live){const gender=live.gender==='female'?'female':'male',claimedOwner=!!live.ownerClaim&&canonicalStaffRole(live.staffRole)==='owner';if(!live.ownerClaim)return gender;if(!this.onlineFb)return claimedOwner?'owner':gender;const cached=this.remoteRoleCache.get(uid);if(cached&&Date.now()-cached.checkedAt<60000)return cached.isOwner?'owner':gender;let isOwner=false;try{const snap=await this.onlineFb.getDoc(this.onlineFb.doc(this.onlineFb.db,'staffRoles',uid));isOwner=snap.exists()&&String(snap.data()?.role||'').toLowerCase()==='owner';}catch{isOwner=claimedOwner;}this.remoteRoleCache.set(uid,{isOwner,checkedAt:Date.now()});return isOwner?'owner':gender;}
+async verifiedRemoteSkin(uid,live){
+    const gender=live.gender==='female'?'female':'male',claimedRole=canonicalStaffRole(live.staffRole),claim=!!live.ownerClaim&&['owner','admin'].includes(claimedRole);if(!claim)return {skin:gender,role:'player'};const cached=this.remoteRoleCache.get(uid);if(cached&&Date.now()-cached.checkedAt<120000)return {skin:['owner','admin'].includes(cached.role)?'owner':gender,role:cached.role};let role=claimedRole;
+    if(this.onlineFb)try{const snap=await this.onlineFb.getDoc(this.onlineFb.doc(this.onlineFb.db,'staffRoles',uid));role=canonicalStaffRole(snap.exists()?snap.data()?.role:'');}catch{role=claimedRole;}if(!['owner','admin'].includes(role))role='player';this.remoteRoleCache.set(uid,{role,checkedAt:Date.now()});return {skin:['owner','admin'].includes(role)?'owner':gender,role};
+  }
 
-  async upsertRemotePlayer(uid,profile,live){
-    let remote=this.remotePlayers.get(uid);const existed=!!remote,previousAppearance=remote?.appearanceSkin||'';const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
-    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,heldObject:null,heldAnchor:null,renderedHeldItem:'',renderedAppearanceSkin:'',renderedVehicle:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,verticalVelocity:0,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
-    remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');
-    if(existed&&previousAppearance&&previousAppearance!==remote.appearanceSkin)this.spawnTransformationEffectAt(remote.group.position,true);
-    remote.vehicle=String(live.vehicle||'none');remote.heldItem=String(live.heldItem||'none');remote.appearanceSize=clamp(Number(live.appearanceSize)||1,.45,2.5);remote.ownerVisual=!!live.ownerClaim&&canonicalStaffRole(live.staffRole)==='owner';remote.ownerAura=Object.prototype.hasOwnProperty.call(live,'ownerAura')?!!live.ownerAura:remote.appearanceSkin==='galaxy';remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
-    const nextRemoteSeen=Number(live.updatedAtMs||Date.now()),nextRemoteY=Number(live.y||terrainHeightAt(Number(live.x||0),Number(live.z||0))),remoteDt=Math.max(.1,(nextRemoteSeen-Number(remote.lastSeenAt||nextRemoteSeen))/1000);remote.verticalVelocity=(nextRemoteY-Number(remote.targetY??nextRemoteY))/remoteDt;
-    remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=nextRemoteY;remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=nextRemoteSeen;remote.pivot.scale.setScalar(remote.appearanceSize);
-    const skin=await this.verifiedRemoteSkin(uid,live);if(remote.skin!==skin)await this.installRemoteModel(remote,skin);
-    this.applyRemoteFormAndVehicle(remote);this.applyRemoteOwnerAura(remote);this.applyRemoteHeldItem(remote);
-    remote.group.visible=!remote.vanished||roleSnapshot().isOwner;
+async upsertRemotePlayer(uid,profile,live){
+    let remote=this.remotePlayers.get(uid);const existed=!!remote,previousAppearance=remote?.appearanceSkin||'',name=String(`${live.firstName||''} ${live.lastName||''}`.trim()||profile.displayName||'Spieler').slice(0,44),level=Math.max(0,Math.floor(Number(live.level||0)));
+    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',staffVisualRole:'player',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,heldObject:null,heldAnchor:null,renderedHeldItem:'',renderedAppearanceSkin:'',renderedVehicle:'',lastVisualKey:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,verticalVelocity:0,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}else if(remote.name!==name){remote.label?.removeFromParent?.();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);remote.label.position.y=2.4;remote.group.add(remote.label);remote.name=name;}
+    remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');if(existed&&previousAppearance&&previousAppearance!==remote.appearanceSkin)this.spawnTransformationEffectAt(remote.group.position,true);remote.vehicle=String(live.vehicle||'none');remote.heldItem=String(live.heldItem||'none');remote.appearanceSize=clamp(Number(live.appearanceSize)||1,.45,2.5);remote.ownerAura=!!live.ownerAura;remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
+    const nextSeen=Number(live.updatedAtMs||Date.now()),nextY=Number(live.y||terrainHeightAt(Number(live.x||0),Number(live.z||0))),remoteDt=Math.max(.1,(nextSeen-Number(remote.lastSeenAt||nextSeen))/1000);remote.verticalVelocity=(nextY-Number(remote.targetY??nextY))/remoteDt;remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=nextY;remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=nextSeen;remote.pivot.scale.setScalar(remote.appearanceSize);
+    const identity=await this.verifiedRemoteSkin(uid,live);remote.staffVisualRole=identity.role;remote.ownerVisual=['owner','admin'].includes(identity.role);if(remote.skin!==identity.skin)await this.installRemoteModel(remote,identity.skin);const visualKey=`${remote.skin}|${remote.staffVisualRole}|${remote.appearanceSkin}|${remote.vehicle}|${remote.heldItem}|${remote.appearanceSize.toFixed(2)}|${remote.ownerAura?1:0}|${remote.ownerCape?1:0}|${remote.ownerHat?1:0}|${remote.vanished?1:0}`;if(remote.lastVisualKey!==visualKey){this.applyRemoteFormAndVehicle(remote);this.applyRemoteOwnerAura(remote);this.applyRemoteHeldItem(remote);remote.lastVisualKey=visualKey;}remote.group.visible=!remote.vanished||this.isOwnerActive||roleSnapshot().isOwner;
   }
 
   async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
@@ -4451,11 +4321,11 @@ class CenterDynastyGame {
     else if(airborne){q(bones.upperRight,{x:-.16,z:-.16});q(bones.upperLeft,{x:-.16,z:.16});q(bones.upperLegRight,{x:-.28});q(bones.lowerLegRight,{x:.5});q(bones.upperLegLeft,{x:-.2});q(bones.lowerLegLeft,{x:.4});q(bones.chest,{x:.025});}
   }
 
-  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem='';remote.renderedAppearanceSkin='';remote.renderedVehicle='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
+  async installRemoteModel(remote,skin){remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();this.disposeClonedModelMaterials(remote.model);remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem='';remote.renderedAppearanceSkin='';remote.renderedVehicle='';remote.lastVisualKey='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
 
   applyRemoteFormAndVehicle(remote) {
     if(!remote?.model)return;const visibleForms=['ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS],appearance=visibleForms.includes(remote.appearanceSkin)?remote.appearanceSkin:['normal','galaxy'].includes(remote.appearanceSkin)?remote.appearanceSkin:'normal',vehicle=['scooter','plane'].includes(remote.vehicle)?remote.vehicle:'none';
-    if(remote.renderedAppearanceSkin!==appearance){remote.formObject?.removeFromParent?.();remote.formObject=null;remote.renderedAppearanceSkin=appearance;if(visibleForms.includes(appearance)){const form=this.createOwnerForm(appearance);if(form){remote.pivot.add(form);remote.formObject=form;}}}
+    if(remote.renderedAppearanceSkin!==appearance){this.disposeGeneratedVisual(remote.formObject);remote.formObject=null;remote.renderedAppearanceSkin=appearance;if(visibleForms.includes(appearance)){const form=this.createOwnerForm(appearance);if(form){remote.pivot.add(form);remote.formObject=form;}}}
     if(remote.model)remote.model.visible=!remote.formObject&&!remote.vanished;
     if(remote.renderedVehicle!==vehicle){this.disposeGeneratedVisual(remote.vehicleObject);remote.vehicleObject=null;remote.renderedVehicle=vehicle;if(vehicle==='scooter'&&!remote.formObject){const scooter=this.createScooterVisual();if(scooter){remote.pivot.add(scooter);remote.vehicleObject=scooter;}}else if(vehicle==='plane'&&!remote.formObject){const plane=this.createStaffPlaneVisual();if(plane){remote.pivot.add(plane);remote.vehicleObject=plane;}}}
     if(remote.model){remote.model.position.y=remote.vehicleObject?.08:0;remote.model.visible=!remote.formObject&&!remote.vanished&&vehicle!=='plane';}
@@ -4467,15 +4337,10 @@ class CenterDynastyGame {
     const form=remote?.formObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(remote.flying||remote.walking):remote.walking,singleMove=!!form.userData.singleMoveAction;if(mixer){if(singleMove&&move){if(wantsMove){move.enabled=true;move.paused=false;}else{move.paused=true;move.time=0;}}else if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);if(form.userData.kind==='owl'&&remote.flying){form.rotation.x=-.12;form.rotation.z=Math.sin(performance.now()*.002)*.04;}else{form.rotation.x*=Math.exp(-delta*8);form.rotation.z*=Math.exp(-delta*8);}
   }
 
-  applyRemoteOwnerAura(remote) {
-    if(!remote?.model)return;
-    const isOwner=(remote.skin==='owner'||remote.ownerVisual),galaxy=isOwner&&remote.appearanceSkin==='galaxy',auraActive=isOwner&&remote.ownerAura&&!remote.vanished;
-    if(galaxy&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}
-    remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,galaxy,this.ownerGalaxySkinTexture);const original=mat.userData.__centerOriginalMaterial||{};const opacity=remote.vanished?.3:galaxy?.74:(original.opacity??1);mat.transparent=remote.vanished||galaxy||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!(remote.vanished||galaxy)&&original.depthWrite!==false;}});
-    if(auraActive&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
-    const ownerVisible=isOwner&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';
-    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion())){remote.cape.position.set(0,1.46,-.24);}}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
-    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
+applyRemoteOwnerAura(remote) {
+    if(!remote?.model)return;const role=remote.staffVisualRole||'player',isStaffVisual=['owner','admin'].includes(role),theme=role==='admin'?'admin':'owner',galaxy=role==='owner'&&remote.appearanceSkin==='galaxy',auraActive=isStaffVisual&&remote.ownerAura&&!remote.vanished;if(galaxy&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,galaxy,this.ownerGalaxySkinTexture);const original=mat.userData.__centerOriginalMaterial||{},opacity=remote.vanished?.3:galaxy?.74:(original.opacity??1);mat.transparent=remote.vanished||galaxy||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!(remote.vanished||galaxy)&&original.depthWrite!==false;}});
+    if(remote.aura&&remote.aura.userData?.theme!==theme){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true,theme);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;const visible=isStaffVisual&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&remote.cape.userData?.theme!==theme){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.hat&&remote.hat.userData?.theme!==theme){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
+    if(visible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape(theme);remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion()))remote.cape.position.set(0,1.46,-.24);}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;if(visible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(theme);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat;
   }
 
   syncRemoteHeldAnchorPose(remote){
@@ -4484,10 +4349,8 @@ class CenterDynastyGame {
     const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
 
-  applyRemoteHeldItem(remote){
-    if(!remote?.pivot)return;const allowed=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'],kind=allowed.includes(remote.heldItem)?remote.heldItem:'none',show=kind!=='none'&&!remote.vanished&&!remote.formObject&&remote.vehicle==='none';
-    if(remote.renderedHeldItem!==kind){this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem=kind;if(kind!=='none'){const mesh=this.createHeldItemMesh(kind);if(mesh){const anchor=new THREE.Group();anchor.name='remote-center-held-item-grip';anchor.userData.kind=kind;anchor.add(mesh);remote.pivot.add(anchor);remote.heldAnchor=anchor;remote.heldObject=mesh;this.syncRemoteHeldAnchorPose(remote);}}}
-    if(remote.heldAnchor)remote.heldAnchor.visible=show;
+applyRemoteHeldItem(remote){
+    if(!remote?.pivot)return;const allowed=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'],kind=allowed.includes(remote.heldItem)?remote.heldItem:'none',theme=remote.staffVisualRole==='admin'?'admin':'owner',show=kind!=='none'&&!remote.vanished&&!remote.formObject&&remote.vehicle==='none',same=remote.renderedHeldItem===kind&&remote.heldObject?.userData?.theme===theme;if(!same){this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem=kind;if(kind!=='none'){const mesh=this.createHeldItemMesh(kind,theme);if(mesh){const anchor=new THREE.Group();anchor.name='remote-center-held-item-grip';anchor.userData.kind=kind;anchor.userData.theme=theme;anchor.add(mesh);remote.pivot.add(anchor);remote.heldAnchor=anchor;remote.heldObject=mesh;this.syncRemoteHeldAnchorPose(remote);}}}if(remote.heldAnchor)remote.heldAnchor.visible=show;
   }
 
   updateRemotePlayers(delta){
@@ -4509,7 +4372,7 @@ class CenterDynastyGame {
     }
   }
 
-  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();this.remotePlayers.delete(uid);}
+  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();this.disposeClonedModelMaterials(remote.model);remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();this.remotePlayers.delete(uid);}
 
   ownerOnly(silent=false){if(this.isOwnerActive)return true;if(!silent)this.toast('Diese Funktion ist ausschließlich für den Owner.');return false;}
   staffOnly(silent=false){if(this.isStaffActive)return true;if(!silent)this.toast('Dieses Center-Teammenü ist nur für Supporter, Moderatoren, Admins und den Owner.');return false;}
@@ -4520,35 +4383,23 @@ class CenterDynastyGame {
   closeOwnerMenu(){if(!this.ownerPanel)return;this.ownerPanel.classList.remove('is-open');this.ownerPanel.setAttribute('aria-hidden','true');this.overlay?.classList.remove('is-owner-panel-open');this.canvas?.focus?.({preventScroll:true});}
   ownerToggleButton(action,label,enabled,description=''){return `<button class="mdc-owner-toggle ${enabled?'active':''}" data-owner-action="${action}"><span>${enabled?'✓':'○'}</span><b>${label}</b><small>${description}</small></button>`;}
 
-  renderOwnerMenu(){
-    if(!this.staffOnly())return;
-    const f=this.ownerFlags,caps=this.staffCapabilities,roleLabel=STAFF_ROLE_LABELS[this.activeStaffRole]||'Team';
-    const appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none',cape:false,hat:false,aura:false,vehicle:'none'};
-    const speedMultiplier=clamp(Number(f.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(f.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER);
-    const onlinePlayers=[...this.remotePlayers.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
-    const villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
-    const landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
-    const movement=[caps.vanish&&this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Für andere vollständig unsichtbar'),caps.god&&this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Alle Überlebenswerte bleiben voll'),caps.noclip&&this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen'),caps.fly&&this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter'),caps.freezeTime&&this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Nur deine lokale Weltzeit einfrieren')].filter(Boolean).join('');
-    const utility=[caps.heal&&'<button data-owner-action="heal">❤ Alles heilen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="ground">↓ Sicher landen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="unstuck">↺ Befreien</button>',caps.world&&'<button data-owner-action="reveal">⌖ Orte aufdecken</button>'].filter(Boolean).join('');
-    const formLabels={normal:'Normal',galaxy:'Owner-Galaxy-Skin',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II',spider:'Zauberspinne',clownfish:'Clownfisch Nemo',bird:'Vogel'};
-    const forms=(caps.forms||['normal']).filter((id)=>!(this.isOwnerActive&&id==='galaxy')).map((id)=>[id,id==='tree'?`Baum ${Math.max(0,Math.floor(Number(appearance.treeVariant)||0))+1}/${Math.max(1,this.natureTreeNames.length)}`:(formLabels[id]||id)]);
-    const itemLabels={none:'Leer',shovel:'Schaufel · Basic Tools',pickaxe:'Spitzhacke · Basic Tools',hoe:'Hacke · Basic Tools',axe:'Axt · Basic Tools',hammer:'Hammer · Basic Tools',sword:'Galaxy-Owner-Schwert',staff:'Galaxy-Owner-Stab',eternalFlame:'Galaxy-Ewige-Flamme'};
-    const teamToolIds=['none',...(caps.items||[]).filter((id)=>['shovel','pickaxe','hoe','axe','hammer'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index);
-    const sections=[];
-    sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div><h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
+renderOwnerMenu(){
+    if(!this.staffOnly())return;const f=this.ownerFlags,caps=this.staffCapabilities,roleLabel=STAFF_ROLE_LABELS[this.activeStaffRole]||'Team',appearance=this.state.ownerAppearance||{skin:'normal',size:1,heldItem:'none',cape:false,hat:false,aura:false,vehicle:'none',publicMode:'staff',publicGender:'male',publicAlias:'Center Spieler'},disguised=this.isPublicPlayerMode(),speedMultiplier=clamp(Number(f.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(f.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER),onlinePlayers=[...this.remotePlayers.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de')),villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5),landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
+    const movement=[caps.vanish&&this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Für andere vollständig unsichtbar'),caps.god&&this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Alle Überlebenswerte bleiben voll'),caps.noclip&&this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen'),caps.fly&&this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter'),caps.freezeTime&&this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Nur deine lokale Weltzeit einfrieren')].filter(Boolean).join(''),utility=[caps.heal&&'<button data-owner-action="heal">❤ Alles heilen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="ground">↓ Sicher landen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="unstuck">↺ Befreien</button>',caps.world&&'<button data-owner-action="reveal">⌖ Orte aufdecken</button>'].filter(Boolean).join(''),formLabels={normal:'Normal',galaxy:'Owner-Galaxy-Skin',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II',spider:'Zauberspinne',clownfish:'Clownfisch Nemo',bird:'Vogel'},forms=(caps.forms||['normal']).filter((id)=>!(this.isOwnerActive&&id==='galaxy')).map((id)=>[id,id==='tree'?`Baum ${Math.max(0,Math.floor(Number(appearance.treeVariant)||0))+1}/${Math.max(1,this.natureTreeNames.length)}`:(formLabels[id]||id)]),itemLabels={none:'Leer',shovel:'Schaufel · Basic Tools',pickaxe:'Spitzhacke · Basic Tools',hoe:'Hacke · Basic Tools',axe:'Axt · Basic Tools',hammer:'Hammer · Basic Tools',sword:'Spezial-Schwert',staff:'Spezial-Stab',eternalFlame:'Ewige Flamme'},teamToolIds=['none',...(caps.items||[]).filter((id)=>['shovel','pickaxe','hoe','axe','hammer'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index),sections=[];
+    sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div>`);
+    if(['owner','admin'].includes(this.activeStaffRole))sections.push(`<h3>Öffentliche Identität</h3><div class="mdc-public-identity"><div class="mdc-owner-actions"><button class="${!disguised?'active ':''}" data-owner-action="public-mode-staff">Als ${this.isOwnerActive?'Owner':'Admin'}</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button></div><div class="mdc-owner-actions"><button class="${appearance.publicGender==='male'?'active ':''}" data-owner-action="public-gender-male">Mann</button><button class="${appearance.publicGender==='female'?'active ':''}" data-owner-action="public-gender-female">Frau</button></div><label>Öffentlicher Spielername<input data-owner-public-alias maxlength="30" value="${escapeHtml(appearance.publicAlias||'Center Spieler')}"></label><p class="mdc-note">Im Modus „normaler Spieler“ werden Name, Geschlecht, Staff-Rolle und Spezialoptik online verborgen. Deine Rechte bleiben intern erhalten.</p></div>`);
+    sections.push(`<h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
     if(caps.speed)sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label><p class="mdc-note">Stufenlos von normal bis extrem schnell. Wirkt auf Laufen und Fly.</p></div>`);
     if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
     if(teamToolIds.length>1)sections.push(`<h3>Team-Werkzeuge</h3><div class="mdc-owner-actions three">${teamToolIds.map((id)=>`<button class="${appearance.heldItem===id?'active ':''}" data-owner-action="admin-item" data-owner-item="${id}">${itemLabels[id]||id}</button>`).join('')}</div>`);
     if(this.isOwnerActive)sections.push(`<h3 class="mdc-galaxy-heading">Owner-Galaxy-Bereich</h3><div class="mdc-owner-actions three"><button class="mdc-galaxy-action ${appearance.skin==='galaxy'?'active':''}" data-owner-action="toggle-owner-galaxy-skin">${appearance.skin==='galaxy'?'✓ Galaxy-Skin AN':'○ Galaxy-Skin AUS'}</button><button class="mdc-galaxy-action ${appearance.heldItem==='sword'?'active':''}" data-owner-action="admin-item" data-owner-item="sword">Galaxy-Owner-Schwert</button><button class="mdc-galaxy-action ${appearance.heldItem==='staff'?'active':''}" data-owner-action="admin-item" data-owner-item="staff">Galaxy-Owner-Stab</button><button class="mdc-galaxy-action ${appearance.heldItem==='eternalFlame'?'active':''}" data-owner-action="admin-item" data-owner-item="eternalFlame">Galaxy-Ewige-Flamme</button><button class="mdc-galaxy-action ${appearance.aura?'active':''}" data-owner-action="toggle-aura">${appearance.aura?'✓ Aura AN':'○ Aura AUS'}</button><button class="mdc-galaxy-action ${appearance.cape?'active':''}" data-owner-action="toggle-cape">${appearance.cape?'✓ Wings AN':'○ Wings AUS'}</button><button class="mdc-galaxy-action ${appearance.hat?'active':''}" data-owner-action="toggle-hat">${appearance.hat?'✓ Galaxy-Krone AN':'○ Galaxy-Krone AUS'}</button></div>`);
-    if((caps.vehicles||[]).some((id)=>id==='scooter'||id==='plane'))sections.push(`<h3>Team-Fahrzeuge</h3><div class="mdc-owner-actions">${(caps.vehicles||[]).includes('scooter')?`<button class="${appearance.vehicle==='scooter'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="scooter">🛴 Electro Scooter Weiß · 40–150 km/h</button>`:''}${(caps.vehicles||[]).includes('plane')?`<button class="${appearance.vehicle==='plane'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="plane">✈ Sägelflugzeug · Admin/Owner</button>`:''}${appearance.vehicle!=='none'?'<button data-owner-action="admin-vehicle" data-owner-vehicle="none">Fahrzeug abstellen</button>':''}</div><p class="mdc-note">Nur Admin und Owner. Das Flugzeug aktiviert Fly automatisch. Der Propeller läuft in der Luft oder bei Bewegung und stoppt am Boden im Stand.</p>`);
+    if(this.activeStaffRole==='admin')sections.push(`<h3 class="mdc-admin-heading">Admin-Grau-Bereich</h3><div class="mdc-owner-actions three"><button class="mdc-admin-action ${appearance.heldItem==='sword'?'active':''}" data-owner-action="admin-item" data-owner-item="sword">Admin-Schwert Grau</button><button class="mdc-admin-action ${appearance.heldItem==='staff'?'active':''}" data-owner-action="admin-item" data-owner-item="staff">Admin-Stab Grau</button><button class="mdc-admin-action ${appearance.heldItem==='eternalFlame'?'active':''}" data-owner-action="admin-item" data-owner-item="eternalFlame">Admin-Ewige-Flamme Grau</button><button class="mdc-admin-action ${appearance.aura?'active':''}" data-owner-action="toggle-aura">${appearance.aura?'✓ Graue Aura AN':'○ Graue Aura AUS'}</button><button class="mdc-admin-action ${appearance.cape?'active':''}" data-owner-action="toggle-cape">${appearance.cape?'✓ Graue Wings AN':'○ Graue Wings AUS'}</button><button class="mdc-admin-action ${appearance.hat?'active':''}" data-owner-action="toggle-hat">${appearance.hat?'✓ Graue Krone AN':'○ Graue Krone AUS'}</button></div><p class="mdc-note">Gleiche Staff-Funktionen wie im Spezialbereich, aber ausschließlich in neutralem Grau. Der weiße Staff-Skin bleibt erhalten.</p>`);
+    if((caps.vehicles||[]).some((id)=>id==='scooter'||id==='plane'))sections.push(`<h3>Team-Fahrzeuge</h3><div class="mdc-owner-actions">${(caps.vehicles||[]).includes('scooter')?`<button class="${appearance.vehicle==='scooter'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="scooter">🛴 Electro Scooter Weiß · 40–150 km/h</button>`:''}${(caps.vehicles||[]).includes('plane')?`<button class="${appearance.vehicle==='plane'?'active ':''}" data-owner-action="admin-vehicle" data-owner-vehicle="plane">✈ Sägelflugzeug · Admin/Owner</button>`:''}${appearance.vehicle!=='none'?'<button data-owner-action="admin-vehicle" data-owner-vehicle="none">Fahrzeug abstellen</button>':''}</div><p class="mdc-note">Das Flugzeug aktiviert Fly automatisch. Der Propeller läuft in der Luft oder bei Bewegung und stoppt am Boden im Stand.</p>`);
     if(caps.world)sections.push(`<h3>Welt und Zeit</h3><div class="mdc-owner-actions three"><button data-owner-action="time-day">☀ Tag</button><button data-owner-action="time-night">☾ Nacht</button><button data-owner-action="weather-clear">Klar</button><button data-owner-action="weather-rain">Regen</button><button data-owner-action="weather-snow">Schnee</button><button data-owner-action="season-next">Jahreszeit +</button></div>`);
     if(caps.resources)sections.push(`<h3>Ressourcen und Fortschritt</h3><div class="mdc-owner-grant"><select data-owner-resource>${Object.entries(RESOURCE_LABELS).map(([id,name])=>`<option value="${id}">${escapeHtml(name)}</option>`).join('')}</select><input data-owner-amount type="number" min="1" max="9999" value="100"><button data-owner-action="grant-resource">Hinzufügen</button></div><div class="mdc-owner-actions"><button data-owner-action="grant-all">Alle Ressourcen +100</button><button data-owner-action="grant-tools">Alle Werkzeuge 100 %</button><button data-owner-action="grant-skills">Skills und XP</button><button data-owner-action="respawn-resources">Ressourcen regenerieren</button></div>`);
-    const staffBindRows=[['staffMenu','Team-Menü'],caps.vanish&&['vanish','Vanish'],caps.god&&['god','Unbesiegbar'],caps.fly&&['fly','Fly']].filter(Boolean);
-    const quickFormOptions=(caps.forms||[]).filter((id)=>ANIMAL_FORM_IDS.includes(id));
-    if(staffBindRows.length||quickFormOptions.length)sections.push(`<h3>Keybinds</h3><div class="mdc-keybind-grid">${staffBindRows.map(([id,label])=>`<label>${label}<select data-keybind-action="${id}">${this.keybindOptions(this.state.keybinds?.[id])}</select></label>`).join('')}${quickFormOptions.length?`<label>Tier-Verwandlung<select data-owner-quick-form>${quickFormOptions.map((id)=>`<option value="${id}" ${appearance.quickForm===id?'selected':''}>${escapeHtml(formLabels[id]||ANIMAL_PROFILES[id]?.label||id)}</option>`).join('')}</select></label><label>Tier-Keybind<select data-keybind-action="transform">${this.keybindOptions(this.state.keybinds?.transform)}</select></label>`:''}</div>${quickFormOptions.length?'<p class="mdc-note">Tier auswählen und die belegte Taste drücken. Die Auswahl bleibt gespeichert.</p>':''}`);
+    const staffBindRows=[['staffMenu','Team-Menü'],caps.vanish&&['vanish','Vanish'],caps.god&&['god','Unbesiegbar'],caps.fly&&['fly','Fly']].filter(Boolean),quickFormOptions=(caps.forms||[]).filter((id)=>ANIMAL_FORM_IDS.includes(id));if(staffBindRows.length||quickFormOptions.length)sections.push(`<h3>Keybinds</h3><div class="mdc-keybind-grid">${staffBindRows.map(([id,label])=>`<label>${label}<select data-keybind-action="${id}">${this.keybindOptions(this.state.keybinds?.[id])}</select></label>`).join('')}${quickFormOptions.length?`<label>Tier-Verwandlung<select data-owner-quick-form>${quickFormOptions.map((id)=>`<option value="${id}" ${appearance.quickForm===id?'selected':''}>${escapeHtml(formLabels[id]||ANIMAL_PROFILES[id]?.label||id)}</option>`).join('')}</select></label><label>Tier-Keybind<select data-keybind-action="transform">${this.keybindOptions(this.state.keybinds?.transform)}</select></label>`:''}</div>`);
     if(caps.online)sections.push(`<h3>Online-Spieler im Center</h3><div class="mdc-owner-player-list">${onlinePlayers.length?onlinePlayers.map((p,i)=>`<article><span>●</span><div><b>${escapeHtml(p.name)}</b><small>${Math.round(Math.hypot(p.group.position.x-this.player.position.x,p.group.position.z-this.player.position.z))} m entfernt${p.vanished?' · Vanish':''}</small></div>${caps.teleport?`<button data-owner-action="tp-player" data-owner-index="${i}">Teleportieren</button>`:''}</article>`).join(''):'<p>Aktuell ist kein weiterer Spieler im Center verbunden.</p>'}</div>`);
-    if(caps.teleport)sections.push(`<h3>Teleportieren</h3><div class="mdc-owner-teleports"><button data-owner-action="tp-spawn">Siedlungs-Spawn</button><button data-owner-action="tp-river">Nächster Fluss</button><button data-owner-action="tp-random">Sicherer Zufallsort</button>${villages.map((v,i)=>`<button data-owner-action="tp-village" data-owner-index="${i}">Dorf: ${escapeHtml(v.name)}</button>`).join('')}${landmarks.map((h,i)=>`<button data-owner-action="tp-landmark" data-owner-index="${i}">${escapeHtml(h.data?.title||h.label||'Weltort')}</button>`).join('')}</div>`);
-    this.ownerPanelBody.innerHTML=sections.join('');this.ownerTeleportPlayers=onlinePlayers;this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
+    if(caps.teleport)sections.push(`<h3>Teleportieren</h3><div class="mdc-owner-teleports"><button data-owner-action="tp-spawn">Siedlungs-Spawn</button><button data-owner-action="tp-river">Nächster Fluss</button><button data-owner-action="tp-random">Sicherer Zufallsort</button>${villages.map((v,i)=>`<button data-owner-action="tp-village" data-owner-index="${i}">Dorf: ${escapeHtml(v.name)}</button>`).join('')}${landmarks.map((h,i)=>`<button data-owner-action="tp-landmark" data-owner-index="${i}">${escapeHtml(h.data?.title||h.label||'Weltort')}</button>`).join('')}</div>`);this.ownerPanelBody.innerHTML=sections.join('');this.ownerTeleportPlayers=onlinePlayers;this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
   }
 
   teleportOwner(x,z,y=null,label='Ort'){if(!this.canStaff('teleport')&&!this.canStaff('fly')&&!this.canStaff('noclip'))return;const tx=clamp(Number(x)||0,this.worldBounds.minX,this.worldBounds.maxX),tz=clamp(Number(z)||0,this.worldBounds.minZ,this.worldBounds.maxZ);this.player.position.set(tx,y===null?terrainHeightAt(tx,tz):Number(y),tz);this.velocityY=0;this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();this.toast(`Teleportiert: ${label}`);this.publishPresence(true).catch(()=>{});}
@@ -4573,27 +4424,17 @@ class CenterDynastyGame {
   handleKeybindChange(event){const quick=event.target.closest?.('[data-owner-quick-form]');if(quick){const form=quick.value,caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole);if(caps.forms?.includes(form)){this.state.ownerAppearance.quickForm=form;this.saveState(true);this.toast(`Verwandlungs-Keybind: ${form}`);}return;}const select=event.target.closest?.('[data-keybind-action]');if(!select)return;const action=select.dataset.keybindAction,code=select.value;if(!(action in DEFAULT_KEYBINDS)||!KEYBIND_OPTIONS.includes(code))return;this.state.keybinds[action]=code;this.saveState(true);this.toast(`Tastenbelegung gespeichert: ${KEYBIND_LABELS[code]||code}`);}
   toggleStaffFlag(key){if(!this.isStaffActive)return;const capability={vanish:'vanish',god:'god',fly:'fly'}[key];if(!capability||!this.canStaff(capability))return;this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,floor);this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}else{this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightLean=0;this.flightRoll=0;if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=0;this.flightVisualPivot.rotation.z=0;}}}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});}
 
-  handleOwnerInput(event){
-    if(!this.staffOnly())return;
-    const speedInput=event.target.closest?.('[data-owner-speed]');
-    if(speedInput&&this.canStaff('speed')){
-      this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);
-      this.ownerFlags.speedLevel=0;
-      const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;
-      return;
-    }
-    const sizeInput=event.target.closest?.('[data-owner-size]');
-    if(sizeInput&&this.canStaff('size')){
-      this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);
-      const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;
-      this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});
-    }
+handleOwnerInput(event){
+    if(!this.staffOnly())return;const alias=event.target.closest?.('[data-owner-public-alias]');if(alias&&['owner','admin'].includes(this.activeStaffRole)){this.state.ownerAppearance.publicAlias=String(alias.value||'Center Spieler').trim().slice(0,30)||'Center Spieler';this.saveState(true);if(this.isPublicPlayerMode())this.publishPresence(true).catch(()=>{});return;}
+    const speedInput=event.target.closest?.('[data-owner-speed]');if(speedInput&&this.canStaff('speed')){this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);this.ownerFlags.speedLevel=0;const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;return;}const sizeInput=event.target.closest?.('[data-owner-size]');if(sizeInput&&this.canStaff('size')){this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});}
   }
 
-  handleOwnerAction(event){
+  async handleOwnerAction(event){
     const button=event.target.closest?.('[data-owner-action]');if(!button||!this.staffOnly())return;const action=button.dataset.ownerAction,caps=this.staffCapabilities;
     const required={ ground:'fly',unstuck:'fly','toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime',heal:'heal',reveal:'world','time-day':'world','time-night':'world','weather-clear':'world','weather-rain':'world','weather-snow':'world','season-next':'world','grant-resource':'resources','grant-all':'resources','grant-tools':'resources','grant-skills':'resources','respawn-resources':'resources','tp-spawn':'teleport','tp-river':'teleport','tp-random':'teleport','tp-player':'teleport','tp-village':'teleport','tp-landmark':'teleport'}[action];
     if(required&&!caps[required]){this.toast('Deine Teamrolle darf diese Funktion nicht verwenden.');return;}
+    if(action==='public-mode-staff'||action==='public-mode-player'){if(!['owner','admin'].includes(this.activeStaffRole))return;this.state.ownerAppearance.publicMode=action==='public-mode-player'?'player':'staff';this.spawnTransformationEffectAt(this.player.position);await this.ensureCorrectPlayerModel();this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action==='public-gender-male'||action==='public-gender-female'){if(!['owner','admin'].includes(this.activeStaffRole))return;this.state.ownerAppearance.publicGender=action.endsWith('female')?'female':'male';if(this.isPublicPlayerMode())await this.ensureCorrectPlayerModel();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'},key=map[action];if(key){if(['vanish','god','fly'].includes(key)){this.toggleStaffFlag(key);return;}this.ownerFlags[key]=!this.ownerFlags[key];this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}}
     if(action==='toggle-owner-galaxy-skin'){
       if(!this.ownerOnly())return;
@@ -4607,7 +4448,7 @@ class CenterDynastyGame {
     if(action.startsWith('skin-')){const skin=action.replace('skin-','')==='shadow'?'galaxy':action.replace('skin-','');this.applyStaffForm(skin,{cycleTree:true});return;}
     if(action==='admin-item'){const item=button.dataset.ownerItem||'none';if(!caps.items.includes(item)){this.toast('Dieses Item ist ausschließlich für eine höhere Teamrolle.');return;}this.state.ownerAppearance.heldItem=item!=='none'&&this.state.ownerAppearance.heldItem===item?'none':item;this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-vehicle'){const vehicle=button.dataset.ownerVehicle||'none';if(!(caps.vehicles||['none']).includes(vehicle)){this.toast('Dieses Fahrzeug ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);const previousVehicle=this.state.ownerAppearance.vehicle||'none';this.state.ownerAppearance.skin=['normal','galaxy'].includes(this.state.ownerAppearance.skin)?this.state.ownerAppearance.skin:'normal';if(vehicle==='scooter'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;this.state.ownerAppearance.vehicle='scooter';this.toast(`🛴 Electro Scooter aktiviert · ${[40,80,120,150][this.state.ownerAppearance.scooterTuning||0]} km/h.`);}else if(vehicle==='plane'){this.state.ownerAppearance.vehicle='plane';this.ownerFlags.fly=true;this.velocityY=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;this.flightTakeoffTargetY=floor+2.4;this.flightTakeoffActive=true;this.toast('✈ Sägelflugzeug aktiviert · Fly automatisch AN.');}else{this.state.ownerAppearance.vehicle='none';if(previousVehicle==='plane'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;}this.toast('Fahrzeug abgestellt.');}this.applyOwnerAppearance();this.renderScooterTuningBar();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
-    if(action==='toggle-aura'||action==='toggle-cape'||action==='toggle-hat'){if(!this.ownerOnly())return;const key=action==='toggle-aura'?'aura':action==='toggle-cape'?'cape':'hat';this.state.ownerAppearance[key]=!this.state.ownerAppearance[key];this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
+    if(action==='toggle-aura'||action==='toggle-cape'||action==='toggle-hat'){if(!caps.ownerCosmetics){this.toast('Diese Spezialausrüstung ist nur für Admin und Owner.');return;}const key=action==='toggle-aura'?'aura':action==='toggle-cape'?'cape':'hat';this.state.ownerAppearance[key]=!this.state.ownerAppearance[key];this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
     else if(action==='unstuck')this.teleportOwner(this.player.position.x+Math.sin(this.yaw)*-6,this.player.position.z+Math.cos(this.yaw)*-6,null,'freie Position');
@@ -4630,15 +4471,13 @@ class CenterDynastyGame {
     this.renderOwnerMenu();this.renderHud(true);this.saveState(true);
   }
 
-  startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;const role=roleSnapshot(),expected=role.isOwner?'owner':bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();this.updateRoleHud();},2300);}
+startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;this.updateRoleHud();const expected=(['owner','admin'].includes(this.activeStaffRole)&&!this.isPublicPlayerMode())?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();},3000);}
 
-  startLoop() {
-    cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateAmbientCreatures(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();this.scene?.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats)this.sanitizeMaterialUniformCompatibility(mat);});if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde sicher bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
-    this.raf=requestAnimationFrame(frame);
+startLoop() {
+    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now();try{this.updateMovement(delta);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals,(d)=>this.updateAnimals(d,now));this.runPerfTask('ambient',now,this.performanceTier==='low'?100:PERF_TASK_INTERVALS.ambient,(d)=>this.updateAmbientCreatures(d,now));this.runPerfTask('npcs',now,this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs,(d)=>this.updateNpcs(d,now));this.runPerfTask('death',now,PERF_TASK_INTERVALS.death,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown,(d)=>this.updateOwnerThrownObjects(d,now));this.updateRemotePlayers(delta);this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects,(d)=>this.updateTransformationEffects(d,now));this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
   }
 
-  resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));const quality=GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality)?this.state.world.graphicsQuality:'medium';const device=Math.max(1,Number(window.devicePixelRatio)||1);const maxRatio=this.isMobile?(quality==='ultra'?1.5:quality==='high'?1.25:quality==='medium'?1:.75):(quality==='ultra'?2:quality==='high'?1.45:quality==='medium'?1.1:.75);this.renderer.setPixelRatio(Math.min(device,maxRatio));this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(this.performancePixelRatio());this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
 }
 
 const game=new CenterDynastyGame();

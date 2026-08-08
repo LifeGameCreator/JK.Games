@@ -4,34 +4,82 @@
       "collectionGroup": "phoneCalls",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "callee", "order": "ASCENDING" },
-        { "fieldPath": "createdAtMs", "order": "DESCENDING" }
+        {
+          "fieldPath": "callee",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAtMs",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "arenaKlRooms",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "maxPlayers", "order": "ASCENDING" },
-        { "fieldPath": "mapId", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "maxPlayers",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mapId",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "angerMenschGames",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "playerProfiles",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "cottbus3D.mapId", "order": "ASCENDING" },
-        { "fieldPath": "cottbus3D.online", "order": "ASCENDING" }
+        {
+          "fieldPath": "cottbus3D.mapId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cottbus3D.online",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "playerProfiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cottbus3D.mapId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cottbus3D.online",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cottbus3D.updatedAtMs",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],
