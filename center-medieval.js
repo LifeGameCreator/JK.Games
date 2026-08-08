@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v263-unused-asset-cleanup';
+const CENTER_VERSION = '2026-08-08-jkgames-v263-orientation-tools-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -37,8 +37,8 @@ const ANIMAL_FORM_IDS = Object.freeze(['fox','shark','cow','orca','horse','owl',
 const STAFF_CAPABILITY_MATRIX = Object.freeze({
   supporter: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:false, noclip:false, speed:false, freezeTime:false, size:false, forms:Object.freeze(['normal']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
   moderator: Object.freeze({ menu:true, vanish:true, god:true, heal:false, online:true, teleport:true, fly:true, noclip:false, speed:true, freezeTime:false, size:false, forms:Object.freeze(['normal','crystal','bush','tree','rock','grass']), items:Object.freeze(['none']), vehicles:Object.freeze(['none']), world:false, resources:false, ownerCosmetics:false }),
-  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','axe','hammer']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:false }),
-  owner: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','sword','axe','staff','hammer','eternalFlame']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:true })
+  admin: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:false }),
+  owner: Object.freeze({ menu:true, vanish:true, god:true, heal:true, online:true, teleport:true, fly:true, noclip:true, speed:true, freezeTime:true, size:true, forms:Object.freeze(['normal','galaxy','ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS]), items:Object.freeze(['none','shovel','pickaxe','hoe','axe','hammer','sword','staff','eternalFlame']), vehicles:Object.freeze(['none','scooter']), world:true, resources:true, ownerCosmetics:true })
 });
 function canonicalStaffRole(value='') {
   const compact=String(value||'').toLowerCase().replace(/[\s._-]+/g,'');
@@ -95,15 +95,15 @@ const CENTER_ASSET_PATHS = Object.freeze({
 const ANIMAL_PROFILES = Object.freeze({
   fox:{label:'Fuchs',asset:'fox',size:1.55,speed:2.4,run:4.9,zone:'land',idle:/idle|look|sit/i,move:/walk|trot|run/i},
   cow:{label:'Kuh',asset:'cow',walkAsset:'cowWalk',size:2.45,speed:1.2,run:2.1,zone:'land',idle:/idle|eating/i,move:/walk|run|trot/i},
-  horse:{label:'Reitpferd',asset:'horse',size:2.5,speed:2.6,run:7.2,zone:'land',idle:null,move:null,yawOffset:-Math.PI/2,proceduralWalk:true},
+  horse:{label:'Reitpferd',asset:'horse',size:2.5,speed:2.6,run:7.2,zone:'land',idle:null,move:null,yawOffset:0,proceduralWalk:true},
   owl:{label:'Uhu',asset:'owl',size:1.25,speed:4.3,run:6.2,zone:'air',idle:/idle|headtwist/i,move:/fly/i},
   wolf1:{label:'Wolf Baby I',asset:'wolf1',size:1.15,speed:2.35,run:4.6,zone:'land',idle:/idle|look|sit/i,move:/walk|run/i},
   wolf2:{label:'Wolf Baby II',asset:'wolf2',size:1.15,speed:2.45,run:4.8,zone:'land',idle:/idle|look|sit/i,move:/walk|run/i},
-  spider:{label:'Zauberspinne',asset:'spider',size:1.75,speed:1.55,run:3.1,zone:'land',idle:/idle|animation/i,move:/walk|run|animation/i},
+  spider:{label:'Zauberspinne',asset:'spider',size:1.75,speed:1.55,run:3.1,zone:'land',idle:null,move:/walk|run|animation/i,yawOffset:Math.PI,singleMoveAnimation:true},
   clownfish:{label:'Clownfisch Nemo',asset:'clownfish',size:.72,speed:2.2,run:3.8,zone:'water',idle:/idle/i,move:/swim/i},
   bird:{label:'Vogel',asset:'birds',size:1.0,speed:5.2,run:8.5,zone:'air',idle:/scene|idle/i,move:/scene|fly/i},
   shark:{label:'Hai',asset:'shark',size:4.2,speed:3.4,run:5.1,zone:'water',idle:/swim/i,move:/swim/i,predator:true},
-  orca:{label:'Orka',asset:'orca',size:4.9,speed:3.2,run:5.4,zone:'water',idle:/berenang|swim/i,move:/berenang|swim/i,predator:true,yawOffset:-Math.PI/2}
+  orca:{label:'Orka',asset:'orca',size:4.9,speed:3.2,run:5.4,zone:'water',idle:/berenang|swim/i,move:/berenang|swim/i,predator:true,yawOffset:Math.PI/2}
 });
 const SEASONS = Object.freeze([
   { id: 'spring', name: 'Frühling', icon: '🌱', ground: 0x6d8f4d, foliage: 0x4f823f, fog: 0xb8d4c1, sky: 0x78a9cf, temp: 13 },
@@ -292,7 +292,7 @@ function normalizeSaveState(raw) {
   state.ownerAppearance.skin = ['normal','ball','crystal','galaxy','bush','tree','rock','grass',...ANIMAL_FORM_IDS].includes(state.ownerAppearance.skin) ? state.ownerAppearance.skin : 'normal';
   state.ownerAppearance.aura = !!(raw.ownerAppearance?.aura ?? legacyAuraSkin);
   state.ownerAppearance.size = clamp(Number(state.ownerAppearance.size) || 1, .45, 2.5);
-  state.ownerAppearance.heldItem = ['none','sword','axe','staff','torch','hammer','eternalFlame'].includes(state.ownerAppearance.heldItem) ? state.ownerAppearance.heldItem : 'none';
+  state.ownerAppearance.heldItem = ['none','sword','shovel','pickaxe','hoe','axe','staff','torch','hammer','eternalFlame'].includes(state.ownerAppearance.heldItem) ? state.ownerAppearance.heldItem : 'none';
   state.ownerAppearance.cape = !!state.ownerAppearance.cape;
   state.ownerAppearance.hat = !!state.ownerAppearance.hat;
   state.ownerAppearance.vehicle = ['none','scooter'].includes(state.ownerAppearance.vehicle) ? state.ownerAppearance.vehicle : 'none';
@@ -1181,11 +1181,16 @@ class CenterDynastyGame {
       mixer=new THREE.AnimationMixer(raw);
       const idleClips=(template?.animations||[]).map((clip)=>this.makeAnimalClipInPlace(clip));
       const moveClips=(walkTemplate?.animations||template?.animations||[]).map((clip)=>this.makeAnimalClipInPlace(clip));
-      const idleClip=idleClips.find((clip)=>profile.idle?.test?.(clip.name||''))||idleClips[0]||moveClips[0];
       const matchedMove=moveClips.find((clip)=>profile.move?.test?.(clip.name||''));
-      const moveClip=matchedMove||moveClips[0]||idleClip;
-      if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.play();}
-      if(moveClip){moveAction=mixer.clipAction(moveClip);if(moveAction!==idleAction){moveAction.play();moveAction.enabled=false;}}
+      if(profile.singleMoveAnimation){
+        const moveClip=matchedMove||moveClips[0]||idleClips[0];
+        if(moveClip){moveAction=mixer.clipAction(moveClip);moveAction.play();moveAction.paused=true;}
+      }else{
+        const idleClip=idleClips.find((clip)=>profile.idle?.test?.(clip.name||''))||idleClips[0]||moveClips[0];
+        const moveClip=matchedMove||moveClips[0]||idleClip;
+        if(idleClip){idleAction=mixer.clipAction(idleClip);idleAction.play();}
+        if(moveClip){moveAction=mixer.clipAction(moveClip);if(moveAction!==idleAction){moveAction.play();moveAction.enabled=false;}}
+      }
     }
     if(type==='cow'){
       const names=['FrontUpperLeg.L_6','FrontUpperLeg.R_9','BackUpperLeg.L_14','BackUpperLeg.R_18'];
@@ -1196,7 +1201,7 @@ class CenterDynastyGame {
       raw.userData.__centerHorseBasePosition=raw.position.clone();
       raw.userData.__centerHorseBaseRotation=raw.rotation.clone();
     }
-    root.userData.centerAnimalType=type;root.userData.assetRoot=raw;root.userData.mixer=mixer;root.userData.idleAction=idleAction;root.userData.moveAction=moveAction;root.userData.proceduralWalk=!!profile.proceduralWalk;return root;
+    root.userData.centerAnimalType=type;root.userData.assetRoot=raw;root.userData.mixer=mixer;root.userData.idleAction=idleAction;root.userData.moveAction=moveAction;root.userData.singleMoveAction=!!profile.singleMoveAnimation;root.userData.proceduralWalk=!!profile.proceduralWalk;return root;
   }
 
   applyProceduralAnimalWalk(visual,moving=true,delta=.016){
@@ -1221,9 +1226,11 @@ class CenterDynastyGame {
 
   setAnimalAnimation(animal,moving=true,delta=.016){
     const visual=animal?.visual||animal;
-    const mixer=animal?.mixer||visual?.userData?.mixer,idle=animal?.idleAction||visual?.userData?.idleAction,move=animal?.moveAction||visual?.userData?.moveAction;
+    const mixer=animal?.mixer||visual?.userData?.mixer,idle=animal?.idleAction||visual?.userData?.idleAction,move=animal?.moveAction||visual?.userData?.moveAction,singleMove=!!visual?.userData?.singleMoveAction;
     if(mixer){
-      if(move&&idle&&move!==idle){if(moving&&!move.enabled){idle.fadeOut(.22);move.enabled=true;move.reset().fadeIn(.22).play();}else if(!moving&&move.enabled){move.fadeOut(.25);move.enabled=false;idle.reset().fadeIn(.25).play();}}
+      if(singleMove&&move){
+        if(moving){move.enabled=true;move.paused=false;}else{move.paused=true;move.time=0;}
+      }else if(move&&idle&&move!==idle){if(moving&&!move.enabled){idle.fadeOut(.22);move.enabled=true;move.reset().fadeIn(.22).play();}else if(!moving&&move.enabled){move.fadeOut(.25);move.enabled=false;idle.reset().fadeIn(.25).play();}}
       mixer.update(delta);
     }
     this.applyProceduralAnimalWalk(visual,moving,delta);
@@ -2667,9 +2674,11 @@ class CenterDynastyGame {
     if(kind==='none')return null;const group=new THREE.Group();group.userData.kind=kind;
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
-    if(['axe','pickaxe','hammer'].includes(kind)){
-      const asset=this.cloneCenterAsset('basicTools',{nodeName:kind,targetSize:1.18,bottomAlign:true});if(!asset)return null;asset.position.y=-.18;group.add(asset);group.userData.assetBased=true;
-      group.rotation.set(.02,0,-.12);
+    if(['shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
+      const toolHeight={shovel:1.16,pickaxe:1.02,hoe:1.12,axe:1.04,hammer:.96}[kind]||1.04;
+      const gripOffset={shovel:-.21,pickaxe:-.18,hoe:-.2,axe:-.19,hammer:-.17}[kind]||-.18;
+      const asset=this.cloneCenterAsset('basicTools',{nodeName:kind,targetHeight:toolHeight,bottomAlign:true});if(!asset)return null;asset.position.y=gripOffset;group.add(asset);group.userData.assetBased=true;
+      group.rotation.set(.02,0,-.08);
     }else if(kind==='sword'){
       const galaxyTexture=this.createGalaxyTexture(96,256),galaxyMetal=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x3f0c72,emissiveIntensity:1.25,metalness:.86,roughness:.14});
       const violetGlow=new THREE.MeshStandardMaterial({color:0xdac9ef,emissive:0x6e35a4,emissiveIntensity:1.8,metalness:.68,roughness:.12});addCylinder(.04,.05,.34,galaxyMetal,-.02);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.075,1),violetGlow);pommel.position.y=-.22;group.add(pommel);const guard=new THREE.Mesh(new THREE.BoxGeometry(.45,.055,.085),galaxyMetal);guard.position.y=.18;group.add(guard);const blade=new THREE.Mesh(new THREE.ConeGeometry(.105,1.38,4),galaxyMetal);blade.position.y=.85;blade.rotation.y=Math.PI/4;group.add(blade);const ridge=new THREE.Mesh(new THREE.BoxGeometry(.016,1.05,.025),violetGlow);ridge.position.y=.77;group.add(ridge);const light=new THREE.PointLight(0x7650b8,1.55,6,2);light.position.y=.8;group.add(light);group.userData.light=light;group.rotation.set(.06,0,-.24);
@@ -2706,7 +2715,7 @@ class CenterDynastyGame {
     }else if(kind==='bow'){
       const curve=new THREE.Mesh(new THREE.TorusGeometry(.48,.025,8,40,Math.PI*1.45),wood);curve.rotation.z=.78;curve.position.y=.52;group.add(curve);const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.31,.13,0),new THREE.Vector3(.32,.91,0)]);group.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd9d2c6})));group.rotation.set(.03,0,-.08);
     }
-    const scale={staff:.74,sword:.50,axe:.82,pickaxe:.82,hammer:.82,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});return group;
+    const scale={staff:.74,sword:.50,shovel:1,pickaxe:1,hoe:1,axe:1,hammer:1,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});return group;
   }
 
   createOwnerForm(kind='ball') {
@@ -2740,13 +2749,13 @@ class CenterDynastyGame {
       const mat=new THREE.MeshStandardMaterial({color:0x4f873e,roughness:1,side:THREE.DoubleSide});
       for(let i=0;i<14;i+=1){const blade=new THREE.Mesh(new THREE.PlaneGeometry(.12,.65),mat);blade.position.set((Math.random()-.5)*.55,.32,(Math.random()-.5)*.55);blade.rotation.y=Math.random()*Math.PI;blade.rotation.z=(Math.random()-.5)*.25;form.add(blade);}
     }else if(ANIMAL_FORM_IDS.includes(kind)){
-      const visual=this.createAnimalVisual(kind);if(visual){const profile=ANIMAL_PROFILES[kind];visual.position.y=profile?.zone==='water'?.95:0;form.add(visual);form.userData.animalVisual=visual;form.userData.mixer=visual.userData.mixer||null;form.userData.idleAction=visual.userData.idleAction||null;form.userData.moveAction=visual.userData.moveAction||null;}
+      const visual=this.createAnimalVisual(kind);if(visual){const profile=ANIMAL_PROFILES[kind];visual.position.y=profile?.zone==='water'?.95:0;form.add(visual);form.userData.animalVisual=visual;form.userData.mixer=visual.userData.mixer||null;form.userData.idleAction=visual.userData.idleAction||null;form.userData.moveAction=visual.userData.moveAction||null;form.userData.singleMoveAction=!!visual.userData.singleMoveAction;}
     }
     return form;
   }
 
   updateOwnerFormAnimation(delta=.016,moving=false){
-    const form=this.ownerFormObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(this.ownerFlags.fly||moving):moving;if(mixer){if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);
+    const form=this.ownerFormObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(this.ownerFlags.fly||moving):moving,singleMove=!!form.userData.singleMoveAction;if(mixer){if(singleMove&&move){if(wantsMove){move.enabled=true;move.paused=false;}else{move.paused=true;move.time=0;}}else if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);
   }
 
   aimBoneChainAtLocalTarget(bone,child,targetLocal,alpha=.8){
@@ -2787,7 +2796,7 @@ class CenterDynastyGame {
     this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true);return group;
   }
 
-  currentFirstPersonArmsIdle(){const kind=this.ownerHeldObject?.userData?.kind||this.firstPersonHeldObject?.userData?.kind||'';return kind==='sword'||kind==='axe'||kind==='hammer'||kind==='pickaxe'||kind==='eternalFlame'||kind==='torch'||kind==='spear'?'knife_idle':'guard_idle';}
+  currentFirstPersonArmsIdle(){const kind=this.ownerHeldObject?.userData?.kind||this.firstPersonHeldObject?.userData?.kind||'';return kind==='sword'||kind==='shovel'||kind==='hoe'||kind==='axe'||kind==='hammer'||kind==='pickaxe'||kind==='eternalFlame'||kind==='torch'||kind==='spear'?'knife_idle':'guard_idle';}
   playFirstPersonArmsAction(name,loop=false){const action=this.firstPersonArmsActions?.get?.(String(name||'').toLowerCase());if(!action)return;for(const other of this.firstPersonArmsActions.values())if(other!==action)other.fadeOut?.(.08);action.reset();action.enabled=true;action.setLoop(loop?THREE.LoopRepeat:THREE.LoopOnce,loop?Infinity:1);action.clampWhenFinished=!loop;action.fadeIn?.(.08).play();this.firstPersonArmsCurrent=name;}
   updateFirstPersonArms(delta=.016){if(this.firstPersonArmsObject)this.firstPersonArmsObject.visible=this.firstPerson&&!this.ownerFlags.vanish&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')&&this.state.ownerAppearance?.vehicle!=='scooter';if(this.firstPersonArmsMixer)this.firstPersonArmsMixer.update(delta);}
 
@@ -2837,7 +2846,7 @@ class CenterDynastyGame {
     if(!this.camera||kind==='none')return;
     const item=this.createHeldItemMesh(kind);if(!item)return;
     item.name='center-first-person-held-item';item.scale.multiplyScalar(kind==='staff'?.42:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
-    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},axe:{p:[.34,-.36,-.7],r:[-.16,-.1,-.62]},hammer:{p:[.34,-.37,-.72],r:[-.12,-.08,-.58]},pickaxe:{p:[.34,-.37,-.72],r:[-.12,-.08,-.58]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};
+    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};
     const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
   }
 
@@ -2860,14 +2869,11 @@ class CenterDynastyGame {
       // V258: Galaxy-Schwert, Galaxy-Stab und Ewige Flamme folgen der Handposition,
       // ihre Richtung wird aber relativ zur Figur fixiert. So können Rig-Animationen
       // die langen Owner-Items nicht mehr nach hinten oder quer durch die Welt drehen.
-      if(['sword','staff','eternalFlame'].includes(kind)){
+      if(['sword','staff','eternalFlame','shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
         anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);
       }else{
         hand.add(anchor);
         const grips={
-          axe:{p:[.012,-.08,.07],r:[Math.PI-.22,.04,-.18]},
-          hammer:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
-          pickaxe:{p:[.012,-.08,.068],r:[Math.PI-.22,.04,-.17]},
           torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},
           spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},
           bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}
@@ -2889,7 +2895,12 @@ class CenterDynastyGame {
     const transforms={
       sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
       staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
-      eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]}
+      eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},
+      shovel:{p:[.015,-.035,.025],r:[.10,.03,-.18]},
+      pickaxe:{p:[.015,-.035,.025],r:[.08,.03,-.20]},
+      hoe:{p:[.015,-.035,.025],r:[.10,.03,-.18]},
+      axe:{p:[.015,-.03,.022],r:[.08,.03,-.20]},
+      hammer:{p:[.015,-.03,.022],r:[.08,.03,-.18]}
     };
     const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
@@ -2952,12 +2963,12 @@ class CenterDynastyGame {
     if(this.state.ownerAppearance?.cape){
       const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);this.ownerCapeObject=cape;
       const chest=this.playerBones.chest||this.playerBones.neck;
-      if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.48,.22),new THREE.Quaternion()))cape.position.set(0,1.48,.22);
+      if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.48,-.22),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI,0)))){cape.position.set(0,1.48,-.22);cape.rotation.y=Math.PI;}
     }
     if(this.state.ownerAppearance?.hat){
       const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);this.ownerHatObject=hat;
       const head=this.playerBones.head||this.playerBones.neck;
-      if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.68,.005),new THREE.Quaternion()))hat.position.set(0,1.68,.005);
+      if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.78,.005),new THREE.Quaternion()))hat.position.set(0,1.78,.005);
     }
   }
 
@@ -3569,7 +3580,7 @@ class CenterDynastyGame {
     const hotspot=this.nearestHotspot,groundGap=this.player.position.y-this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
     if(groundGap>1.65){this.toast('In der Luft kannst du keine Ressourcen bearbeiten.');return;}
     if(this.isOwnerActive&&this.state.ownerAppearance?.heldItem==='staff'&&hotspot&&['tree','rock','bush','animal','npc'].includes(hotspot.type)){this.ownerTelekinesis(hotspot);return;}
-    if(this.firstPerson&&this.firstPersonArmsActions?.size){const kind=this.state.ownerAppearance?.heldItem!=='none'?this.state.ownerAppearance.heldItem:this.state.equippedTool||'none',clip=['sword','axe','ironAxe','hammer','pickaxe','eternalFlame','torch','spear'].includes(kind)?'knife_hit_01':kind==='none'?(this.nextPunchSide==='right'?'jab.r':'jab.l'):'jab.r';this.playFirstPersonArmsAction(clip,false);clearTimeout(this.firstPersonArmsReturnTimer);this.firstPersonArmsReturnTimer=setTimeout(()=>{if(this.opened)this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true);},430);}
+    if(this.firstPerson&&this.firstPersonArmsActions?.size){const kind=this.state.ownerAppearance?.heldItem!=='none'?this.state.ownerAppearance.heldItem:this.state.equippedTool||'none',clip=['sword','shovel','hoe','axe','ironAxe','hammer','pickaxe','eternalFlame','torch','spear'].includes(kind)?'knife_hit_01':kind==='none'?(this.nextPunchSide==='right'?'jab.r':'jab.l'):'jab.r';this.playFirstPersonArmsAction(clip,false);clearTimeout(this.firstPersonArmsReturnTimer);this.firstPersonArmsReturnTimer=setTimeout(()=>{if(this.opened)this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true);},430);}
     if(hotspot?.type==='tutorial-pickup'){this.collectTutorialPickup(hotspot.data);return;}
     if(hotspot?.type==='tree'&&['axe','ironAxe'].includes(this.state.equippedTool)){this.triggerActionAnimation('chop',500);this.harvestTree(hotspot.data);return;}
     if(hotspot?.type==='rock'&&this.state.equippedTool==='pickaxe'){this.triggerActionAnimation('mine',500);this.harvestRock(hotspot.data);return;}
@@ -3716,7 +3727,7 @@ class CenterDynastyGame {
   huntAnimal(animal) {
     if(!animal?.active||!['fox','cow','wolf1','wolf2','spider'].includes(animal.type)){return this.observeAnimal(animal);}
     if(animal.type==='spider'){
-      const held=this.state.ownerAppearance?.heldItem||'none',hasWeapon=['sword','axe','hammer','staff','eternalFlame'].includes(held)||['spear','bow','axe','ironAxe','pickaxe'].includes(this.state.equippedTool);
+      const held=this.state.ownerAppearance?.heldItem||'none',hasWeapon=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'].includes(held)||['spear','bow','axe','ironAxe','pickaxe'].includes(this.state.equippedTool);
       if(!hasWeapon&&!this.isStaffActive){this.toast('Du brauchst eine Waffe gegen die Zauberspinne.');return;}
       const hunting=this.state.skills.hunting||0,damage=this.isStaffActive?95:42+hunting*6;animal.hp=Math.max(0,Number(animal.hp||animal.maxHp||145)-damage);this.toast(`🕷 Zauberspinne getroffen · ${Math.ceil(animal.hp)}/${animal.maxHp||145} Leben`);
       if(animal.hp>0)return;
@@ -4389,7 +4400,7 @@ class CenterDynastyGame {
   }
 
   updateRemoteAnimalForm(remote,delta=.016){
-    const form=remote?.formObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(remote.flying||remote.walking):remote.walking;if(mixer){if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);if(form.userData.kind==='owl'&&remote.flying){form.rotation.x=-.12;form.rotation.z=Math.sin(performance.now()*.002)*.04;}else{form.rotation.x*=Math.exp(-delta*8);form.rotation.z*=Math.exp(-delta*8);}
+    const form=remote?.formObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(remote.flying||remote.walking):remote.walking,singleMove=!!form.userData.singleMoveAction;if(mixer){if(singleMove&&move){if(wantsMove){move.enabled=true;move.paused=false;}else{move.paused=true;move.time=0;}}else if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);if(form.userData.kind==='owl'&&remote.flying){form.rotation.x=-.12;form.rotation.z=Math.sin(performance.now()*.002)*.04;}else{form.rotation.x*=Math.exp(-delta*8);form.rotation.z*=Math.exp(-delta*8);}
   }
 
   applyRemoteOwnerAura(remote) {
@@ -4398,8 +4409,8 @@ class CenterDynastyGame {
     remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(mat.userData.__remoteAuraColor===undefined){mat.userData.__remoteAuraColor=mat.color?.getHex?.();mat.userData.__remoteAuraEmissive=mat.emissive?.getHex?.();mat.userData.__remoteAuraIntensity=mat.emissiveIntensity;}if(active){mat.color?.set?.(0x3b1268);mat.emissive?.set?.(0x6f1ac7);mat.emissiveIntensity=1.15;mat.transparent=true;mat.opacity=.74;}else{if(mat.userData.__remoteAuraColor!==undefined)mat.color?.setHex?.(mat.userData.__remoteAuraColor);if(mat.userData.__remoteAuraEmissive!==undefined)mat.emissive?.setHex?.(mat.userData.__remoteAuraEmissive);if(mat.userData.__remoteAuraIntensity!==undefined)mat.emissiveIntensity=mat.userData.__remoteAuraIntensity;mat.transparent=false;mat.opacity=1;}mat.needsUpdate=true;}});
     if(active&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=active;
     const ownerVisible=(remote.skin==='owner'||remote.ownerVisual)&&!remote.vanished&&!remote.formObject;
-    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.48,.22),new THREE.Quaternion()))remote.cape.position.set(0,1.49,.18);}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
-    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.68,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.71,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
+    if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.48,-.22),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI,0)))){remote.cape.position.set(0,1.49,-.2);remote.cape.rotation.y=Math.PI;}}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
+    if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.78,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.81,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
   }
 
   updateRemotePlayers(delta){
@@ -4443,8 +4454,8 @@ class CenterDynastyGame {
     const utility=[caps.heal&&'<button data-owner-action="heal">❤ Alles heilen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="ground">↓ Sicher landen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="unstuck">↺ Befreien</button>',caps.world&&'<button data-owner-action="reveal">⌖ Orte aufdecken</button>'].filter(Boolean).join('');
     const formLabels={normal:'Normal',galaxy:'Owner-Galaxy-Skin',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II',spider:'Zauberspinne',clownfish:'Clownfisch Nemo',bird:'Vogel'};
     const forms=(caps.forms||['normal']).filter((id)=>!(this.isOwnerActive&&id==='galaxy')).map((id)=>[id,id==='tree'?`Baum ${Math.max(0,Math.floor(Number(appearance.treeVariant)||0))+1}/${Math.max(1,this.natureTreeNames.length)}`:(formLabels[id]||id)]);
-    const itemLabels={none:'Leer',sword:'Galaxy-Owner-Schwert',axe:'Axt · Basic Tools',staff:'Galaxy-Owner-Stab',hammer:'Hammer · Basic Tools',eternalFlame:'Galaxy-Ewige-Flamme'};
-    const teamToolIds=['none',...(caps.items||[]).filter((id)=>['axe','hammer'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index);
+    const itemLabels={none:'Leer',shovel:'Schaufel · Basic Tools',pickaxe:'Spitzhacke · Basic Tools',hoe:'Hacke · Basic Tools',axe:'Axt · Basic Tools',hammer:'Hammer · Basic Tools',sword:'Galaxy-Owner-Schwert',staff:'Galaxy-Owner-Stab',eternalFlame:'Galaxy-Ewige-Flamme'};
+    const teamToolIds=['none',...(caps.items||[]).filter((id)=>['shovel','pickaxe','hoe','axe','hammer'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index);
     const sections=[];
     sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div><h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
     if(caps.speed)sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label><p class="mdc-note">Stufenlos von normal bis extrem schnell. Wirkt auf Laufen und Fly.</p></div>`);
