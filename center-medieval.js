@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v264-wings-plane-render-fix';
+const CENTER_VERSION = '2026-08-08-jkgames-v265-owner-material-online-wings-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -2825,9 +2825,12 @@ class CenterDynastyGame {
   }
 
   applyStaffVehicle(){
-    this.disposeGeneratedVisual(this.ownerScooterObject);this.disposeGeneratedVisual(this.ownerPlaneObject);this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{},allowed=this.staffCapabilities?.vehicles||['none'];if(!this.isStaffActive||!['normal','galaxy'].includes(appearance.skin))return;
-    if(appearance.vehicle==='scooter'&&allowed.includes('scooter')){const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;return;}
-    if(appearance.vehicle==='plane'&&allowed.includes('plane')){const plane=this.createStaffPlaneVisual();if(!plane)return;this.modelPivot.add(plane);this.ownerPlaneObject=plane;this.ownerPlaneMixer=plane.userData.mixer||null;this.ownerPlaneAction=plane.userData.propellerAction||null;}
+    if(!this.modelPivot)return;const appearance=this.state.ownerAppearance||{},allowed=this.staffCapabilities?.vehicles||['none'];const desired=this.isStaffActive&&['normal','galaxy'].includes(appearance.skin)&&allowed.includes(appearance.vehicle)?appearance.vehicle:'none',current=this.ownerPlaneObject?'plane':this.ownerScooterObject?'scooter':'none';
+    // V265: Bei Aura/Wings/Krone nicht jedes Mal das aktive Fahrzeug neu klonen.
+    if(current===desired)return;
+    this.disposeGeneratedVisual(this.ownerScooterObject);this.disposeGeneratedVisual(this.ownerPlaneObject);this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;
+    if(desired==='scooter'){const scooter=this.createScooterVisual();if(!scooter)return;scooter.position.set(0,.01,0);this.modelPivot.add(scooter);this.ownerScooterObject=scooter;return;}
+    if(desired==='plane'){const plane=this.createStaffPlaneVisual();if(!plane)return;this.modelPivot.add(plane);this.ownerPlaneObject=plane;this.ownerPlaneMixer=plane.userData.mixer||null;this.ownerPlaneAction=plane.userData.propellerAction||null;}
   }
 
   cacheOriginalMaterial(material) {
@@ -2846,26 +2849,47 @@ class CenterDynastyGame {
     };
   }
 
-  setShadowCharacterMode(active) {
-    this.playerModel?.traverse?.((object)=>{
-      if(!object.isMesh)return;
-      const mats=Array.isArray(object.material)?object.material:[object.material];
-      for(const material of mats){
-        if(!material)continue;
-        this.cacheOriginalMaterial(material);
-        const original=material.userData.__centerOriginalMaterial;
-        if(active){
-          if(!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}
-          material.map=this.ownerGalaxySkinTexture;material.emissiveMap=this.ownerGalaxySkinTexture;material.color?.set?.(0xddd2ff);material.emissive?.set?.(0x3d0b71);material.emissiveIntensity=1.7;if('metalness' in material)material.metalness=.48;if('roughness' in material)material.roughness=.24;
-        }else{
-          material.map=original.map||null;material.emissiveMap=original.emissiveMap||null;if(original.color!==undefined)material.color?.setHex?.(original.color);if(original.emissive!==undefined)material.emissive?.setHex?.(original.emissive);if(original.emissiveIntensity!==undefined)material.emissiveIntensity=original.emissiveIntensity;if(original.metalness!==undefined)material.metalness=original.metalness;if(original.roughness!==undefined)material.roughness=original.roughness;
-        }
-        material.needsUpdate=true;
-      }
-    });
+  materialSupportsEmissive(material){
+    return !!(material&&(material.isMeshLambertMaterial||material.isMeshPhongMaterial||material.isMeshToonMaterial||material.isMeshStandardMaterial||material.isMeshPhysicalMaterial));
   }
 
-  disposeHeldVisual(object){if(!object)return;object.traverse?.((child)=>{child.geometry?.dispose?.();const mats=Array.isArray(child.material)?child.material:[child.material];for(const mat of mats)mat?.dispose?.();});object.removeFromParent?.();}
+  sanitizeMaterialUniformCompatibility(material){
+    if(!material)return false;let changed=false;
+    // Three r185 liest emissiveMap bereits in refreshUniformsCommon. Ein dynamisch
+    // gesetztes emissiveMap auf MeshBasic/Normal/Depth-Materialien hat dort aber
+    // kein passendes Shader-Uniform und kann den Renderer genau mit
+    // "Cannot set properties of undefined (setting 'value')" abbrechen.
+    if(!this.materialSupportsEmissive(material)&&material.emissiveMap){material.emissiveMap=null;changed=true;}
+    if(changed)material.needsUpdate=true;return changed;
+  }
+
+  applyGalaxyMaterialMode(material,active,texture=null){
+    if(!material)return;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial||{};let programChanged=false;
+    if(active){
+      const galaxyTexture=texture||this.ownerGalaxySkinTexture;
+      if('map' in material&&galaxyTexture&&material.map!==galaxyTexture){material.map=galaxyTexture;programChanged=true;}
+      if(this.materialSupportsEmissive(material)){
+        if(galaxyTexture&&material.emissiveMap!==galaxyTexture){material.emissiveMap=galaxyTexture;programChanged=true;}
+        material.emissive?.set?.(0x3d0b71);if('emissiveIntensity' in material)material.emissiveIntensity=1.7;
+      }else if(material.emissiveMap){material.emissiveMap=null;programChanged=true;}
+      material.color?.set?.(0xddd2ff);if('metalness' in material)material.metalness=.48;if('roughness' in material)material.roughness=.24;
+    }else{
+      if('map' in material&&material.map!==original.map){material.map=original.map||null;programChanged=true;}
+      if(this.materialSupportsEmissive(material)){
+        if(material.emissiveMap!==original.emissiveMap){material.emissiveMap=original.emissiveMap||null;programChanged=true;}
+        if(original.emissive!==undefined)material.emissive?.setHex?.(original.emissive);if(original.emissiveIntensity!==undefined&&'emissiveIntensity' in material)material.emissiveIntensity=original.emissiveIntensity;
+      }else if(material.emissiveMap){material.emissiveMap=null;programChanged=true;}
+      if(original.color!==undefined)material.color?.setHex?.(original.color);if(original.metalness!==undefined&&'metalness' in material)material.metalness=original.metalness;if(original.roughness!==undefined&&'roughness' in material)material.roughness=original.roughness;
+    }
+    if(this.sanitizeMaterialUniformCompatibility(material))programChanged=true;if(programChanged)material.needsUpdate=true;
+  }
+
+  setShadowCharacterMode(active) {
+    if(active&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}
+    this.playerModel?.traverse?.((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats)this.applyGalaxyMaterialMode(material,active,this.ownerGalaxySkinTexture);});
+  }
+
+  disposeHeldVisual(object){this.disposeGeneratedVisual(object);}
 
   createFirstPersonHeldItem(kind){
     this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
@@ -2877,40 +2901,17 @@ class CenterDynastyGame {
   }
 
   applyHeldItemVisual() {
-    this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;
-    this.ownerHeldObject=null;this.ownerItemLight=null;
-    this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
-    const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'};
-    const formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(appearance.skin))&&!['scooter','plane'].includes(appearance.vehicle);
-    if(!formAllowsItems)return;
-    const selectedKind=this.isStaffActive?appearance.heldItem:'none';
-    const allowedItems=this.staffCapabilities?.items||['none'];
-    const staffKind=allowedItems.includes(selectedKind)?selectedKind:'none';
-    const toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'pickaxe':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'spear':this.state.equippedTool==='bow'?'bow':'none';
-    const kind=staffKind&&staffKind!=='none'?staffKind:toolKind;
-    const mesh=this.createHeldItemMesh(kind);if(!mesh)return;
-    const hand=this.playerBones.handRight;
-    if(hand){
-      const anchor=new THREE.Group();anchor.name='center-held-item-grip';anchor.userData.kind=kind;
-      // V258: Galaxy-Schwert, Galaxy-Stab und Ewige Flamme folgen der Handposition,
-      // ihre Richtung wird aber relativ zur Figur fixiert. So können Rig-Animationen
-      // die langen Owner-Items nicht mehr nach hinten oder quer durch die Welt drehen.
-      if(['sword','staff','eternalFlame','shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
-        anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);
-      }else{
-        hand.add(anchor);
-        const grips={
-          torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},
-          spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},
-          bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}
-        };
-        const tr=grips[kind]||{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]};anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);
-      }
-      anchor.add(mesh);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;
-    }else this.modelPivot.add(mesh);
-    this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;
-    this.syncOwnerHeldAnchorPose();
-    this.createFirstPersonHeldItem(kind);if(this.firstPerson)this.ensureFirstPersonArms().then(()=>this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true)).catch(()=>{});this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();
+    const appearance=this.state.ownerAppearance||{skin:'normal',heldItem:'none'},formAllowsItems=(!this.isStaffActive||['normal','galaxy'].includes(appearance.skin))&&!['scooter','plane'].includes(appearance.vehicle),selectedKind=this.isStaffActive?appearance.heldItem:'none',allowedItems=this.staffCapabilities?.items||['none'],staffKind=allowedItems.includes(selectedKind)?selectedKind:'none',toolKind=this.state.equippedTool==='axe'||this.state.equippedTool==='ironAxe'?'axe':this.state.equippedTool==='pickaxe'?'pickaxe':this.state.equippedTool==='hammer'?'hammer':this.state.equippedTool==='torch'?'torch':this.state.equippedTool==='spear'?'spear':this.state.equippedTool==='bow'?'bow':'none',kind=formAllowsItems?(staffKind&&staffKind!=='none'?staffKind:toolKind):'none',currentKind=this.ownerHeldObject?.userData?.kind||'none';
+    if(kind==='none'){
+      this.disposeHeldVisual(this.ownerHeldObject);this.ownerHeldObject=null;this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;this.ownerItemLight=null;this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;return;
+    }
+    // V265: Beim Umschalten von Aura/Wings/Krone bleibt dasselbe Item bestehen.
+    // Dadurch werden Galaxy-Texturen und GLB-Materialien nicht unnötig neu erzeugt.
+    if(currentKind===kind&&this.ownerHeldAnchor){if(!this.firstPersonHeldObject||this.firstPersonHeldObject.userData?.kind!==kind)this.createFirstPersonHeldItem(kind);this.syncOwnerHeldAnchorPose();this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();return;}
+    this.disposeHeldVisual(this.ownerHeldObject);this.ownerHeldObject=null;this.ownerHeldAnchor?.removeFromParent?.();this.ownerHeldAnchor=null;this.ownerItemLight=null;this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;
+    const mesh=this.createHeldItemMesh(kind);if(!mesh)return;const hand=this.playerBones.handRight;
+    if(hand){const anchor=new THREE.Group();anchor.name='center-held-item-grip';anchor.userData.kind=kind;if(['sword','staff','eternalFlame','shovel','pickaxe','hoe','axe','hammer'].includes(kind)){anchor.userData.worldLockedGrip=true;this.modelPivot.add(anchor);}else{hand.add(anchor);const grips={torch:{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]},spear:{p:[.012,-.09,.07],r:[Math.PI-.12,.02,-.1]},bow:{p:[.01,-.07,.065],r:[Math.PI-.2,.02,-.2]}};const tr=grips[kind]||{p:[.012,-.08,.068],r:[Math.PI-.18,.03,-.15]};anchor.position.set(...tr.p);anchor.rotation.set(...tr.r);}anchor.add(mesh);mesh.userData.fixedToHand=true;this.ownerHeldAnchor=anchor;}else this.modelPivot.add(mesh);
+    this.ownerHeldObject=mesh;this.ownerItemLight=mesh.userData.light||null;this.syncOwnerHeldAnchorPose();this.createFirstPersonHeldItem(kind);if(this.firstPerson)this.ensureFirstPersonArms().then(()=>this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true)).catch(()=>{});this.updateHeldItemTransform(performance.now(),true);this.applyOwnerVisualState();
   }
 
   syncOwnerHeldAnchorPose(){
@@ -2979,7 +2980,7 @@ class CenterDynastyGame {
   }
 
   refreshSceneMaterialsAfterContextRestore(){
-    if(!this.scene)return;this.scene.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.needsUpdate=true;for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap'])if(mat[key])mat[key].needsUpdate=true;}});
+    if(!this.scene)return;this.scene.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.sanitizeMaterialUniformCompatibility(mat);for(const key of ['map','emissiveMap','alphaMap','normalMap','roughnessMap','metalnessMap']){const tex=mat[key];if(tex?.userData?.__centerRuntimeGalaxyTexture)tex.needsUpdate=true;}}});
   }
 
   splitAngelWingGeometry(sourceMesh){
@@ -3007,25 +3008,32 @@ class CenterDynastyGame {
   }
 
   applyOwnerWearables(){
-    this.disposeGeneratedVisual(this.ownerCapeObject);this.disposeGeneratedVisual(this.ownerHatObject);this.ownerCapeObject=null;this.ownerHatObject=null;
-    if(!this.isOwnerActive||!['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal'))return;
-    if(this.state.ownerAppearance?.cape){
-      const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);this.ownerCapeObject=cape;
-      const chest=this.playerBones.chest||this.playerBones.neck;
-      if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,0)))){cape.position.set(0,1.46,-.24);}
+    const allowed=!!(this.isOwnerActive&&['normal','galaxy'].includes(this.state.ownerAppearance?.skin||'normal')),wantCape=allowed&&!!this.state.ownerAppearance?.cape,wantHat=allowed&&!!this.state.ownerAppearance?.hat;
+    // V265: Wearables nur bei echter Statusänderung neu erzeugen. Das vermeidet
+    // unnötige CanvasTexture-/Material-Neuerstellungen beim Umschalten anderer Owner-Funktionen.
+    if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}
+    if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
+    if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape();this.modelPivot.add(cape);this.ownerCapeObject=cape;const chest=this.playerBones.chest||this.playerBones.neck;if(!this.configureWearableFollower(cape,this.modelPivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,0))))cape.position.set(0,1.46,-.24);}
+    if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
+  }
+
+  wingFlightPose(flying=false,motion=0,vertical=0,now=performance.now()){
+    const moving=clamp(Number(motion)||0,0,1),up=flying&&vertical>.22,down=flying&&vertical<-.22;let sweep=.075+Math.sin(now*.0018)*.018,spread=.075;
+    if(flying){
+      if(down){sweep=.035+Math.sin(now*.0024)*.035;spread=.055+Math.sin(now*.0018)*.012;}
+      else if(up){sweep=.18+Math.sin(now*.0125)*.34;spread=.095;}
+      else if(moving>.06){sweep=.15+Math.sin(now*.0105)*(.24+moving*.10);spread=.085;}
+      else{sweep=.105+Math.sin(now*.0046)*.105;spread=.08;}
     }
-    if(this.state.ownerAppearance?.hat){
-      const hat=this.createGalaxyOwnerHat();this.modelPivot.add(hat);this.ownerHatObject=hat;
-      const head=this.playerBones.head||this.playerBones.neck;
-      if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);
-    }
+    return {sweep,spread};
   }
 
   updateOwnerWearables(delta=.016,now=performance.now()){
     if(this.ownerCapeObject){
-      this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),vertical=this.flightVerticalVelocity||0,ascending=flying&&vertical>.22,descending=flying&&vertical<-.22;
-      let z=.16,y=.04;if(flying){if(descending){z=.08+Math.sin(now*.0022)*.025;y=.055+Math.sin(now*.0017)*.02;}else if(ascending){z=.20+Math.sin(now*.0105)*.27;y=.06+Math.sin(now*.008)*.055;}else if(motion>.06){z=.18+Math.sin(now*.009)*(.20+motion*.13);y=.055+Math.sin(now*.0074)*.05;}else{z=.15+Math.sin(now*.0042)*.10;y=.045+Math.sin(now*.0031)*.035;}}else{z=.12+Math.sin(now*.0018)*.02;y=.035;}
-      if(left){left.rotation.x=.015;left.rotation.y=-y;left.rotation.z=z;}if(right){right.rotation.x=.015;right.rotation.y=y;right.rotation.z=-z;}
+      this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),vertical=this.flightVerticalVelocity||0,{sweep,spread}=this.wingFlightPose(flying,motion,vertical,now);
+      // V265: Der eigentliche Flügelschlag läuft jetzt um die Y-Achse. Dadurch
+      // schwingen die Flügel hinter dem Rücken nach vorn/hinten statt zum Boden/Himmel.
+      if(left){left.rotation.x=.01;left.rotation.y=-sweep;left.rotation.z=spread;}if(right){right.rotation.x=.01;right.rotation.y=sweep;right.rotation.z=-spread;}
       if(this.ownerCapeObject.userData?.sparkles)this.ownerCapeObject.userData.sparkles.rotation.y=Math.sin(now*.0013)*.08;if(this.ownerCapeObject.userData?.light)this.ownerCapeObject.userData.light.intensity=.66+Math.sin(now*.003)*.11;
     }
     if(this.ownerHatObject){this.updateWearableFollower(this.ownerHatObject);if(this.ownerHatObject.userData?.halo)this.ownerHatObject.userData.halo.rotation.z=now*.00055;if(this.ownerHatObject.userData?.light)this.ownerHatObject.userData.light.intensity=.44+Math.sin(now*.002)*.07;}
@@ -3076,10 +3084,10 @@ class CenterDynastyGame {
 
   applyOwnerVisualState() {
     if(!this.playerModel)return;const appearance=this.state.ownerAppearance||{skin:'normal'};const auraMode=this.isOwnerActive&&appearance.skin==='galaxy';const vanished=this.isStaffActive&&this.ownerFlags.vanish;
-    this.playerModel.traverse((object)=>{if(!object.isMesh)return;const materials=Array.isArray(object.material)?object.material:[object.material];for(const material of materials){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;const opacity=vanished?.24:auraMode?.72:(original.opacity??1);material.transparent=vanished||auraMode||!!original.transparent||opacity<1;material.opacity=opacity;material.depthWrite=!(vanished||auraMode)&&original.depthWrite!==false;material.needsUpdate=true;}});
-    if(this.ownerFormObject)this.ownerFormObject.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=vanished||mat.transparent;mat.opacity=vanished?.24:(mat.userData.__formOpacity??mat.opacity??1);mat.depthWrite=!vanished;mat.needsUpdate=true;}});
+    this.playerModel.traverse((object)=>{if(!object.isMesh)return;const materials=Array.isArray(object.material)?object.material:[object.material];for(const material of materials){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;const opacity=vanished?.24:auraMode?.72:(original.opacity??1);material.transparent=vanished||auraMode||!!original.transparent||opacity<1;material.opacity=opacity;material.depthWrite=!(vanished||auraMode)&&original.depthWrite!==false;}});
+    if(this.ownerFormObject)this.ownerFormObject.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=vanished||mat.transparent;mat.opacity=vanished?.24:(mat.userData.__formOpacity??mat.opacity??1);mat.depthWrite=!vanished;}});
     if(this.ownerAura)this.ownerAura.visible=this.isOwnerActive&&!!appearance.aura&&!vanished&&!this.firstPerson;
-    const applyItem=(root)=>root?.traverse?.((object)=>{if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?0:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;material.needsUpdate=true;}});
+    const applyItem=(root)=>root?.traverse?.((object)=>{if(object.isLight){if(object.userData.__centerBaseIntensity===undefined)object.userData.__centerBaseIntensity=object.intensity;object.intensity=vanished?0:object.userData.__centerBaseIntensity;return;}if(!object.isMesh&&!object.isLine&&!object.isLineSegments&&!object.isPoints)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const material of mats){if(!material)continue;this.cacheOriginalMaterial(material);const original=material.userData.__centerOriginalMaterial;material.transparent=vanished||!!original.transparent;material.opacity=vanished?0:(original.opacity??1);material.depthWrite=!vanished&&original.depthWrite!==false;}});
     applyItem(this.ownerHeldObject);applyItem(this.firstPersonHeldObject);applyItem(this.ownerCapeObject);applyItem(this.ownerHatObject);applyItem(this.ownerScooterObject);applyItem(this.ownerPlaneObject);
     if(this.ownerHeldAnchor)this.ownerHeldAnchor.visible=!this.firstPerson&&!vanished;
     if(this.firstPersonHeldObject)this.firstPersonHeldObject.visible=this.firstPerson&&!vanished;
@@ -4415,15 +4423,15 @@ class CenterDynastyGame {
 
   async upsertRemotePlayer(uid,profile,live){
     let remote=this.remotePlayers.get(uid);const existed=!!remote,previousAppearance=remote?.appearanceSkin||'';const name=String(profile.displayName||`${live.firstName||''} ${live.lastName||''}`.trim()||'Spieler').slice(0,44);
-    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,renderedAppearanceSkin:'',renderedVehicle:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
+    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${Math.max(0,Math.floor(Number(live.level||0)))} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,heldObject:null,heldAnchor:null,renderedHeldItem:'',renderedAppearanceSkin:'',renderedVehicle:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,verticalVelocity:0,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}
     remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');
     if(existed&&previousAppearance&&previousAppearance!==remote.appearanceSkin)this.spawnTransformationEffectAt(remote.group.position,true);
-    remote.vehicle=String(live.vehicle||'none');remote.ownerVisual=!!live.ownerClaim&&canonicalStaffRole(live.staffRole)==='owner';remote.ownerAura=Object.prototype.hasOwnProperty.call(live,'ownerAura')?!!live.ownerAura:remote.appearanceSkin==='galaxy';remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
-    remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=Number(live.y||terrainHeightAt(remote.targetX,Number(live.z||0)));remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=Number(live.updatedAtMs||Date.now());
+    remote.vehicle=String(live.vehicle||'none');remote.heldItem=String(live.heldItem||'none');remote.appearanceSize=clamp(Number(live.appearanceSize)||1,.45,2.5);remote.ownerVisual=!!live.ownerClaim&&canonicalStaffRole(live.staffRole)==='owner';remote.ownerAura=Object.prototype.hasOwnProperty.call(live,'ownerAura')?!!live.ownerAura:remote.appearanceSkin==='galaxy';remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
+    const nextRemoteSeen=Number(live.updatedAtMs||Date.now()),nextRemoteY=Number(live.y||terrainHeightAt(Number(live.x||0),Number(live.z||0))),remoteDt=Math.max(.1,(nextRemoteSeen-Number(remote.lastSeenAt||nextRemoteSeen))/1000);remote.verticalVelocity=(nextRemoteY-Number(remote.targetY??nextRemoteY))/remoteDt;
+    remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=nextRemoteY;remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=nextRemoteSeen;remote.pivot.scale.setScalar(remote.appearanceSize);
     const skin=await this.verifiedRemoteSkin(uid,live);if(remote.skin!==skin)await this.installRemoteModel(remote,skin);
-    this.applyRemoteFormAndVehicle(remote);this.applyRemoteOwnerAura(remote);
+    this.applyRemoteFormAndVehicle(remote);this.applyRemoteOwnerAura(remote);this.applyRemoteHeldItem(remote);
     remote.group.visible=!remote.vanished||roleSnapshot().isOwner;
-    remote.model?.traverse?.((object)=>{if(!object.isMesh)return;const aura=(remote.skin==='owner'||remote.ownerVisual)&&remote.ownerAura;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=remote.vanished||aura;mat.opacity=remote.vanished?.3:aura?.74:1;mat.depthWrite=!(remote.vanished||aura);mat.needsUpdate=true;}});
   }
 
   async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
@@ -4434,7 +4442,7 @@ class CenterDynastyGame {
       upperLeft:find(/(?:a r m_up_L|left(?:upper)?arm|upperarm.*left|bip L UpperArm|mixamorig:LeftArm)/i),lowerLeft:find(/(?:a r m_dawn_L|left.*forearm|forearm.*left|bip L Forearm|mixamorig:LeftForeArm)/i),
       upperLegRight:find(/(?:thigh.*r|right.*thigh|right.*upleg|bip R Thigh|mixamorig:RightUpLeg|leg_up_R)/i),lowerLegRight:find(/(?:calf.*r|right.*calf|right.*leg|bip R Calf|mixamorig:RightLeg|leg_dawn_R)/i),
       upperLegLeft:find(/(?:thigh.*l|left.*thigh|left.*upleg|bip L Thigh|mixamorig:LeftUpLeg|leg_up_L)/i),lowerLegLeft:find(/(?:calf.*l|left.*calf|left.*leg|bip L Calf|mixamorig:LeftLeg|leg_dawn_L)/i),
-      chest:find(/(?:^chest|spine_?2|upperchest)/i),head:find(/(?:^head|head_)/i)
+      chest:find(/(?:^chest|spine_?2|upperchest)/i),head:find(/(?:^head|head_)/i),handRight:find(/(?:right.*hand|hand.*right|bip R Hand|mixamorig:RightHand|hand_R)/i)
     };}
 
   applyRemoteSpecialPose(remote,delta=.016,airborne=false){
@@ -4443,7 +4451,7 @@ class CenterDynastyGame {
     else if(airborne){q(bones.upperRight,{x:-.16,z:-.16});q(bones.upperLeft,{x:-.16,z:.16});q(bones.upperLegRight,{x:-.28});q(bones.lowerLegRight,{x:.5});q(bones.upperLegLeft,{x:-.2});q(bones.lowerLegLeft,{x:.4});q(bones.chest,{x:.025});}
   }
 
-  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.renderedAppearanceSkin='';remote.renderedVehicle='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
+  async installRemoteModel(remote,skin){remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem='';remote.renderedAppearanceSkin='';remote.renderedVehicle='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
 
   applyRemoteFormAndVehicle(remote) {
     if(!remote?.model)return;const visibleForms=['ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS],appearance=visibleForms.includes(remote.appearanceSkin)?remote.appearanceSkin:['normal','galaxy'].includes(remote.appearanceSkin)?remote.appearanceSkin:'normal',vehicle=['scooter','plane'].includes(remote.vehicle)?remote.vehicle:'none';
@@ -4461,12 +4469,25 @@ class CenterDynastyGame {
 
   applyRemoteOwnerAura(remote) {
     if(!remote?.model)return;
-    const active=(remote.skin==='owner'||remote.ownerVisual)&&remote.ownerAura&&!remote.vanished;
-    remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;if(mat.userData.__remoteAuraColor===undefined){mat.userData.__remoteAuraColor=mat.color?.getHex?.();mat.userData.__remoteAuraEmissive=mat.emissive?.getHex?.();mat.userData.__remoteAuraIntensity=mat.emissiveIntensity;}if(active){mat.color?.set?.(0x3b1268);mat.emissive?.set?.(0x6f1ac7);mat.emissiveIntensity=1.15;mat.transparent=true;mat.opacity=.74;}else{if(mat.userData.__remoteAuraColor!==undefined)mat.color?.setHex?.(mat.userData.__remoteAuraColor);if(mat.userData.__remoteAuraEmissive!==undefined)mat.emissive?.setHex?.(mat.userData.__remoteAuraEmissive);if(mat.userData.__remoteAuraIntensity!==undefined)mat.emissiveIntensity=mat.userData.__remoteAuraIntensity;mat.transparent=false;mat.opacity=1;}mat.needsUpdate=true;}});
-    if(active&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=active;
-    const ownerVisible=(remote.skin==='owner'||remote.ownerVisual)&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';
+    const isOwner=(remote.skin==='owner'||remote.ownerVisual),galaxy=isOwner&&remote.appearanceSkin==='galaxy',auraActive=isOwner&&remote.ownerAura&&!remote.vanished;
+    if(galaxy&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}
+    remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,galaxy,this.ownerGalaxySkinTexture);const original=mat.userData.__centerOriginalMaterial||{};const opacity=remote.vanished?.3:galaxy?.74:(original.opacity??1);mat.transparent=remote.vanished||galaxy||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!(remote.vanished||galaxy)&&original.depthWrite!==false;}});
+    if(auraActive&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
+    const ownerVisible=isOwner&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';
     if(ownerVisible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape();remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion())){remote.cape.position.set(0,1.46,-.24);}}if(remote.cape)remote.cape.visible=ownerVisible&&remote.ownerCape;
     if(ownerVisible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat();remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=ownerVisible&&remote.ownerHat;
+  }
+
+  syncRemoteHeldAnchorPose(remote){
+    const anchor=remote?.heldAnchor;if(!anchor||!remote?.pivot)return;const hand=remote.bones?.handRight,kind=anchor.userData.kind||remote.heldItem||'none';
+    if(hand){remote.pivot.updateWorldMatrix?.(true,false);hand.updateWorldMatrix?.(true,false);hand.getWorldPosition(this.tmpVector);remote.pivot.worldToLocal(this.tmpVector);anchor.position.copy(this.tmpVector);}else anchor.position.set(.42,1.13,.02);
+    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
+  }
+
+  applyRemoteHeldItem(remote){
+    if(!remote?.pivot)return;const allowed=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'],kind=allowed.includes(remote.heldItem)?remote.heldItem:'none',show=kind!=='none'&&!remote.vanished&&!remote.formObject&&remote.vehicle==='none';
+    if(remote.renderedHeldItem!==kind){this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem=kind;if(kind!=='none'){const mesh=this.createHeldItemMesh(kind);if(mesh){const anchor=new THREE.Group();anchor.name='remote-center-held-item-grip';anchor.userData.kind=kind;anchor.add(mesh);remote.pivot.add(anchor);remote.heldAnchor=anchor;remote.heldObject=mesh;this.syncRemoteHeldAnchorPose(remote);}}}
+    if(remote.heldAnchor)remote.heldAnchor.visible=show;
   }
 
   updateRemotePlayers(delta){
@@ -4477,9 +4498,9 @@ class CenterDynastyGame {
       const groundY=terrainHeightAt(remote.group.position.x,remote.group.position.z),airborne=!remote.flying&&remote.targetY>groundY+.24,targetY=(remote.flying||airborne)?remote.targetY:groundY;
       remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));
       if(remote.aura?.visible)this.animateGalaxyAura(remote.aura,delta,now);
-      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot;let z=remote.flying?(remote.walking?.18+Math.sin(now*.009)*.25:.15+Math.sin(now*.0042)*.10):.12,y=remote.flying?.05+Math.sin(now*.0031)*.03:.035;if(l){l.rotation.y=-y;l.rotation.z=z;}if(r){r.rotation.y=y;r.rotation.z=-z;}}
+      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,{sweep,spread}=this.wingFlightPose(remote.flying,remote.walking?1:0,remote.verticalVelocity||0,now);if(l){l.rotation.x=.01;l.rotation.y=-sweep;l.rotation.z=spread;}if(r){r.rotation.x=.01;r.rotation.y=sweep;r.rotation.z=-spread;}}
       if(remote.vehicleObject?.userData?.mixer){const a=remote.vehicleObject.userData.propellerAction,spin=remote.flying||remote.walking||remote.targetY>terrainHeightAt(remote.group.position.x,remote.group.position.z)+.24;if(a){a.paused=!spin;a.timeScale=remote.flying?1.5:1.05;}if(spin)remote.vehicleObject.userData.mixer.update(delta);}
-      if(remote.hat?.visible)this.updateWearableFollower(remote.hat);
+      if(remote.hat?.visible)this.updateWearableFollower(remote.hat);if(remote.heldAnchor?.visible){this.syncRemoteHeldAnchorPose(remote);this.animateHeldItemEffects(remote.heldObject,now);}
       this.updateRemoteAnimalForm(remote,delta);
       const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
       if(remote.mixer&&remote.action){if(humanWalking){remote.action.paused=false;remote.mixer.timeScale=1;remote.mixer.update(delta);remote.wasWalking=true;}else{if(remote.wasWalking){remote.action.reset();remote.action.play();remote.action.time=0;remote.wasWalking=false;}remote.action.paused=true;remote.mixer.update(0);}}
@@ -4488,7 +4509,7 @@ class CenterDynastyGame {
     }
   }
 
-  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();this.remotePlayers.delete(uid);}
+  removeRemotePlayer(uid){const remote=this.remotePlayers.get(uid);if(!remote)return;remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.group.removeFromParent();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();this.remotePlayers.delete(uid);}
 
   ownerOnly(silent=false){if(this.isOwnerActive)return true;if(!silent)this.toast('Diese Funktion ist ausschließlich für den Owner.');return false;}
   staffOnly(silent=false){if(this.isStaffActive)return true;if(!silent)this.toast('Dieses Center-Teammenü ist nur für Supporter, Moderatoren, Admins und den Owner.');return false;}
@@ -4613,7 +4634,7 @@ class CenterDynastyGame {
 
   startLoop() {
     cancelAnimationFrame(this.raf);
-    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateAmbientCreatures(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();this.refreshSceneMaterialsAfterContextRestore();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Rendererzustand wurde nach einem Material-/WebGL-Fehler neu synchronisiert:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
+    const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const minFrame=this.isMobile?33:22;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.05,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;try{this.updateMovement(delta);this.updateChunkStreaming();this.updateWorldTime(delta);this.updateNeeds(delta);this.updateAnimals(delta,now);this.updateAmbientCreatures(delta,now);this.updateNpcs(delta,now);this.ensureDeathLootMarker();this.updateOwnerThrownObjects(delta,now);this.updateRemotePlayers(delta);this.updateTransformationEffects(delta,now);this.animateWeather(delta);this.updateCamera(delta);this.updateHotspots();this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();this.scene?.traverse?.((object)=>{const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats)this.sanitizeMaterialUniformCompatibility(mat);});if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde sicher bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};
     this.raf=requestAnimationFrame(frame);
   }
 
