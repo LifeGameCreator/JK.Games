@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v268-owner-admin-online-performance-graphics';
+const CENTER_VERSION = '2026-08-08-jkgames-v269-remote-animation-hd-lightning';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -10,8 +10,8 @@ const WORLD_SEED = 20260802;
 const MIN_RENDER_DISTANCE = 1;
 const MAX_RENDER_DISTANCE = 5;
 const WATER_LEVEL = -2.15;
-const ONLINE_WRITE_INTERVAL_MS = 1250;
-const ONLINE_HEARTBEAT_MS = 10000;
+const ONLINE_WRITE_INTERVAL_MS = 220;
+const ONLINE_HEARTBEAT_MS = 6000;
 const ONLINE_STALE_MS = 26000;
 const ONLINE_QUERY_LIMIT = 48;
 const PERF_TASK_INTERVALS = Object.freeze({ world:100, needs:250, animals:55, ambient:60, npcs:105, death:450, thrown:34, effects:34, weather:40, hotspots:110 });
@@ -25,7 +25,7 @@ const PRIMARY_ACTION_COOLDOWN_MS = 520;
 const DAYS_PER_SEASON = 12;
 const WORLD_TIME_HOURS_PER_MINUTE = 1.35;
 const CONTROLS_HINT_DURATION_MS = 6500;
-const GRAPHICS_QUALITIES = Object.freeze(['performance','low','medium','high','ultra','maximum']);
+const GRAPHICS_QUALITIES = Object.freeze(['minimal','performance','low','medium','high','ultra','maximum','extreme']);
 const SHADOW_MODES = Object.freeze(['off','character','world']);
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const OWNER_MAX_SPEED_MULTIPLIER = 12;
@@ -76,11 +76,15 @@ const MOBILE_QUERY = '(max-width: 860px), (pointer: coarse)';
 const ASSET_ROOT = './assets/cottbus/';
 const CENTER_ASSET_ROOT = './assets/center-open-world/';
 const MODEL_PATHS = Object.freeze({
-  // V267: Normale Spieler benutzen die Mann-/Frau-Charaktere aus Ego-Shooter.
-  male: `./man-walk.glb?v=20260808-v267`,
-  female: `./woman-walk.glb?v=20260808-v267`,
+  // V269: Normale Spieler benutzen die echten Ego-Shooter-Walk-Modelle.
+  male: `./man-walk.glb?v=20260808-v269`,
+  female: `./woman-walk.glb?v=20260808-v269`,
   // Admin und Owner teilen sich bewusst denselben weißen Staff-Skin.
-  owner: `${ASSET_ROOT}player-owner.glb?v=20260808-v267`
+  owner: `${ASSET_ROOT}player-owner.glb?v=20260808-v269`
+});
+const RUN_MODEL_PATHS = Object.freeze({
+  male: `./man-run.glb?v=20260808-v269`,
+  female: `./woman-run.glb?v=20260808-v269`
 });
 const CENTER_ASSET_PATHS = Object.freeze({
   basicTools: `${CENTER_ASSET_ROOT}basic-tools.glb`,
@@ -251,7 +255,7 @@ function defaultSaveState() {
     inventory: { wood: 0, firewood: 0, logs: 0, stone: 0, berries: 0, mushrooms: 0, meat: 0, cookedMeat: 0, water: 1, leather: 0, flax: 0, iron: 0, herbs: 0, grain: 0, medicine: 0, coins: 0 },
     tools: { axe: 0, pickaxe: 0, spear: 0, hammer: 0, torch: 0, bow: 0, ironAxe: 0 },
     equippedTool: '',
-    ownerAppearance: { skin: 'normal', aura: false, size: 1, heldItem: 'none', cape: false, hat: false, vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0, publicMode: 'staff', publicGender: 'male', publicAlias: 'Center Spieler' },
+    ownerAppearance: { skin: 'normal', aura: false, size: 1, heldItem: 'none', cape: false, hat: false, vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0, publicMode: 'staff', publicGender: 'male', publicAlias: 'Center Spieler', staffMaxHealth: 500, staffDamage: 180 },
     keybinds: { ...DEFAULT_KEYBINDS },
     deathLoot: null,
     tutorial: { done: false, step: 'sticks', sticks: 0, stones: 0, berries: 0, mushrooms: 0, treeChopped: false },
@@ -315,6 +319,8 @@ function normalizeSaveState(raw) {
   state.ownerAppearance.publicMode = ['staff','owner','admin','player'].includes(state.ownerAppearance.publicMode) ? state.ownerAppearance.publicMode : 'staff';
   state.ownerAppearance.publicGender = state.ownerAppearance.publicGender === 'female' ? 'female' : 'male';
   state.ownerAppearance.publicAlias = String(state.ownerAppearance.publicAlias || 'Center Spieler').trim().slice(0,30) || 'Center Spieler';
+  state.ownerAppearance.staffMaxHealth = Math.floor(clamp(Number(state.ownerAppearance.staffMaxHealth)||500,100,10000));
+  state.ownerAppearance.staffDamage = Math.floor(clamp(Number(state.ownerAppearance.staffDamage)||180,10,2500));
   state.horseTamed = !!raw.horseTamed;
   state.keybinds = { ...DEFAULT_KEYBINDS, ...(raw.keybinds || {}) };
   for (const [action, fallback] of Object.entries(DEFAULT_KEYBINDS)) if (!KEYBIND_OPTIONS.includes(state.keybinds[action])) state.keybinds[action] = fallback;
@@ -336,7 +342,8 @@ function normalizeSaveState(raw) {
   state.time = ((Number(state.time) || 8) % 24 + 24) % 24;
   state.weather = WEATHER[state.weather] ? state.weather : 'clear';
   state.weatherRemaining = Number.isFinite(Number(state.weatherRemaining)) ? clamp(state.weatherRemaining, .5, 12) : 4 + Math.random() * 4;
-  for (const key of Object.keys(base.needs)) state.needs[key] = clamp(state.needs[key], 0, 100);
+  const storedHealthCap=Math.floor(clamp(Number(raw.ownerAppearance?.staffMaxHealth)||500,100,10000));
+  for (const key of Object.keys(base.needs)) state.needs[key] = clamp(state.needs[key], 0, key==='health'?storedHealthCap:100);
   for (const key of Object.keys(base.inventory)) state.inventory[key] = Math.max(0, Math.floor(Number(state.inventory[key]) || 0));
   for (const key of Object.keys(base.tools)) state.tools[key] = clamp(state.tools[key], 0, 100);
   for (const key of Object.keys(base.skills)) state.skills[key] = Math.floor(clamp(state.skills[key], 0, 5));
@@ -468,6 +475,9 @@ class CenterDynastyGame {
     this.playerModel = null;
     this.playerMixer = null;
     this.playerAction = null;
+    this.playerWalkAction = null;
+    this.playerRunAction = null;
+    this.playerActiveAction = null;
     this.playerActionWasMoving = false;
     this.idleBlend = 1;
     this.idleStartedAt = performance.now();
@@ -496,6 +506,10 @@ class CenterDynastyGame {
     this.webglContextRestoreAt = 0;
     this.ownerItemLight = null;
     this.ownerThrownObjects = [];
+    this.staffLightningEffects = [];
+    this.staffShotSeq = 0;
+    this.staffShotAtMs = 0;
+    this.staffShotEnd = new THREE.Vector3();
     this.flightEffects = null;
     this.flightVerticalVelocity = 0;
     this.flightInputMagnitude = 0;
@@ -516,6 +530,10 @@ class CenterDynastyGame {
     this.currentRegion = '';
     this.playerSkin = '';
     this.walking = false;
+    this.sprinting = false;
+    this.motionVelocityX = 0;
+    this.motionVelocityY = 0;
+    this.motionVelocityZ = 0;
     this.velocityY = 0;
     this.onGround = true;
     this.yaw = Number(this.state.position.yaw || Math.PI);
@@ -558,7 +576,9 @@ class CenterDynastyGame {
     this.gltfLoader = new GLTFLoader(this.loadingManager);
     this.centerAssetTemplates = new Map();
     this.centerAssetLoadPromise = null;
-    this.natureTreeNames = ['ARVORE_SEM','Branches01','Componen12','Group23','Group27','Group4','Group5','Group6'];
+    // V269: Nur eindeutig bodengebundene Baumgruppen. Group4/5/6 wurden aus dem
+    // Pack entfernt, weil sie je nach Export wie schwebende Baum-Wolken erschienen.
+    this.natureTreeNames = ['ARVORE_SEM','Branches01','Componen12','Group23','Group27'];
     this.natureCloudNames = [];
     this.ownerScooterObject = null;
     this.scooterTuningBar = null;
@@ -591,6 +611,7 @@ class CenterDynastyGame {
     this.presenceWriteInFlight = false;
     this.lastPresenceWriteAt = 0;
     this.lastPresenceKey = '';
+    this.lastProfilePresenceWriteAt = 0;
     this.isStaffActive = false;
     this.activeStaffRole = 'player';
     this.staffCapabilities = staffCapabilities('player');
@@ -639,26 +660,40 @@ class CenterDynastyGame {
   staffVisualTheme(){return this.effectivePublicStaffRole()==='admin'?'admin':'owner';}
   effectiveRenderDistance(){
     const requested=Math.floor(clamp(this.state.world?.renderDistance||2,MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE)),quality=this.state.world?.graphicsQuality||'medium';
-    const qualityCap=quality==='performance'?1:quality==='low'?2:quality==='medium'?2:quality==='high'?3:quality==='ultra'?4:5;
-    const hardwareCap=quality==='maximum'?5:(this.performanceTier==='low'?2:this.performanceTier==='balanced'?3:4);
+    const qualityCap=quality==='minimal'?1:quality==='performance'?1:quality==='low'?2:quality==='medium'?2:quality==='high'?3:quality==='ultra'?4:5;
+    const hardwareCap=['maximum','extreme'].includes(quality)?5:(this.performanceTier==='low'?2:this.performanceTier==='balanced'?3:4);
     return Math.max(MIN_RENDER_DISTANCE,Math.min(requested,qualityCap,hardwareCap));
   }
   maxVisibleRemotePlayers(){
     const quality=this.state.world?.graphicsQuality||'medium';
-    if(quality==='performance')return 6;if(quality==='low')return 9;
+    if(quality==='minimal')return 4;if(quality==='performance')return 6;if(quality==='low')return 9;
+    if(quality==='extreme')return MAX_REMOTE_PLAYERS;
     return this.performanceTier==='low'?8:this.performanceTier==='balanced'?12:MAX_REMOTE_PLAYERS;
   }
   performanceDensityFactor(){
     const quality=this.state.world?.graphicsQuality||'medium';
-    const q=quality==='performance'?.34:quality==='low'?.56:quality==='medium'?.75:quality==='high'?.9:quality==='ultra'?1:1.18;
-    const h=quality==='maximum'?1:(this.performanceTier==='low'?.76:this.performanceTier==='balanced'?.9:1);
-    return clamp(q*h,.28,1.2);
+    const q=quality==='minimal'?.22:quality==='performance'?.34:quality==='low'?.56:quality==='medium'?.75:quality==='high'?.9:quality==='ultra'?1:quality==='maximum'?1.18:1.30;
+    const h=['maximum','extreme'].includes(quality)?1:(this.performanceTier==='low'?.76:this.performanceTier==='balanced'?.9:1);
+    return clamp(q*h,.18,1.32);
   }
   performancePixelRatio(){
     const quality=this.state.world?.graphicsQuality||'medium',device=Math.max(1,Number(window.devicePixelRatio)||1);
-    const qualityCap=quality==='performance'?.50:quality==='low'?.68:quality==='medium'?.90:quality==='high'?1.16:quality==='ultra'?1.42:2.0;
-    const hardwareCap=quality==='maximum'?2.0:(this.performanceTier==='low'?.80:this.performanceTier==='balanced'?1.02:1.34);
-    return Math.max(.48,Math.min(device,qualityCap,hardwareCap)*this.performanceScale);
+    const qualityCap=quality==='minimal'?.40:quality==='performance'?.50:quality==='low'?.68:quality==='medium'?.90:quality==='high'?1.16:quality==='ultra'?1.42:quality==='maximum'?2.0:2.4;
+    const hardwareCap=quality==='extreme'?2.4:quality==='maximum'?2.0:(this.performanceTier==='low'?.80:this.performanceTier==='balanced'?1.02:1.34);
+    return Math.max(.38,Math.min(device,qualityCap,hardwareCap)*this.performanceScale);
+  }
+  remoteCosmeticTier(){
+    const q=this.state.world?.graphicsQuality||'medium';
+    if(q==='minimal'||q==='performance')return 'minimal';
+    if(q==='low')return 'low';
+    if(q==='medium'||q==='high')return 'medium';
+    return 'high';
+  }
+  effectiveMaxHealth(){
+    return this.isStaffActive&&['owner','admin'].includes(this.activeStaffRole)?Math.floor(clamp(Number(this.state.ownerAppearance?.staffMaxHealth)||500,100,10000)):100;
+  }
+  staffDamageAmount(){
+    return Math.floor(clamp(Number(this.state.ownerAppearance?.staffDamage)||180,10,2500));
   }
   runPerfTask(name,now,interval,callback){
     const previous=Number(this.perfTaskAt[name]||0);if(previous&&now-previous<interval)return;this.perfTaskAt[name]=now;const dt=previous?Math.min(.25,Math.max(.001,(now-previous)/1000)):.016;callback(dt);
@@ -1338,7 +1373,7 @@ class CenterDynastyGame {
   }
 
 decorateChunkWithAssetTrees(chunk){
-    if(!this.centerAssetTemplates.has('naturePack'))return;const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+991))>>>0),quality=this.state.world?.graphicsQuality||'medium';const count=quality==='maximum'?5:quality==='ultra'&&this.performanceTier==='high'?4:quality==='high'?3:quality==='performance'?1:2;
+    if(!this.centerAssetTemplates.has('naturePack'))return;const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+991))>>>0),quality=this.state.world?.graphicsQuality||'medium';const count=quality==='minimal'?0:quality==='extreme'?6:quality==='maximum'?5:quality==='ultra'&&this.performanceTier==='high'?4:quality==='high'?3:quality==='performance'?1:2;
     for(let i=0;i<count;i+=1){const lx=18+rnd()*(CHUNK_SIZE-36),lz=18+rnd()*(CHUNK_SIZE-36),x=chunk.originX+lx,z=chunk.originZ+lz;if(Math.abs(x-riverCenter(z))<27||this.pointNearChunkRoad(chunk,x,z,4)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<48))continue;const y=terrainHeightAt(x,z);if(y>58)continue;const name=this.natureTreeNames[Math.floor(rnd()*this.natureTreeNames.length)],tree=this.cloneCenterAsset('naturePack',{nodeName:name,targetSize:5.6+rnd()*4.8,bottomAlign:true});if(!tree)continue;tree.position.set(lx,y,lz);tree.rotation.y=rnd()*Math.PI*2;tree.name='asset-tree';chunk.group.add(tree);const radius=.75+(rnd()*.55);const collider=this.registerCollider(x,z,radius,'decorative-tree',chunk.key,tree);chunk.colliders.push(collider);}
   }
 
@@ -1387,9 +1422,11 @@ decorateChunkWithAssetTrees(chunk){
 applyGraphicsQuality() {
     const quality = GRAPHICS_QUALITIES.includes(this.state.world?.graphicsQuality) ? this.state.world.graphicsQuality : 'medium';
     this.renderer?.setPixelRatio?.(this.performancePixelRatio());
-    if (this.renderer) this.renderer.toneMappingExposure = quality === 'maximum' ? 1.10 : quality === 'ultra' ? 1.06 : quality === 'high' ? 1.03 : 1;
+    if (this.renderer) this.renderer.toneMappingExposure = quality === 'extreme' ? 1.13 : quality === 'maximum' ? 1.10 : quality === 'ultra' ? 1.06 : quality === 'high' ? 1.03 : 1;
     this.applyShadowSettings();
     this.applyWorldRenderSettings(true);
+    // Jeder Client entscheidet selbst, wie teuer fremde Wings/Auren/Staff-Effekte sind.
+    for(const remote of this.remotePlayers.values()){remote.lastCosmeticKey='';remote.lastHeldKey='';this.applyRemoteOwnerAura(remote);this.applyRemoteHeldItem(remote);}
     this.resize();
   }
 
@@ -1402,7 +1439,7 @@ applyGraphicsQuality() {
     if(this.sun){
       this.sun.castShadow=enabled;
       const quality=this.state.world?.graphicsQuality||'medium';
-      const mapSize=quality==='maximum'?4096:quality==='ultra'?2048:quality==='high'?1024:512;
+      const mapSize=quality==='extreme'?4096:quality==='maximum'?3072:quality==='ultra'?2048:quality==='high'?1024:512;
       this.sun.shadow.mapSize.set(mapSize,mapSize);
       this.sun.shadow.map?.dispose?.();
       this.sun.shadow.map=null;
@@ -1666,10 +1703,10 @@ async updateChunkStreaming(force = false) {
 
 buildChunkGrass(chunk) {
     const random=seededRandom((Math.imul(chunk.cx+7001,1103515245)^Math.imul(chunk.cz+9001,12345)^(WORLD_SEED+333))>>>0),quality=this.state.world?.graphicsQuality||'medium';
-    const density=densityMultiplier(this.state.world?.density)*this.performanceDensityFactor(),grassBase=quality==='performance'?58:quality==='low'?105:quality==='medium'?165:quality==='high'?245:quality==='ultra'?310:420,count=Math.floor(grassBase*density);
+    const density=densityMultiplier(this.state.world?.density)*this.performanceDensityFactor(),grassBase=quality==='minimal'?28:quality==='performance'?58:quality==='low'?105:quality==='medium'?165:quality==='high'?245:quality==='ultra'?310:quality==='maximum'?420:520,count=Math.floor(grassBase*density);
     if(count<1)return;
     const seasonColors=[0x5f8a45,0x5c8b43,0x718044,0x9aa58f],matA=new THREE.MeshStandardMaterial({color:seasonColors[this.state.season]||seasonColors[0],roughness:1,side:THREE.DoubleSide,transparent:true,opacity:.94}),matB=matA.clone();matB.color.offsetHSL(.02,-.03,.035);
-    const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=['performance','low'].includes(quality)?null:new THREE.InstancedMesh(geo,matA.clone(),count);
+    const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=['minimal','performance','low'].includes(quality)?null:new THREE.InstancedMesh(geo,matA.clone(),count);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),q2=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
     for(let i=0;i<count*4&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;const yaw=random()*Math.PI*2,sc=.55+random()*.65;q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));scale.set(sc*(.8+random()*.35),sc,sc);const pos=new THREE.Vector3(lx,y+.012,lz);matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);if(meshC){q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);}used++;}
     for(const mesh of [meshA,meshB,meshC].filter(Boolean)){mesh.count=used;mesh.instanceMatrix.needsUpdate=true;}meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';chunk.group.add(meshA,meshB);if(meshC){meshC.name='grass-clumps-c';chunk.group.add(meshC);}this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
@@ -2463,6 +2500,33 @@ buildChunkGrass(chunk) {
     return this.makeInPlaceLocomotionClip(clip);
   }
 
+
+  normalizedRigNodeName(name=''){
+    return String(name||'').replace(/_\d+$/,'').replace(/[\s._:-]+/g,'').toLowerCase();
+  }
+
+  retargetLocomotionClip(clip,root,label='run'){
+    if(!clip?.clone||!root)return null;
+    const byName=new Map();root.traverse?.((object)=>{if(object?.name){const key=this.normalizedRigNodeName(object.name);if(key&&!byName.has(key))byName.set(key,object.name);}});
+    const cloned=this.makeInPlaceLocomotionClip(clip);
+    const tracks=[];
+    for(const track of cloned?.tracks||[]){
+      const dot=String(track.name||'').lastIndexOf('.');if(dot<1){tracks.push(track);continue;}
+      const source=track.name.slice(0,dot),property=track.name.slice(dot),target=byName.get(this.normalizedRigNodeName(source));
+      if(!target)continue;track.name=`${target}${property}`;tracks.push(track);
+    }
+    if(!tracks.length)return null;
+    return new THREE.AnimationClip(`${label}-${cloned.name||'locomotion'}`,cloned.duration,tracks,cloned.blendMode);
+  }
+
+  switchPlayerLocomotion(action){
+    if(!action)return;
+    if(this.playerActiveAction===action){action.enabled=true;action.paused=false;return;}
+    const previous=this.playerActiveAction;
+    if(previous&&previous!==action){previous.fadeOut?.(.12);previous.enabled=true;previous.paused=false;}
+    action.enabled=true;action.paused=false;action.reset?.();action.fadeIn?.(.12);action.play?.();this.playerActiveAction=action;
+  }
+
   cachePlayerBones(root) {
     const all=[];
     root?.traverse?.((object)=>{
@@ -2543,22 +2607,17 @@ buildChunkGrass(chunk) {
   }
 
   resetLocomotionToIdle(instant=false) {
-    if(this.playerAction){
-      this.playerAction.paused=true;
-      this.playerAction.enabled=true;
-    }
-    this.playerMixer.timeScale=1;
-    this.playerActionWasMoving=false;
-    this.idleStartedAt=performance.now();
-    this.idleBlend=instant?1:0;
-    this.applyIdlePose(.016,instant);
+    for(const action of [this.playerWalkAction,this.playerRunAction,this.playerAction])if(action){action.paused=true;action.enabled=true;}
+    if(this.playerMixer)this.playerMixer.timeScale=1;
+    this.playerActiveAction=null;this.playerActionWasMoving=false;
+    this.idleStartedAt=performance.now();this.idleBlend=instant?1:0;this.applyIdlePose(.016,instant);
   }
 
   updatePlayerAnimation(delta,moving,sprint) {
     const flying=this.isStaffActive&&this.ownerFlags.fly,appearance=this.state.ownerAppearance||{},scooter=this.isStaffActive&&appearance.vehicle==='scooter'&&!!this.ownerScooterObject,plane=this.isStaffActive&&appearance.vehicle==='plane'&&!!this.ownerPlaneObject,mounted=!!this.mountedHorse,animalForm=this.isStaffActive&&ANIMAL_FORM_IDS.includes(appearance.skin),humanMoving=moving&&!flying&&!scooter&&!plane&&!mounted&&!animalForm;
-    if(this.playerMixer&&this.playerAction){
-      if(humanMoving){if(!this.playerActionWasMoving){this.playerAction.paused=false;this.playerAction.enabled=true;this.playerAction.play();}const size=this.isStaffActive&&this.staffCapabilities?.size?clamp(Number(appearance.size)||1,.45,2.5):1;this.playerMixer.timeScale=(sprint?1.45:1)/Math.sqrt(size);this.playerMixer.update(delta);this.playerActionWasMoving=true;this.idleBlend=0;}
-      else{if(this.playerActionWasMoving){this.playerAction.paused=true;this.playerActionWasMoving=false;this.idleStartedAt=performance.now();this.idleBlend=0;}if(!flying&&!scooter&&!plane&&!mounted)this.applyIdlePose(delta,false);}
+    if(this.playerMixer&&(this.playerWalkAction||this.playerAction)){
+      if(humanMoving){const desired=sprint&&this.playerRunAction?this.playerRunAction:(this.playerWalkAction||this.playerAction);this.switchPlayerLocomotion(desired);const size=this.isStaffActive&&this.staffCapabilities?.size?clamp(Number(appearance.size)||1,.45,2.5):1;this.playerMixer.timeScale=((desired===this.playerRunAction)?1:(sprint&&!this.playerRunAction?1.32:1.02))/Math.sqrt(size);this.playerMixer.update(delta);this.playerActionWasMoving=true;this.idleBlend=0;}
+      else{if(this.playerActionWasMoving){for(const action of [this.playerWalkAction,this.playerRunAction,this.playerAction])if(action){action.fadeOut?.(.10);action.paused=true;}this.playerActionWasMoving=false;this.playerActiveAction=null;this.idleStartedAt=performance.now();this.idleBlend=0;}if(!flying&&!scooter&&!plane&&!mounted)this.applyIdlePose(delta,false);}
     }else if(!humanMoving&&!flying&&!scooter&&!plane&&!mounted)this.applyIdlePose(delta,false);
     const now=performance.now(),airborne=!this.onGround&&!flying,isBall=this.isStaffActive&&appearance.skin==='ball';
     this.modelPivot.position.y=isBall?0:(flying?Math.sin(now*.0022)*.045:airborne?0:Math.sin(now*.0016)*.008);
@@ -3033,7 +3092,7 @@ createGalaxyOwnerCape(theme='owner',compact=false){
     const split={left:this.wingGeometryTemplate.left.clone(),right:this.wingGeometryTemplate.right.clone()};
     let texture=null;const makeMat=()=>{if(admin)return new THREE.MeshStandardMaterial({color:0xa8adb2,emissive:0x25292d,emissiveIntensity:compact?.28:.58,metalness:.42,roughness:.3,side:THREE.DoubleSide,transparent:true,opacity:.96});texture||=this.createGalaxyTexture(compact?96:256,compact?144:384);texture.repeat.set(1.15,2.35);return new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xe9ddff,emissive:0x4d168c,emissiveIntensity:compact?.82:1.7,metalness:.22,roughness:.24,side:THREE.DoubleSide,transparent:true,opacity:.94});};
     const makeWing=(side,geometry)=>{const pivot=new THREE.Group();pivot.name=side<0?'angel-wing-left':'angel-wing-right';const hinge=side*.12;geometry.translate(-hinge,0,0);const mesh=new THREE.Mesh(geometry,makeMat());mesh.castShadow=!compact&&!!this.state.world?.shadows;mesh.receiveShadow=false;pivot.position.x=hinge;pivot.add(mesh);root.add(pivot);return {pivot,mesh};};root.userData.left=makeWing(-1,split.left);root.userData.right=makeWing(1,split.right);if(texture)root.userData.galaxyTexture=texture;
-    const sparkleCount=compact?(this.state.world?.graphicsQuality==='performance'?2:6):(this.performanceTier==='low'?10:18);if(sparkleCount>0){const pos=new Float32Array(sparkleCount*3),rnd=seededRandom(admin?26568:26488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:admin?0xd7dbde:0xeedcff,size:.024,transparent:true,opacity:compact?.42:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;}if(!compact){const light=new THREE.PointLight(admin?0xc6cacf:0x7b42e8,admin?.38:.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;}root.rotation.x=.02;return root;
+    const sparkleCount=compact?(['minimal','performance'].includes(this.state.world?.graphicsQuality)?2:6):(this.performanceTier==='low'?10:18);if(sparkleCount>0){const pos=new Float32Array(sparkleCount*3),rnd=seededRandom(admin?26568:26488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:admin?0xd7dbde:0xeedcff,size:.024,transparent:true,opacity:compact?.42:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;}if(!compact){const light=new THREE.PointLight(admin?0xc6cacf:0x7b42e8,admin?.38:.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;}root.rotation.x=.02;return root;
   }
 
 createGalaxyOwnerHat(theme='owner',compact=false){
@@ -3114,9 +3173,14 @@ applyOwnerVisualState() {
 
 async ensureCorrectPlayerModel() {
     const player=bridgeSnapshot(),staffWhite=['owner','admin'].includes(this.activeStaffRole)&&!this.isPublicPlayerMode(),skin=staffWhite?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:player.gender;if(this.playerSkin===skin&&this.playerModel){this.updateRoleHud();return;}
-    this.modelPivot.clear();this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);this.playerModel=null;this.playerMixer=null;this.playerAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
-    try{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male),root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});this.playerModel=root;this.flightVisualPivot.add(root);this.cachePlayerBones(root);const locomotion=this.selectLocomotionClip(gltf.animations||[]);if(locomotion){this.playerMixer=new THREE.AnimationMixer(root);this.playerAction=this.playerMixer.clipAction(locomotion);this.playerAction.play();this.resetLocomotionToIdle(true);}}
-    catch(error){console.warn('Center-Charaktermodell konnte nicht geladen werden',error);this.playerModel=this.makeFallbackCharacter(skin);this.flightVisualPivot.add(this.playerModel);}this.playerSkin=skin;this.updateRoleHud();this.applyPerspectiveVisibility();this.applyOwnerAppearance();
+    this.modelPivot.clear();this.flightVisualPivot=new THREE.Group();this.flightVisualPivot.name='center-flight-visual-pivot';this.modelPivot.add(this.flightVisualPivot);this.playerModel=null;this.playerMixer=null;this.playerAction=null;this.playerWalkAction=null;this.playerRunAction=null;this.playerActiveAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
+    try{
+      const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male),root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});this.playerModel=root;this.flightVisualPivot.add(root);this.cachePlayerBones(root);
+      const walkClip=this.selectLocomotionClip(gltf.animations||[]);let runClip=null;
+      if(RUN_MODEL_PATHS[skin]){try{const runGltf=await this.gltfLoader.loadAsync(RUN_MODEL_PATHS[skin]);const source=this.selectLocomotionClip(runGltf.animations||[]);runClip=this.retargetLocomotionClip(source,root,'run');}catch(error){console.warn('Center-Rennanimation konnte nicht geladen werden',error);}}
+      if(walkClip||runClip){this.playerMixer=new THREE.AnimationMixer(root);if(walkClip){this.playerWalkAction=this.playerMixer.clipAction(walkClip);this.playerWalkAction.play();this.playerWalkAction.paused=true;this.playerAction=this.playerWalkAction;}if(runClip){this.playerRunAction=this.playerMixer.clipAction(runClip);this.playerRunAction.play();this.playerRunAction.paused=true;}this.resetLocomotionToIdle(true);}
+    } catch(error){console.warn('Center-Charaktermodell konnte nicht geladen werden',error);this.playerModel=this.makeFallbackCharacter(skin);this.flightVisualPivot.add(this.playerModel);}
+    this.playerSkin=skin;this.updateRoleHud();this.applyPerspectiveVisibility();this.applyOwnerAppearance();
   }
 
   makeFallbackCharacter(skin='male',variant=0) {
@@ -3130,7 +3194,7 @@ async ensureCorrectPlayerModel() {
   }
 
 updateRoleHud() {
-    const previousRole=this.activeStaffRole,local=roleSnapshot();let activeRole=local.role;if(this.onlineUser&&this.ownerVerificationChecked){const verified=canonicalStaffRole(this.verifiedStaffRole);activeRole=verified!=='player'?verified:'player';}this.activeStaffRole=activeRole;this.staffCapabilities=staffCapabilities(activeRole);this.isStaffActive=(STAFF_ROLE_LEVELS[activeRole]||0)>0;this.isOwnerActive=activeRole==='owner';
+    const previousRole=this.activeStaffRole,local=roleSnapshot();let activeRole=local.role;if(this.onlineUser&&this.ownerVerificationChecked){const verified=canonicalStaffRole(this.verifiedStaffRole);activeRole=verified!=='player'?verified:'player';}this.activeStaffRole=activeRole;this.staffCapabilities=staffCapabilities(activeRole);this.isStaffActive=(STAFF_ROLE_LEVELS[activeRole]||0)>0;this.isOwnerActive=activeRole==='owner';if(!['owner','admin'].includes(activeRole)&&Number(this.state?.needs?.health)>100)this.state.needs.health=100;
     this.overlay.classList.toggle('is-owner',this.isOwnerActive);this.overlay.classList.toggle('is-staff',this.isStaffActive);this.overlay.dataset.staffRole=activeRole;if(this.ownerMenuButton){this.ownerMenuButton.hidden=!this.isStaffActive;this.ownerMenuButton.title=`${STAFF_ROLE_LABELS[activeRole]||'Team'}-Menü (Punkt)`;}
     const caps=this.staffCapabilities,appearance=this.state.ownerAppearance,before=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(!caps.size)appearance.size=1;if(!caps.forms.includes(appearance.skin))appearance.skin='normal';if(!caps.items.includes(appearance.heldItem))appearance.heldItem='none';if(!(caps.vehicles||['none']).includes(appearance.vehicle))appearance.vehicle='none';if(!caps.ownerCosmetics){appearance.aura=false;appearance.cape=false;appearance.hat=false;}if(!this.isOwnerActive&&appearance.skin==='galaxy')appearance.skin='normal';if(!['owner','admin'].includes(activeRole))appearance.publicMode='staff';else if(activeRole==='admin'&&appearance.publicMode==='owner')appearance.publicMode='admin';
     for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1;if(!this.isStaffActive)this.closeOwnerMenu();const after=`${appearance.skin}|${appearance.aura}|${appearance.size}|${appearance.heldItem}|${appearance.cape}|${appearance.hat}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(previousRole!==activeRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
@@ -3265,14 +3329,14 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
   updateMovement(delta) {
     if(this.deathScreenOpen)return;
-    const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05;
+    const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05,startX=this.player.position.x,startY=this.player.position.y,startZ=this.player.position.z;
     const owner=this.isStaffActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god,scooter=owner&&this.state.ownerAppearance?.vehicle==='scooter'&&!!this.ownerScooterObject,plane=owner&&this.state.ownerAppearance?.vehicle==='plane'&&!!this.ownerPlaneObject,mounted=!!this.mountedHorse;
     const inWater=!fly&&!mounted&&!scooter&&!plane&&this.isInWater(this.player.position.x,this.player.position.z);
     const sprint=input.sprint&&(god||this.state.needs.stamina>2)&&!inWater;
     const speedBoost=owner?clamp(Number(this.ownerFlags.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER):1;
     const scooterKmh=[40,80,120,150][Math.floor(clamp(Number(this.state.ownerAppearance?.scooterTuning)||0,0,3))]||40;
     const baseSpeed=plane?(fly?(sprint?27:20):7.2):scooter?scooterKmh/3.6:mounted?(sprint?13.2:8.9):(sprint?8.8:5.1);
-    const speed=baseSpeed*(inWater?.48:1)*((this.state.needs.health<25&&!god)?.72:1)*((scooter||plane)?1:speedBoost);
+    const healthRatio=this.state.needs.health/Math.max(1,this.effectiveMaxHealth());const speed=baseSpeed*(inWater?.48:1)*((healthRatio<.25&&!god)?.72:1)*((scooter||plane)?1:speedBoost);
     let movedDistance=0;
     if(moving){
       const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length),sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
@@ -3325,7 +3389,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     }
     this.ensureValidWorldPosition();
     if(this.onGround&&!this.collides(this.player.position.x,this.player.position.z,this.player.position.y))this.lastSafePosition.copy(this.player.position);
-    this.walking=moving;this.renderScooterTuningBar();this.updatePlayerAnimation(delta,moving&&!(!this.onGround&&!fly),sprint);this.updateCurrentRegion();if(this.buildMode)this.updateBuildGhost();
+    this.walking=moving;this.sprinting=!!(moving&&sprint);const invDt=1/Math.max(.001,delta);this.motionVelocityX=clamp((this.player.position.x-startX)*invDt,-200,200);this.motionVelocityY=clamp((this.player.position.y-startY)*invDt,-200,200);this.motionVelocityZ=clamp((this.player.position.z-startZ)*invDt,-200,200);if(!moving){this.motionVelocityX*=.2;this.motionVelocityZ*=.2;}this.renderScooterTuningBar();this.updatePlayerAnimation(delta,moving&&!(!this.onGround&&!fly),sprint);this.updateCurrentRegion();if(this.buildMode)this.updateBuildGhost();
   }
 
   isInWater(x,z) { const river=Math.abs(x-riverCenter(z))<14.5; const lake=Math.hypot(x-188,(z+185)/.72)<48; const ocean=this.oceanZone&&Math.abs(x-this.oceanZone.x)<this.oceanZone.width*.5&&Math.abs(z-this.oceanZone.z)<this.oceanZone.depth*.5; return river||lake||!!ocean; }
@@ -3418,20 +3482,20 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
   updateNeeds(delta) {
     const invulnerable=this.isStaffActive&&this.ownerFlags.god;
-    if(invulnerable){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.updateSurvivalWarnings();return;}
+    if(invulnerable){for(const key of Object.keys(this.state.needs))this.state.needs[key]=key==='health'?this.effectiveMaxHealth():100;this.updateSurvivalWarnings();return;}
     const survival=this.state.skills.survival||0,weather=WEATHER[this.state.weather],factor=(1-survival*.075)*weather.drain;
     this.state.needs.hunger=Math.max(0,this.state.needs.hunger-delta*.035*factor);this.state.needs.thirst=Math.max(0,this.state.needs.thirst-delta*.052*factor);
     const hour=this.state.time,baseTemp=SEASONS[this.state.season].temp+weather.temp+(hour<6||hour>20?-5:0),nearFire=this.nearOwnedBuilding('campfire',8)||Math.hypot(this.player.position.x+40,this.player.position.z-177)<8;
     const warmthTarget=nearFire?100:clamp(70+baseTemp*2.2,0,100);this.state.needs.warmth+=(warmthTarget-this.state.needs.warmth)*Math.min(1,delta*.025);
     const emptyNeeds=(this.state.needs.hunger<=0?1:0)+(this.state.needs.thirst<=0?1:0)+(this.state.needs.warmth<=0?1:0);
-    if(emptyNeeds>0)this.state.needs.health=Math.max(0,this.state.needs.health-delta*emptyNeeds);else if(this.state.needs.hunger>55&&this.state.needs.thirst>55)this.state.needs.health=Math.min(100,this.state.needs.health+delta*.025);
+    if(emptyNeeds>0)this.state.needs.health=Math.max(0,this.state.needs.health-delta*emptyNeeds);else if(this.state.needs.hunger>55&&this.state.needs.thirst>55)this.state.needs.health=Math.min(this.effectiveMaxHealth(),this.state.needs.health+delta*.025);
     this.updateSurvivalWarnings();if(this.state.needs.health<=0&&!this.deathScreenOpen)this.respawnAfterCollapse();
   }
 
   updateSurvivalWarnings() {
-    const labels={hunger:'Hunger ist kritisch – iss schnell etwas.',thirst:'Durst ist kritisch – trink schnell etwas.',warmth:'Wärme ist kritisch – suche Feuer oder Schutz.',health:'Dein Leben ist kritisch.'};
-    for(const key of Object.keys(this.warningState)){const low=this.state.needs[key]<=20;if(low&&!this.warningState[key])this.toast(labels[key]);this.warningState[key]=low;}
-    this.overlay?.classList.toggle('is-critical-health',this.state.needs.health<=20);
+    const maxHealth=this.effectiveMaxHealth(),healthPct=this.state.needs.health/Math.max(1,maxHealth)*100,labels={hunger:'Hunger ist kritisch – iss schnell etwas.',thirst:'Durst ist kritisch – trink schnell etwas.',warmth:'Wärme ist kritisch – suche Feuer oder Schutz.',health:'Dein Leben ist kritisch.'};
+    for(const key of Object.keys(this.warningState)){const value=key==='health'?healthPct:this.state.needs[key],low=value<=20;if(low&&!this.warningState[key])this.toast(labels[key]);this.warningState[key]=low;}
+    this.overlay?.classList.toggle('is-critical-health',healthPct<=20);
     this.overlay?.classList.toggle('is-critical-needs',this.state.needs.hunger<=20||this.state.needs.thirst<=20||this.state.needs.warmth<=20);
   }
 
@@ -3448,7 +3512,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   showDeathScreen(){this.deathScreenOpen=true;if(this.deathScreen)this.deathScreen.hidden=false;if(document.pointerLockElement===this.canvas)document.exitPointerLock?.();}
   hideDeathScreen(){this.deathScreenOpen=false;if(this.deathScreen)this.deathScreen.hidden=true;}
   respawnFromDeath(){
-    this.hideDeathScreen();const x=Number(this.state.world?.spawnX||0),z=Number(this.state.world?.spawnZ||0),y=terrainHeightAt(x,z);this.player.position.set(x,y,z);this.lastSafePosition.copy(this.player.position);this.onGround=true;this.velocityY=0;this.fallStartY=null;this.state.needs={health:100,hunger:70,thirst:70,stamina:100,warmth:75};this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();this.renderHud(true);this.saveState(true);this.toast('Du wurdest wiederbelebt. Dein Loot ist zehn Minuten auf der Karte markiert.');
+    this.hideDeathScreen();const x=Number(this.state.world?.spawnX||0),z=Number(this.state.world?.spawnZ||0),y=terrainHeightAt(x,z);this.player.position.set(x,y,z);this.lastSafePosition.copy(this.player.position);this.onGround=true;this.velocityY=0;this.fallStartY=null;this.state.needs={health:this.effectiveMaxHealth(),hunger:70,thirst:70,stamina:100,warmth:75};this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();this.renderHud(true);this.saveState(true);this.toast('Du wurdest wiederbelebt. Dein Loot ist zehn Minuten auf der Karte markiert.');
   }
   ensureDeathLootMarker(){
     const loot=this.state.deathLoot;if(!loot||Number(loot.expiresAt||0)<=Date.now()){this.clearDeathLoot();return null;}if(this.deathLootObject?.parent)return this.deathLootObject;
@@ -3623,11 +3687,40 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     }
   }
 
+
+  staffLightningTarget(maxDistance=105){
+    const origin=new THREE.Vector3(),direction=new THREE.Vector3();this.camera.getWorldPosition(origin);this.camera.getWorldDirection(direction).normalize();const ray=new THREE.Ray(origin,direction),end=origin.clone().addScaledVector(direction,maxDistance);let best=null,bestT=maxDistance;
+    const consider=(point,radius,data,type)=>{const t=clamp(point.clone().sub(origin).dot(direction),0,maxDistance);if(t<=.45||t>=bestT)return;const closest=origin.clone().addScaledVector(direction,t);if(closest.distanceTo(point)<=radius){bestT=t;best={point:point.clone(),data,type};}};
+    for(const animal of this.animals){if(!animal?.active||!animal.group?.visible)continue;animal.group.getWorldPosition(this.tmpVector);this.tmpVector.y+=Math.max(.35,(animal.profile?.size||1)*.35);consider(this.tmpVector,Math.max(.65,(animal.profile?.size||1)*.38),animal,'animal');}
+    for(const npc of this.npcs){if(!npc?.group?.visible)continue;npc.group.getWorldPosition(this.tmpVector);this.tmpVector.y+=1;consider(this.tmpVector,.8,npc,'npc');}
+    if(best)end=origin.clone().addScaledVector(direction,bestT);
+    else if(direction.y<-.015){for(let t=2;t<=maxDistance;t+=1.5){const p=origin.clone().addScaledVector(direction,t),ground=terrainHeightAt(p.x,p.z)+.05;if(p.y<=ground){p.y=ground;end=p;break;}}}
+    return {origin,end,hit:best,ray};
+  }
+
+  spawnStaffLightning(origin,end,theme='owner'){
+    const group=new THREE.Group(),admin=theme==='admin',quality=this.state.world?.graphicsQuality||'medium',segments=['minimal','performance'].includes(quality)?7:quality==='low'?10:16,positions=new Float32Array((segments+1)*3),dir=end.clone().sub(origin),right=new THREE.Vector3().crossVectors(dir,new THREE.Vector3(0,1,0)).normalize(),up=new THREE.Vector3().crossVectors(right,dir).normalize();
+    for(let i=0;i<=segments;i++){const t=i/segments,p=origin.clone().lerp(end,t),jitter=Math.sin(Math.PI*t)*(i===0||i===segments?0:(.05+Math.random()*.12));p.addScaledVector(right,(Math.random()-.5)*jitter).addScaledVector(up,(Math.random()-.5)*jitter);positions[i*3]=p.x;positions[i*3+1]=p.y;positions[i*3+2]=p.z;}
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(positions,3));const mat=new THREE.LineBasicMaterial({color:admin?0xd4d7da:0xb56cff,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false}),line=new THREE.Line(geo,mat);group.add(line);if(!['minimal','performance'].includes(quality)){const impact=new THREE.Mesh(new THREE.SphereGeometry(.12,8,6),new THREE.MeshBasicMaterial({color:admin?0xf1f2f3:0xf5d8ff,transparent:true,opacity:.82,blending:THREE.AdditiveBlending,depthWrite:false}));impact.position.copy(end);group.add(impact);}this.scene.add(group);this.staffLightningEffects.push({group,start:performance.now(),duration:260});
+  }
+
+  updateStaffLightningEffects(now=performance.now()){
+    for(let i=this.staffLightningEffects.length-1;i>=0;i--){const fx=this.staffLightningEffects[i],t=(now-fx.start)/fx.duration;if(t>=1){this.disposeGeneratedVisual(fx.group);this.staffLightningEffects.splice(i,1);continue;}fx.group.traverse?.((o)=>{const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats)if(m?.transparent)m.opacity=Math.max(0,1-t);});}
+  }
+
+  castStaffLightning(){
+    if(!this.isStaffActive||!['owner','admin'].includes(this.effectivePublicStaffRole())||this.isPublicPlayerMode()||this.state.ownerAppearance?.heldItem!=='staff')return false;const theme=this.staffVisualTheme(),target=this.staffLightningTarget(),damage=this.staffDamageAmount();this.spawnStaffLightning(target.origin,target.end,theme);this.staffShotSeq=(Math.floor(Number(this.staffShotSeq)||0)+1)%1000000000;this.staffShotAtMs=Date.now();this.staffShotEnd.copy(target.end);this.publishPresence(true).catch(()=>{});this.triggerActionAnimation('weapon-attack',300);
+    if(target.hit?.type==='animal'){const animal=target.hit.data;animal.maxHp=Math.max(1,Number(animal.maxHp||145));animal.hp=Math.max(0,Number(animal.hp??animal.maxHp)-damage);if(animal.hp<=0){animal.active=false;if(animal.group)animal.group.visible=false;animal.respawnAt=Date.now()+120000;this.state.stats.animals+=1;this.toast(`⚡ ${animal.profile?.label||'Tier'} getroffen · besiegt (${damage} Schaden)`);}else this.toast(`⚡ ${animal.profile?.label||'Tier'}: -${damage} · ${Math.ceil(animal.hp)}/${animal.maxHp}`);}
+    else if(target.hit?.type==='npc'){const npc=target.hit.data;npc.staffEventHealth=Math.max(0,Number(npc.staffEventHealth??100)-damage);npc.hitFlashUntil=performance.now()+240;this.toast(`⚡ ${npc.name||'NPC'}: -${damage} Event-Schaden`);}
+    return true;
+  }
+
   performPrimaryAction() {
     if(this.deathScreenOpen)return;
     if(!this.opened||this.panel?.classList.contains('is-open')||this.ownerPanel?.classList.contains('is-open')||this.buildMode)return;
     const now=performance.now();if(now<this.actionCooldownUntil)return;this.actionCooldownUntil=now+PRIMARY_ACTION_COOLDOWN_MS;
     const hotspot=this.nearestHotspot,groundGap=this.player.position.y-this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
+    if(this.castStaffLightning())return;
     if(groundGap>1.65){this.toast('In der Luft kannst du keine Ressourcen bearbeiten.');return;}
     if(this.isOwnerActive&&this.state.ownerAppearance?.heldItem==='staff'&&hotspot&&['tree','rock','bush','animal','npc'].includes(hotspot.type)){this.ownerTelekinesis(hotspot);return;}
     if(this.firstPerson&&this.firstPersonArmsActions?.size){const kind=this.state.ownerAppearance?.heldItem!=='none'?this.state.ownerAppearance.heldItem:this.state.equippedTool||'none',clip=['sword','shovel','hoe','axe','ironAxe','hammer','pickaxe','eternalFlame','torch','spear'].includes(kind)?'knife_hit_01':kind==='none'?(this.nextPunchSide==='right'?'jab.r':'jab.l'):'jab.r';this.playFirstPersonArmsAction(clip,false);clearTimeout(this.firstPersonArmsReturnTimer);this.firstPersonArmsReturnTimer=setTimeout(()=>{if(this.opened)this.playFirstPersonArmsAction(this.currentFirstPersonArmsIdle(),true);},430);}
@@ -3863,7 +3956,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
   sleepUntilMorning() {
     this.state.day+=1;if((this.state.day-1)%DAYS_PER_SEASON===0){this.state.season=(this.state.season+1)%4;this.applySeasonVisuals();}
-    this.state.time=7;this.state.needs.stamina=100;this.state.needs.health=Math.min(100,this.state.needs.health+18);this.state.needs.hunger=Math.max(0,this.state.needs.hunger-10);this.state.needs.thirst=Math.max(0,this.state.needs.thirst-8);this.dailySettlementTick();this.toast(`Tag ${this.state.day} beginnt.`);this.renderHud(true);
+    this.state.time=7;this.state.needs.stamina=100;this.state.needs.health=Math.min(this.effectiveMaxHealth(),this.state.needs.health+18);this.state.needs.hunger=Math.max(0,this.state.needs.hunger-10);this.state.needs.thirst=Math.max(0,this.state.needs.thirst-8);this.dailySettlementTick();this.toast(`Tag ${this.state.day} beginnt.`);this.renderHud(true);
   }
 
   collectProduction(kind) {
@@ -3877,10 +3970,10 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
   useItem(item) {
     if(item==='berries'){if(this.state.inventory.berries<1)return this.toast('Keine Beeren.');this.state.inventory.berries-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+9);}
-    if(item==='cookedMeat'){if(this.state.inventory.cookedMeat<1)return this.toast('Kein gebratenes Fleisch.');this.state.inventory.cookedMeat-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+32);this.state.needs.health=Math.min(100,this.state.needs.health+4);}
+    if(item==='cookedMeat'){if(this.state.inventory.cookedMeat<1)return this.toast('Kein gebratenes Fleisch.');this.state.inventory.cookedMeat-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+32);this.state.needs.health=Math.min(this.effectiveMaxHealth(),this.state.needs.health+4);}
     if(item==='mushrooms'){if(this.state.inventory.mushrooms<1)return this.toast('Keine Pilze.');this.state.inventory.mushrooms-=1;this.state.needs.hunger=Math.min(100,this.state.needs.hunger+12);}
     if(item==='water'){if(this.state.inventory.water<1)return this.toast('Kein Wasser.');this.state.inventory.water-=1;this.state.needs.thirst=Math.min(100,this.state.needs.thirst+30);}
-    if(item==='medicine'){if(this.state.inventory.medicine<1)return this.toast('Kein Heilmittel.');this.state.inventory.medicine-=1;this.state.needs.health=Math.min(100,this.state.needs.health+45);this.state.needs.warmth=Math.min(100,this.state.needs.warmth+12);}
+    if(item==='medicine'){if(this.state.inventory.medicine<1)return this.toast('Kein Heilmittel.');this.state.inventory.medicine-=1;this.state.needs.health=Math.min(this.effectiveMaxHealth(),this.state.needs.health+45);this.state.needs.warmth=Math.min(100,this.state.needs.warmth+12);}
     this.renderHud(true);this.saveState();
   }
 
@@ -4045,7 +4138,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     const shadowMode=SHADOW_MODES.includes(this.state.world?.shadowMode)?this.state.world.shadowMode:'off';
     const controls=this.state.world?.controlsHint||'auto';
     return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Online-Modus</h3><p>Wenn Online aktiviert ist, siehst du andere Spieler im Center, die Online ebenfalls eingeschaltet haben. Die Einstellung bleibt aktiv und verbindet sich bei einer kurzen Unterbrechung automatisch neu.</p><div class="mdc-setting-options"><button class="${onlineEnabled?'active':''}" data-mdc-action="world-online" data-value="${onlineEnabled?'off':'on'}">${onlineEnabled?'Online ausschalten':'Online einschalten'}<small>${onlineEnabled?'Aktiviert':'Ausgeschaltet'}</small></button></div></div>
-      <div class="mdc-settings-card"><small>GRAFIKQUALITÄT</small><h3>Darstellung und Leistung</h3><p>Performance ist für sehr schwache PCs. Maximum erhöht Sichtweite, Auflösung, Vegetation und Schattendetails über Ultra hinaus.</p><div class="mdc-setting-options">${[['performance','Performance'],['low','Niedrig'],['medium','Mittel'],['high','Hoch'],['ultra','Ultra'],['maximum','Maximum']].map(([id,label])=>`<button class="${quality===id?'active':''}" data-mdc-action="world-quality" data-value="${id}">${label}<small>${id==='performance'?'Minimalste Last':id==='low'?'Sehr sparsam':id==='medium'?'Ausgewogen':id==='high'?'Charakterschatten':id==='ultra'?'Welt-Schatten':'Maximale Dichte & Details'}</small></button>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>GRAFIKQUALITÄT</small><h3>Darstellung und Leistung</h3><p>Minimal reduziert auch fremde Wings/Auren stark. Extreme ist die neue HD-Stufe mit maximaler Dichte, Auflösung und hochwertigen Online-Effekten.</p><div class="mdc-setting-options">${[['minimal','Minimal'],['performance','Performance'],['low','Niedrig'],['medium','Mittel'],['high','Hoch'],['ultra','Ultra'],['maximum','Maximum'],['extreme','Extreme HD']].map(([id,label])=>`<button class="${quality===id?'active':''}" data-mdc-action="world-quality" data-value="${id}">${label}<small>${id==='minimal'?'Extrem sparsam · Remote-Effekte reduziert':id==='performance'?'Sehr geringe Last':id==='low'?'Sparsam':id==='medium'?'Ausgewogen':id==='high'?'Mehr Details':id==='ultra'?'HD & Welt-Schatten':id==='maximum'?'Sehr hohe Dichte':'Höchste lokale & Online-Details'}</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>SCHATTEN</small><h3>Schattenmodus</h3><p>Der Modus kann unabhängig von der Grafikstufe angepasst werden.</p><div class="mdc-setting-options three">${[['off','Aus'],['character','Nur Charakter'],['world','Gesamte Welt']].map(([id,label])=>`<button class="${shadowMode===id?'active':''}" data-mdc-action="world-shadow-mode" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>TASTENBELEGUNG</small><h3>Menüs und Aktionen</h3><p>Du kannst die wichtigsten Center-Tasten direkt ändern.</p><div class="mdc-keybind-grid">${[['overview','Übersicht'],['inventory','Inventar'],['crafting','Herstellen'],['building','Bauen'],['perspective','Perspektive'],['interact','Interagieren'],['jump','Springen']].map(([id,label])=>`<label>${label}<select data-keybind-action="${id}">${this.keybindOptions(this.state.keybinds?.[id])}</select></label>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>STEUERUNGSHILFE</small><h3>Tastenanzeige</h3><p>Standardmäßig wird die Tastenhilfe beim Betreten nur einige Sekunden eingeblendet.</p><div class="mdc-setting-options three">${[['auto','Kurz beim Start'],['always','Immer anzeigen'],['hidden','Ausblenden']].map(([id,label])=>`<button class="${controls===id?'active':''}" data-mdc-action="world-controls" data-value="${id}">${label}</button>`).join('')}</div></div>
@@ -4117,7 +4210,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       this.openManagement('settings');
       this.toast(enabled?'Online ist aktiviert. Spieler werden verbunden.':'Online ausgeschaltet.');
     }
-    if(action==='world-quality'){const value=button.dataset.value;this.state.world.graphicsQuality=GRAPHICS_QUALITIES.includes(value)?value:'medium';this.state.world.shadowMode=['ultra','maximum'].includes(value)?'world':value==='high'?'character':'off';this.applyGraphicsQuality();this.saveState(true);this.openManagement('settings');const labels={performance:'Performance',low:'Niedrig',medium:'Mittel',high:'Hoch',ultra:'Ultra',maximum:'Maximum'};this.toast(`Grafikqualität: ${labels[value]||'Mittel'}.`);}
+    if(action==='world-quality'){const value=button.dataset.value;this.state.world.graphicsQuality=GRAPHICS_QUALITIES.includes(value)?value:'medium';this.state.world.shadowMode=['ultra','maximum','extreme'].includes(value)?'world':value==='high'?'character':'off';this.applyGraphicsQuality();this.saveState(true);this.openManagement('settings');const labels={minimal:'Minimal',performance:'Performance',low:'Niedrig',medium:'Mittel',high:'Hoch',ultra:'Ultra',maximum:'Maximum',extreme:'Extreme HD'};this.toast(`Grafikqualität: ${labels[value]||'Mittel'}.`);}
     if(action==='world-shadow-mode'){const value=button.dataset.value;this.state.world.shadowMode=SHADOW_MODES.includes(value)?value:'off';this.applyShadowSettings();this.saveState(true);this.openManagement('settings');this.toast(value==='off'?'Schatten ausgeschaltet.':value==='character'?'Nur Charakterschatten aktiv.':'Vollständige Weltschatten aktiv.');}
     if(action==='world-controls'){const value=button.dataset.value;this.state.world.controlsHint=['auto','always','hidden'].includes(value)?value:'auto';this.scheduleControlsHint(value==='always');if(value==='hidden')this.controlsHintElement?.classList.add('is-hidden');this.saveState(true);this.openManagement('settings');}
     if(action==='job-plus')this.adjustVillageJob(button.dataset.job,1);
@@ -4152,8 +4245,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
   renderHud(force=false) {
     const now=performance.now();if(!force&&now-this.lastHudAt<200)return;this.lastHudAt=now;
-    const needs=[['health','Leben','♥'],['hunger','Hunger','●'],['thirst','Durst','◆'],['stamina','Ausdauer','⚡'],['warmth','Wärme','♨']];
-    this.needsElement.innerHTML=needs.map(([id,name,icon])=>`<div class="${id} ${this.state.needs[id]<=20?'is-low':''}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${clamp(this.state.needs[id],0,100)}%"></b></i></div><strong>${Math.round(this.state.needs[id])}</strong></div>`).join('');
+    const needs=[['health','Leben','♥'],['hunger','Hunger','●'],['thirst','Durst','◆'],['stamina','Ausdauer','⚡'],['warmth','Wärme','♨']],maxHealth=this.effectiveMaxHealth();
+    this.needsElement.innerHTML=needs.map(([id,name,icon])=>{const max=id==='health'?maxHealth:100,value=this.state.needs[id],pct=clamp(value/Math.max(1,max)*100,0,100),low=pct<=20,display=id==='health'&&max>100?`${Math.round(value)}/${max}`:Math.round(value);return `<div class="${id} ${low?'is-low':''}"><span>${icon}</span><div><small>${name}</small><i><b style="width:${pct}%"></b></i></div><strong>${display}</strong></div>`;}).join('');
     const q=this.currentQuest();this.questElement.innerHTML=`<small>AUFGABE</small><strong>${q.title}</strong><span>${q.progress}</span>`;
     const equipped=this.state.equippedTool&&RECIPES[this.state.equippedTool]?`<div class="mdc-equipped-tool"><span>${RECIPES[this.state.equippedTool].icon}</span><b>${Math.round(this.state.tools[this.state.equippedTool]||0)}%</b><small>${RECIPES[this.state.equippedTool].name}</small></div>`:'';
     this.hotbarElement.innerHTML=`${equipped}<button data-mdc-use="berries"><span>●</span><b>${this.state.inventory.berries}</b><small>Beeren</small></button><button data-mdc-use="mushrooms"><span>🍄</span><b>${this.state.inventory.mushrooms}</b><small>Pilze</small></button><button data-mdc-use="cookedMeat"><span>🍖</span><b>${this.state.inventory.cookedMeat}</b><small>Fleisch</small></button><button data-mdc-use="water"><span>💧</span><b>${this.state.inventory.water}</b><small>Wasser</small></button><div><span>🪵</span><b>${this.state.inventory.logs}</b><small>Stämme</small></div><div><span>◆</span><b>${this.state.inventory.stone}</b><small>Stein</small></div><button data-mdc-use="medicine"><span>✚</span><b>${this.state.inventory.medicine}</b><small>Heilmittel</small></button><div><span>◉</span><b>${this.state.inventory.coins}</b><small>Münzen</small></div>`;
@@ -4180,8 +4273,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
 
 presencePayload(online=true, compatibility=this.onlineCompatibilityMode) {
     const player=bridgeSnapshot(),disguised=this.isPublicPlayerMode(),publicAlias=String(this.state.ownerAppearance?.publicAlias||'Center Spieler').trim().slice(0,30)||'Center Spieler',publicGender=this.state.ownerAppearance?.publicGender==='female'?'female':'male',visibleStaffRole=this.effectivePublicStaffRole(),staffVisualClaim=!disguised&&['owner','admin'].includes(visibleStaffRole),vanished=!!(this.isStaffActive&&this.ownerFlags.vanish);
-    const base={online:!!online&&!vanished,mapId:ONLINE_MAP_ID,sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,view:this.firstPerson?'first':'third',gender:disguised?publicGender:player.gender,firstName:disguised?publicAlias:player.firstName.slice(0,30),lastName:disguised?'':player.lastName.slice(0,30),level:player.level,slot:player.slot,ownerClaim:staffVisualClaim,updatedAtMs:Date.now(),version:CENTER_VERSION};if(compatibility)return {cottbus3D:base};
-    return {cottbus3D:{...base,mode:'center',y:Number((this.player?.position.y||0).toFixed(3)),staffRole:visibleStaffRole,vanished,flying:!!(this.isStaffActive&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,appearanceSkin:disguised?'normal':this.isStaffActive?this.state.ownerAppearance.skin:'normal',appearanceSize:disguised?1:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,heldItem:disguised?'none':this.isStaffActive?this.state.ownerAppearance.heldItem:'none',vehicle:disguised?'none':this.isStaffActive?this.state.ownerAppearance.vehicle:'none',ownerCape:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.cape),ownerHat:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.hat),ownerAura:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.aura)}};
+    const base={online:!!online&&!vanished,mapId:ONLINE_MAP_ID,sessionId:this.onlineSessionId,x:Number((this.player?.position.x||0).toFixed(3)),z:Number((this.player?.position.z||0).toFixed(3)),yaw:Number(this.yaw.toFixed(4)),bodyYaw:Number((this.modelPivot?.rotation.y||0).toFixed(4)),walking:!!this.walking,sprinting:!!this.sprinting,velocityX:Number((this.motionVelocityX||0).toFixed(3)),velocityY:Number((this.motionVelocityY||0).toFixed(3)),velocityZ:Number((this.motionVelocityZ||0).toFixed(3)),view:this.firstPerson?'first':'third',gender:disguised?publicGender:player.gender,firstName:disguised?publicAlias:player.firstName.slice(0,30),lastName:disguised?'':player.lastName.slice(0,30),level:player.level,slot:player.slot,ownerClaim:staffVisualClaim,updatedAtMs:Date.now(),version:CENTER_VERSION};if(compatibility){const {sprinting,velocityX,velocityY,velocityZ,...legacy}=base;return {cottbus3D:legacy};}
+    return {cottbus3D:{...base,mode:'center',y:Number((this.player?.position.y||0).toFixed(3)),staffRole:visibleStaffRole,vanished,flying:!!(this.isStaffActive&&this.ownerFlags.fly),season:this.state.season,day:this.state.day,appearanceSkin:disguised?'normal':this.isStaffActive?this.state.ownerAppearance.skin:'normal',appearanceSize:disguised?1:this.isStaffActive&&this.staffCapabilities?.size?Number(this.state.ownerAppearance.size||1):1,heldItem:disguised?'none':this.isStaffActive?this.state.ownerAppearance.heldItem:'none',vehicle:disguised?'none':this.isStaffActive?this.state.ownerAppearance.vehicle:'none',ownerCape:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.cape),ownerHat:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.hat),ownerAura:!!(staffVisualClaim&&this.staffCapabilities?.ownerCosmetics&&this.state.ownerAppearance.aura),staffShotSeq:Math.max(0,Math.floor(Number(this.staffShotSeq)||0)),staffShotAtMs:Math.max(0,Math.floor(Number(this.staffShotAtMs)||0)),staffShotX:Number((this.staffShotEnd?.x||0).toFixed(3)),staffShotY:Number((this.staffShotEnd?.y||0).toFixed(3)),staffShotZ:Number((this.staffShotEnd?.z||0).toFixed(3))}};
   }
 
   async prepareMultiplayer(){
@@ -4253,34 +4346,17 @@ async connectMultiplayer(prepared=null) {
 
   async publishPresence(force=false){
     if(!this.opened||!this.state.world?.onlineEnabled||!this.onlineFb||!this.onlineDocRef||!this.player||this.presenceWriteInFlight)return false;
-    const now=Date.now();
-    let payload=this.presencePayload(true);
-    let live=payload.cottbus3D;
-    let key=`${Number(live.x||0).toFixed(2)}|${Number(live.y||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}|${!!live.vanished}|${!!live.flying}|${live.appearanceSkin||'normal'}|${live.heldItem||'none'}|${live.vehicle||'none'}|${!!live.ownerAura}|${!!live.ownerCape}|${!!live.ownerHat}`;
-    if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;
-    this.presenceWriteInFlight=true;
+    const now=Date.now();let payload=this.presencePayload(true),live=payload.cottbus3D;
+    let key=`${Number(live.x||0).toFixed(2)}|${Number(live.y||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}|${!!live.sprinting}|${Number(live.velocityX||0).toFixed(1)}|${Number(live.velocityY||0).toFixed(1)}|${Number(live.velocityZ||0).toFixed(1)}|${!!live.vanished}|${!!live.flying}|${live.appearanceSkin||'normal'}|${live.heldItem||'none'}|${live.vehicle||'none'}|${!!live.ownerAura}|${!!live.ownerCape}|${!!live.ownerHat}|${Number(live.staffShotSeq||0)}`;
+    if(!force&&(now-this.lastPresenceWriteAt<ONLINE_WRITE_INTERVAL_MS||key===this.lastPresenceKey))return false;this.presenceWriteInFlight=true;
     try{
-      try{
-        await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});
-      }catch(error){
-        if(!this.onlineCompatibilityMode&&isFirebasePermissionError(error)){
-          this.onlineCompatibilityMode=true;
-          payload=this.presencePayload(true,true);
-          live=payload.cottbus3D;
-          key=`${Number(live.x||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}`;
-          await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});
-        }else throw error;
-      }
-      if(this.onlinePresenceRef){
-        try{await this.onlineFb.setDoc(this.onlinePresenceRef,{cottbus3D:payload.cottbus3D},{merge:false});this.onlinePresenceAvailable=true;}
-        catch(error){this.onlinePresenceAvailable=false;if(!isFirebasePermissionError(error))console.warn('Center-Präsenzkanal konnte nicht geschrieben werden; Profil-Fallback bleibt aktiv.',error);}
-      }
-      this.lastPresenceWriteAt=Date.now();
-      this.lastPresenceKey=key;
-      return true;
-    }finally{
-      this.presenceWriteInFlight=false;
-    }
+      // Die schnelle Center-Präsenz läuft mit ~4,5 Hz. Das große playerProfiles-Dokument
+      // wird nur noch bei Heartbeats/Änderungen regelmäßig gespiegelt – weniger Firestore-Last.
+      const writeProfile=force||!this.onlinePresenceAvailable||now-this.lastProfilePresenceWriteAt>3000;
+      if(writeProfile){try{await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});this.lastProfilePresenceWriteAt=Date.now();}catch(error){if(!this.onlineCompatibilityMode&&isFirebasePermissionError(error)){this.onlineCompatibilityMode=true;payload=this.presencePayload(true,true);live=payload.cottbus3D;key=`${Number(live.x||0).toFixed(2)}|${Number(live.z||0).toFixed(2)}|${Number(live.bodyYaw||0).toFixed(2)}|${!!live.walking}`;await this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true});this.lastProfilePresenceWriteAt=Date.now();}else throw error;}}
+      if(this.onlinePresenceRef&&!this.onlineCompatibilityMode){try{const dedicatedPayload=this.presencePayload(true,false);await this.onlineFb.setDoc(this.onlinePresenceRef,{cottbus3D:dedicatedPayload.cottbus3D},{merge:false});this.onlinePresenceAvailable=true;}catch(error){this.onlinePresenceAvailable=false;if(!isFirebasePermissionError(error))console.warn('Center-Präsenzkanal konnte nicht geschrieben werden; Profil-Fallback bleibt aktiv.',error);}}
+      this.lastPresenceWriteAt=Date.now();this.lastPresenceKey=key;return true;
+    }finally{this.presenceWriteInFlight=false;}
   }
 
   async disconnectMultiplayer(userInitiated=false){
@@ -4318,7 +4394,7 @@ async connectMultiplayer(prepared=null) {
   }
 
 async applyPresenceSnapshot(snapshot){
-    if(!this.opened)return;const ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=this.isOwnerActive||roleSnapshot().isOwner,candidates=[];for(const docSnap of snapshot.docs||[]){const uid=docSnap.id;if(!uid||uid===ownUid)continue;const data=docSnap.data?.()||{},live=data.cottbus3D||{},updated=Number(live.updatedAtMs||0),sameCenter=live.mapId===ONLINE_MAP_ID||live.mode==='center';if(!live.online||!sameCenter||!updated||now-updated>ONLINE_STALE_MS)continue;if(live.vanished&&!viewerIsOwner){this.removeRemotePlayer(uid);continue;}const dx=Number(live.x||0)-this.player.position.x,dz=Number(live.z||0)-this.player.position.z;candidates.push({uid,data,live,updated,dist2:dx*dx+dz*dz});}
+    if(!this.opened)return;const ownUid=this.onlineUser?.uid||'',now=Date.now(),viewerIsOwner=this.isOwnerActive||roleSnapshot().isOwner,candidates=[];for(const docSnap of snapshot.docs||[]){const uid=docSnap.id;if(!uid||uid===ownUid)continue;const data=docSnap.data?.()||{},live=data.cottbus3D||{},updated=Number(live.updatedAtMs||0),sameCenter=live.mapId===ONLINE_MAP_ID||live.mode==='center';if(!live.online||!sameCenter||!updated||now-updated>120000)continue;if(live.vanished&&!viewerIsOwner){this.removeRemotePlayer(uid);continue;}const dx=Number(live.x||0)-this.player.position.x,dz=Number(live.z||0)-this.player.position.z;candidates.push({uid,data,live,updated,dist2:dx*dx+dz*dz});}
     candidates.sort((a,b)=>a.dist2-b.dist2||b.updated-a.updated);const selected=candidates.slice(0,this.maxVisibleRemotePlayers()),active=new Set(selected.map((entry)=>entry.uid));await Promise.allSettled(selected.map(({uid,data,live})=>this.upsertRemotePlayer(uid,data,live)));for(const uid of [...this.remotePlayers.keys()])if(!active.has(uid))this.removeRemotePlayer(uid);this.setOnlineUi(this.onlineConnected?'online':'connecting',`${1+this.remotePlayers.size} Spieler im Center.`,1+this.remotePlayers.size);if(this.ownerPanel?.classList.contains('is-open')&&this.isStaffActive)this.renderOwnerMenu();
   }
 
@@ -4329,22 +4405,33 @@ async verifiedRemoteSkin(uid,live){
 
 async upsertRemotePlayer(uid,profile,live){
     let remote=this.remotePlayers.get(uid);const existed=!!remote,previousAppearance=remote?.appearanceSkin||'',name=String(`${live.firstName||''} ${live.lastName||''}`.trim()||profile.displayName||'Spieler').slice(0,44),level=Math.max(0,Math.floor(Number(live.level||0)));
-    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',staffVisualRole:'player',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,heldObject:null,heldAnchor:null,renderedHeldItem:'',renderedAppearanceSkin:'',renderedVehicle:'',lastVisualKey:'',lastFormKey:'',lastCosmeticKey:'',lastHeldKey:'',lastMaterialThemeKey:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,flying:!!live.flying,vanished:!!live.vanished,verticalVelocity:0,lastSeenAt:Number(live.updatedAtMs||Date.now())};this.remotePlayers.set(uid,remote);}else if(remote.name!==name){remote.label?.removeFromParent?.();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);remote.label.position.y=2.4;remote.group.add(remote.label);remote.name=name;}
+    if(!remote){const group=new THREE.Group(),pivot=new THREE.Group();group.add(pivot);group.position.set(Number(live.x||0),Number.isFinite(Number(live.y))?Number(live.y):terrainHeightAt(Number(live.x||0),Number(live.z||0)),Number(live.z||0));const label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);label.position.y=2.4;group.add(label);this.scene.add(group);remote={uid,group,pivot,label,name,skin:'',staffVisualRole:'player',mixer:null,cape:null,hat:null,aura:null,formObject:null,vehicleObject:null,heldObject:null,heldAnchor:null,renderedHeldItem:'',renderedAppearanceSkin:'',renderedVehicle:'',lastVisualKey:'',lastFormKey:'',lastCosmeticKey:'',lastHeldKey:'',lastMaterialThemeKey:'',targetX:Number(live.x||0),targetY:Number(live.y||0),targetZ:Number(live.z||0),targetYaw:Number(live.bodyYaw??live.yaw??0),walking:!!live.walking,sprinting:!!live.sprinting,flying:!!live.flying,vanished:!!live.vanished,velocityX:Number(live.velocityX||0),velocityY:Number(live.velocityY||0),velocityZ:Number(live.velocityZ||0),verticalVelocity:Number(live.velocityY||0),lastSnapshotReceivedAt:performance.now(),lastSeenAt:Date.now(),sourceUpdatedAt:Number(live.updatedAtMs||Date.now()),lastShotSeq:0};this.remotePlayers.set(uid,remote);}else if(remote.name!==name){remote.label?.removeFromParent?.();remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.();remote.label=this.makeLabel(name,`LEVEL ${level} · ONLINE`);remote.label.position.y=2.4;remote.group.add(remote.label);remote.name=name;}
     remote.appearanceSkin=['shadow','oaura'].includes(String(live.appearanceSkin||''))?'galaxy':String(live.appearanceSkin||'normal');if(existed&&previousAppearance&&previousAppearance!==remote.appearanceSkin)this.spawnTransformationEffectAt(remote.group.position,true);remote.vehicle=String(live.vehicle||'none');remote.heldItem=String(live.heldItem||'none');remote.appearanceSize=clamp(Number(live.appearanceSize)||1,.45,2.5);remote.ownerAura=!!live.ownerAura;remote.ownerCape=!!live.ownerCape;remote.ownerHat=!!live.ownerHat;
-    const nextSeen=Number(live.updatedAtMs||Date.now()),nextY=Number(live.y||terrainHeightAt(Number(live.x||0),Number(live.z||0))),remoteDt=Math.max(.1,(nextSeen-Number(remote.lastSeenAt||nextSeen))/1000);remote.verticalVelocity=(nextY-Number(remote.targetY??nextY))/remoteDt;remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=nextY;remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.lastSeenAt=nextSeen;remote.pivot.scale.setScalar(remote.appearanceSize);
-    const identity=await this.verifiedRemoteSkin(uid,live);remote.staffVisualRole=identity.role;remote.ownerVisual=['owner','admin'].includes(identity.role);if(remote.skin!==identity.skin)await this.installRemoteModel(remote,identity.skin);const formKey=`${remote.skin}|${remote.staffVisualRole}|${remote.appearanceSkin}|${remote.vehicle}|${remote.appearanceSize.toFixed(2)}|${remote.vanished?1:0}`,cosmeticKey=`${remote.staffVisualRole}|${remote.appearanceSkin}|${remote.vehicle}|${remote.ownerAura?1:0}|${remote.ownerCape?1:0}|${remote.ownerHat?1:0}|${remote.vanished?1:0}`,heldKey=`${remote.staffVisualRole}|${remote.heldItem}|${remote.vehicle}|${remote.appearanceSkin}|${remote.vanished?1:0}`;if(remote.lastFormKey!==formKey){this.applyRemoteFormAndVehicle(remote);remote.lastFormKey=formKey;remote.lastCosmeticKey='';remote.lastHeldKey='';}if(remote.lastCosmeticKey!==cosmeticKey){this.applyRemoteOwnerAura(remote);remote.lastCosmeticKey=cosmeticKey;}if(remote.lastHeldKey!==heldKey){this.applyRemoteHeldItem(remote);remote.lastHeldKey=heldKey;}remote.lastVisualKey=`${formKey}|${cosmeticKey}|${heldKey}`;remote.group.visible=!remote.vanished||this.isOwnerActive||roleSnapshot().isOwner;
+    const nextSeen=Number(live.updatedAtMs||Date.now()),nextY=Number(live.y||terrainHeightAt(Number(live.x||0),Number(live.z||0))),remoteDt=Math.max(.08,(nextSeen-Number(remote.sourceUpdatedAt||nextSeen))/1000);remote.verticalVelocity=Number.isFinite(Number(live.velocityY))?clamp(Number(live.velocityY),-200,200):(nextY-Number(remote.targetY??nextY))/remoteDt;remote.velocityX=clamp(Number(live.velocityX)||0,-200,200);remote.velocityY=remote.verticalVelocity;remote.velocityZ=clamp(Number(live.velocityZ)||0,-200,200);remote.targetX=clamp(live.x,this.worldBounds.minX,this.worldBounds.maxX);remote.targetY=nextY;remote.targetZ=clamp(live.z,this.worldBounds.minZ,this.worldBounds.maxZ);remote.targetYaw=Number(live.bodyYaw??live.yaw??0);remote.walking=!!live.walking;remote.sprinting=!!live.sprinting;remote.flying=!!live.flying;remote.vanished=!!live.vanished;remote.sourceUpdatedAt=nextSeen;remote.lastSnapshotReceivedAt=performance.now();remote.lastSeenAt=Date.now();remote.pivot.scale.setScalar(remote.appearanceSize);
+    const identity=await this.verifiedRemoteSkin(uid,live);remote.staffVisualRole=identity.role;remote.ownerVisual=['owner','admin'].includes(identity.role);if(remote.skin!==identity.skin)await this.installRemoteModel(remote,identity.skin);const shotSeq=Math.max(0,Math.floor(Number(live.staffShotSeq)||0)),shotAt=Number(live.staffShotAtMs||0);if(shotSeq>Number(remote.lastShotSeq||0)&&Date.now()-shotAt<1800&&['owner','admin'].includes(remote.staffVisualRole)){const from=remote.group.position.clone().add(new THREE.Vector3(0,1.45,0)),to=new THREE.Vector3(Number(live.staffShotX||from.x),Number(live.staffShotY||from.y),Number(live.staffShotZ||from.z));this.spawnStaffLightning(from,to,remote.staffVisualRole==='admin'?'admin':'owner');remote.lastShotSeq=shotSeq;}else if(shotSeq>Number(remote.lastShotSeq||0))remote.lastShotSeq=shotSeq;const formKey=`${remote.skin}|${remote.staffVisualRole}|${remote.appearanceSkin}|${remote.vehicle}|${remote.appearanceSize.toFixed(2)}|${remote.vanished?1:0}`,cosmeticKey=`${remote.staffVisualRole}|${remote.appearanceSkin}|${remote.vehicle}|${remote.ownerAura?1:0}|${remote.ownerCape?1:0}|${remote.ownerHat?1:0}|${remote.vanished?1:0}|${this.remoteCosmeticTier()}`,heldKey=`${remote.staffVisualRole}|${remote.heldItem}|${remote.vehicle}|${remote.appearanceSkin}|${remote.vanished?1:0}`;if(remote.lastFormKey!==formKey){this.applyRemoteFormAndVehicle(remote);remote.lastFormKey=formKey;remote.lastCosmeticKey='';remote.lastHeldKey='';}if(remote.lastCosmeticKey!==cosmeticKey){this.applyRemoteOwnerAura(remote);remote.lastCosmeticKey=cosmeticKey;}if(remote.lastHeldKey!==heldKey){this.applyRemoteHeldItem(remote);remote.lastHeldKey=heldKey;}remote.lastVisualKey=`${formKey}|${cosmeticKey}|${heldKey}`;remote.group.visible=!remote.vanished||this.isOwnerActive||roleSnapshot().isOwner;
   }
 
-  async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;return{root,animations:gltf.animations||[]};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
+  async remoteTemplate(skin){if(this.remoteModelCache.has(skin))return this.remoteModelCache.get(skin);const promise=(async()=>{const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;let runAnimations=[];if(RUN_MODEL_PATHS[skin])try{const run=await this.gltfLoader.loadAsync(RUN_MODEL_PATHS[skin]);runAnimations=run.animations||[];}catch{}return{root,animations:gltf.animations||[],runAnimations};})();this.remoteModelCache.set(skin,promise);try{return await promise;}catch(e){this.remoteModelCache.delete(skin);throw e;}}
 
   collectRemotePoseBones(root){
-    const all=[];root?.traverse?.((object)=>{if(object?.isBone){object.userData.__centerRemoteBaseQuaternion=object.quaternion.clone();all.push(object);}});const find=(pattern)=>all.find((bone)=>pattern.test(bone.name||''));return{
+    const all=[];root?.traverse?.((object)=>{if(object?.isBone){object.userData.__centerRemoteBaseQuaternion=object.quaternion.clone();object.userData.__centerRemoteBasePosition=object.position.clone();all.push(object);}});const find=(pattern)=>all.find((bone)=>pattern.test(bone.name||'')),result={all,
       upperRight:find(/(?:a r m_up_R|right(?:upper)?arm|upperarm.*right|bip R UpperArm|mixamorig:RightArm)/i),lowerRight:find(/(?:a r m_dawn_R|right.*forearm|forearm.*right|bip R Forearm|mixamorig:RightForeArm)/i),
       upperLeft:find(/(?:a r m_up_L|left(?:upper)?arm|upperarm.*left|bip L UpperArm|mixamorig:LeftArm)/i),lowerLeft:find(/(?:a r m_dawn_L|left.*forearm|forearm.*left|bip L Forearm|mixamorig:LeftForeArm)/i),
+      shoulderRight:find(/(?:shoulder_R|right.*shoulder|bip R Clavicle|mixamorig:RightShoulder)/i),shoulderLeft:find(/(?:shoulder_L|left.*shoulder|bip L Clavicle|mixamorig:LeftShoulder)/i),
       upperLegRight:find(/(?:thigh.*r|right.*thigh|right.*upleg|bip R Thigh|mixamorig:RightUpLeg|leg_up_R)/i),lowerLegRight:find(/(?:calf.*r|right.*calf|right.*leg|bip R Calf|mixamorig:RightLeg|leg_dawn_R)/i),
       upperLegLeft:find(/(?:thigh.*l|left.*thigh|left.*upleg|bip L Thigh|mixamorig:LeftUpLeg|leg_up_L)/i),lowerLegLeft:find(/(?:calf.*l|left.*calf|left.*leg|bip L Calf|mixamorig:LeftLeg|leg_dawn_L)/i),
-      chest:find(/(?:^chest|spine_?2|upperchest)/i),head:find(/(?:^head|head_)/i),handRight:find(/(?:right.*hand|hand.*right|bip R Hand|mixamorig:RightHand|hand_R)/i)
-    };}
+      chest:find(/(?:^chest|spine_?2|upperchest)/i),neck:find(/(?:^neck|neck_)/i),head:find(/(?:^head|head_)/i),handRight:find(/(?:right.*hand|hand.*right|bip R Hand|mixamorig:RightHand|hand_R)/i)
+    };
+    const set=(bone,rot)=>{if(!bone?.userData.__centerRemoteBaseQuaternion)return;bone.userData.__centerRemoteIdleQuaternion=bone.userData.__centerRemoteBaseQuaternion.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(rot.x||0,rot.y||0,rot.z||0)));};
+    set(result.upperRight,{x:.025,y:.018,z:1.49});set(result.upperLeft,{x:.025,y:-.018,z:-1.49});set(result.lowerRight,{x:-.075,y:-.012,z:.025});set(result.lowerLeft,{x:-.075,y:.012,z:-.025});set(result.shoulderRight,{z:.01});set(result.shoulderLeft,{z:-.01});set(result.chest,{x:.01});set(result.neck,{x:.01});set(result.head,{x:.01});return result;
+  }
+
+
+  applyRemoteIdlePose(remote,delta=.016,instant=false){
+    const bones=remote?.bones;if(!bones)return;const alpha=instant?1:1-Math.exp(-Math.max(.001,delta)*4.5),now=performance.now(),breathe=Math.sin(now*.00155+remote.uid.length)*.018,look=Math.sin(now*.00057+remote.uid.length*.21)*.12;
+    for(const bone of bones.all||[]){const q=bone.userData.__centerRemoteIdleQuaternion||bone.userData.__centerRemoteBaseQuaternion,p=bone.userData.__centerRemoteBasePosition;if(q)bone.quaternion.slerp(q,alpha);if(p)bone.position.lerp(p,alpha);}
+    if(bones.chest){bones.chest.rotateX(breathe);bones.chest.rotateY(look*.18);}if(bones.neck)bones.neck.rotateY(look*.42);if(bones.head){bones.head.rotateY(look*.62);bones.head.rotateX(Math.sin(now*.00041+remote.uid.length)*.025);}if(bones.upperRight)bones.upperRight.rotateX(Math.sin(now*.00115)*.018);if(bones.upperLeft)bones.upperLeft.rotateX(-Math.sin(now*.00115)*.018);
+  }
 
   applyRemoteSpecialPose(remote,delta=.016,airborne=false){
     const bones=remote?.bones;if(!bones)return;const alpha=1-Math.exp(-Math.max(.001,delta)*8),q=(bone,euler)=>{if(!bone?.userData.__centerRemoteBaseQuaternion)return;const target=bone.userData.__centerRemoteBaseQuaternion.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(euler.x||0,euler.y||0,euler.z||0)));bone.quaternion.slerp(target,alpha);};
@@ -4352,7 +4439,7 @@ async upsertRemotePlayer(uid,profile,live){
     else if(airborne){q(bones.upperRight,{x:-.16,z:-.16});q(bones.upperLeft,{x:-.16,z:.16});q(bones.upperLegRight,{x:-.28});q(bones.lowerLegRight,{x:.5});q(bones.upperLegLeft,{x:-.2});q(bones.lowerLegLeft,{x:.4});q(bones.chest,{x:.025});}
   }
 
-  async installRemoteModel(remote,skin){remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();this.disposeClonedModelMaterials(remote.model);remote.pivot.clear();remote.mixer=null;remote.action=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem='';remote.renderedAppearanceSkin='';remote.renderedVehicle='';remote.lastVisualKey='';remote.lastFormKey='';remote.lastCosmeticKey='';remote.lastHeldKey='';remote.lastMaterialThemeKey='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const locomotion=this.selectLocomotionClip(template.animations);if(locomotion){remote.mixer=new THREE.AnimationMixer(model);remote.action=remote.mixer.clipAction(locomotion);remote.action.play();remote.action.time=0;remote.action.paused=true;remote.mixer.update(0);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
+  async installRemoteModel(remote,skin){remote.mixer?.stopAllAction?.();remote.vehicleObject?.userData?.mixer?.stopAllAction?.();this.disposeGeneratedVisual(remote.cape);this.disposeGeneratedVisual(remote.hat);this.disposeGeneratedVisual(remote.aura);this.disposeGeneratedVisual(remote.formObject);this.disposeGeneratedVisual(remote.vehicleObject);this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();this.disposeClonedModelMaterials(remote.model);remote.pivot.clear();remote.mixer=null;remote.action=null;remote.walkAction=null;remote.runAction=null;remote.activeAction=null;remote.wasWalking=false;remote.model=null;remote.bones=null;remote.aura=null;remote.cape=null;remote.hat=null;remote.formObject=null;remote.vehicleObject=null;remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem='';remote.renderedAppearanceSkin='';remote.renderedVehicle='';remote.lastVisualKey='';remote.lastFormKey='';remote.lastCosmeticKey='';remote.lastHeldKey='';remote.lastMaterialThemeKey='';try{const template=await this.remoteTemplate(skin),model=cloneSkeleton(template.root);model.traverse((object)=>{if(object.isMesh&&object.material)object.material=Array.isArray(object.material)?object.material.map((m)=>m.clone()):object.material.clone();});remote.model=model;remote.bones=this.collectRemotePoseBones(model);remote.pivot.add(model);const walk=this.selectLocomotionClip(template.animations),runSource=this.selectLocomotionClip(template.runAnimations||[]),run=this.retargetLocomotionClip(runSource,model,'remote-run');if(walk||run){remote.mixer=new THREE.AnimationMixer(model);if(walk){remote.walkAction=remote.mixer.clipAction(walk);remote.walkAction.play();remote.walkAction.paused=true;remote.action=remote.walkAction;}if(run){remote.runAction=remote.mixer.clipAction(run);remote.runAction.play();remote.runAction.paused=true;}remote.mixer.update(0);this.applyRemoteIdlePose(remote,.016,true);}}catch{remote.model=this.makeFallbackCharacter(skin);remote.pivot.add(remote.model);}remote.skin=skin;this.applyRemoteOwnerAura(remote);}
 
   applyRemoteFormAndVehicle(remote) {
     if(!remote?.model)return;const visibleForms=['ball','crystal','bush','tree','rock','grass',...ANIMAL_FORM_IDS],appearance=visibleForms.includes(remote.appearanceSkin)?remote.appearanceSkin:['normal','galaxy'].includes(remote.appearanceSkin)?remote.appearanceSkin:'normal',vehicle=['scooter','plane'].includes(remote.vehicle)?remote.vehicle:'none';
@@ -4368,10 +4455,25 @@ async upsertRemotePlayer(uid,profile,live){
     const form=remote?.formObject;if(!form||!ANIMAL_FORM_IDS.includes(form.userData.kind))return;const mixer=form.userData.mixer,idle=form.userData.idleAction,move=form.userData.moveAction,wantsMove=form.userData.kind==='owl'?(remote.flying||remote.walking):remote.walking,singleMove=!!form.userData.singleMoveAction;if(mixer){if(singleMove&&move){if(wantsMove){move.enabled=true;move.paused=false;}else{move.paused=true;move.time=0;}}else if(move&&idle&&move!==idle){if(wantsMove&&!move.enabled){idle.fadeOut(.18);move.enabled=true;move.reset().fadeIn(.18).play();}else if(!wantsMove&&move.enabled){move.fadeOut(.2);move.enabled=false;idle.reset().fadeIn(.2).play();}}mixer.update(delta);}this.applyProceduralAnimalWalk(form.userData.animalVisual||form,wantsMove,delta);if(form.userData.kind==='owl'&&remote.flying){form.rotation.x=-.12;form.rotation.z=Math.sin(performance.now()*.002)*.04;}else{form.rotation.x*=Math.exp(-delta*8);form.rotation.z*=Math.exp(-delta*8);}
   }
 
+
+  createCheapRemoteWings(theme='owner'){
+    const admin=theme==='admin',root=new THREE.Group();root.name=admin?'remote-admin-gray-wings-lite':'remote-galaxy-wings-lite';root.userData.theme=theme;root.userData.compact=true;const mat=new THREE.MeshBasicMaterial({color:admin?0xaeb3b8:0x7140b8,transparent:true,opacity:.82,side:THREE.DoubleSide,depthWrite:true});
+    const make=(side)=>{const shape=new THREE.Shape();shape.moveTo(0,0);shape.lineTo(side*.72,.26);shape.lineTo(side*1.05,.02);shape.lineTo(side*.82,-.28);shape.lineTo(side*.22,-.15);shape.closePath();const geo=new THREE.ShapeGeometry(shape),pivot=new THREE.Group(),mesh=new THREE.Mesh(geo,mat.clone());mesh.position.z=-.02;pivot.position.x=side*.10;pivot.add(mesh);root.add(pivot);return{pivot,mesh};};root.userData.left=make(-1);root.userData.right=make(1);return root;
+  }
+  createCheapRemoteAura(theme='owner'){
+    const admin=theme==='admin',root=new THREE.Group();root.name='remote-aura-lite';root.userData.theme=theme;const mat=new THREE.MeshBasicMaterial({color:admin?0xb8bdc2:0x824bd0,transparent:true,opacity:.38,depthWrite:false,blending:THREE.AdditiveBlending});const ring=new THREE.Mesh(new THREE.TorusGeometry(.78,.018,5,24),mat);ring.rotation.x=Math.PI/2;ring.position.y=1.0;root.add(ring);root.userData.rings=[ring];return root;
+  }
+  simplifyRemoteVisual(root,tier='medium'){
+    if(!root)return;root.traverse?.((object)=>{if(object.isLight)object.visible=tier==='high';if(object.isPoints)object.visible=tier!=='minimal'&&tier!=='low';if(object.isMesh){object.castShadow=tier==='high'&&!!this.state.world?.shadows;object.receiveShadow=false;}});
+  }
+
 applyRemoteOwnerAura(remote) {
-    if(!remote?.model)return;const role=remote.staffVisualRole||'player',isStaffVisual=['owner','admin'].includes(role),theme=role==='admin'?'admin':'owner',galaxy=role==='owner'&&remote.appearanceSkin==='galaxy',auraActive=isStaffVisual&&remote.ownerAura&&!remote.vanished,materialKey=`${role}|${galaxy?1:0}|${remote.vanished?1:0}`;if(remote.lastMaterialThemeKey!==materialKey){if(galaxy&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,galaxy,this.ownerGalaxySkinTexture);const original=mat.userData.__centerOriginalMaterial||{},opacity=remote.vanished?.3:galaxy?.74:(original.opacity??1);mat.transparent=remote.vanished||galaxy||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!(remote.vanished||galaxy)&&original.depthWrite!==false;}});remote.lastMaterialThemeKey=materialKey;}
-    if(remote.aura&&remote.aura.userData?.theme!==theme){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=this.createGalaxyAuraGroup(true,theme);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;const visible=isStaffVisual&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&remote.cape.userData?.theme!==theme){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.hat&&remote.hat.userData?.theme!==theme){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
-    if(visible&&remote.ownerCape&&!remote.cape){remote.cape=this.createGalaxyOwnerCape(theme,true);remote.cape.scale.setScalar(.9);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion()))remote.cape.position.set(0,1.46,-.24);}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;if(visible&&remote.ownerHat&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(theme,true);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat;
+    if(!remote?.model)return;const role=remote.staffVisualRole||'player',isStaffVisual=['owner','admin'].includes(role),theme=role==='admin'?'admin':'owner',galaxy=role==='owner'&&remote.appearanceSkin==='galaxy',tier=this.remoteCosmeticTier(),auraActive=isStaffVisual&&remote.ownerAura&&!remote.vanished&&tier!=='minimal',materialKey=`${role}|${galaxy?1:0}|${remote.vanished?1:0}|${tier}`;
+    if(remote.lastMaterialThemeKey!==materialKey){if(galaxy&&tier!=='minimal'&&!this.ownerGalaxySkinTexture){this.ownerGalaxySkinTexture=this.createGalaxyTexture(256,512);this.ownerGalaxySkinTexture.repeat.set(1.35,2.7);}remote.model.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;this.applyGalaxyMaterialMode(mat,galaxy,tier==='minimal'?null:this.ownerGalaxySkinTexture);const original=mat.userData.__centerOriginalMaterial||{};if(galaxy&&tier==='minimal'){if('color'in mat)mat.color?.set?.(0x43206c);if('emissive'in mat)mat.emissive?.set?.(0x160526);if('emissiveIntensity'in mat)mat.emissiveIntensity=.35;}const opacity=remote.vanished?.3:(original.opacity??1);mat.transparent=remote.vanished||!!original.transparent||opacity<1;mat.opacity=opacity;mat.depthWrite=!remote.vanished&&original.depthWrite!==false;mat.needsUpdate=true;}});remote.lastMaterialThemeKey=materialKey;}
+    if(remote.aura&&(remote.aura.userData?.theme!==theme||remote.aura.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=tier==='low'?this.createCheapRemoteAura(theme):this.createGalaxyAuraGroup(true,theme);remote.aura.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.aura,tier);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
+    const visible=isStaffVisual&&!remote.vanished&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&(remote.cape.userData?.theme!==theme||remote.cape.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.hat&&(remote.hat.userData?.theme!==theme||remote.hat.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
+    if(visible&&remote.ownerCape&&!remote.cape){remote.cape=tier==='minimal'||tier==='low'?this.createCheapRemoteWings(theme):this.createGalaxyOwnerCape(theme,tier!=='high');remote.cape.userData.qualityTier=tier;remote.cape.scale.setScalar(tier==='minimal'?.82:.9);this.simplifyRemoteVisual(remote.cape,tier);remote.pivot.add(remote.cape);const chest=remote.bones?.chest;if(!this.configureWearableFollower(remote.cape,remote.pivot,chest,new THREE.Vector3(0,1.46,-.24),new THREE.Quaternion()))remote.cape.position.set(0,1.46,-.24);}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;
+    if(visible&&remote.ownerHat&&tier!=='minimal'&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(theme,tier!=='high');remote.hat.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.hat,tier);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat&&tier!=='minimal';
   }
 
   syncRemoteHeldAnchorPose(remote){
@@ -4381,24 +4483,25 @@ applyRemoteOwnerAura(remote) {
   }
 
 applyRemoteHeldItem(remote){
-    if(!remote?.pivot)return;const allowed=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'],kind=allowed.includes(remote.heldItem)?remote.heldItem:'none',theme=remote.staffVisualRole==='admin'?'admin':'owner',show=kind!=='none'&&!remote.vanished&&!remote.formObject&&remote.vehicle==='none',same=remote.renderedHeldItem===kind&&remote.heldObject?.userData?.theme===theme;if(!same){this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem=kind;if(kind!=='none'){const mesh=this.createHeldItemMesh(kind,theme);if(mesh){const anchor=new THREE.Group();anchor.name='remote-center-held-item-grip';anchor.userData.kind=kind;anchor.userData.theme=theme;anchor.add(mesh);remote.pivot.add(anchor);remote.heldAnchor=anchor;remote.heldObject=mesh;this.syncRemoteHeldAnchorPose(remote);}}}if(remote.heldAnchor)remote.heldAnchor.visible=show;
+    if(!remote?.pivot)return;const allowed=['sword','shovel','pickaxe','hoe','axe','hammer','staff','eternalFlame'],kind=allowed.includes(remote.heldItem)?remote.heldItem:'none',theme=remote.staffVisualRole==='admin'?'admin':'owner',show=kind!=='none'&&!remote.vanished&&!remote.formObject&&remote.vehicle==='none',same=remote.renderedHeldItem===kind&&remote.heldObject?.userData?.theme===theme;if(!same){this.disposeGeneratedVisual(remote.heldObject);remote.heldAnchor?.removeFromParent?.();remote.heldObject=null;remote.heldAnchor=null;remote.renderedHeldItem=kind;if(kind!=='none'){const mesh=this.createHeldItemMesh(kind,theme);if(mesh){this.simplifyRemoteVisual(mesh,this.remoteCosmeticTier());const anchor=new THREE.Group();anchor.name='remote-center-held-item-grip';anchor.userData.kind=kind;anchor.userData.theme=theme;anchor.add(mesh);remote.pivot.add(anchor);remote.heldAnchor=anchor;remote.heldObject=mesh;this.syncRemoteHeldAnchorPose(remote);}}}if(remote.heldAnchor)remote.heldAnchor.visible=show;
   }
 
   updateRemotePlayers(delta){
-    const now=Date.now();
+    const now=Date.now(),perfNow=performance.now(),quality=this.state.world?.graphicsQuality||'medium';
     for(const [uid,remote] of this.remotePlayers){
       if(now-remote.lastSeenAt>ONLINE_STALE_MS){this.removeRemotePlayer(uid);continue;}
-      const amount=1-Math.exp(-delta*7);remote.group.position.x+=(remote.targetX-remote.group.position.x)*amount;remote.group.position.z+=(remote.targetZ-remote.group.position.z)*amount;
-      const groundY=terrainHeightAt(remote.group.position.x,remote.group.position.z),airborne=!remote.flying&&remote.targetY>groundY+.24,targetY=(remote.flying||airborne)?remote.targetY:groundY;
-      remote.group.position.y+=(targetY-remote.group.position.y)*amount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*9));
-      if(remote.aura?.visible)this.animateGalaxyAura(remote.aura,delta,now);
+      const prediction=clamp((perfNow-Number(remote.lastSnapshotReceivedAt||perfNow))/1000,0,(remote.flying||remote.sprinting)?.34:.24),predictMotion=remote.walking||remote.flying;
+      const predictedX=clamp(remote.targetX+(predictMotion?remote.velocityX*prediction:0),this.worldBounds.minX,this.worldBounds.maxX),predictedZ=clamp(remote.targetZ+(predictMotion?remote.velocityZ*prediction:0),this.worldBounds.minZ,this.worldBounds.maxZ),predictedY=remote.targetY+(remote.flying?remote.velocityY*prediction:0);
+      const gap=Math.hypot(predictedX-remote.group.position.x,predictedZ-remote.group.position.z);if(gap>16){remote.group.position.x=predictedX;remote.group.position.z=predictedZ;}else{const amount=1-Math.exp(-delta*(remote.sprinting?16:13));remote.group.position.x+=(predictedX-remote.group.position.x)*amount;remote.group.position.z+=(predictedZ-remote.group.position.z)*amount;}
+      const groundY=terrainHeightAt(remote.group.position.x,remote.group.position.z),airborne=!remote.flying&&remote.targetY>groundY+.24,targetY=(remote.flying||airborne)?predictedY:groundY,yAmount=1-Math.exp(-delta*14);remote.group.position.y+=(targetY-remote.group.position.y)*yAmount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*13));
+      if(remote.aura?.visible&&quality!=='minimal'&&quality!=='performance')this.animateGalaxyAura(remote.aura,delta,now);
       if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,{sweep,spread}=this.wingFlightPose(remote.flying,remote.walking?1:0,remote.verticalVelocity||0,now);if(l){l.rotation.x=.01;l.rotation.y=-sweep;l.rotation.z=spread;}if(r){r.rotation.x=.01;r.rotation.y=sweep;r.rotation.z=-spread;}}
       if(remote.vehicleObject?.userData?.mixer){const a=remote.vehicleObject.userData.propellerAction,spin=remote.flying||remote.walking||remote.targetY>terrainHeightAt(remote.group.position.x,remote.group.position.z)+.24;if(a){a.paused=!spin;a.timeScale=remote.flying?1.5:1.05;}if(spin)remote.vehicleObject.userData.mixer.update(delta);}
-      if(remote.hat?.visible)this.updateWearableFollower(remote.hat);if(remote.heldAnchor?.visible){this.syncRemoteHeldAnchorPose(remote);this.animateHeldItemEffects(remote.heldObject,now);}
-      this.updateRemoteAnimalForm(remote,delta);
-      const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
-      if(remote.mixer&&remote.action){if(humanWalking){remote.action.paused=false;remote.mixer.timeScale=1;remote.mixer.update(delta);remote.wasWalking=true;}else{if(remote.wasWalking){remote.action.reset();remote.action.play();remote.action.time=0;remote.wasWalking=false;}remote.action.paused=true;remote.mixer.update(0);}}
-      if(!remote.formObject&&!remote.vehicleObject)this.applyRemoteSpecialPose(remote,delta,airborne);
+      if(remote.hat?.visible)this.updateWearableFollower(remote.hat);if(remote.heldAnchor?.visible){this.syncRemoteHeldAnchorPose(remote);if(!['minimal','performance'].includes(quality))this.animateHeldItemEffects(remote.heldObject,now);}
+      this.updateRemoteAnimalForm(remote,delta);const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
+      if(remote.mixer&&(remote.walkAction||remote.action)){if(humanWalking){const desired=remote.sprinting&&remote.runAction?remote.runAction:(remote.walkAction||remote.action);if(remote.activeAction!==desired){if(remote.activeAction&&remote.activeAction!==desired){remote.activeAction.fadeOut?.(.10);remote.activeAction.paused=false;}desired.enabled=true;desired.paused=false;desired.reset?.();desired.fadeIn?.(.10);desired.play?.();remote.activeAction=desired;}else desired.paused=false;remote.mixer.timeScale=remote.sprinting&&!remote.runAction?1.32:1;remote.mixer.update(delta);remote.wasWalking=true;}else{if(remote.wasWalking){for(const a of [remote.walkAction,remote.runAction,remote.action])if(a){a.fadeOut?.(.08);a.paused=true;}remote.activeAction=null;remote.wasWalking=false;}this.applyRemoteIdlePose(remote,delta,false);}}
+      else if(!humanWalking)this.applyRemoteIdlePose(remote,delta,false);
+      if(!remote.formObject&&!remote.vehicleObject&&(remote.flying||airborne))this.applyRemoteSpecialPose(remote,delta,airborne);
       if(remote.model){const targetTilt=remote.flying?.12:airborne?-.025:0;remote.model.rotation.x+=(targetTilt-remote.model.rotation.x)*(1-Math.exp(-delta*6));}
     }
   }
@@ -4420,6 +4523,7 @@ renderOwnerMenu(){
     sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div>`);
     if(['owner','admin'].includes(this.activeStaffRole)){const publicRole=this.effectivePublicStaffRole(),roleButtons=this.isOwnerActive?`<button class="${publicRole==='owner'?'active ':''}" data-owner-action="public-mode-owner">Als Owner</button><button class="${publicRole==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`:`<button class="${publicRole==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`;sections.push(`<h3>Öffentliche Identität</h3><div class="mdc-owner-character"><div class="mdc-owner-actions three">${roleButtons}</div><div class="mdc-owner-actions"><button class="${appearance.publicGender==='male'?'active ':''}" data-owner-action="public-gender-male">Mann</button><button class="${appearance.publicGender==='female'?'active ':''}" data-owner-action="public-gender-female">Frau</button></div><label>Öffentlicher Spielername<input data-owner-public-alias maxlength="30" value="${escapeHtml(appearance.publicAlias||'Center Spieler')}"></label><p class="mdc-note">Owner kann sich öffentlich auch als Admin oder normaler Spieler darstellen. Die echten Rechte bleiben intern erhalten.</p></div>`);}
     sections.push(`<h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
+    if(['owner','admin'].includes(this.activeStaffRole)){const maxHealth=this.effectiveMaxHealth(),staffDamage=this.staffDamageAmount();sections.push(`<h3>Staff-Kampfwerte</h3><div class="mdc-owner-character"><label>Maximales Leben <input data-owner-health-max type="number" min="100" max="10000" step="50" value="${maxHealth}"><b>${maxHealth}</b></label><label>Stab-Schaden <input data-owner-staff-damage type="number" min="10" max="2500" step="10" value="${staffDamage}"><b>${staffDamage}</b></label><div class="mdc-owner-actions"><button data-owner-action="fill-staff-health">❤ Leben auf Maximum</button></div><p class="mdc-note">Owner-Stab schießt Galaxy-Blitze, Admin-Stab graue Blitze genau in Blickrichtung. Die Werte bleiben im Center-Spielstand gespeichert.</p></div>`);}
     if(caps.speed)sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label><p class="mdc-note">Stufenlos von normal bis extrem schnell. Wirkt auf Laufen und Fly.</p></div>`);
     if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
     if(teamToolIds.length>1)sections.push(`<h3>Team-Werkzeuge</h3><div class="mdc-owner-actions three">${teamToolIds.map((id)=>`<button class="${appearance.heldItem===id?'active ':''}" data-owner-action="admin-item" data-owner-item="${id}">${itemLabels[id]||id}</button>`).join('')}</div>`);
@@ -4452,10 +4556,12 @@ renderOwnerMenu(){
 
   keybindOptions(selected){return KEYBIND_OPTIONS.map((code)=>`<option value="${code}" ${code===selected?'selected':''}>${KEYBIND_LABELS[code]||code}</option>`).join('');}
   handleKeybindChange(event){const quick=event.target.closest?.('[data-owner-quick-form]');if(quick){const form=quick.value,caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole);if(caps.forms?.includes(form)){this.state.ownerAppearance.quickForm=form;this.saveState(true);this.toast(`Verwandlungs-Keybind: ${form}`);}return;}const select=event.target.closest?.('[data-keybind-action]');if(!select)return;const action=select.dataset.keybindAction,code=select.value;if(!(action in DEFAULT_KEYBINDS)||!KEYBIND_OPTIONS.includes(code))return;this.state.keybinds[action]=code;this.saveState(true);this.toast(`Tastenbelegung gespeichert: ${KEYBIND_LABELS[code]||code}`);}
-  toggleStaffFlag(key){if(!this.isStaffActive)return;const capability={vanish:'vanish',god:'god',fly:'fly'}[key];if(!capability||!this.canStaff(capability))return;this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=100;if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,floor);this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}else{this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightLean=0;this.flightRoll=0;if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=0;this.flightVisualPivot.rotation.z=0;}}}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});}
+  toggleStaffFlag(key){if(!this.isStaffActive)return;const capability={vanish:'vanish',god:'god',fly:'fly'}[key];if(!capability||!this.canStaff(capability))return;this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=need==='health'?this.effectiveMaxHealth():100;if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,floor);this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}else{this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightLean=0;this.flightRoll=0;if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=0;this.flightVisualPivot.rotation.z=0;}}}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});}
 
 handleOwnerInput(event){
     if(!this.staffOnly())return;const alias=event.target.closest?.('[data-owner-public-alias]');if(alias&&['owner','admin'].includes(this.activeStaffRole)){this.state.ownerAppearance.publicAlias=String(alias.value||'Center Spieler').trim().slice(0,30)||'Center Spieler';this.saveState(true);if(this.isPublicPlayerMode())this.publishPresence(true).catch(()=>{});return;}
+    const healthInput=event.target.closest?.('[data-owner-health-max]');if(healthInput&&['owner','admin'].includes(this.activeStaffRole)){const old=this.effectiveMaxHealth(),value=Math.floor(clamp(Number(healthInput.value)||old,100,10000));this.state.ownerAppearance.staffMaxHealth=value;if(value>old)this.state.needs.health=Math.min(value,this.state.needs.health+(value-old));else this.state.needs.health=Math.min(value,this.state.needs.health);const label=healthInput.parentElement?.querySelector('b');if(label)label.textContent=String(value);this.renderHud(true);this.saveState(true);return;}
+    const damageInput=event.target.closest?.('[data-owner-staff-damage]');if(damageInput&&['owner','admin'].includes(this.activeStaffRole)){const value=Math.floor(clamp(Number(damageInput.value)||180,10,2500));this.state.ownerAppearance.staffDamage=value;const label=damageInput.parentElement?.querySelector('b');if(label)label.textContent=String(value);this.saveState(true);return;}
     const speedInput=event.target.closest?.('[data-owner-speed]');if(speedInput&&this.canStaff('speed')){this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);this.ownerFlags.speedLevel=0;const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;return;}const sizeInput=event.target.closest?.('[data-owner-size]');if(sizeInput&&this.canStaff('size')){this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});}
   }
 
@@ -4480,7 +4586,8 @@ handleOwnerInput(event){
     if(action==='admin-item'){const item=button.dataset.ownerItem||'none';if(!caps.items.includes(item)){this.toast('Dieses Item ist ausschließlich für eine höhere Teamrolle.');return;}this.state.ownerAppearance.heldItem=themeChanged?item:(item!=='none'&&this.state.ownerAppearance.heldItem===item?'none':item);this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='admin-vehicle'){const vehicle=button.dataset.ownerVehicle||'none';if(!(caps.vehicles||['none']).includes(vehicle)){this.toast('Dieses Fahrzeug ist für deine Teamrolle gesperrt.');return;}if(this.mountedHorse)this.dismountHorse(true);const previousVehicle=this.state.ownerAppearance.vehicle||'none';this.state.ownerAppearance.skin=['normal','galaxy'].includes(this.state.ownerAppearance.skin)?this.state.ownerAppearance.skin:'normal';if(vehicle==='scooter'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;this.state.ownerAppearance.vehicle='scooter';this.toast(`🛴 Electro Scooter aktiviert · ${[40,80,120,150][this.state.ownerAppearance.scooterTuning||0]} km/h.`);}else if(vehicle==='plane'){this.state.ownerAppearance.vehicle='plane';this.ownerFlags.fly=true;this.velocityY=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;this.flightTakeoffTargetY=floor+2.4;this.flightTakeoffActive=true;this.toast('✈ Sägelflugzeug aktiviert · Fly automatisch AN.');}else{this.state.ownerAppearance.vehicle='none';if(previousVehicle==='plane'){this.ownerFlags.fly=false;this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightVerticalVelocity=0;}this.toast('Fahrzeug abgestellt.');}this.applyOwnerAppearance();this.renderScooterTuningBar();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action==='toggle-aura'||action==='toggle-cape'||action==='toggle-hat'){if(!caps.ownerCosmetics){this.toast('Diese Spezialausrüstung ist nur für Admin und Owner.');return;}const key=action==='toggle-aura'?'aura':action==='toggle-cape'?'cape':'hat';this.state.ownerAppearance[key]=themeChanged?true:!this.state.ownerAppearance[key];if(key==='aura'){if(this.state.ownerAppearance.aura)this.ensureOwnerAura();this.updateOwnerAura(.016,performance.now());}else this.applyOwnerWearables();this.applyOwnerVisualState();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
-    if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
+    if(action==='fill-staff-health'){this.state.needs.health=this.effectiveMaxHealth();this.toast(`Leben auf ${this.effectiveMaxHealth()} gesetzt.`);}
+    else if(action==='heal'){for(const key of Object.keys(this.state.needs))this.state.needs[key]=key==='health'?this.effectiveMaxHealth():100;this.toast('Leben, Hunger, Durst, Ausdauer und Wärme vollständig geheilt.');}
     else if(action==='ground')this.teleportOwner(this.player.position.x,this.player.position.z,null,'sicherer Boden');
     else if(action==='unstuck')this.teleportOwner(this.player.position.x+Math.sin(this.yaw)*-6,this.player.position.z+Math.cos(this.yaw)*-6,null,'freie Position');
     else if(action==='time-day'){this.state.time=12;this.toast('Mittag eingestellt. Zeit anhalten bleibt aus, bis du es ausdrücklich aktivierst.');}
@@ -4505,7 +4612,7 @@ handleOwnerInput(event){
 startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;this.updateRoleHud();const expected=(['owner','admin'].includes(this.activeStaffRole)&&!this.isPublicPlayerMode())?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();},3000);}
 
 startLoop() {
-    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.runPerfTask('ambient',now,(this.performanceTier==='low'?100:PERF_TASK_INTERVALS.ambient)*slow,(d)=>this.updateAmbientCreatures(d,now));this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>this.updateTransformationEffects(d,now));this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
+    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.runPerfTask('ambient',now,(this.performanceTier==='low'?100:PERF_TASK_INTERVALS.ambient)*slow,(d)=>this.updateAmbientCreatures(d,now));this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
   }
 
 resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(this.performancePixelRatio());this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
