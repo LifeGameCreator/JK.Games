@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-08-jkgames-v277-wings-spine-attachment-fix';
+const CENTER_VERSION = '2026-08-08-jkgames-v278-smooth-wings-unified-galaxy-design';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -37,10 +37,13 @@ const STAFF_ROLE_LEVELS = Object.freeze({ player: 0, supporter: 1, moderator: 2,
 const STAFF_ROLE_LABELS = Object.freeze({ player:'Spieler', member:'Teammitglied', supporter:'Supporter', moderator:'Moderator', admin:'Admin', owner:'Owner', testsupporter:'Testsupporter', testmoderator:'Testmoderator', testmember:'Testmitglied' });
 const STAFF_THEME_IDS = Object.freeze(['owner','admin','moderator','supporter','member']);
 const STAFF_THEME_CONFIG = Object.freeze({
-  owner:Object.freeze({label:'Owner Galaxy',primary:0x8b4dff,secondary:0xff4fa3,accent:0x55c7ff,dark:0x17052d,emissive:0x4d168c,css:'owner'}),
-  admin:Object.freeze({label:'Admin Red Galaxy',primary:0xff314f,secondary:0xff7a3d,accent:0xffb1bd,dark:0x31030a,emissive:0x8f1028,css:'admin'}),
-  moderator:Object.freeze({label:'Moderator Grün',primary:0x2ee878,secondary:0x8cff68,accent:0xc2ffd7,dark:0x042914,emissive:0x08763a,css:'moderator'}),
-  supporter:Object.freeze({label:'Supporter Blau',primary:0x348dff,secondary:0x4fdcff,accent:0xc7edff,dark:0x031d47,emissive:0x0b4b9c,css:'supporter'}),
+  // V278: Alle Staff-Sets benutzen exakt denselben Galaxy-Aufbau. Nur die Palette
+  // ändert sich je Rang, damit Skin, Wings, Krone, Stab, Schwert und Flamme wie
+  // eine zusammengehörige Ausrüstung wirken statt wie einzelne Farbrecolors.
+  owner:Object.freeze({label:'Owner Galaxy',primary:0x8c49ff,secondary:0x315dff,accent:0x8fe7ff,dark:0x080313,emissive:0x5320ad,css:'owner'}),
+  admin:Object.freeze({label:'Admin Red Galaxy',primary:0xff2448,secondary:0x8f001c,accent:0xff8f9e,dark:0x050005,emissive:0x8b0827,css:'admin'}),
+  moderator:Object.freeze({label:'Moderator Grün',primary:0x21e66f,secondary:0x087a3b,accent:0xa0ffca,dark:0x010d07,emissive:0x08743a,css:'moderator'}),
+  supporter:Object.freeze({label:'Supporter Blau',primary:0x218cff,secondary:0x073eaa,accent:0x81eaff,dark:0x010817,emissive:0x0a4d9f,css:'supporter'}),
   member:Object.freeze({label:'Team Weiß',primary:0xf0f2f4,secondary:0xbec5cc,accent:0xffffff,dark:0x24282c,emissive:0x686f76,css:'member'})
 });
 const ANIMAL_FORM_IDS = Object.freeze(['fox','shark','cow','orca','horse','owl','wolf1','wolf2','spider','clownfish','bird']);
@@ -2870,18 +2873,27 @@ buildChunkGrass(chunk) {
   createGalaxyTexture(width=128,height=256,theme='owner') {
     theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');
     const hex=(value)=>`#${Number(value).toString(16).padStart(6,'0')}`;
-    const primary=new THREE.Color(cfg.primary),secondary=new THREE.Color(cfg.secondary),accent=new THREE.Color(cfg.accent),dark=new THREE.Color(cfg.dark);
+    const primary=new THREE.Color(cfg.primary),secondary=new THREE.Color(cfg.secondary),accent=new THREE.Color(cfg.accent),dark=new THREE.Color(cfg.dark),white=new THREE.Color(0xffffff);
     const rgb=(c,a)=>`rgba(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)},${a})`;
-    const gradient=ctx.createLinearGradient(0,0,width,height);gradient.addColorStop(0,hex(cfg.dark));gradient.addColorStop(.22,hex(cfg.emissive));gradient.addColorStop(.48,hex(cfg.primary));gradient.addColorStop(.7,hex(cfg.secondary));gradient.addColorStop(1,hex(cfg.dark));ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);
-    const nebula=ctx.createRadialGradient(width*.34,height*.42,2,width*.34,height*.42,width*.62);nebula.addColorStop(0,rgb(secondary,.72));nebula.addColorStop(.36,rgb(primary,.42));nebula.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=nebula;ctx.fillRect(0,0,width,height);
-    const nebula2=ctx.createRadialGradient(width*.78,height*.72,1,width*.78,height*.72,width*.48);nebula2.addColorStop(0,rgb(accent,.58));nebula2.addColorStop(.4,rgb(primary,.31));nebula2.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=nebula2;ctx.fillRect(0,0,width,height);
-    const rnd=seededRandom(20060806+STAFF_THEME_IDS.indexOf(theme)*991);for(let i=0;i<260;i+=1){const x=rnd()*width,y=rnd()*height,r=rnd()<.08?1.5+rnd()*1.8:.35+rnd()*.8;ctx.beginPath();ctx.fillStyle=rnd()<.18?rgb(accent,.95):rnd()<.52?rgb(secondary,.98):'rgba(255,255,255,.96)';ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
-    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.userData.__centerStaffTheme=theme;texture.needsUpdate=true;return texture;
+    // V278: Ein einziges Galaxy-Muster für ALLE Staff-Ränge. Die Positionen der
+    // Nebel und Sterne sind absichtlich rangunabhängig; ausschließlich die Palette
+    // wechselt zwischen Owner-Lila/Blau, Admin-Rot/Schwarz, Mod-Grün und Support-Blau.
+    const space=ctx.createLinearGradient(0,0,width,height);space.addColorStop(0,hex(cfg.dark));space.addColorStop(.32,rgb(dark.clone().lerp(primary,.18),1));space.addColorStop(.68,hex(cfg.dark));space.addColorStop(1,rgb(dark.clone().lerp(secondary,.16),1));ctx.fillStyle=space;ctx.fillRect(0,0,width,height);
+    const paintNebula=(x,y,r,inner,mid,alpha=.72)=>{const g=ctx.createRadialGradient(width*x,height*y,1,width*x,height*y,Math.max(width,height)*r);g.addColorStop(0,rgb(inner,alpha));g.addColorStop(.22,rgb(mid,alpha*.62));g.addColorStop(.58,rgb(primary,alpha*.28));g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(0,0,width,height);};
+    paintNebula(.23,.25,.60,secondary,primary,.78);paintNebula(.77,.55,.52,primary,accent,.68);paintNebula(.40,.88,.44,accent,secondary,.46);
+    // Feine diagonale Galaxie-Bänder geben allen Gegenständen dieselbe erkennbare Struktur.
+    ctx.save();ctx.globalCompositeOperation='screen';ctx.lineCap='round';for(let i=0;i<3;i++){ctx.beginPath();ctx.strokeStyle=rgb(i===0?secondary:i===1?primary:accent,.16-i*.025);ctx.lineWidth=Math.max(2,width*(.075-i*.012));ctx.moveTo(-width*.15,height*(.18+i*.27));ctx.bezierCurveTo(width*.28,height*(.02+i*.18),width*.62,height*(.72-i*.10),width*1.15,height*(.48+i*.18));ctx.stroke();}ctx.restore();
+    // Fixer Seed = dieselbe Sternenkarte in jeder Rangfarbe.
+    const rnd=seededRandom(2780808);const starCount=Math.max(150,Math.min(360,Math.round((width*height)/155)));
+    ctx.save();ctx.globalCompositeOperation='screen';for(let i=0;i<starCount;i+=1){const x=rnd()*width,y=rnd()*height,bright=rnd(),r=bright>.965?1.7+rnd()*2.1:bright>.82?.75+rnd()*1.0:.28+rnd()*.55;const starColor=bright>.76?accent:(bright>.42?white:secondary);ctx.beginPath();ctx.fillStyle=rgb(starColor,.62+bright*.36);ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();if(bright>.975){ctx.strokeStyle=rgb(accent,.52);ctx.lineWidth=.6;ctx.beginPath();ctx.moveTo(x-r*3.4,y);ctx.lineTo(x+r*3.4,y);ctx.moveTo(x,y-r*3.4);ctx.lineTo(x,y+r*3.4);ctx.stroke();}}
+    // Staubsterne zwischen den großen Sternen.
+    for(let i=0;i<100;i++){const x=rnd()*width,y=rnd()*height;ctx.fillStyle=rgb(primary,.18+rnd()*.24);ctx.fillRect(x,y,.45,.45);}ctx.restore();
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(1,2);texture.userData.__centerRuntimeGalaxyTexture=true;texture.userData.__centerStaffTheme=theme;texture.userData.__centerGalaxyPattern='v278-unified';texture.needsUpdate=true;return texture;
   }
 
 createGalaxyAuraGroup(compact=false,theme='owner') {
     theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),root=new THREE.Group();root.name=compact?`remote-${theme}-staff-aura`:`${theme}-staff-aura`;root.userData.compact=compact;root.userData.theme=theme;
-    const particleCount=compact?(this.performanceTier==='low'?22:34):(this.performanceTier==='low'?42:72),positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*5),palette=[cfg.primary,cfg.secondary,cfg.accent,0xffffff].map(c=>new THREE.Color(c)),rnd=seededRandom((compact?2621:2622)+STAFF_THEME_IDS.indexOf(theme)*80);
+    const particleCount=compact?(this.performanceTier==='low'?22:34):(this.performanceTier==='low'?42:72),positions=new Float32Array(particleCount*3),colors=new Float32Array(particleCount*3),seeds=new Float32Array(particleCount*5),palette=[cfg.primary,cfg.secondary,cfg.accent,0xffffff].map(c=>new THREE.Color(c)),rnd=seededRandom(compact?2782621:2782622);
     for(let i=0;i<particleCount;i+=1){const radius=.22+rnd()*.82,angle=rnd()*Math.PI*2,height=.02+rnd()*2.12,twinkle=.55+rnd()*1.35;positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=height;positions[i*3+2]=Math.sin(angle)*radius;const c=palette[Math.floor(rnd()*palette.length)];colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;seeds[i*5]=radius;seeds[i*5+1]=angle;seeds[i*5+2]=height;seeds[i*5+3]=.35+rnd()*.8;seeds[i*5+4]=twinkle;}
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));const material=new THREE.PointsMaterial({size:compact?.021:.032,vertexColors:true,transparent:true,opacity:.68,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true}),points=new THREE.Points(geometry,material);root.add(points);
     const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array((compact?8:18)*3);for(let i=0;i<starPos.length/3;i++){const a=rnd()*Math.PI*2,r=.28+rnd()*.72;starPos[i*3]=Math.cos(a)*r;starPos[i*3+1]=.12+rnd()*1.9;starPos[i*3+2]=Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));const stars=new THREE.Points(starGeo,new THREE.PointsMaterial({color:cfg.accent,size:compact?.026:.04,transparent:true,opacity:.66,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(stars);
@@ -2911,7 +2923,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
   applyAdminGrayTheme(root){return this.applyStaffTheme(root,'member');}
 
   createHeldItemMesh(kind='none',theme='owner') {
-    if(kind==='none')return null;const group=new THREE.Group();group.userData.kind=kind;
+    if(kind==='none')return null;theme=normalizeStaffTheme(theme);const group=new THREE.Group();group.userData.kind=kind;const cfg=staffThemeConfig(theme),bright=new THREE.Color(cfg.accent).lerp(new THREE.Color(0xffffff),.34).getHex(),deep=new THREE.Color(cfg.dark).lerp(new THREE.Color(cfg.primary),.16).getHex();
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
     if(['shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
@@ -2925,34 +2937,34 @@ updateOwnerAura(delta=.016,now=performance.now()) {
       group.add(asset);group.userData.assetBased=true;
       group.rotation.set(.06,0,-.10);
     }else if(kind==='sword'){
-      const galaxyTexture=this.createGalaxyTexture(96,256,theme),galaxyMetal=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x3f0c72,emissiveIntensity:1.25,metalness:.86,roughness:.14});
-      const violetGlow=new THREE.MeshStandardMaterial({color:0xdac9ef,emissive:0x6e35a4,emissiveIntensity:1.8,metalness:.68,roughness:.12});addCylinder(.04,.05,.34,galaxyMetal,-.02);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.075,1),violetGlow);pommel.position.y=-.22;group.add(pommel);const guard=new THREE.Mesh(new THREE.BoxGeometry(.45,.055,.085),galaxyMetal);guard.position.y=.18;group.add(guard);const blade=new THREE.Mesh(new THREE.ConeGeometry(.105,1.38,4),galaxyMetal);blade.position.y=.85;blade.rotation.y=Math.PI/4;group.add(blade);const ridge=new THREE.Mesh(new THREE.BoxGeometry(.016,1.05,.025),violetGlow);ridge.position.y=.77;group.add(ridge);const light=new THREE.PointLight(0x7650b8,1.55,6,2);light.position.y=.8;group.add(light);group.userData.light=light;group.rotation.set(.06,0,-.24);
+      const galaxyTexture=this.createGalaxyTexture(96,256,theme),galaxyMetal=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:cfg.emissive,emissiveIntensity:1.35,metalness:.82,roughness:.16});
+      const galaxyGlow=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,color:bright,emissive:cfg.primary,emissiveIntensity:1.95,metalness:.48,roughness:.1});addCylinder(.04,.05,.34,galaxyMetal,-.02);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.075,1),galaxyGlow);pommel.position.y=-.22;group.add(pommel);const guard=new THREE.Mesh(new THREE.BoxGeometry(.45,.055,.085),galaxyMetal);guard.position.y=.18;group.add(guard);const blade=new THREE.Mesh(new THREE.ConeGeometry(.105,1.38,4),galaxyMetal);blade.position.y=.85;blade.rotation.y=Math.PI/4;group.add(blade);const ridge=new THREE.Mesh(new THREE.BoxGeometry(.016,1.05,.025),galaxyGlow);ridge.position.y=.77;group.add(ridge);const light=new THREE.PointLight(cfg.primary,1.72,6.5,2);light.position.y=.8;group.add(light);group.userData.light=light;group.rotation.set(.06,0,-.24);
     }else if(kind==='staff'){
-      const galaxyTexture=this.createGalaxyTexture(128,320,theme),shaftMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x23103d,emissiveIntensity:.88,roughness:.18,metalness:.84});
-      const trim=new THREE.MeshStandardMaterial({color:0x15131b,emissive:0x241332,emissiveIntensity:.45,metalness:.9,roughness:.2});
-      const crystalMat=new THREE.MeshStandardMaterial({color:0xa78dcc,emissive:0x60409a,emissiveIntensity:2.25,metalness:.22,roughness:.06,transparent:true,opacity:.94});
+      const galaxyTexture=this.createGalaxyTexture(128,320,theme),shaftMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:cfg.emissive,emissiveIntensity:1.02,roughness:.17,metalness:.82});
+      const trim=new THREE.MeshStandardMaterial({color:deep,emissive:cfg.emissive,emissiveIntensity:.55,metalness:.9,roughness:.18});
+      const crystalMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,color:bright,emissive:cfg.primary,emissiveIntensity:2.35,metalness:.18,roughness:.05,transparent:true,opacity:.95});
       addCylinder(.034,.046,2.3,shaftMat,-.18,18);const grip=addCylinder(.048,.052,.4,trim,-.45,18);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.095,1),crystalMat);pommel.position.y=-1.37;group.add(pommel);
       for(let i=0;i<3;i+=1){const ring=new THREE.Mesh(new THREE.TorusGeometry(.15+i*.038,.012,8,48),trim.clone());ring.position.y=.9+i*.14;ring.rotation.x=Math.PI/2+(i-1)*.18;ring.rotation.z=i*.5;group.add(ring);}
       const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.235,1),crystalMat);crystal.position.y=1.08;group.add(crystal);group.userData.crystal=crystal;
-      const crystalShell=new THREE.Mesh(new THREE.OctahedronGeometry(.285,1),new THREE.MeshBasicMaterial({color:0x7e63b8,transparent:true,opacity:.09,depthWrite:false,blending:THREE.AdditiveBlending,wireframe:true}));crystalShell.position.copy(crystal.position);group.add(crystalShell);group.userData.crystalShell=crystalShell;
-      const orbitMat=new THREE.MeshBasicMaterial({color:0x8c73bd,transparent:true,opacity:.42,depthWrite:false,blending:THREE.AdditiveBlending});const orbitA=new THREE.Mesh(new THREE.TorusGeometry(.31,.008,6,64),orbitMat),orbitB=new THREE.Mesh(new THREE.TorusGeometry(.27,.006,6,64),orbitMat.clone());orbitA.position.y=1.08;orbitB.position.y=1.08;orbitA.rotation.x=1.1;orbitB.rotation.x=.35;orbitB.rotation.y=.75;group.add(orbitA,orbitB);group.userData.orbitA=orbitA;group.userData.orbitB=orbitB;
-      const glow=new THREE.PointLight(0x7552aa,2.35,10,2);glow.position.y=1.08;group.add(glow);group.userData.light=glow;
-      const segments=7,geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segments*6),3));const lightning=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:0xa88bdb,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending}));lightning.position.y=1.08;group.add(lightning);group.userData.lightning=lightning;
-      const pCount=20,pPos=new Float32Array(pCount*3);for(let i=0;i<pCount;i+=1){const a=i/pCount*Math.PI*2,r=.2+(i%4)*.018;pPos[i*3]=Math.cos(a)*r;pPos[i*3+1]=(i%5-2)*.035;pPos[i*3+2]=Math.sin(a)*r;}const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));const sparkles=new THREE.Points(pGeo,new THREE.PointsMaterial({color:0xd9d0ea,size:.025,transparent:true,opacity:.72,depthWrite:false,blending:THREE.AdditiveBlending}));sparkles.position.y=1.08;group.add(sparkles);group.userData.sparkles=sparkles;group.rotation.set(.02,0,-.13);
+      const crystalShell=new THREE.Mesh(new THREE.OctahedronGeometry(.285,1),new THREE.MeshBasicMaterial({color:cfg.accent,transparent:true,opacity:.13,depthWrite:false,blending:THREE.AdditiveBlending,wireframe:true}));crystalShell.position.copy(crystal.position);group.add(crystalShell);group.userData.crystalShell=crystalShell;
+      const orbitMat=new THREE.MeshBasicMaterial({color:cfg.accent,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending});const orbitA=new THREE.Mesh(new THREE.TorusGeometry(.31,.008,6,64),orbitMat),orbitB=new THREE.Mesh(new THREE.TorusGeometry(.27,.006,6,64),orbitMat.clone());orbitA.position.y=1.08;orbitB.position.y=1.08;orbitA.rotation.x=1.1;orbitB.rotation.x=.35;orbitB.rotation.y=.75;group.add(orbitA,orbitB);group.userData.orbitA=orbitA;group.userData.orbitB=orbitB;
+      const glow=new THREE.PointLight(cfg.primary,2.55,10,2);glow.position.y=1.08;group.add(glow);group.userData.light=glow;
+      const segments=7,geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(segments*6),3));const lightning=new THREE.LineSegments(geo,new THREE.LineBasicMaterial({color:cfg.accent,transparent:true,opacity:.56,depthWrite:false,blending:THREE.AdditiveBlending}));lightning.position.y=1.08;group.add(lightning);group.userData.lightning=lightning;
+      const pCount=20,pPos=new Float32Array(pCount*3);for(let i=0;i<pCount;i+=1){const a=i/pCount*Math.PI*2,r=.2+(i%4)*.018;pPos[i*3]=Math.cos(a)*r;pPos[i*3+1]=(i%5-2)*.035;pPos[i*3+2]=Math.sin(a)*r;}const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));const sparkles=new THREE.Points(pGeo,new THREE.PointsMaterial({color:bright,size:.025,transparent:true,opacity:.78,depthWrite:false,blending:THREE.AdditiveBlending}));sparkles.position.y=1.08;group.add(sparkles);group.userData.sparkles=sparkles;group.rotation.set(.02,0,-.13);
     }else if(kind==='eternalFlame'){
       // V258: Die fehlerhaft exportierte GLB wird absichtlich nicht mehr gerendert.
       // Stattdessen entsteht die Ewige Flamme vollständig im Galaxy-Design.
       const galaxyTexture=this.createGalaxyTexture(96,220,theme);
-      const handleMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:0x2e174e,emissiveIntensity:.75,metalness:.82,roughness:.2});
-      const trimMat=new THREE.MeshStandardMaterial({color:0x15131c,emissive:0x251638,emissiveIntensity:.38,metalness:.9,roughness:.18});
-      addCylinder(.038,.05,.92,handleMat,-.15,18);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.085,1),new THREE.MeshStandardMaterial({color:0x7657a7,emissive:0x5b2f93,emissiveIntensity:1.45,metalness:.35,roughness:.12}));pommel.position.y=-.67;group.add(pommel);
+      const handleMat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,emissive:cfg.emissive,emissiveIntensity:.95,metalness:.82,roughness:.18});
+      const trimMat=new THREE.MeshStandardMaterial({color:deep,emissive:cfg.emissive,emissiveIntensity:.5,metalness:.9,roughness:.17});
+      addCylinder(.038,.05,.92,handleMat,-.15,18);const pommel=new THREE.Mesh(new THREE.OctahedronGeometry(.085,1),new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,color:bright,emissive:cfg.primary,emissiveIntensity:1.65,metalness:.3,roughness:.1}));pommel.position.y=-.67;group.add(pommel);
       const cup=new THREE.Mesh(new THREE.CylinderGeometry(.16,.11,.16,16),trimMat);cup.position.y=.38;group.add(cup);
-      const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,8,36),new THREE.MeshBasicMaterial({color:0x8c6acb,transparent:true,opacity:.72,blending:THREE.AdditiveBlending,depthWrite:false}));ring.position.y=.48;ring.rotation.x=Math.PI/2;group.add(ring);group.userData.flameRing=ring;
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(.19,.018,8,36),new THREE.MeshBasicMaterial({color:cfg.accent,transparent:true,opacity:.76,blending:THREE.AdditiveBlending,depthWrite:false}));ring.position.y=.48;ring.rotation.x=Math.PI/2;group.add(ring);group.userData.flameRing=ring;
       const flameParts=[];
-      const makeFlame=(radius,height,y,color,emissive,opacity,scaleZ=1)=>{const mat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:3.2,transparent:true,opacity,roughness:.18,metalness:0,depthWrite:false,blending:THREE.AdditiveBlending});const flame=new THREE.Mesh(new THREE.ConeGeometry(radius,height,14),mat);flame.position.y=y;flame.scale.z=scaleZ;group.add(flame);flameParts.push(flame);return flame;};
-      makeFlame(.18,.68,.82,0x7e51d9,0x4c1fa2,.82,.8);makeFlame(.12,.56,.9,0x55b9ff,0x2677d6,.72,.72);makeFlame(.075,.44,.98,0xff557f,0xb52358,.6,.7);
-      const core=new THREE.Mesh(new THREE.SphereGeometry(.085,12,8),new THREE.MeshBasicMaterial({color:0xe3d8ff,transparent:true,opacity:.82,blending:THREE.AdditiveBlending,depthWrite:false}));core.position.y=.68;group.add(core);group.userData.flameCore=core;group.userData.flameParts=flameParts;
-      const glow=new THREE.PointLight(0x8e62ff,4.4,20,2);glow.position.set(0,.82,.05);group.add(glow);group.userData.light=glow;const blue=new THREE.PointLight(0x4ca6ff,1.65,9,2);blue.position.set(0,.92,.12);group.add(blue);group.userData.blueLight=blue;group.rotation.set(.02,0,-.08);
+      const makeFlame=(radius,height,y,color,emissive,opacity,scaleZ=1)=>{const mat=new THREE.MeshStandardMaterial({map:galaxyTexture,emissiveMap:galaxyTexture,color,emissive,emissiveIntensity:3.25,transparent:true,opacity,roughness:.16,metalness:0,depthWrite:false,blending:THREE.AdditiveBlending});const flame=new THREE.Mesh(new THREE.ConeGeometry(radius,height,14),mat);flame.position.y=y;flame.scale.z=scaleZ;group.add(flame);flameParts.push(flame);return flame;};
+      makeFlame(.18,.68,.82,cfg.primary,cfg.emissive,.84,.8);makeFlame(.12,.56,.9,cfg.secondary,cfg.primary,.74,.72);makeFlame(.075,.44,.98,cfg.accent,cfg.secondary,.64,.7);
+      const core=new THREE.Mesh(new THREE.SphereGeometry(.085,12,8),new THREE.MeshBasicMaterial({color:bright,transparent:true,opacity:.86,blending:THREE.AdditiveBlending,depthWrite:false}));core.position.y=.68;group.add(core);group.userData.flameCore=core;group.userData.flameParts=flameParts;
+      const glow=new THREE.PointLight(cfg.primary,4.5,20,2);glow.position.set(0,.82,.05);group.add(glow);group.userData.light=glow;const blue=new THREE.PointLight(cfg.accent,1.72,9,2);blue.position.set(0,.92,.12);group.add(blue);group.userData.blueLight=blue;group.rotation.set(.02,0,-.08);
     }else if(kind==='torch'){
       addCylinder(.05,.07,1.02,wood,.18);const wrap=new THREE.Mesh(new THREE.CylinderGeometry(.1,.085,.26,8),new THREE.MeshStandardMaterial({color:0x3b2719,roughness:1}));wrap.position.y=.76;group.add(wrap);const flameMat=new THREE.MeshStandardMaterial({color:0xffd45c,emissive:0xff4a00,emissiveIntensity:3,transparent:true,opacity:.94});const flame=new THREE.Mesh(new THREE.ConeGeometry(.13,.43,10),flameMat);flame.position.y=1.04;group.add(flame);group.userData.flame=flame;const light=new THREE.PointLight(0xff8b32,4.2,18,2);light.position.y=1.02;group.add(light);group.userData.light=light;group.rotation.set(.02,0,-.12);
     }else if(kind==='spear'){
@@ -2960,7 +2972,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     }else if(kind==='bow'){
       const curve=new THREE.Mesh(new THREE.TorusGeometry(.48,.025,8,40,Math.PI*1.45),wood);curve.rotation.z=.78;curve.position.y=.52;group.add(curve);const lineGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-.31,.13,0),new THREE.Vector3(.32,.91,0)]);group.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd9d2c6})));group.rotation.set(.03,0,-.08);
     }
-    const scale={staff:.74,sword:.50,shovel:1,pickaxe:1,hoe:1,axe:1,hammer:1,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});if(theme!=='owner'&&['sword','staff','eternalFlame'].includes(kind))this.applyStaffTheme(group,theme);group.userData.theme=theme;return group;
+    const scale={staff:.74,sword:.50,shovel:1,pickaxe:1,hoe:1,axe:1,hammer:1,eternalFlame:.72,torch:.58,spear:.68,bow:.75}[kind]||.65;group.scale.setScalar(scale);group.traverse((object)=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}});group.userData.theme=theme;group.userData.unifiedGalaxyDesign=['sword','staff','eternalFlame'].includes(kind);return group;
   }
 
   createOwnerForm(kind='ball') {
@@ -3234,7 +3246,7 @@ applyHeldItemVisual() {
   }
 
 createGalaxyOwnerCape(theme='owner',compact=false){
-    theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),root=new THREE.Group();root.name=compact?`remote-${theme}-angel-wings`:`${theme}-angel-wings`;root.userData.theme=theme;root.userData.compact=compact;const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
+    theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),root=new THREE.Group();root.name=compact?`remote-${theme}-angel-wings`:`${theme}-angel-wings`;root.userData.theme=theme;root.userData.compact=compact;root.userData.wingOpenBlend=0;const template=this.centerAssetTemplates.get('ownerWings');if(!template?.root)return root;
     // V276: Die Angel-Wings werden als zwei echte Flügelhälften aufgebaut.
     // Dadurch sitzen sie dauerhaft HINTER dem Rücken und können um ihre Schulteransätze
     // nach vorn/hinten schlagen, ohne den Charakter oder die Arm-Bones mitzuziehen.
@@ -3270,7 +3282,7 @@ createGalaxyOwnerCape(theme='owner',compact=false){
       source.traverse?.((object)=>{if(object.isMesh){object.material=makeMat();object.castShadow=!compact;object.receiveShadow=false;}});
       root.add(source);
     }
-    const sparkleCount=compact?(['minimal','performance'].includes(this.state.world?.graphicsQuality)?2:6):(this.performanceTier==='low'?10:18);if(sparkleCount>0){const pos=new Float32Array(sparkleCount*3),rnd=seededRandom(26488+STAFF_THEME_IDS.indexOf(theme)*80);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:cfg.accent,size:.024,transparent:true,opacity:compact?.42:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;}if(!compact){const light=new THREE.PointLight(cfg.primary,.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;}root.rotation.x=.02;return root;
+    const sparkleCount=compact?(['minimal','performance'].includes(this.state.world?.graphicsQuality)?2:6):(this.performanceTier==='low'?10:18);if(sparkleCount>0){const pos=new Float32Array(sparkleCount*3),rnd=seededRandom(27826488);for(let i=0;i<sparkleCount;i++){const side=i%2?-1:1;pos[i*3]=side*(.22+rnd()*1.05);pos[i*3+1]=-.42+rnd()*.92;pos[i*3+2]=-.08+rnd()*.18;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const sparkles=new THREE.Points(geo,new THREE.PointsMaterial({color:cfg.accent,size:.024,transparent:true,opacity:compact?.42:.62,depthWrite:false,blending:THREE.AdditiveBlending}));root.add(sparkles);root.userData.sparkles=sparkles;}if(!compact){const light=new THREE.PointLight(cfg.primary,.62,4,2);light.position.set(0,.02,.12);root.add(light);root.userData.light=light;}root.rotation.x=.02;return root;
   }
 
 createGalaxyOwnerHat(theme='owner',compact=false){
@@ -3288,23 +3300,29 @@ applyOwnerWearables(){
 
   wingFlightPose(flying=false,motion=0,vertical=0,now=performance.now(),speedBoost=1,sprinting=false){
     const moving=clamp(Number(motion)||0,0,1),boost=clamp(Number(speedBoost)||1,1,5),fast=!!sprinting;
-    // Boden: beide Wings hängen locker nach unten und schlagen nicht.
-    if(!flying)return {sweep:0,spread:.96};
-    // Flug: Wings gehen seitlich auf. Der eigentliche Schlag läuft NUR um die Y-Achse
-    // (vorne <-> hinten), niemals als Auf-/Ab-Klappen zum Boden/Himmel.
+    // Zielpose. Der Übergang selbst wird in smoothWingFlightPose weich interpoliert,
+    // damit beim Start/Landen kein hartes "zack unten / zack oben" mehr entsteht.
+    if(!flying)return {sweep:0,spread:.96,open:0};
     const movingFactor=moving>.06?moving:0;
     const frequency=(movingFactor?(.0066+movingFactor*.0032):.0036)*(1+(boost-1)*.22)*(fast?1.34:1);
     const amplitude=movingFactor?(.14+movingFactor*.12+(fast?.055:0)):.075;
     const sweep=Math.sin(now*frequency)*amplitude;
-    // Im Flug fast waagerecht/seitlich; beim Steigen/Sinken nur minimal anders,
-    // ohne die gewünschte Vor-/Zurück-Bewegung zu verfälschen.
     const verticalTrim=clamp(Math.abs(Number(vertical)||0)*.008,0,.035);
-    return {sweep,spread:.075+verticalTrim};
+    return {sweep,spread:.075+verticalTrim,open:1};
+  }
+
+  smoothWingFlightPose(cape,target,delta=.016){
+    if(!cape)return target;const data=cape.userData||(cape.userData={}),previous=Number.isFinite(data.wingOpenBlend)?data.wingOpenBlend:0,wantsOpen=target.open>=.5;
+    // Öffnen beim langsamen Abheben bewusst weich; beim Landen ebenso langsam zurück
+    // in die hängende Ruheposition. Exponentielles Damping bleibt FPS-unabhängig.
+    const rate=wantsOpen?1.55:1.35,alpha=1-Math.exp(-Math.max(.001,Number(delta)||.016)*rate);data.wingOpenBlend=THREE.MathUtils.lerp(previous,wantsOpen?1:0,alpha);
+    const b=clamp(data.wingOpenBlend,0,1),eased=b*b*(3-2*b),spread=THREE.MathUtils.lerp(.96,target.spread,eased),sweep=target.sweep*eased;
+    return {spread,sweep,open:b};
   }
 
   updateOwnerWearables(delta=.016,now=performance.now()){
     if(this.ownerCapeObject){
-      this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),vertical=this.flightVerticalVelocity||0,speedBoost=clamp(Number(this.ownerFlags.speedMultiplier)||1,1,5),{sweep,spread}=this.wingFlightPose(flying,motion,vertical,now,speedBoost,!!this.sprinting);
+      this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1),vertical=this.flightVerticalVelocity||0,speedBoost=clamp(Number(this.ownerFlags.speedMultiplier)||1,1,5),targetPose=this.wingFlightPose(flying,motion,vertical,now,speedBoost,!!this.sprinting),{sweep,spread}=this.smoothWingFlightPose(this.ownerCapeObject,targetPose,delta);
       // V265: Der eigentliche Flügelschlag läuft jetzt um die Y-Achse. Dadurch
       // schwingen die Flügel hinter dem Rücken nach vorn/hinten statt zum Boden/Himmel.
       if(left){left.rotation.x=.01;left.rotation.y=-sweep;left.rotation.z=spread;}if(right){right.rotation.x=.01;right.rotation.y=sweep;right.rotation.z=-spread;}
@@ -4853,7 +4871,7 @@ applyRemoteHeldItem(remote){
       const gap=Math.hypot(predictedX-remote.group.position.x,predictedZ-remote.group.position.z);if(gap>16){remote.group.position.x=predictedX;remote.group.position.z=predictedZ;}else{const amount=1-Math.exp(-delta*(remote.sprinting?23:19));remote.group.position.x+=(predictedX-remote.group.position.x)*amount;remote.group.position.z+=(predictedZ-remote.group.position.z)*amount;}
       const groundY=terrainHeightAt(remote.group.position.x,remote.group.position.z),airborne=!remote.flying&&remote.targetY>groundY+.24,targetY=(remote.flying||airborne)?predictedY:groundY,yAmount=1-Math.exp(-delta*19);remote.group.position.y+=(targetY-remote.group.position.y)*yAmount;remote.pivot.rotation.y=lerpAngle(remote.pivot.rotation.y,remote.targetYaw,Math.min(1,delta*18));
       if(remote.aura?.visible&&quality!=='minimal'&&quality!=='performance')this.animateGalaxyAura(remote.aura,delta,now);
-      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,remoteSpeed=Math.hypot(Number(remote.velocityX)||0,Number(remote.velocityZ)||0),speedBoost=clamp(1+remoteSpeed*.10,1,5),{sweep,spread}=this.wingFlightPose(remote.flying,remote.walking?1:0,remote.verticalVelocity||0,now,speedBoost,!!remote.sprinting);if(l){l.rotation.x=.01;l.rotation.y=-sweep;l.rotation.z=spread;}if(r){r.rotation.x=.01;r.rotation.y=sweep;r.rotation.z=-spread;}}
+      if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,remoteSpeed=Math.hypot(Number(remote.velocityX)||0,Number(remote.velocityZ)||0),speedBoost=clamp(1+remoteSpeed*.10,1,5),targetPose=this.wingFlightPose(remote.flying,remote.walking?1:0,remote.verticalVelocity||0,now,speedBoost,!!remote.sprinting),{sweep,spread}=this.smoothWingFlightPose(remote.cape,targetPose,delta);if(l){l.rotation.x=.01;l.rotation.y=-sweep;l.rotation.z=spread;}if(r){r.rotation.x=.01;r.rotation.y=sweep;r.rotation.z=-spread;}}
       if(remote.vehicleObject?.userData?.mixer){const a=remote.vehicleObject.userData.propellerAction,spin=remote.flying||remote.walking||remote.targetY>terrainHeightAt(remote.group.position.x,remote.group.position.z)+.24;if(a){a.paused=!spin;a.timeScale=remote.flying?1.5:1.05;}if(spin)remote.vehicleObject.userData.mixer.update(delta);}
       if(remote.hat?.visible)this.updateWearableFollower(remote.hat);if(remote.heldAnchor?.visible){this.syncRemoteHeldAnchorPose(remote);if(!['minimal','performance'].includes(quality))this.animateHeldItemEffects(remote.heldObject,now);}this.updateRemoteStaffBeam(remote,now,perfNow);
       this.updateRemoteAnimalForm(remote,delta);const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
