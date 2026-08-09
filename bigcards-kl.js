@@ -1,12 +1,18 @@
-/* BigCards.kl – JK.Games Top Game V354 */
+/* BigCards.kl – JK.Games Top Game V355 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-bigcards-v354-full-cloud-sync";
+  const VERSION = "2026-08-10-bigcards-v355-indexeddb-cloud-fix";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
-  const CLOUD_SCHEMA_VERSION = 354;
-  const CLOUD_CHUNK_CHARS = 240000;
+  const CLOUD_SCHEMA_VERSION = 355;
+  const CLOUD_MIN_SCHEMA_VERSION = 354;
+  const CLOUD_CHUNK_CHARS = 180000;
+  const CLOUD_CHUNK_MAX_BYTES = 180000;
+  const LOCAL_DB_NAME = "jk-games-bigcards-kl-cache";
+  const LOCAL_DB_VERSION = 1;
+  const LOCAL_DB_STORE = "saves";
+  const LOCAL_SAVE_DELAY_MS = 900;
   const CLOUD_MAX_CHUNKS = 160;
   const CLOUD_SAVE_DELAY_MS = 12000;
   const CLOUD_POLL_MS = 15000;
@@ -205,7 +211,7 @@
   ]);
 
   const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,lastHeader:0,toastTimer:0,rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0};
-  let S=null,tickTimer=0,cloudSaveTimer=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),cloudReady=false,cloudBooting=false,cloudDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudUid="",cloudMigrationPending=false;
+  let S=null,tickTimer=0,cloudSaveTimer=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),cloudReady=false,cloudBooting=false,cloudDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false;
 
   const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
   const esc=(v)=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -216,13 +222,53 @@
   function localStateKey(userId=""){return userId?`${SAVE_KEY}:uid:${userId}`:SAVE_KEY;}
   function cloudMetaKey(userId){return `${SAVE_KEY}:cloud-meta:${userId}`;}
   function readStoredJson(key){try{const raw=JSON.parse(localStorage.getItem(key)||"null");return raw&&typeof raw==="object"?raw:null}catch{return null}}
-  function writeLocalState(userId=""){if(!S)return;const json=JSON.stringify(S);try{localStorage.setItem(SAVE_KEY,json);if(userId)localStorage.setItem(localStateKey(userId),json)}catch(e){console.warn("BigCards local save",e)}}
-  function readLocalStateForUser(userId){return readStoredJson(localStateKey(userId))||readStoredJson(SAVE_KEY);}
+  function openLocalDb(){
+    if(localDbPromise)return localDbPromise;
+    localDbPromise=new Promise((resolve,reject)=>{
+      if(!window.indexedDB)return reject(new Error("IndexedDB nicht verfügbar"));
+      const req=indexedDB.open(LOCAL_DB_NAME,LOCAL_DB_VERSION);
+      req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(LOCAL_DB_STORE))db.createObjectStore(LOCAL_DB_STORE,{keyPath:"id"});};
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error||new Error("IndexedDB konnte nicht geöffnet werden"));
+      req.onblocked=()=>reject(new Error("IndexedDB ist blockiert"));
+    });
+    return localDbPromise;
+  }
+  function indexedStateId(userId=""){return userId?`uid:${userId}`:"guest";}
+  async function readIndexedState(userId=""){
+    try{const db=await openLocalDb();return await new Promise((resolve,reject)=>{const tx=db.transaction(LOCAL_DB_STORE,"readonly"),req=tx.objectStore(LOCAL_DB_STORE).get(indexedStateId(userId));req.onsuccess=()=>resolve(req.result?.state||null);req.onerror=()=>reject(req.error);});}catch(e){console.warn("BigCards IndexedDB read",e);return null}
+  }
+  async function putIndexedState(userId,state){
+    const db=await openLocalDb();return await new Promise((resolve,reject)=>{const tx=db.transaction(LOCAL_DB_STORE,"readwrite");tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||new Error("IndexedDB Schreibfehler"));tx.onabort=()=>reject(tx.error||new Error("IndexedDB Schreiben abgebrochen"));tx.objectStore(LOCAL_DB_STORE).put({id:indexedStateId(userId),updatedAt:Number(state?.updatedAt)||now(),state});});
+  }
+  function clearLegacyFullCopies(userId=""){try{localStorage.removeItem(SAVE_KEY);if(userId)localStorage.removeItem(localStateKey(userId));}catch{}}
+  async function flushLocalState(userId=""){
+    if(!S)return false;if(localSaveBusy){localSaveQueued=true;return false}localSaveBusy=true;
+    const target=userId||cloudUid||currentUidSync()||"";let snapshot;
+    try{snapshot=JSON.parse(JSON.stringify(S));await putIndexedState(target,snapshot);clearLegacyFullCopies(target);return true;}
+    catch(e){
+      console.warn("BigCards IndexedDB local save",e);
+      // Nur als Notfall genau EINE localStorage-Kopie versuchen. Keine doppelte Vollkopie mehr.
+      try{const json=JSON.stringify(snapshot||S);if(json.length>1500000){console.warn("BigCards local fallback übersprungen: Spielstand ist zu groß für localStorage.");return false}localStorage.setItem(SAVE_KEY,json);return true}catch(fallback){console.warn("BigCards local fallback save",fallback);return false}
+    }finally{localSaveBusy=false;if(localSaveQueued){localSaveQueued=false;setTimeout(()=>flushLocalState(target),120)}}
+  }
+  function writeLocalState(userId="",immediate=false){
+    if(!S)return;localSaveUser=userId||cloudUid||currentUidSync()||localSaveUser||"";
+    if(immediate){clearTimeout(localSaveTimer);localSaveTimer=0;void flushLocalState(localSaveUser);return}
+    if(localSaveTimer)return;localSaveTimer=setTimeout(()=>{localSaveTimer=0;void flushLocalState(localSaveUser);},LOCAL_SAVE_DELAY_MS);
+  }
+  async function readLocalStateForUser(userId){
+    const indexed=await readIndexedState(userId);if(indexed&&typeof indexed==="object")return indexed;
+    const scoped=readStoredJson(localStateKey(userId)),global=readStoredJson(SAVE_KEY);
+    const legacy=scoped&&global?(Number(scoped.updatedAt||0)>=Number(global.updatedAt||0)?scoped:global):(scoped||global);
+    if(legacy){try{await putIndexedState(userId,legacy);clearLegacyFullCopies(userId);}catch(e){console.warn("BigCards legacy cache migration",e)}return legacy;}
+    return null;
+  }
   function readCloudMeta(userId){return readStoredJson(cloudMetaKey(userId))||{};}
   function writeCloudMeta(userId,data){try{localStorage.setItem(cloudMetaKey(userId),JSON.stringify(data||{}))}catch{}}
-  function backupLocalConflict(userId,raw){if(!raw)return;try{localStorage.setItem(`${SAVE_KEY}:conflict:${userId}:${now()}`,JSON.stringify(raw))}catch{}}
+  function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave();}
-  function defaultState(){return {version:354,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,featuredLastAt:now(),jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
+  function defaultState(){return {version:355,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,featuredLastAt:now(),jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -253,7 +299,7 @@
     S.floors=Array.from({length:4},(_,i)=>Array.isArray(S.floors?.[i])?S.floors[i].slice(0,10).concat(Array(10).fill(null)).slice(0,10):Array(10).fill(null));S.unlockedFloors=clamp(S.unlockedFloors||1,1,4);S.phase=clamp(S.phase||0,0,3);S.phaseRebirths=clamp(S.phaseRebirths||0,0,5);S.level=Math.max(1,Math.floor(S.level||1));
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=354;const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now());if(saveLocal||repaired||potionInventoryMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=355;const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now());if(saveLocal||repaired||potionInventoryMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -960,8 +1006,18 @@
   async function displayName(){const u=await currentUser();return u?.displayName||u?.email?.split("@")[0]||"Spieler"}
   function deviceId(){const key=`${SAVE_KEY}:device`;try{let id=localStorage.getItem(key);if(!id){id=`dev-${now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;localStorage.setItem(key,id)}return id}catch{return `dev-${Math.random().toString(36).slice(2,10)}`}}
   function cloudHash(text){let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16).padStart(8,"0")}
-  function splitCloudPayload(text){const out=[];let pos=0;while(pos<text.length){let end=Math.min(text.length,pos+CLOUD_CHUNK_CHARS);if(end<text.length){const c=text.charCodeAt(end-1);if(c>=0xD800&&c<=0xDBFF)end--;}out.push(text.slice(pos,end));pos=end;}return out.length?out:[""];}
-  function cloudHasFullSave(root){return Number(root?.schemaVersion)>=CLOUD_SCHEMA_VERSION&&typeof root?.saveId==="string"&&Number(root?.chunkCount)>0;}
+  function utf8Size(text){try{return new TextEncoder().encode(text).length}catch{return unescape(encodeURIComponent(text)).length}}
+  function splitCloudPayload(text){
+    const out=[];let pos=0;
+    while(pos<text.length){
+      let high=Math.min(text.length,pos+CLOUD_CHUNK_CHARS),end=high;
+      if(utf8Size(text.slice(pos,end))>CLOUD_CHUNK_MAX_BYTES){let low=pos+1;while(low<high){const mid=Math.floor((low+high+1)/2),part=text.slice(pos,mid);if(utf8Size(part)<=CLOUD_CHUNK_MAX_BYTES)low=mid;else high=mid-1;}end=low;}
+      if(end<text.length){const c=text.charCodeAt(end-1);if(c>=0xD800&&c<=0xDBFF)end--;}
+      if(end<=pos)throw new Error("Cloud-Chunk konnte nicht geteilt werden");out.push(text.slice(pos,end));pos=end;
+    }
+    return out.length?out:[""];
+  }
+  function cloudHasFullSave(root){return Number(root?.schemaVersion)>=CLOUD_MIN_SCHEMA_VERSION&&typeof root?.saveId==="string"&&Number(root?.chunkCount)>0;}
   function meaningfulLocalProgress(raw){if(!raw||typeof raw!=="object")return false;return Object.keys(raw.instances||{}).length>0||Object.keys(raw.collection||{}).length>0||Object.keys(raw.exclusiveCollection||{}).length>0||Number(raw.points)>1000||Number(raw.level)>1||Number(raw.totalRebirths)>0||Number(raw.lifetimeScore)>0;}
   function mergeLegacyCheckpoint(raw,root){const out=Object.assign(defaultState(),raw||{});if(root){out.points=Math.max(0,Number(root.points)||out.points||1000);out.level=Math.max(1,Number(root.level)||out.level||1);out.totalRebirths=Math.max(0,Number(root.totalRebirths)||out.totalRebirths||0);out.lifetimeScore=Math.max(Number(out.lifetimeScore)||0,Number(root.lifetimeScore)||0);out.updatedAt=Math.max(Number(out.updatedAt)||0,Number(root.updatedAtMs)||0);}return out;}
   async function readFullCloudState(fb,userId,root){
@@ -972,14 +1028,24 @@
     if(Number.isFinite(Number(root.points)))raw.points=Math.max(0,Number(root.points));raw.updatedAt=Math.max(Number(raw.updatedAt)||0,Number(root.updatedAtMs)||0);return raw;
   }
   function scheduleCloudSave(delay=CLOUD_SAVE_DELAY_MS){if(!cloudReady||cloudBooting||cloudMigrationPending)return;if(cloudSaveTimer)return;cloudSaveTimer=setTimeout(()=>{cloudSaveTimer=0;syncProfile(false)},Math.max(500,delay));}
-  async function writeProfile(fb,u){const profile={userId:u.uid,displayName:await displayName(),lifetimeScore:Math.floor(S.lifetimeScore||0),lifetimePointsEarned:Math.floor(S.lifetimePointsEarned||0),maxLevelEver:Math.floor(S.maxLevelEver||1),totalRebirths:Math.floor(S.totalRebirths||0),highestProductionEver:Math.floor(S.highestProductionEver||0),highestXpProductionEver:Math.floor(S.highestXpProductionEver||0),collectionDiscovered:collectionCount(),exclusiveDiscovered:exclusiveCount(),unlockedFloors:Math.floor(S.unlockedFloors||1),currentProduction:Math.floor(productionPerSecond()),lastUpdated:fb.serverTimestamp()};await fb.setDoc(fb.doc(fb.db,PROFILE_COLLECTION,u.uid),profile,{merge:true});}
+  async function writeProfile(fb,u){
+    const ref=fb.doc(fb.db,PROFILE_COLLECTION,u.uid),profile={userId:u.uid,displayName:await displayName(),lifetimeScore:Math.floor(S.lifetimeScore||0),lifetimePointsEarned:Math.floor(S.lifetimePointsEarned||0),maxLevelEver:Math.floor(S.maxLevelEver||1),totalRebirths:Math.floor(S.totalRebirths||0),highestProductionEver:Math.floor(S.highestProductionEver||0),highestXpProductionEver:Math.floor(S.highestXpProductionEver||0),collectionDiscovered:collectionCount(),exclusiveDiscovered:exclusiveCount(),unlockedFloors:Math.floor(S.unlockedFloors||1),currentProduction:Math.floor(productionPerSecond()),lastUpdated:fb.serverTimestamp()};
+    // Bestehende High-Water-Werte nie kleiner schreiben, damit ältere Geräte/Profiles
+    // nicht an den Sicherheitsregeln scheitern und der Vollsave trotzdem synchronisiert.
+    try{const snap=await fb.getDoc(ref);if(snap.exists()){const old=snap.data()||{};for(const k of ["lifetimeScore","lifetimePointsEarned","maxLevelEver","totalRebirths","highestProductionEver","highestXpProductionEver","collectionDiscovered","exclusiveDiscovered","unlockedFloors"])profile[k]=Math.max(Number(profile[k])||0,Number(old[k])||0);}}catch{}
+    await fb.setDoc(ref,profile,{merge:true});
+  }
   async function syncProfile(force=false){
-    if((!cloudReady&&!force)||cloudMigrationPending||cloudSaving||!S){if(cloudSaving)cloudDirty=true;return false}const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;}const mutationAtStart=cloudMutationCounter;
-    try{updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=354;const payload=JSON.stringify(S),chunks=splitCloudPayload(payload);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);const saveId=`v354-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;
+    if((!cloudReady&&!force)||cloudMigrationPending||cloudSaving||!S){if(cloudSaving)cloudDirty=true;return false}const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;}const mutationAtStart=cloudMutationCounter;let cloudStage="Vorbereitung";
+    try{updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=355;const payload=JSON.stringify(S),chunks=splitCloudPayload(payload);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);const saveId=`v355-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Chunks";
       for(let start=0;start<chunks.length;start+=6){const jobs=[];for(let i=start;i<Math.min(chunks.length,start+6);i++){const id=`chunk-${String(i).padStart(3,"0")}`;jobs.push(fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,data:chunks[i],updatedAtMs:savedAt}));}await Promise.all(jobs);}
-      const root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,saveId,chunkCount:chunks.length,payloadChars:payload.length,payloadHash:cloudHash(payload),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
-      await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),root,{merge:true});await writeProfile(fb,u);cloudLastSaveId=saveId;cloudLastRemoteUpdatedAt=savedAt;writeCloudMeta(u.uid,{saveId,remoteUpdatedAtMs:savedAt,syncedLocalUpdatedAt:savedAt});writeLocalState(u.uid);if(cloudMutationCounter===mutationAtStart)cloudDirty=false;return true;
-    }catch(e){console.warn("BigCards full cloud save",e);cloudDirty=true;return false}finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave();}
+      cloudStage="Root";const root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,saveId,chunkCount:chunks.length,payloadChars:payload.length,payloadHash:cloudHash(payload),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
+      await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),root,{merge:true});
+      // Profil/Bestenliste ist Zusatzdaten. Ein alter High-Water-Konflikt darf niemals
+      // den eigentlichen Karten-Vollsave als fehlgeschlagen markieren.
+      try{cloudStage="Profil";await writeProfile(fb,u)}catch(profileError){console.warn("BigCards leaderboard profile save",profileError)}
+      cloudLastSaveId=saveId;cloudLastRemoteUpdatedAt=savedAt;writeCloudMeta(u.uid,{saveId,remoteUpdatedAtMs:savedAt,syncedLocalUpdatedAt:savedAt});writeLocalState(u.uid,true);if(cloudMutationCounter===mutationAtStart)cloudDirty=false;return true;
+    }catch(e){console.warn(`BigCards full cloud save (${cloudStage})`,e);cloudDirty=true;return false}finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave();}
   }
   async function pullCloudIfNewer(showToast=false){
     if(!cloudReady||cloudBooting||cloudSaving||cloudMigrationPending||cloudDirty)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{},remoteAt=Number(root.updatedAtMs)||0;if(!cloudHasFullSave(root))return false;if(root.saveId===cloudLastSaveId&&remoteAt<=cloudLastRemoteUpdatedAt)return false;const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=remoteAt;cloudDirty=false;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:remoteAt,syncedLocalUpdatedAt:Number(S.updatedAt)||remoteAt});UI.battleCard=null;UI.battleResult=null;UI.battleSession=null;UI.floor=Math.min(UI.floor,S.unlockedFloors-1);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand von einem anderen Gerät aktualisiert.",3000);return true}catch(e){console.warn("BigCards cloud pull",e);return false}}
@@ -991,14 +1057,14 @@
   function startRuntimeTimers(){lastTick=performance.now();clearInterval(tickTimer);tickTimer=setInterval(tick,250);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
   async function initializeCloudSession(){
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;const fb=await firebase(),u=await currentUser();
-    if(!fb||!u){cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft nur lokal. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}
-    cloudUid=u.uid;const localRaw=readLocalStateForUser(u.uid)||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null;
+    if(!fb||!u){const localOnly=await readIndexedState("");if(localOnly)adoptState(localOnly,{saveLocal:false});cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft lokal über sicheren Gerätespeicher. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}
+    cloudUid=u.uid;const localRaw=(await readLocalStateForUser(u.uid))||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null;
     try{rootSnap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(rootSnap.exists())root=rootSnap.data()||{};if(cloudHasFullSave(root))remoteRaw=await readFullCloudState(fb,u.uid,root);}catch(e){console.warn("BigCards cloud load",e);}
     if(remoteRaw){const localUnsynced=meta.saveId===root.saveId&&Number(localRaw?.updatedAt||0)>Number(meta.syncedLocalUpdatedAt||0)+1000;if(localUnsynced){adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudDirty=true;}else{if(meta.saveId&&meta.saveId!==root.saveId&&Number(localRaw?.updatedAt||0)>Number(meta.syncedLocalUpdatedAt||0)+1000)backupLocalConflict(u.uid,localRaw);adoptState(remoteRaw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudDirty=false;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});}}
     else if(root){const localHasCards=Object.keys(localRaw?.instances||{}).length>0||Object.keys(localRaw?.collection||{}).length>0||Object.keys(localRaw?.exclusiveCollection||{}).length>0;if(localHasCards||meaningfulLocalProgress(localRaw)&&Number(root.collectionDiscovered||0)===0){adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudDirty=true;}else{adoptState(mergeLegacyCheckpoint(localRaw,root),{saveLocal:true,userId:u.uid});if(Number(root.collectionDiscovered||0)>0&&!localHasCards){cloudMigrationPending=true;cloudDirty=false;}}}
     else{adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudDirty=true;}
     cloudBooting=false;cloudReady=!cloudMigrationPending;ensureDaily();applyOffline();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);await loadRole();await claimPayouts();startRuntimeTimers();
-    if(cloudMigrationPending){toast("☁ Der alte Firebase-Stand enthält noch keinen Kartenbestand. Öffne V354 einmal auf dem PC/anderen Gerät, auf dem deine Karten vorhanden sind. Das Handy prüft danach automatisch erneut und übernimmt den vollständigen Stand.",7000);return;}
+    if(cloudMigrationPending){toast("☁ Der alte Firebase-Stand enthält noch keinen Kartenbestand. Öffne V355 einmal auf dem PC/anderen Gerät, auf dem deine Karten vorhanden sind. Das Handy prüft danach automatisch erneut und übernimmt den vollständigen Stand.",7000);return;}
     if(cloudDirty)await syncProfile(true);else toast(`☁ BigCards synchronisiert · ${Object.keys(S.instances||{}).length} Karten geladen`,3000);
   }
   async function loadRole(showToast=false){const fb=await firebase(),u=await currentUser();if(!fb||!u){UI.role="player";if(UI.tab==="mod")UI.tab="field";if(showToast)toast("Firebase-Rolle nicht verfügbar.");return refresh()}try{const snap=await fb.getDoc(fb.doc(fb.db,"staffRoles",u.uid));UI.role=String(snap.data()?.role||"player").toLowerCase();}catch{UI.role="player"}if(UI.role!=="owner"&&UI.tab==="mod")UI.tab="field";refresh();}
@@ -1052,7 +1118,7 @@
   function grantJkCoinPurchase(kind,amount=1){state();const qty=Math.max(1,Math.floor(Number(amount)||1));if(String(kind).startsWith("pack:")){const id=String(kind).split(":")[1];S.jkPackCredits[id]=(S.jkPackCredits[id]||0)+qty}else if(kind==="exclusivePack")S.exclusiveCredits+=qty;else if(kind==="autoOpenerHour")S.autoOpenerUntil=Math.max(now(),S.autoOpenerUntil||0)+qty*3600000;else if(kind==="autoCollectorHour")S.autoCollectorUntil=Math.max(now(),S.autoCollectorUntil||0)+qty*3600000;else if(String(kind).startsWith("aura:")){const id=String(kind).split(":")[1];S.auraInventory[id]=(S.auraInventory[id]||0)+qty}else if(String(kind).startsWith("combatAura:")){const id=String(kind).split(":")[1];S.combatAuraInventory[id]=(S.combatAuraInventory[id]||0)+qty}else if(String(kind).startsWith("bind:")){const id=String(kind).split(":")[1];S.bindInventory[id]=(S.bindInventory[id]||0)+qty}else if(String(kind).startsWith("trail:")){const id=String(kind).split(":")[1];if(!trailBy(id))return false;S.trailInventory[id]=trailCount(id)+qty}else if(String(kind).startsWith("featuredStorage:")){const tier=clamp(Math.floor(Number(String(kind).split(":")[1])||0),0,FEATURED_STORAGE_TIERS.length-1);S.featuredStorageTier=Math.max(Math.floor(Number(S.featuredStorageTier)||0),tier)}else if(String(kind).startsWith("pointsMinutes:")){const mins=Number(String(kind).split(":")[1])||5;S.points+=Math.max(1000,productionPerSecond()*60*mins)*qty}else return false;persist();if(UI.overlay){refresh();toast("JK/Coin-Kauf in BigCards.kl gutgeschrieben.")}return true;}
 
   function open(phone){if(UI.overlay)return;state();UI.phone=phone||UI.phone;UI.tab="field";UI.battleResult=null;UI.battleSession=null;UI.floor=Math.min(UI.floor,S.unlockedFloors-1);const overlay=document.createElement("div");overlay.className="bc-overlay";overlay.dataset.bigcardsKl="1";overlay.innerHTML=renderShell();document.body.append(overlay);document.body.classList.add("bigcards-kl-open");UI.overlay=overlay;UI.main=overlay.querySelector("[data-bc-main]");bindEvents();refresh(false);toast("☁ BigCards-Spielstand wird mit Firebase abgeglichen …",2400);initializeCloudSession();}
-  function close(){if(!UI.overlay)return;updateFeaturedEarnings(now());clearTimeout(UI.battleEnemyTimer);UI.battleEnemyTimer=0;UI.battleSession=null;clearFieldDragVisuals();UI.drag=null;S.lastSeen=now();persist();if(cloudReady&&!cloudMigrationPending)syncProfile(true);stopCloudWatchers();window.removeEventListener("keydown",onKey);clearInterval(tickTimer);clearInterval(autoTimer);UI.overlay.remove();UI.overlay=null;UI.main=null;UI.packReveal=null;document.body.classList.remove("bigcards-kl-open")}
+  function close(){if(!UI.overlay)return;updateFeaturedEarnings(now());clearTimeout(UI.battleEnemyTimer);UI.battleEnemyTimer=0;UI.battleSession=null;clearFieldDragVisuals();UI.drag=null;S.lastSeen=now();persist();writeLocalState(cloudUid||currentUidSync(),true);if(cloudReady&&!cloudMigrationPending)syncProfile(true);stopCloudWatchers();window.removeEventListener("keydown",onKey);clearInterval(tickTimer);clearInterval(autoTimer);UI.overlay.remove();UI.overlay=null;UI.main=null;UI.packReveal=null;document.body.classList.remove("bigcards-kl-open")}
   function returnToTopGames(){const phone=UI.phone;close();setTimeout(()=>{if(window.JKGamesOpenTopGames)window.JKGamesOpenTopGames(phone);else if(window.openDeviceInterface&&phone)window.openDeviceInterface(phone,"topgames",false)},80)}
 
   window.BigCardsKL=Object.freeze({version:VERSION,open,close,returnToTopGames,grantJkCoinPurchase,getState:()=>state(),getFeaturedStorageTier:()=>Math.floor(Number(state().featuredStorageTier)||0),featuredStorageTiers:FEATURED_STORAGE_TIERS,rarities:RARITIES,trails:TRAILS,baseNames:BASE_NAMES});
