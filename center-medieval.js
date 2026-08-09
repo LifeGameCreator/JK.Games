@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v302-village-foundation-placement-hard-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v303-village-pack-recenter-foundation-clean-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -161,7 +161,7 @@ const CENTER_ASSET_PATHS = Object.freeze({
   ownerWings: `${CENTER_ASSET_ROOT}angel_wings.glb?v=20260808-v264`,
   staffCape: `./staff-cape-v282.glb?v=20260809-v282`,
   staffPlane: `${CENTER_ASSET_ROOT}saegelflugzeug.glb?v=20260808-v264`,
-  villageHousePack: `./village-house-pack-v299.glb?v=20260809-v299`,
+  villageHousePack: `./village-house-pack-v303.glb?v=20260809-v303`,
   playerHouseLevel1: `./player-house-level1-v293.glb?v=20260809-v293`,
   playerHouseLevel2: `./player-house-level2-v293.glb?v=20260809-v293`,
   playerHouseLevel3: `./player-house-level3-v293.glb?v=20260809-v293`,
@@ -1516,14 +1516,45 @@ class CenterDynastyGame {
   }
 
   createVillageHouseVariant(variant=0,targetHeight=5.7){
-    const template=this.centerAssetTemplates.get('villageHousePack');if(!template?.root)return null;const index=Math.abs(Math.floor(Number(variant)||0))%5;
+    const template=this.centerAssetTemplates.get('villageHousePack');if(!template?.root)return null;
+    const index=Math.abs(Math.floor(Number(variant)||0))%5;
     let base=this.villageHouseVariantTemplates.get(index);
     if(!base){
-      const root=cloneSkeleton(template.root);root.updateMatrixWorld(true);const centers=[-20,-10,0,10,20],centerZ=centers[index],remove=[];
-      root.traverse((object)=>{if(!(object.isMesh||object.isSkinnedMesh))return;const p=new THREE.Vector3();object.getWorldPosition(p);if(/collider/i.test(String(object.name||''))||Math.abs(p.z-centerZ)>5.65){remove.push(object);return;}const mats=Array.isArray(object.material)?object.material:[object.material];const cloned=mats.map((mat)=>{const next=mat?.clone?.()||mat;if(next?.map)next.map.colorSpace=THREE.SRGBColorSpace;if(next){next.envMapIntensity=.35;next.roughness=Math.min(1,Math.max(.55,Number(next.roughness)||.82));next.needsUpdate=true;}return next;});object.material=Array.isArray(object.material)?cloned:cloned[0];object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;});
-      for(const object of remove)object.removeFromParent?.();root.updateMatrixWorld(true);let box=new THREE.Box3().setFromObject(root);if(box.isEmpty())return null;const size=box.getSize(new THREE.Vector3()),scale=1/Math.max(.001,size.y);root.scale.multiplyScalar(scale);root.updateMatrixWorld(true);box=new THREE.Box3().setFromObject(root);const center=box.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=box.min.y;root.updateMatrixWorld(true);root.name=`center-village-house-template-${index}`;this.villageHouseVariantTemplates.set(index,root);base=root;
+      // V303: Das Original-Pack enthält fünf Häuser entlang der Z-Achse (-20,-10,0,10,20).
+      // Wichtig: Wir schneiden zuerst genau EIN Haus aus dem Pack heraus, skalieren aber NOCH NICHT.
+      // Frühere Versionen haben vor dem finalen Skalieren über root.position zentriert. Diese Position
+      // wurde beim späteren Skalieren nicht mitskaliert; dadurch konnte das sichtbare Haus viele Meter
+      // neben seinem Fundament landen (z.B. mitten auf dem Brunnen), während die Betonplatte leer blieb.
+      const root=cloneSkeleton(template.root);root.updateMatrixWorld(true);
+      const centers=[-20,-10,0,10,20],centerZ=centers[index],remove=[];
+      root.traverse((object)=>{
+        if(!(object.isMesh||object.isSkinnedMesh))return;
+        const p=new THREE.Vector3();object.getWorldPosition(p);
+        if(/collider/i.test(String(object.name||''))||Math.abs(p.z-centerZ)>5.7){remove.push(object);return;}
+        const mats=Array.isArray(object.material)?object.material:[object.material];
+        const cloned=mats.map((mat)=>{const next=mat?.clone?.()||mat;if(next?.map)next.map.colorSpace=THREE.SRGBColorSpace;if(next){next.envMapIntensity=.35;next.roughness=Math.min(1,Math.max(.55,Number(next.roughness)||.82));next.needsUpdate=true;}return next;});
+        object.material=Array.isArray(object.material)?cloned:cloned[0];object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;
+      });
+      for(const object of remove)object.removeFromParent?.();
+      root.updateMatrixWorld(true);
+      const rawBox=new THREE.Box3().setFromObject(root);if(rawBox.isEmpty())return null;
+      root.name=`center-village-house-source-${index}`;this.villageHouseVariantTemplates.set(index,root);base=root;
     }
-    const clone=base.clone(true);clone.scale.multiplyScalar(targetHeight);clone.name=`center-village-house-pack-${index}`;clone.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});return clone;
+    const clone=cloneSkeleton(base);clone.updateMatrixWorld(true);
+    let box=new THREE.Box3().setFromObject(clone);if(box.isEmpty())return null;
+    const size=box.getSize(new THREE.Vector3()),scaleBy=Math.max(.01,Number(targetHeight)||5.7)/Math.max(.001,size.y);
+    clone.scale.multiplyScalar(scaleBy);clone.updateMatrixWorld(true);
+    // V303: ERST NACH der finalen Skalierung wird das sichtbare Haus auf lokalen Ursprung/Boden gelegt.
+    // Damit befinden sich sichtbares Haus, Hitbox und Betonfundament garantiert an derselben Position.
+    box=new THREE.Box3().setFromObject(clone);const center=box.getCenter(new THREE.Vector3());
+    clone.position.x-=center.x;clone.position.z-=center.z;clone.position.y-=box.min.y;clone.updateMatrixWorld(true);
+    box=new THREE.Box3().setFromObject(clone);const finalCenter=box.getCenter(new THREE.Vector3());
+    // Numerische Restabweichungen noch einmal entfernen.
+    clone.position.x-=finalCenter.x;clone.position.z-=finalCenter.z;clone.position.y-=box.min.y;clone.updateMatrixWorld(true);
+    clone.name=`center-village-house-pack-v303-${index}`;
+    clone.userData.villageVariant=index;clone.userData.v303Centered=true;
+    clone.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});
+    return clone;
   }
 
   sampleVillageFootprint(x,z,halfW,halfD,yaw=0){
@@ -1546,14 +1577,14 @@ class CenterDynastyGame {
     // V302: Fundament ist nur wenig größer als das echte Haus. Keine riesigen Betonplatten mehr.
     // Der massive Sockel reicht bis UNTER den niedrigsten gemessenen Bodenpunkt; oben liegt eine
     // durchgehende Betonplatte, auf der das Haus exakt aufsitzt.
-    const margin=.38,width=Math.max(3.4,halfW*2+margin*2),depthSize=Math.max(3.2,halfD*2+margin*2);
-    const bottomY=groundMin-.18,slabThickness=.24,bodyTop=baseY-slabThickness*.82,bodyDepth=Math.max(.46,bodyTop-bottomY);
+    const margin=.30,width=Math.max(3.4,halfW*2+margin*2),depthSize=Math.max(3.2,halfD*2+margin*2);
+    const bottomY=groundMin-.22,slabThickness=.34,bodyTop=baseY-slabThickness,bodyDepth=Math.max(.56,bodyTop-bottomY);
     const concreteMat=new THREE.MeshStandardMaterial({color:0x696d6e,roughness:.97,metalness:0,flatShading:true});
     const slabMat=new THREE.MeshStandardMaterial({color:0x85898a,roughness:.95,metalness:0,flatShading:true});
     const foundation=new THREE.Mesh(new THREE.BoxGeometry(width,bodyDepth,depthSize,2,1,2),concreteMat);
     foundation.position.set(x-chunk.originX,bottomY+bodyDepth*.5,z-chunk.originZ);
     foundation.rotation.y=yaw;
-    foundation.name='v302-village-concrete-foundation';
+    foundation.name='v303-village-concrete-foundation';
     foundation.castShadow=!!this.state.world?.shadows;
     foundation.receiveShadow=true;
     chunk.group.add(foundation);
@@ -1561,7 +1592,7 @@ class CenterDynastyGame {
     const slab=new THREE.Mesh(new THREE.BoxGeometry(width+.10,slabThickness,depthSize+.10),slabMat);
     slab.position.set(x-chunk.originX,baseY-slabThickness*.5,z-chunk.originZ);
     slab.rotation.y=yaw;
-    slab.name='v302-village-concrete-slab';
+    slab.name='v303-village-concrete-slab';
     slab.castShadow=!!this.state.world?.shadows;
     slab.receiveShadow=true;
     chunk.group.add(slab);
@@ -1587,6 +1618,12 @@ class CenterDynastyGame {
       if(center>ra+rb)return false;
     }
     return true;
+  }
+
+  villageFootprintHitsCircle(house,cx,cz,radius=1){
+    if(!house)return false;const yaw=Number(house.yaw)||0,c=Math.cos(yaw),s=Math.sin(yaw),dx=cx-(Number(house.x)||0),dz=cz-(Number(house.z)||0);
+    const localX=dx*c-dz*s,localZ=dx*s+dz*c,hw=Math.max(.1,Number(house.foundationHalfW||house.halfW)||1),hd=Math.max(.1,Number(house.foundationHalfD||house.halfD)||1);
+    const qx=Math.max(Math.abs(localX)-hw,0),qz=Math.max(Math.abs(localZ)-hd,0);return Math.hypot(qx,qz)<=Math.max(0,Number(radius)||0);
   }
 
   registerVillageRectColliders(chunk,x,z,halfW,halfD,yaw,height=6.8){
@@ -2282,31 +2319,34 @@ buildChunkGrass(chunk) {
     const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
     const villageType=random()<.26?'Bergdorf':random()<.55?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
     const timberMat=new THREE.MeshStandardMaterial({color:0x513321,roughness:1}),roadMat=this.groundPathMaterial('gravel'),sandMat=this.groundPathMaterial('sand');
-    this.createTerrainCircle(chunk,x,z,17,sandMat,44);this.createTerrainCircle(chunk,x,z,14.5,roadMat,44);
+    this.createTerrainCircle(chunk,x,z,19,sandMat,48);this.createTerrainCircle(chunk,x,z,16.5,roadMat,48);
 
     const houseCount=7+Math.floor(random()*5),housePositions=[],innerCount=Math.ceil(houseCount/2),outerCount=Math.max(1,Math.floor(houseCount/2));
     for(let i=0;i<houseCount;i+=1){
       const group=this.createVillageHouseVariant(i,5.35+(i%3)*.46);
       // Keine alten Ersatzhäuser: fehlt das echte Pack, wird kein falsches Kastenhaus erzeugt.
-      if(!group){if(i===0)console.warn('V302: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
+      if(!group){if(i===0)console.warn('V303: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
       group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),halfW=Math.max(1.65,size.x*.50),halfD=Math.max(1.55,size.z*.50);
       const outer=i%2===1,slot=Math.floor(i/2),count=outer?outerCount:innerCount,baseRadius=outer?39:27,baseAngle=(slot/Math.max(1,count))*Math.PI*2+(outer?Math.PI/Math.max(2,count):0)+(random()-.5)*.10;
       let placement=null;
       for(let attempt=0;attempt<24&&!placement;attempt+=1){
-        const ringPush=Math.floor(attempt/8)*4.6,angle=baseAngle+(attempt%8)*.105*(attempt%2?-1:1),radius=baseRadius+ringPush,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:hx,z:hz,halfW,halfD,foundationHalfW:halfW+.38,foundationHalfD:halfD+.38,yaw};
-        if(Math.hypot(hx-x,hz-z)<20+Math.hypot(halfW,halfD))continue;
+        const ringPush=Math.floor(attempt/8)*4.6,angle=baseAngle+(attempt%8)*.105*(attempt%2?-1:1),radius=baseRadius+ringPush,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:hx,z:hz,halfW,halfD,foundationHalfW:halfW+.30,foundationHalfD:halfD+.30,yaw};
+        // V303: Dorfmitte, Brunnen und Markt sind absolute Sperrzonen für Häuser.
+        if(this.villageFootprintHitsCircle(candidateHouse,x,z,18.5))continue;
+        if(this.villageFootprintHitsCircle(candidateHouse,x,z,6.8))continue;
+        if(this.villageFootprintHitsCircle(candidateHouse,x+8,z+5,5.7))continue;
         if(pointInsideWaterFeature(hx,hz,Math.max(halfW,halfD)+3.5))continue;
-        if(housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,.7)))continue;
-        const probe=this.sampleVillageFootprint(hx,hz,halfW+.38,halfD+.38,yaw);
+        if(housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.05)))continue;
+        const probe=this.sampleVillageFootprint(hx,hz,halfW+.30,halfD+.30,yaw);
         if(!Number.isFinite(probe.min)||!Number.isFinite(probe.max)||probe.slope>9.5)continue;
         placement={hx,hz,yaw,angle,radius,probe};
       }
       // Lieber ein Haus weniger als zwei Häuser ineinander.
-      if(!placement){console.warn(`V302: Kein sicherer Fundamentplatz für Dorfhaus ${i+1} in ${name} gefunden.`);continue;}
-      const {hx,hz,yaw,angle,radius}=placement,localX=hx-chunk.originX,localZ=hz-chunk.originZ,samples=placement.probe||this.sampleVillageFootprint(hx,hz,halfW+.38,halfD+.38,yaw),baseY=samples.max+.16;
+      if(!placement){console.warn(`V303: Kein sicherer Fundamentplatz für Dorfhaus ${i+1} in ${name} gefunden.`);continue;}
+      const {hx,hz,yaw,angle,radius}=placement,localX=hx-chunk.originX,localZ=hz-chunk.originZ,samples=placement.probe||this.sampleVillageFootprint(hx,hz,halfW+.30,halfD+.30,yaw),baseY=samples.max+.34;
       const foundation=this.addVillageFoundation(chunk,hx,hz,halfW,halfD,yaw,baseY,samples.min);
-      if(!foundation){console.warn(`V302: Fundament für Dorfhaus ${i+1} in ${name} konnte nicht erstellt werden – Haus wird nicht gesetzt.`);continue;}
-      group.position.set(localX,foundation.topY+.018,localZ);group.rotation.y=yaw;group.name=`v302-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
+      if(!foundation){console.warn(`V303: Fundament für Dorfhaus ${i+1} in ${name} konnte nicht erstellt werden – Haus wird nicht gesetzt.`);continue;}
+      group.position.set(localX,foundation.topY+.018,localZ);group.rotation.y=yaw;group.name=`v303-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
       this.registerVillageRectColliders(chunk,hx,hz,halfW,halfD,yaw,Math.max(5.8,size.y*1.03));
       const doorX=hx-Math.cos(angle)*(foundation.halfD+.95),doorZ=hz-Math.sin(angle)*(foundation.halfD+.95);
       housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:halfW*2,d:halfD*2,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,yaw,angle,radius,doorX,doorZ});
@@ -2334,24 +2374,24 @@ buildChunkGrass(chunk) {
     if(community){
       community.updateMatrixWorld(true);const cbox=new THREE.Box3().setFromObject(community),csize=cbox.getSize(new THREE.Vector3()),halfW=Math.max(1.8,csize.x*.50),halfD=Math.max(1.7,csize.z*.50);let spot=null;
       for(let attempt=0;attempt<24&&!spot;attempt+=1){
-        const angle=3.78+(attempt%8)*.14*(attempt%2?-1:1),radius=45+Math.floor(attempt/8)*5,cx=x+Math.cos(angle)*radius,cz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:cx,z:cz,halfW,halfD,foundationHalfW:halfW+.38,foundationHalfD:halfD+.38,yaw};
-        if(pointInsideWaterFeature(cx,cz,Math.max(halfW,halfD)+3.5)||housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,.8)))continue;
-        const probe=this.sampleVillageFootprint(cx,cz,halfW+.38,halfD+.38,yaw);if(probe.slope>9.5)continue;
+        const angle=3.78+(attempt%8)*.14*(attempt%2?-1:1),radius=45+Math.floor(attempt/8)*5,cx=x+Math.cos(angle)*radius,cz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:cx,z:cz,halfW,halfD,foundationHalfW:halfW+.30,foundationHalfD:halfD+.30,yaw};
+        if(this.villageFootprintHitsCircle(candidateHouse,x,z,19.5)||this.villageFootprintHitsCircle(candidateHouse,x+8,z+5,6.0)||pointInsideWaterFeature(cx,cz,Math.max(halfW,halfD)+3.5)||housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.1)))continue;
+        const probe=this.sampleVillageFootprint(cx,cz,halfW+.30,halfD+.30,yaw);if(probe.slope>9.5)continue;
         spot={x:cx,z:cz,yaw,angle,radius,probe};
       }
       if(spot){
-        const samples=spot.probe||this.sampleVillageFootprint(spot.x,spot.z,halfW+.38,halfD+.38,spot.yaw),baseY=samples.max+.16,foundation=this.addVillageFoundation(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,baseY,samples.min);
+        const samples=spot.probe||this.sampleVillageFootprint(spot.x,spot.z,halfW+.30,halfD+.30,spot.yaw),baseY=samples.max+.34,foundation=this.addVillageFoundation(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,baseY,samples.min);
         if(foundation){
-          community.position.set(spot.x-chunk.originX,foundation.topY+.018,spot.z-chunk.originZ);community.rotation.y=spot.yaw;community.name=`v302-${name}-gemeinschaftshaus`;chunk.group.add(community);
+          community.position.set(spot.x-chunk.originX,foundation.topY+.018,spot.z-chunk.originZ);community.rotation.y=spot.yaw;community.name=`v303-${name}-gemeinschaftshaus`;chunk.group.add(community);
           this.registerVillageRectColliders(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,Math.max(6,csize.y*1.04));
           const doorX=spot.x-Math.cos(spot.angle)*(foundation.halfD+.98),doorZ=spot.z-Math.sin(spot.angle)*(foundation.halfD+.98);
           housePositions.push({x:spot.x,z:spot.z,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,w:halfW*2,d:halfD*2,yaw:spot.yaw,angle:spot.angle,radius:spot.radius,doorX,doorZ,community:true});communityPlaced=true;
         }
       }
-      if(!communityPlaced){community.removeFromParent?.();community=null;console.warn(`V302: Gemeinschaftshaus in ${name} ausgelassen, damit kein Gebäude schwebt oder überlappt.`);}
+      if(!communityPlaced){community.removeFromParent?.();community=null;console.warn(`V303: Gemeinschaftshaus in ${name} ausgelassen, damit kein Gebäude schwebt, den Brunnen blockiert oder überlappt.`);}
     }
 
-    // V301: Keine sternförmigen Wege mehr vom Mittelpunkt zu jedem Haus. Stattdessen
+    // V303: Keine sternförmigen Wege mehr vom Mittelpunkt zu jedem Haus. Stattdessen
     // verbindet ein unregelmäßiger Kies-/Sandweg die Betonfundamente an deren Zugangsseite.
     const roadStops=housePositions.filter((entry)=>Number.isFinite(entry.doorX)&&Number.isFinite(entry.doorZ)).sort((a,b)=>Math.atan2(a.z-z,a.x-x)-Math.atan2(b.z-z,b.x-x));
     if(roadStops.length>1){
