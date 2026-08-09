@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v286-open-world-syntax-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v287-smooth-npcs-animals-cloak-back-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1419,7 +1419,7 @@ class CenterDynastyGame {
     }
     if(type==='cow'){
       const names=['FrontUpperLeg.L_6','FrontUpperLeg.R_9','BackUpperLeg.L_14','BackUpperLeg.R_18'];
-      root.userData.proceduralLegs=names.map((name)=>raw.getObjectByName(name)).filter(Boolean);
+      root.userData.proceduralLegs=names.map((name)=>raw.getObjectByName(name)).filter(Boolean);root.userData.proceduralLegBases=new Map(root.userData.proceduralLegs.map((bone)=>[bone,bone.quaternion.clone()]));
     }
     if(type==='horse'){
       root.userData.proceduralHorseRoot=raw;
@@ -1437,8 +1437,9 @@ class CenterDynastyGame {
       for(let i=0;i<legs.length;i+=1){
         const bone=legs[i];
         if(!bone?.isBone)continue;
-        const direction=(i===0||i===3)?1:-1;
-        bone.rotateX(Math.sin(phase+i*.35)*.34*strength*direction);
+        const direction=(i===0||i===3)?1:-1,base=visual.userData.proceduralLegBases?.get?.(bone);
+        if(base){bone.quaternion.copy(base);bone.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(phase+i*.35)*.34*strength*direction,0,0)));}
+        else bone.rotateX(Math.sin(phase+i*.35)*.34*strength*direction);
       }
     }
     const horse=visual.userData.proceduralHorseRoot;
@@ -3341,7 +3342,7 @@ applyOwnerWearables(){
     const appearance=this.state.ownerAppearance||{},cloakTheme=this.appearanceTheme('cloak'),capeTheme=this.appearanceTheme('cape'),hatTheme=this.appearanceTheme('hat'),allowed=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&['normal','galaxy'].includes(appearance.skin||'normal')),wantCloak=allowed&&!!appearance.cloak,wantCape=allowed&&!!appearance.cape,wantHat=allowed&&!!appearance.hat;
     if(this.ownerCloakObject&&this.ownerCloakObject.userData?.theme!==cloakTheme){this.disposeGeneratedVisual(this.ownerCloakObject);this.ownerCloakObject=null;}if(this.ownerCapeObject&&this.ownerCapeObject.userData?.theme!==capeTheme){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(this.ownerHatObject&&this.ownerHatObject.userData?.theme!==hatTheme){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
     if(!wantCloak&&this.ownerCloakObject){this.disposeGeneratedVisual(this.ownerCloakObject);this.ownerCloakObject=null;}if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
-    if(wantCloak&&!this.ownerCloakObject){const cloak=this.createStaffCloak(cloakTheme);this.modelPivot.add(cloak);this.ownerCloakObject=cloak;cloak.userData.centerBackAttachment=true;const backBone=this.playerBones?.neck||this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.spine,backPos=new THREE.Vector3(0,1.62,-.05),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cloak,this.modelPivot,backBone,backPos,backQ)){cloak.position.copy(backPos);cloak.quaternion.copy(backQ);}this.updateWearableFollower(cloak);}
+    if(wantCloak&&!this.ownerCloakObject){const cloak=this.createStaffCloak(cloakTheme);this.modelPivot.add(cloak);this.ownerCloakObject=cloak;cloak.userData.centerBackAttachment=true;const backBone=this.playerBones?.neck||this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.spine,backPos=new THREE.Vector3(0,1.62,-.09),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cloak,this.modelPivot,backBone,backPos,backQ)){cloak.position.copy(backPos);cloak.quaternion.copy(backQ);}this.updateWearableFollower(cloak);}
     if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape(capeTheme);this.modelPivot.add(cape);this.ownerCapeObject=cape;cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cape,this.modelPivot,backBone,backPos,backQ)){cape.position.copy(backPos);cape.quaternion.copy(backQ);}}
     if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat(hatTheme);this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
   }
@@ -3854,8 +3855,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   updateAnimals(delta,now) {
     const random=Math.random,px=this.player?.position.x||0,pz=this.player?.position.z||0,playerVanished=!!(this.isStaffActive&&this.ownerFlags.vanish);
     for(const animal of this.animals){
-      if(!animal.active){if(animal.respawnAt&&Date.now()>animal.respawnAt){animal.active=true;animal.group.visible=true;animal.hp=animal.maxHp||100;animal.predatorTarget=null;if(animal.type==='spider'){animal.x=animal.homeX;animal.z=animal.homeZ;animal.y=terrainHeightAt(animal.x,animal.z);animal.targetX=animal.homeX;animal.targetZ=animal.homeZ;animal.group.position.set(animal.x,animal.y,animal.z);}else this.relocateAnimal(animal,100,300);}else continue;}
-      if(this.mountedHorse===animal){animal.x=this.player.position.x;animal.z=this.player.position.z;animal.y=terrainHeightAt(animal.x,animal.z);animal.group.position.set(animal.x,animal.y,animal.z);animal.group.rotation.y=this.modelPivot.rotation.y;this.setAnimalAnimation(animal,this.walking,delta);continue;}
+      if(!animal.active){if(animal.respawnAt&&Date.now()>animal.respawnAt){animal.active=true;animal.group.visible=true;animal.hp=animal.maxHp||100;animal.predatorTarget=null;if(animal.type==='spider'){animal.x=animal.homeX;animal.z=animal.homeZ;animal.y=terrainHeightAt(animal.x,animal.z);animal.targetX=animal.homeX;animal.targetZ=animal.homeZ;}else this.relocateAnimal(animal,100,300);animal.renderTargetX=animal.x;animal.renderTargetY=animal.y;animal.renderTargetZ=animal.z;}else continue;}
+      if(this.mountedHorse===animal){animal.x=this.player.position.x;animal.z=this.player.position.z;animal.y=terrainHeightAt(animal.x,animal.z);animal.renderTargetX=animal.x;animal.renderTargetY=animal.y;animal.renderTargetZ=animal.z;animal.renderRotationY=this.modelPivot.rotation.y;animal.renderMoving=!!this.walking;continue;}
       const profile=animal.profile||ANIMAL_PROFILES[animal.type];if(!profile)continue;
       if(animal.type!=='spider'&&Math.hypot(animal.x-px,animal.z-pz)>650)this.relocateAnimal(animal,140,310);
       if(profile.predator&&(!animal.predatorTarget||!animal.predatorTarget.active||now>animal.predatorUntil)){if(random()<delta*.04){const targets=this.animals.filter((other)=>other!==animal&&other.active&&other.profile?.predator&&other.type!==animal.type&&Math.hypot(other.x-animal.x,other.z-animal.z)<75);if(targets.length){animal.predatorTarget=targets[Math.floor(random()*targets.length)];animal.predatorUntil=now+5000+random()*4500;}}}
@@ -3865,9 +3866,11 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       if(animal.type==='spider'&&animal.aggressive&&!playerVanished){const homeDistance=Math.hypot(px-animal.homeX,pz-animal.homeZ);if(playerDistance<15&&homeDistance<animal.roamRadius+18){animal.targetX=px;animal.targetZ=pz;if(playerDistance<2.05&&now>(animal.attackCooldown||0)){animal.attackCooldown=now+1250;if(!(this.isStaffActive&&this.ownerFlags.god)){this.state.needs.health=Math.max(0,this.state.needs.health-(6+Math.floor(Math.random()*7)));this.toast('🕷 Zauberspinne hat dich getroffen.');}}}else if(homeDistance>animal.roamRadius+18){const a=Math.atan2(animal.homeX-animal.x,animal.homeZ-animal.z);animal.targetX=animal.homeX+Math.sin(a)*3;animal.targetZ=animal.homeZ+Math.cos(a)*3;}}
       else if(!playerVanished&&profile.zone==='land'&&!animal.tamed&&playerDistance<11&&animal.type!=='cow'){animal.targetX=animal.x+(animal.x-px)/Math.max(1,playerDistance)*34;animal.targetZ=animal.z+(animal.z-pz)/Math.max(1,playerDistance)*34;}
       const dx=animal.targetX-animal.x,dz=animal.targetZ-animal.z,d=Math.hypot(dx,dz)||1,dy=(animal.targetY??animal.y)-animal.y;let speed=profile.speed;if(animal.predatorTarget||(!playerVanished&&animal.type==='spider'&&playerDistance<15)||(!playerVanished&&playerDistance<11&&profile.zone==='land'&&!animal.tamed))speed=profile.run;animal.x+=dx/d*speed*delta;animal.z+=dz/d*speed*delta;
-      if(profile.zone==='water')animal.y+=(dy-animal.y*.0)*Math.min(1,delta*2.8);else if(profile.zone==='air')animal.y+=dy*Math.min(1,delta*1.9);else animal.y=terrainHeightAt(animal.x,animal.z);
-      animal.group.position.set(animal.x,animal.y,animal.z);animal.group.rotation.y=Math.atan2(dx,dz);if(profile.zone==='water')animal.group.rotation.z=Math.sin(now*.0016+animal.x*.01)*.035;if(profile.zone==='air')animal.group.rotation.z=Math.sin(now*.002+animal.z*.01)*.08;
-      this.setAnimalAnimation(animal,d>2||!!animal.predatorTarget,delta);
+      if(profile.zone==='water')animal.y+=dy*Math.min(1,delta*2.8);else if(profile.zone==='air')animal.y+=dy*Math.min(1,delta*1.9);else animal.y=terrainHeightAt(animal.x,animal.z);
+      // V287: Die KI darf weiterhin in einem sparsameren Takt rechnen. Die sichtbare
+      // Position/Rotation wird aber in smoothDynamicActors in jedem Renderframe geglättet.
+      animal.renderTargetX=animal.x;animal.renderTargetY=animal.y;animal.renderTargetZ=animal.z;animal.renderRotationY=Math.atan2(dx,dz);animal.renderMoving=d>2||!!animal.predatorTarget;
+      animal.renderZone=profile.zone;
     }
   }
 
@@ -3879,11 +3882,39 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       const dx=tx-npc.x,dz=tz-npc.z,d=Math.hypot(dx,dz)||1,speed=.5+(npc.name.length%4)*.08;
       npc.x+=dx/d*Math.min(speed*delta,d);npc.z+=dz/d*Math.min(speed*delta,d);
       const ox=npc.group.userData.chunkOriginX||0,oz=npc.group.userData.chunkOriginZ||0;
-      npc.group.position.set(npc.x-ox,terrainHeightAt(npc.x,npc.z),npc.z-oz);npc.group.rotation.y=Math.atan2(dx,dz);
-      const limbs=npc.group.userData.npcLimbs,walk=Math.min(1,d/2),phase=now*.006+(npc.name.length||0);
-      if(limbs){limbs.arms?.forEach((arm,i)=>arm.rotation.x=Math.sin(phase+i*Math.PI)*.42*walk);limbs.legs?.forEach((leg,i)=>leg.rotation.x=Math.sin(phase+i*Math.PI)*.5*walk);}
-      else if(npc.group.userData.npcModel){const model=npc.group.userData.npcModel;model.position.y=Math.abs(Math.sin(phase))*0.018*walk;model.rotation.z=Math.sin(phase)*.008*walk;const wb=model.userData.npcWalkBones;if(wb?.bases){for(const [bone,baseQ] of wb.bases){const sign=(bone===wb.upperRight||bone===wb.legLeft)?1:-1,amount=(bone===wb.upperRight||bone===wb.upperLeft)?.34:.46;const target=baseQ.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(phase)*sign*amount*walk,0,0)));bone.quaternion.slerp(target,Math.min(1,delta*10));}}}
+      // V287: Nur das logische Ziel wird hier aktualisiert. Die sichtbare Figur bewegt
+      // sich pro Renderframe weich zu diesem Ziel, statt alle 100-300 ms zu springen.
+      npc.renderTargetX=npc.x-ox;npc.renderTargetY=terrainHeightAt(npc.x,npc.z);npc.renderTargetZ=npc.z-oz;npc.renderRotationY=Math.atan2(dx,dz);npc.renderWalk=Math.min(1,d/2);
       const hotspot=this.hotspots.find((h)=>h.id===npc.id);if(hotspot){hotspot.x=npc.x;hotspot.z=npc.z;}
+    }
+  }
+
+  smoothDynamicActors(delta=.016,now=performance.now()){
+    const actorAlpha=1-Math.exp(-Math.max(.001,delta)*18),rotAlpha=1-Math.exp(-Math.max(.001,delta)*14);
+    const smoothAngle=(current,target)=>current+Math.atan2(Math.sin(target-current),Math.cos(target-current))*rotAlpha;
+    for(const animal of this.animals){
+      if(!animal?.active||!animal.group?.parent)continue;
+      if(this.mountedHorse===animal){animal.group.position.set(this.player.position.x,terrainHeightAt(this.player.position.x,this.player.position.z),this.player.position.z);animal.group.rotation.y=this.modelPivot.rotation.y;this.setAnimalAnimation(animal,!!this.walking,delta);continue;}
+      if(Number.isFinite(animal.renderTargetX)){
+        animal.group.position.x=THREE.MathUtils.lerp(animal.group.position.x,animal.renderTargetX,actorAlpha);
+        animal.group.position.y=THREE.MathUtils.lerp(animal.group.position.y,animal.renderTargetY,actorAlpha);
+        animal.group.position.z=THREE.MathUtils.lerp(animal.group.position.z,animal.renderTargetZ,actorAlpha);
+      }
+      if(Number.isFinite(animal.renderRotationY))animal.group.rotation.y=smoothAngle(animal.group.rotation.y,animal.renderRotationY);
+      if(animal.renderZone==='water')animal.group.rotation.z=Math.sin(now*.0016+animal.x*.01)*.035;else if(animal.renderZone==='air')animal.group.rotation.z=Math.sin(now*.002+animal.z*.01)*.08;
+      this.setAnimalAnimation(animal,!!animal.renderMoving,delta);
+    }
+    for(const npc of this.npcs){
+      if(!npc?.group?.parent)continue;
+      if(Number.isFinite(npc.renderTargetX)){
+        npc.group.position.x=THREE.MathUtils.lerp(npc.group.position.x,npc.renderTargetX,actorAlpha);
+        npc.group.position.y=THREE.MathUtils.lerp(npc.group.position.y,npc.renderTargetY,actorAlpha);
+        npc.group.position.z=THREE.MathUtils.lerp(npc.group.position.z,npc.renderTargetZ,actorAlpha);
+      }
+      if(Number.isFinite(npc.renderRotationY))npc.group.rotation.y=smoothAngle(npc.group.rotation.y,npc.renderRotationY);
+      const walk=Number(npc.renderWalk)||0,phase=now*.006+(npc.name?.length||0),limbs=npc.group.userData.npcLimbs;
+      if(limbs){limbs.arms?.forEach((arm,i)=>arm.rotation.x=Math.sin(phase+i*Math.PI)*.42*walk);limbs.legs?.forEach((leg,i)=>leg.rotation.x=Math.sin(phase+i*Math.PI)*.5*walk);}
+      else if(npc.group.userData.npcModel){const model=npc.group.userData.npcModel;model.position.y=Math.abs(Math.sin(phase))*0.018*walk;model.rotation.z=Math.sin(phase)*.008*walk;const wb=model.userData.npcWalkBones;if(wb?.bases){for(const [bone,baseQ] of wb.bases){const sign=(bone===wb.upperRight||bone===wb.legLeft)?1:-1,amount=(bone===wb.upperRight||bone===wb.upperLeft)?.34:.46;const target=baseQ.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(phase)*sign*amount*walk,0,0)));bone.quaternion.slerp(target,Math.min(1,delta*12));}}}
     }
   }
 
@@ -4901,7 +4932,7 @@ applyRemoteOwnerAura(remote) {
     if(remote.aura&&(remote.aura.userData?.theme!==auraTheme||remote.aura.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=tier==='low'?this.createCheapRemoteAura(auraTheme):this.createGalaxyAuraGroup(true,auraTheme);remote.aura.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.aura,tier);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
     const visible=isStaffVisual&&!hidden&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&(remote.cape.userData?.theme!==capeTheme||remote.cape.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.cloak&&(remote.cloak.userData?.theme!==cloakTheme||remote.cloak.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cloak);remote.cloak=null;}if(remote.hat&&(remote.hat.userData?.theme!==hatTheme||remote.hat.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
     if(visible&&remote.ownerCape&&!remote.cape){remote.cape=tier==='minimal'||tier==='low'?this.createCheapRemoteWings(capeTheme):this.createGalaxyOwnerCape(capeTheme,tier!=='high');remote.cape.userData.qualityTier=tier;remote.cape.scale.setScalar(tier==='minimal'?.82:.9);this.simplifyRemoteVisual(remote.cape,tier);remote.pivot.add(remote.cape);remote.cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(remote.model,remote.bones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();/* V277: Auch bei Online-Spielern fest am Oberkoerper statt nur am Root-Pivot. */if(!this.configureWearableFollower(remote.cape,remote.pivot,backBone,backPos,backQ)){remote.cape.position.copy(backPos);remote.cape.quaternion.copy(backQ);}}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;
-    if(visible&&remote.staffCloak&&tier!=='minimal'&&!remote.cloak){remote.cloak=this.createStaffCloak(cloakTheme,tier!=='high');remote.cloak.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.cloak,tier);remote.pivot.add(remote.cloak);const backBone=remote.bones?.neck||this.resolveBackAttachmentBone(remote.model,remote.bones)||remote.bones?.chest||remote.bones?.spine,neckPos=new THREE.Vector3(0,1.62,-.07),q=new THREE.Quaternion();if(!this.configureWearableFollower(remote.cloak,remote.pivot,backBone,neckPos,q)){remote.cloak.position.copy(neckPos);remote.cloak.quaternion.copy(q);}this.updateWearableFollower(remote.cloak);}if(remote.cloak)remote.cloak.visible=visible&&remote.staffCloak&&tier!=='minimal';
+    if(visible&&remote.staffCloak&&tier!=='minimal'&&!remote.cloak){remote.cloak=this.createStaffCloak(cloakTheme,tier!=='high');remote.cloak.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.cloak,tier);remote.pivot.add(remote.cloak);const backBone=remote.bones?.neck||this.resolveBackAttachmentBone(remote.model,remote.bones)||remote.bones?.chest||remote.bones?.spine,neckPos=new THREE.Vector3(0,1.62,-.11),q=new THREE.Quaternion();if(!this.configureWearableFollower(remote.cloak,remote.pivot,backBone,neckPos,q)){remote.cloak.position.copy(neckPos);remote.cloak.quaternion.copy(q);}this.updateWearableFollower(remote.cloak);}if(remote.cloak)remote.cloak.visible=visible&&remote.staffCloak&&tier!=='minimal';
     if(visible&&remote.ownerHat&&tier!=='minimal'&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(hatTheme,tier!=='high');remote.hat.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.hat,tier);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat&&tier!=='minimal';
   }
 
@@ -5045,7 +5076,7 @@ handleOwnerInput(event){
 startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;this.updateRoleHud();const expected=(this.isStaffActive&&!this.isPublicPlayerMode())?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();},3000);}
 
 startLoop() {
-    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.runPerfTask('ambient',now,(this.performanceTier==='low'?100:PERF_TASK_INTERVALS.ambient)*slow,(d)=>this.updateAmbientCreatures(d,now));this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
+    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.updateAmbientCreatures(delta,now);this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.smoothDynamicActors(delta,now);this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
   }
 
 resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(this.performancePixelRatio());this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
