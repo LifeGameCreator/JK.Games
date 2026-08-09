@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v330-owner-wizard-v1-animations-survival-half-damage-no-foot-fire';
+const CENTER_VERSION = '2026-08-09-jkgames-v331-wizard-male-locomotion-staff-hand-great-sword-position-orientation';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -764,6 +764,8 @@ class CenterDynastyGame {
     this.playerWizardAttackRightAction = null;
     this.playerWizardAttackLeftAction = null;
     this.playerWizardDrawAction = null;
+    this.playerWizardPropBone = null;
+    this.playerWizardStaffHandOffset = null;
     this.wizardNativeAction = null;
     this.wizardNativeActionUntil = 0;
     this.wizardAttackSide = 0;
@@ -3534,6 +3536,36 @@ buildChunkGrass(chunk) {
     apply(this.playerBones.lowerRight);apply(this.playerBones.lowerLeft);
   }
 
+  prepareWizardStaffHandConstraint(root,weaponStandClip){
+    this.playerWizardPropBone=null;this.playerWizardStaffHandOffset=null;
+    const hand=this.playerBones?.handRight;if(!root||!hand)return;
+    let prop=null;root.traverse?.((object)=>{if(!prop&&object?.isBone&&/\bProp1\b|bip Prop1/i.test(String(object.name||'')))prop=object;});
+    if(!prop)return;
+    // Die GLB enthält den Stab als vollständig an "bip Prop1" gewichtetes Mesh.
+    // Wir lesen einmal die vom Animator vorgesehene Relation aus Weapon_Stand aus
+    // und halten diese Relation anschließend fest an der rechten Hand.
+    try{
+      if(weaponStandClip){
+        const sampler=new THREE.AnimationMixer(root),action=sampler.clipAction(weaponStandClip);action.play();sampler.setTime(Math.min(.12,Math.max(0,(Number(weaponStandClip.duration)||.4)*.18)));root.updateMatrixWorld(true);
+        this.playerWizardStaffHandOffset=hand.matrixWorld.clone().invert().multiply(prop.matrixWorld.clone());
+        action.stop();sampler.stopAllAction();sampler.uncacheRoot?.(root);
+      }
+    }catch(error){console.warn('Wizard-Stab-Handrelation konnte nicht aus Weapon_Stand gelesen werden',error);}
+    if(!this.playerWizardStaffHandOffset){
+      // Fallback: Stab senkrecht an die rechte Hand, falls ein Export die Weapon_Stand-Spur verliert.
+      this.playerWizardStaffHandOffset=new THREE.Matrix4().compose(new THREE.Vector3(.02,-.06,.035),new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,.06)),new THREE.Vector3(1,1,1));
+    }
+    this.playerWizardPropBone=prop;
+  }
+
+  syncWizardStaffToRightHand(){
+    if(!this.isOwnerWizardActive()||!this.playerWizardPropBone||!this.playerWizardStaffHandOffset)return;
+    const hand=this.playerBones?.handRight,prop=this.playerWizardPropBone,parent=prop.parent;if(!hand||!parent)return;
+    this.playerModel?.updateMatrixWorld?.(true);hand.updateWorldMatrix?.(true,false);parent.updateWorldMatrix?.(true,false);
+    const desired=hand.matrixWorld.clone().multiply(this.playerWizardStaffHandOffset),local=parent.matrixWorld.clone().invert().multiply(desired);
+    local.decompose(prop.position,prop.quaternion,prop.scale);prop.updateMatrixWorld?.(true);
+  }
+
   cachePlayerBones(root) {
     const all=[];
     root?.traverse?.((object)=>{
@@ -3648,7 +3680,7 @@ buildChunkGrass(chunk) {
     if(scooter)this.applyScooterPose(delta);else if(mounted)this.applyRidingPose(delta);else if(flying&&!animalForm&&!plane)this.applyFlyingPose(delta,moving,sprint);
     this.updateStaffPlane(delta,moving);
     this.updateOwnerFormAnimation(delta,moving);if(animalForm&&this.ownerFormObject){if(appearance.skin==='owl'&&flying){this.ownerFormObject.rotation.x=this.flightLean*.45;this.ownerFormObject.rotation.z=this.flightRoll*.55;}else{this.ownerFormObject.rotation.x*=Math.exp(-delta*8);this.ownerFormObject.rotation.z*=Math.exp(-delta*8);}}
-    this.updateFlightEffects(delta,moving,sprint);this.applyActionAnimation(now);this.updateHeldItemTransform(now);this.updateFirstPersonArms(delta);this.updateOwnerAura(delta,now);this.updateOwnerWearables(delta,now);
+    this.updateFlightEffects(delta,moving,sprint);this.applyActionAnimation(now);this.syncWizardStaffToRightHand();this.updateHeldItemTransform(now);this.updateFirstPersonArms(delta);this.updateOwnerAura(delta,now);this.updateOwnerWearables(delta,now);
   }
 
   applyFlyingPose(delta=.016,moving=false,sprint=false) {
@@ -3840,7 +3872,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
       asset.updateMatrixWorld(true);
       const box=new THREE.Box3().setFromObject(asset),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),gripX=box.max.x-size.x*.075;
       asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;
-      asset.rotation.set(Math.PI*1.5,-.18,0);
+      // V331: um 180° um die eigene Längsachse gerollt: breite Klingenseite/Schneide zeigt zum Boden.
+      asset.rotation.set(Math.PI*.5,-.18,0);
     }else asset.rotation.set(0,0,Math.PI/2);
     asset.name='center-owner-great-sword';asset.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.35,Number(mat.metalness)||0);mat.roughness=Math.min(.48,Number(mat.roughness)||.5);}}});return asset;
   }
@@ -3861,8 +3894,9 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(allowed&&!this.ownerGreatSwordCarryObject){
       const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
       const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
-      // V329: X exakt auf Rückenmitte wie beim Wings-Anker; Höhe und Rückenabstand aus V328 bleiben erhalten.
-      const pos=new THREE.Vector3(0,2.42,-.22);
+      // V331: optische Mitte korrigiert. Das gekrümmte Modell braucht etwas +X,
+      // damit seine sichtbare Klingenmasse mittig wie die Wings sitzt; außerdem etwas tiefer.
+      const pos=new THREE.Vector3(.18,2.24,-.22);
       const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
@@ -4097,7 +4131,7 @@ applyStaffVehicle(){
 createFirstPersonHeldItem(kind){
     this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;if(!this.camera||kind==='none')return;const theme=this.appearanceTheme('heldItem'),item=this.createHeldItemMesh(kind,theme);if(!item)return;
     item.name='center-first-person-held-item';item.userData.theme=theme;item.scale.multiplyScalar(kind==='staff'?.42:kind==='greatSword'?.48:kind==='kitSword'?.54:['shovel','pickaxe','hoe','axe','hammer'].includes(kind)?.46:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
-    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},greatSword:{p:[.31,-.28,-.68],r:[-.04,-.20,1.54]},kitSword:{p:[.34,-.36,-.76],r:[-.10,-.14,-.46]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
+    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},greatSword:{p:[.32,-.31,-.72],r:[3.10,-.20,1.54]},kitSword:{p:[.34,-.36,-.76],r:[-.10,-.14,-.46]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
   }
 
 applyHeldItemVisual() {
@@ -4115,7 +4149,7 @@ applyHeldItemVisual() {
     const kind=anchor.userData.kind||this.ownerHeldObject?.userData?.kind||'sword';
     const transforms={
       sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
-      greatSword:{p:[.012,-.018,.012],r:[0,0,0]},
+      greatSword:{p:[.02,-.085,.055],r:[0,0,0]},
       kitSword:{p:[.02,-.088,.056],r:[.70,.02,-.09]},
       staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
       eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},
@@ -4131,7 +4165,8 @@ applyHeldItemVisual() {
       // folgen dem Hand-Bone, damit die Schlaganimation beim Stehen, Laufen und Rennen sauber mitgeht.
       hand.getWorldQuaternion(this.tmpQuaternion);this.modelPivot.getWorldQuaternion(this.tmpQuaternion2);
       anchor.quaternion.copy(this.tmpQuaternion2).invert().multiply(this.tmpQuaternion);
-      anchor.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,Math.PI,'XYZ')));
+      // V331: den zusätzlichen 180°-Flip aus V328 entfernen. Der echte Griff liegt dadurch wieder an der Hand
+      // statt die gesamte Klingenlänge unter den Charakter/Füße zu drehen.
     }else anchor.rotation.set(...tr.r);
   }
 
@@ -4399,7 +4434,7 @@ async ensureCorrectPlayerModel() {
     const token=(this.playerModelInstallToken||0)+1;this.playerModelInstallToken=token;
     this.playerMixer?.stopAllAction?.();this.playerWalkMixer?.stopAllAction?.();this.playerRunMixer?.stopAllAction?.();
     if(this.ownerHeldObject)this.disposeGeneratedVisual(this.ownerHeldObject);if(this.ownerGreatSwordCarryObject)this.disposeGeneratedVisual(this.ownerGreatSwordCarryObject);if(this.ownerCapeObject)this.disposeGeneratedVisual(this.ownerCapeObject);if(this.ownerCloakObject)this.disposeGeneratedVisual(this.ownerCloakObject);if(this.ownerHatObject)this.disposeGeneratedVisual(this.ownerHatObject);if(this.ownerScooterObject)this.disposeGeneratedVisual(this.ownerScooterObject);if(this.ownerPlaneObject)this.disposeGeneratedVisual(this.ownerPlaneObject);if(this.ownerAura)this.disposeGeneratedVisual(this.ownerAura);if(this.ownerFormObject)this.disposeGeneratedVisual(this.ownerFormObject);if(this.playerModel)this.disposeClonedModelMaterials(this.playerModel);
-    this.modelPivot.clear();const installPivot=new THREE.Group();installPivot.name='center-flight-visual-pivot';this.flightVisualPivot=installPivot;this.modelPivot.add(installPivot);this.playerModel=null;this.playerMixer=null;this.playerWalkMixer=null;this.playerRunMixer=null;this.playerDualLocomotion=false;this.playerWalkVisual=null;this.playerRunVisual=null;this.playerAction=null;this.playerWalkAction=null;this.playerRunAction=null;this.playerJogAction=null;this.playerIdleAction=null;this.playerWeaponIdleAction=null;this.playerWizardAttackRightAction=null;this.playerWizardAttackLeftAction=null;this.playerWizardDrawAction=null;this.wizardNativeAction=null;this.wizardNativeActionUntil=0;this.playerUsesNativeIdle=false;this.playerActiveAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerGreatSwordCarryObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerCloakObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
+    this.modelPivot.clear();const installPivot=new THREE.Group();installPivot.name='center-flight-visual-pivot';this.flightVisualPivot=installPivot;this.modelPivot.add(installPivot);this.playerModel=null;this.playerMixer=null;this.playerWalkMixer=null;this.playerRunMixer=null;this.playerDualLocomotion=false;this.playerWalkVisual=null;this.playerRunVisual=null;this.playerAction=null;this.playerWalkAction=null;this.playerRunAction=null;this.playerJogAction=null;this.playerIdleAction=null;this.playerWeaponIdleAction=null;this.playerWizardAttackRightAction=null;this.playerWizardAttackLeftAction=null;this.playerWizardDrawAction=null;this.playerWizardPropBone=null;this.playerWizardStaffHandOffset=null;this.wizardNativeAction=null;this.wizardNativeActionUntil=0;this.playerUsesNativeIdle=false;this.playerActiveAction=null;this.playerBones={};this.ownerHeldObject=null;this.ownerHeldAnchor=null;this.firstPersonHeldObject=null;this.ownerGreatSwordCarryObject=null;this.ownerFormObject=null;this.ownerCapeObject=null;this.ownerCloakObject=null;this.ownerHatObject=null;this.ownerScooterObject=null;this.ownerPlaneObject=null;this.ownerPlaneMixer=null;this.ownerPlaneAction=null;this.ownerAura=null;this.flightEffects=null;this.flightLean=0;this.flightInputMagnitude=0;
     try{
       if((skin==='male'||skin==='female')&&RUN_MODEL_PATHS[skin]&&IDLE_MODEL_PATHS[skin]){
         const [walkGltf,runGltf,idleGltf]=await Promise.all([
@@ -4423,9 +4458,19 @@ async ensureCorrectPlayerModel() {
       }else{
         const gltf=await this.gltfLoader.loadAsync(MODEL_PATHS[skin]||MODEL_PATHS.male);if(token!==this.playerModelInstallToken)return;const root=gltf.scene;root.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root),height=Math.max(.01,box.max.y-box.min.y);root.scale.multiplyScalar((skin==='owner'||skin==='maskedOwner'?1.86:1.76)/height);root.updateMatrixWorld(true);const scaled=new THREE.Box3().setFromObject(root),center=scaled.getCenter(new THREE.Vector3());root.position.x-=center.x;root.position.z-=center.z;root.position.y-=scaled.min.y-.035;root.rotation.y=CHARACTER_MODEL_YAW;root.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;const mats=Array.isArray(object.material)?object.material:[object.material];mats.forEach((m)=>{if(m?.map)m.map.colorSpace=THREE.SRGBColorSpace;if(m){m.envMapIntensity=.25;this.cacheOriginalMaterial(m);}});}});if(token!==this.playerModelInstallToken)return;this.playerModel=root;installPivot.add(root);this.cachePlayerBones(root);
         if(skin==='maskedOwner'){
-          const animations=gltf.animations||[],find=(name)=>animations.find((clip)=>String(clip?.name||'')===name)||null,idleClip=find('Man_Stand'),walkClip=this.makeInPlaceLocomotionClip(find('Man_Walk')),jogClip=this.makeInPlaceLocomotionClip(find('Man_Jog')),runClip=this.makeInPlaceLocomotionClip(find('Man_Run')),weaponIdleClip=find('Weapon_Stand'),attackRightClip=find('Attack_RightHigh_LeftLow'),attackLeftClip=find('Attack_LeftLow_RightHigh'),drawClip=find('Draw_Weapon_Right_Back');
+          const animations=gltf.animations||[],find=(name)=>animations.find((clip)=>String(clip?.name||'')===name)||null,idleClip=find('Man_Stand'),nativeWalk=find('Man_Walk'),nativeJog=find('Man_Jog'),nativeRun=find('Man_Run'),weaponIdleClip=find('Weapon_Stand'),attackRightClip=find('Attack_RightHigh_LeftLow'),attackLeftClip=find('Attack_LeftLow_RightHigh'),drawClip=find('Draw_Weapon_Right_Back');
+          let walkClip=this.makeInPlaceLocomotionClip(nativeWalk),jogClip=this.makeInPlaceLocomotionClip(nativeJog),runClip=this.makeInPlaceLocomotionClip(nativeRun);
+          // V331: Für deutlichere Beinbewegung nimmt der Wizard die bewährte normale Mann-Walk-/Run-Animation.
+          // Stand, Weapon_Stand, Draw und beide Angriffe bleiben aus dem Wizard-GLB.
+          try{
+            const [maleWalkGltf,maleRunGltf]=await Promise.all([this.gltfLoader.loadAsync(MODEL_PATHS.male),this.gltfLoader.loadAsync(RUN_MODEL_PATHS.male)]);if(token!==this.playerModelInstallToken)return;
+            const maleWalkSource=(maleWalkGltf.animations||[])[0]||this.selectLocomotionClip(maleWalkGltf.animations||[]),maleRunSource=(maleRunGltf.animations||[])[0]||this.selectLocomotionClip(maleRunGltf.animations||[]);
+            const retargetWalk=this.retargetLocomotionClip(this.sanitizeEgoLocomotionClip(maleWalkSource),root,'wizard-male-walk'),retargetRun=this.retargetLocomotionClip(this.sanitizeEgoLocomotionClip(maleRunSource),root,'wizard-male-run');
+            if(retargetWalk)walkClip=retargetWalk;
+            if(retargetRun){jogClip=retargetRun.clone();jogClip.name='wizard-male-jog';runClip=retargetRun.clone();runClip.name='wizard-male-run-fast';}
+          }catch(error){console.warn('Wizard konnte Mann-Laufanimationen nicht laden; native Wizard-Clips bleiben aktiv',error);}
           this.playerMixer=new THREE.AnimationMixer(root);this.playerUsesNativeIdle=!!idleClip;const loop=(clip)=>{if(!clip)return null;const a=this.playerMixer.clipAction(clip);a.enabled=true;a.play();a.paused=true;return a;},once=(clip)=>{if(!clip)return null;const a=this.playerMixer.clipAction(clip);a.setLoop(THREE.LoopOnce,1);a.clampWhenFinished=false;a.enabled=true;a.play();a.paused=true;return a;};
-          if(idleClip){this.playerIdleAction=loop(idleClip);this.playerIdleAction.paused=false;this.playerActiveAction=this.playerIdleAction;}this.playerWalkAction=loop(walkClip);this.playerAction=this.playerWalkAction;this.playerJogAction=loop(jogClip);this.playerRunAction=loop(runClip);this.playerWeaponIdleAction=loop(weaponIdleClip);this.playerWizardAttackRightAction=once(attackRightClip);this.playerWizardAttackLeftAction=once(attackLeftClip);this.playerWizardDrawAction=once(drawClip);this.resetLocomotionToIdle(true);
+          if(idleClip){this.playerIdleAction=loop(idleClip);this.playerIdleAction.paused=false;this.playerActiveAction=this.playerIdleAction;}this.playerWalkAction=loop(walkClip);this.playerAction=this.playerWalkAction;this.playerJogAction=loop(jogClip);this.playerRunAction=loop(runClip);this.playerWeaponIdleAction=loop(weaponIdleClip);this.playerWizardAttackRightAction=once(attackRightClip);this.playerWizardAttackLeftAction=once(attackLeftClip);this.playerWizardDrawAction=once(drawClip);this.prepareWizardStaffHandConstraint(root,weaponIdleClip);this.resetLocomotionToIdle(true);
         }else{const walkClip=this.selectLocomotionClip(gltf.animations||[]);if(walkClip){this.playerMixer=new THREE.AnimationMixer(root);this.playerWalkAction=this.playerMixer.clipAction(walkClip);this.playerWalkAction.play();this.playerWalkAction.paused=true;this.playerAction=this.playerWalkAction;this.resetLocomotionToIdle(true);}}
       }
     } catch(error){if(token!==this.playerModelInstallToken)return;console.warn('Center-Charaktermodell konnte nicht geladen werden',error);this.playerModel=this.makeFallbackCharacter(skin);installPivot.add(this.playerModel);}
@@ -6260,7 +6305,8 @@ applyRemoteOwnerAura(remote) {
     if(kind==='greatSword'&&hand){
       hand.getWorldQuaternion(this.tmpQuaternion);remote.pivot.getWorldQuaternion(this.tmpQuaternion2);
       anchor.quaternion.copy(this.tmpQuaternion2).invert().multiply(this.tmpQuaternion);
-      anchor.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,Math.PI,'XYZ')));
+      // V331: den zusätzlichen 180°-Flip aus V328 entfernen. Der echte Griff liegt dadurch wieder an der Hand
+      // statt die gesamte Klingenlänge unter den Charakter/Füße zu drehen.
     }else anchor.rotation.set(...tr.r);
   }
 
