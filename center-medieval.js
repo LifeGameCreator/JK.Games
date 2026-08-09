@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v299-player-markers-village-pack-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v300-max-terrain-village-foundation-water-update';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -10,6 +10,18 @@ const WORLD_SEED = 20260802;
 const MIN_RENDER_DISTANCE = 1;
 const MAX_RENDER_DISTANCE = 5;
 const WATER_LEVEL = -2.15;
+// V300: Feste Wasserregionen werden sowohl beim Terraforming als auch beim Rendering
+// verwendet. Dadurch kann kein See mehr unter dem normalen Gelände verschwinden.
+const WORLD_LAKES = Object.freeze([
+  Object.freeze({x:188,z:-185,rx:62,rz:46,name:'Waldsee'}),
+  Object.freeze({x:-340,z:270,rx:48,rz:35,name:'Birkenweiher'}),
+  Object.freeze({x:415,z:245,rx:74,rz:50,name:'Großer Silbersee'}),
+  Object.freeze({x:-510,z:-360,rx:58,rz:41,name:'Nebelmoorsee'}),
+  Object.freeze({x:540,z:-115,rx:44,rz:31,name:'Fuchssee'}),
+  Object.freeze({x:-155,z:-455,rx:53,rz:37,name:'Moossee'}),
+  Object.freeze({x:-650,z:110,rx:66,rz:43,name:'Lindensee'})
+]);
+const WORLD_OCEAN = Object.freeze({x:900,z:-650,rx:500,rz:355,level:-.18,name:'Südmeer'});
 const ONLINE_WRITE_INTERVAL_MS = 100;
 const ONLINE_HEARTBEAT_MS = 3500;
 const ONLINE_STALE_MS = 45000;
@@ -445,7 +457,23 @@ function riverCenter(z) {
   return 35 * Math.sin(z * .0095) + 17 * Math.sin(z * .022) - 12;
 }
 
-function terrainHeightAt(x, z) {
+function smoothRange(edge0,edge1,value){
+  const t=clamp((Number(value)-edge0)/Math.max(.0001,edge1-edge0),0,1);
+  return t*t*(3-2*t);
+}
+
+function ellipseDistance(x,z,feature,padding=0){
+  const rx=Math.max(1,Number(feature?.rx||1)+padding),rz=Math.max(1,Number(feature?.rz||1)+padding);
+  return Math.hypot((x-Number(feature?.x||0))/rx,(z-Number(feature?.z||0))/rz);
+}
+
+function pointInsideWaterFeature(x,z,padding=0){
+  if(Math.abs(x-riverCenter(z))<18+padding)return true;
+  for(const lake of WORLD_LAKES)if(ellipseDistance(x,z,lake,padding)<1)return true;
+  return ellipseDistance(x,z,WORLD_OCEAN,padding)<1;
+}
+
+function rawTerrainHeightAt(x,z){
   const large = Math.sin(x * .00155 + .7) * Math.cos(z * .00125 - .4) * 18;
   const rolling = Math.sin(x * .0063) * 5.5 + Math.cos(z * .0054) * 5 + Math.sin((x + z) * .0038) * 4.2;
   const detail = Math.sin(x * .018 + z * .006) * 1.7 + Math.cos(z * .016 - x * .004) * 1.5;
@@ -467,7 +495,42 @@ function terrainHeightAt(x, z) {
   }
   const riverDistance = Math.abs(x - riverCenter(z));
   h -= Math.exp(-(riverDistance ** 2) / (24 ** 2)) * 13.5;
-  return clamp(h, -9, 112);
+  return clamp(h,-9,112);
+}
+
+const VILLAGE_TERRAIN_CACHE=new Map();
+function villageCandidateForChunk(cx,cz){
+  const cacheKey=`${cx}:${cz}`;if(VILLAGE_TERRAIN_CACHE.has(cacheKey))return VILLAGE_TERRAIN_CACHE.get(cacheKey);
+  const chance=hash2(cx,cz,WORLD_SEED+707);if(chance<.76){VILLAGE_TERRAIN_CACHE.set(cacheKey,null);return null;}
+  const random=seededRandom((Math.imul(cx+512,1640531513)^Math.imul(cz+512,2246822519)^(WORLD_SEED+701))>>>0);
+  const originX=chunkOrigin(cx),originZ=chunkOrigin(cz),lx=45+random()*(CHUNK_SIZE-90),lz=45+random()*(CHUNK_SIZE-90),x=originX+lx,z=originZ+lz,rawY=rawTerrainHeightAt(x,z);
+  if(rawY>48||rawY<-3||Math.abs(x-riverCenter(z))<42||WORLD_LAKES.some((lake)=>ellipseDistance(x,z,lake,22)<1)||ellipseDistance(x,z,WORLD_OCEAN,35)<1){VILLAGE_TERRAIN_CACHE.set(cacheKey,null);return null;}
+  const candidate={cx,cz,lx,lz,x,z,y:rawY};VILLAGE_TERRAIN_CACHE.set(cacheKey,candidate);return candidate;
+}
+
+function lakeWaterLevel(lake){return clamp(rawTerrainHeightAt(lake.x,lake.z)-.72,-4.5,48);}
+
+function terrainHeightAt(x, z) {
+  let h=rawTerrainHeightAt(x,z);
+  // V300: Dörfer bekommen schon im eigentlichen Höhenfeld eine sanfte Terrasse.
+  // Gebäude stehen dadurch nicht mehr halb im Hang. Die äußere Übergangszone bleibt
+  // weich, damit keine künstliche senkrechte Kante rund um das Dorf entsteht.
+  const centerCx=worldToChunk(x),centerCz=worldToChunk(z);
+  for(let dz=-1;dz<=1;dz+=1)for(let dx=-1;dx<=1;dx+=1){
+    const village=villageCandidateForChunk(centerCx+dx,centerCz+dz);if(!village)continue;
+    const d=Math.hypot(x-village.x,z-village.z);if(d>=72)continue;
+    const weight=1-smoothRange(38,72,d),gentle=village.y+Math.sin((x-village.x)*.045)*.08+Math.cos((z-village.z)*.042)*.07;
+    h=h*(1-weight)+gentle*weight;
+  }
+  // Der Fluss erhält jetzt garantiert ein sichtbares Bett unterhalb des Wassers.
+  const riverDistance=Math.abs(x-riverCenter(z));
+  if(riverDistance<31){const weight=1-smoothRange(11,31,riverDistance),target=WATER_LEVEL-.72-(1-clamp(riverDistance/31,0,1))*.8;h=h*(1-weight)+target*weight;}
+  // Seen werden wirklich in den Boden eingeschnitten statt nur als Fläche darüber gelegt.
+  for(const lake of WORLD_LAKES){const d=ellipseDistance(x,z,lake);if(d>=1.2)continue;const level=lakeWaterLevel(lake),weight=1-smoothRange(.78,1.18,d),target=level-1.05-(1-clamp(d,0,1))*.95;h=h*(1-weight)+target*weight;}
+  // Das Meer besitzt eine eigene Küstenmulde; so ist die Wasserfläche nicht mehr unter
+  // normalem Terrain versteckt und am Rand entsteht ein sichtbarer Strand.
+  const oceanD=ellipseDistance(x,z,WORLD_OCEAN);if(oceanD<1.18){const weight=1-smoothRange(.78,1.16,oceanD),target=WORLD_OCEAN.level-1.35-(1-clamp(oceanD,0,1))*.65;h=h*(1-weight)+target*weight;}
+  return clamp(h,-9,112);
 }
 
 function makeTerrainGeometry(size = CHUNK_SIZE, segments = 22, originX = 0, originZ = 0) {
@@ -484,9 +547,15 @@ function makeTerrainGeometry(size = CHUNK_SIZE, segments = 22, originX = 0, orig
       const x = originX + localX;
       const y = terrainHeightAt(x, z);
       vertices.push(localX, y, localZ);
-      const altitude = clamp((y + 8) / 95, 0, 1);
-      if (altitude > .72) color.setHSL(.12, .08, .42 + altitude * .16);
-      else color.setHSL(.245 - altitude * .035, .34, .28 + altitude * .12);
+      const altitude = clamp((y + 8) / 95, 0, 1),riverD=Math.abs(x-riverCenter(z));
+      let shore=riverD<34;
+      for(const lake of WORLD_LAKES)if(ellipseDistance(x,z,lake)<1.18){shore=true;break;}
+      if(ellipseDistance(x,z,WORLD_OCEAN)<1.13)shore=true;
+      const meadowNoise=.5+.5*Math.sin(x*.024+Math.cos(z*.015)*2.2);
+      if(shore)color.setHSL(.105,.24,.43+meadowNoise*.045);
+      else if (altitude > .72) color.setHSL(.12, .08, .42 + altitude * .16);
+      else if(altitude<.18)color.setHSL(.255,.31,.30+meadowNoise*.055);
+      else color.setHSL(.245 - altitude * .035, .34+meadowNoise*.055, .28 + altitude * .12+meadowNoise*.028);
       colors.push(color.r, color.g, color.b);
     }
   }
@@ -692,6 +761,7 @@ class CenterDynastyGame {
     this.oceanFish = [];
     this.lakeZones = [];
     this.villageHouseVariantTemplates = new Map();
+    this.pathTextureCache = new Map();
     this.waypointElements = new Map();
     this.waypointLayer = null;
     this.waypointForward = new THREE.Vector3();
@@ -1456,6 +1526,36 @@ class CenterDynastyGame {
     const clone=base.clone(true);clone.scale.multiplyScalar(targetHeight);clone.name=`center-village-house-pack-${index}`;clone.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});return clone;
   }
 
+  sampleVillageFootprint(x,z,halfW,halfD,yaw=0){
+    const heights=[],c=Math.cos(yaw),s=Math.sin(yaw);
+    for(const sx of [-1,0,1])for(const sz of [-1,0,1]){const lx=sx*halfW,lz=sz*halfD,wx=x+lx*c+lz*s,wz=z-lx*s+lz*c;heights.push(terrainHeightAt(wx,wz));}
+    return {min:Math.min(...heights),max:Math.max(...heights),average:heights.reduce((sum,v)=>sum+v,0)/Math.max(1,heights.length)};
+  }
+
+  addVillageFoundation(chunk,x,z,halfW,halfD,yaw,baseY,groundMin){
+    const depth=Math.max(.28,baseY-groundMin+.12),material=new THREE.MeshStandardMaterial({color:0x77756d,roughness:1,flatShading:true}),foundation=new THREE.Mesh(new THREE.BoxGeometry(halfW*1.88,depth,halfD*1.88,2,1,2),material);
+    foundation.position.set(x-chunk.originX,baseY-depth*.5-.025,z-chunk.originZ);foundation.rotation.y=yaw;foundation.name='v300-village-stone-foundation';foundation.castShadow=!!this.state.world?.shadows;foundation.receiveShadow=!!this.state.world?.shadows;chunk.group.add(foundation);
+    // Sichtbarer Sockelrand über der Erde verhindert, dass Hauswände optisch im Boden enden.
+    const lip=new THREE.Mesh(new THREE.BoxGeometry(halfW*1.98,.22,halfD*1.98),new THREE.MeshStandardMaterial({color:0x918d82,roughness:1,flatShading:true}));lip.position.set(x-chunk.originX,baseY-.09,z-chunk.originZ);lip.rotation.y=yaw;lip.name='v300-village-foundation-lip';lip.receiveShadow=!!this.state.world?.shadows;chunk.group.add(lip);
+  }
+
+  registerVillageRectColliders(chunk,x,z,halfW,halfD,yaw,height=6.8){
+    const c=Math.cos(yaw),s=Math.sin(yaw),add=(lx,lz,length,localYaw)=>{const wx=x+lx*c+lz*s,wz=z-lx*s+lz*c,collider=this.registerCollider(wx,wz,.18,'village',chunk.key);collider.shape='segment';collider.length=Math.max(.4,length);collider.yaw=yaw+localYaw;collider.radius=.13;collider.height=height;chunk.colliders.push(collider);};
+    add(-halfW,0,halfD*2,0);add(halfW,0,halfD*2,0);add(0,-halfD,halfW*2,Math.PI/2);add(0,halfD,halfW*2,Math.PI/2);
+  }
+
+  groundPathTexture(kind='gravel'){
+    if(this.pathTextureCache?.has(kind))return this.pathTextureCache.get(kind);
+    const palette={gravel:['#766c59','#9a907c','#504b42'],sand:['#a78c62','#c3aa7d','#806b4f'],dirt:['#6f5437','#8d6d48','#4f3d2d']}[kind]||['#766c59','#9a907c','#504b42'];
+    const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d'),rnd=seededRandom(WORLD_SEED+kind.length*991);ctx.fillStyle=palette[0];ctx.fillRect(0,0,128,128);
+    for(let i=0;i<680;i++){const x=rnd()*128,y=rnd()*128,r=.35+rnd()*1.8;ctx.globalAlpha=.16+rnd()*.36;ctx.fillStyle=rnd()<.72?palette[1]:palette[2];ctx.beginPath();ctx.ellipse(x,y,r,r*(.45+rnd()*.75),rnd()*Math.PI,0,Math.PI*2);ctx.fill();}
+    ctx.globalAlpha=1;const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(1,1);tex.anisotropy=2;this.pathTextureCache?.set(kind,tex);return tex;
+  }
+
+  groundPathMaterial(kind='gravel'){
+    return new THREE.MeshStandardMaterial({map:this.groundPathTexture(kind),color:0xffffff,roughness:1,metalness:0,polygonOffset:true,polygonOffsetFactor:kind==='gravel'?-6:kind==='sand'?-4:-3});
+  }
+
   houseLevelDefinition(level=1){return HOUSE_UPGRADE_LEVELS[Math.floor(clamp(Number(level)||1,1,HOUSE_UPGRADE_LEVELS.length))-1]||HOUSE_UPGRADE_LEVELS[0];}
 
   houseCollisionProfile(level=1){
@@ -1831,7 +1931,7 @@ async updateChunkStreaming(force = false) {
     const originX = chunkOrigin(cx), originZ = chunkOrigin(cz);
     group.position.set(originX, 0, originZ);
     const quality = this.state.world?.density || 'normal';
-    const segments = quality === 'low' ? 16 : quality === 'high' ? 26 : 21;
+    const segments = quality === 'low' ? 18 : quality === 'high' ? 30 : 25;
     const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     const terrain = new THREE.Mesh(makeTerrainGeometry(CHUNK_SIZE, segments, originX, originZ), terrainMaterial);
     group.add(terrain);
@@ -1843,6 +1943,7 @@ async updateChunkStreaming(force = false) {
     this.decorateChunkWithAssetTrees(chunk);
     this.buildChunkRocksAndBushes(chunk);
     this.buildChunkGrass(chunk);
+    this.buildChunkPlantsAndFlowers(chunk);
     this.scene.add(group);
     this.chunks.set(key, chunk);
     return chunk;
@@ -1855,8 +1956,8 @@ async updateChunkStreaming(force = false) {
     for(let i=0;i<=segments;i+=1){
       const t=i/segments,cx=worldAx+dx*t,cz=worldAz+dz*t;
       const leftX=cx+px,leftZ=cz+pz,rightX=cx-px,rightZ=cz-pz;
-      vertices.push(leftX-chunk.originX,terrainHeightAt(leftX,leftZ)+.012,leftZ-chunk.originZ,rightX-chunk.originX,terrainHeightAt(rightX,rightZ)+.012,rightZ-chunk.originZ);
-      uvs.push(0,t,1,t);
+      vertices.push(leftX-chunk.originX,terrainHeightAt(leftX,leftZ)+.018,leftZ-chunk.originZ,rightX-chunk.originX,terrainHeightAt(rightX,rightZ)+.018,rightZ-chunk.originZ);
+      const tileV=t*Math.max(1,length/3.2),tileU=Math.max(1,width/2.4);uvs.push(0,tileV,tileU,tileV);
       if(i<segments){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}
     }
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
@@ -1864,14 +1965,14 @@ async updateChunkStreaming(force = false) {
   }
 
   createTerrainCircle(chunk,worldX,worldZ,radius,material,segments=32) {
-    const vertices=[worldX-chunk.originX,terrainHeightAt(worldX,worldZ)+.01,worldZ-chunk.originZ],indices=[];
-    for(let i=0;i<=segments;i+=1){const a=i/segments*Math.PI*2,x=worldX+Math.cos(a)*radius,z=worldZ+Math.sin(a)*radius;vertices.push(x-chunk.originX,terrainHeightAt(x,z)+.011,z-chunk.originZ);if(i<segments)indices.push(0,i+1,i+2);}
-    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,material);mesh.name='terrain-road-junction';mesh.receiveShadow=!!this.state.world?.shadows;chunk.group.add(mesh);return mesh;
+    const vertices=[worldX-chunk.originX,terrainHeightAt(worldX,worldZ)+.022,worldZ-chunk.originZ],uvs=[.5,.5],indices=[];
+    for(let i=0;i<=segments;i+=1){const a=i/segments*Math.PI*2,x=worldX+Math.cos(a)*radius,z=worldZ+Math.sin(a)*radius;vertices.push(x-chunk.originX,terrainHeightAt(x,z)+.023,z-chunk.originZ);uvs.push(.5+Math.cos(a)*radius/3,.5+Math.sin(a)*radius/3);if(i<segments)indices.push(0,i+1,i+2);}
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,material);mesh.name='terrain-road-junction';mesh.receiveShadow=!!this.state.world?.shadows;chunk.group.add(mesh);return mesh;
   }
 
   buildChunkPaths(chunk) {
     const random = seededRandom((Math.imul(chunk.cx + 4096, 73856093) ^ Math.imul(chunk.cz + 4096, 19349663) ^ WORLD_SEED) >>> 0);
-    const material = new THREE.MeshStandardMaterial({ color: 0x756146, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 });
+    const gravel = this.groundPathMaterial('gravel'), sand=this.groundPathMaterial('sand');
     const hub = chunk.villages[0]
       ? { x: chunk.villages[0].x - chunk.originX, z: chunk.villages[0].z - chunk.originZ }
       : { x: CHUNK_SIZE * (.43 + random() * .14), z: CHUNK_SIZE * (.43 + random() * .14) };
@@ -1896,8 +1997,11 @@ async updateChunkStreaming(force = false) {
         const current = { x: it * it * from.x + 2 * it * t * control.x + t * t * to.x, z: it * it * from.z + 2 * it * t * control.z + t * t * to.z };
         const worldA = { x: chunk.originX + previous.x, z: chunk.originZ + previous.z };
         const worldB = { x: chunk.originX + current.x, z: chunk.originZ + current.z };
-        this.createTerrainStrip(chunk,worldA.x,worldA.z,worldB.x,worldB.z,width,material,5);
-        chunk.roadSegments.push({ ax: worldA.x, az: worldA.z, bx: worldB.x, bz: worldB.z, width });
+        // Breiter heller Sand-/Erdsaum + echter Kieskern. Das sieht deutlich natürlicher
+        // aus als die frühere einfarbige braune Fläche.
+        this.createTerrainStrip(chunk,worldA.x,worldA.z,worldB.x,worldB.z,width+1.5,sand,5);
+        this.createTerrainStrip(chunk,worldA.x,worldA.z,worldB.x,worldB.z,width,gravel,5);
+        chunk.roadSegments.push({ ax: worldA.x, az: worldA.z, bx: worldB.x, bz: worldB.z, width:width+1.1 });
         previous = current;
       }
     };
@@ -1906,7 +2010,8 @@ async updateChunkStreaming(force = false) {
       if (!['cave','mine','landmark','encounter'].includes(hotspot.type)) continue;
       addRoad(hub, { x: hotspot.x - chunk.originX, z: hotspot.z - chunk.originZ }, 71 + String(hotspot.id || '').length, 3.2);
     }
-    this.createTerrainCircle(chunk,chunk.originX+hub.x,chunk.originZ+hub.z,7.2,material,28);
+    this.createTerrainCircle(chunk,chunk.originX+hub.x,chunk.originZ+hub.z,8.2,sand,32);
+    this.createTerrainCircle(chunk,chunk.originX+hub.x,chunk.originZ+hub.z,6.9,gravel,32);
   }
 
   pointNearChunkRoad(chunk, x, z, padding = 0) {
@@ -1931,7 +2036,7 @@ async updateChunkStreaming(force = false) {
     for (let i = 0; i < count; i += 1) {
       const lx = 5 + random() * (CHUNK_SIZE - 10), lz = 5 + random() * (CHUNK_SIZE - 10);
       const x = chunk.originX + lx, z = chunk.originZ + lz, y = terrainHeightAt(x, z);
-      if (y > 62 || Math.abs(x - riverCenter(z)) < 25 || this.pointNearChunkRoad(chunk, x, z, 2.8) || chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<50)) continue;
+      if (y > 62 || pointInsideWaterFeature(x,z,7) || this.pointNearChunkRoad(chunk, x, z, 2.8) || chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<50)) continue;
       const prospectiveScale=.58+random()*1.18;
       if(nodes.some((other)=>Math.hypot(x-other.x,z-other.z)<Math.max(minTreeSpacing,(other.scale+prospectiveScale)*1.35)))continue;
       const roll = random();
@@ -2006,7 +2111,7 @@ async updateChunkStreaming(force = false) {
       const nodes=[];
       for(let i=0;i<count;i+=1){
         const lx=6+random()*(CHUNK_SIZE-12),lz=6+random()*(CHUNK_SIZE-12),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
-        if(y>72||Math.abs(x-riverCenter(z))<18||this.pointNearChunkRoad(chunk,x,z,type==='bush'?1.1:2.1)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<42))continue;
+        if(y>72||pointInsideWaterFeature(x,z,type==='bush'?3:5)||this.pointNearChunkRoad(chunk,x,z,type==='bush'?1.1:2.1)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<42))continue;
         const dense=type==='bush' ? random()<.46 : true;
         nodes.push({id:`${type}-${chunk.key}-${i}`,type,x,z,y,scale:.42+random()*(type==='rock'?1.25:.82),yaw:random()*Math.PI*2,active:true,dense,chunkKey:chunk.key,instanceEntries:[]});
       }
@@ -2037,8 +2142,22 @@ buildChunkGrass(chunk) {
     const seasonColors=[0x5f8a45,0x5c8b43,0x718044,0x9aa58f],matA=new THREE.MeshStandardMaterial({color:seasonColors[this.state.season]||seasonColors[0],roughness:1,side:THREE.DoubleSide,transparent:true,opacity:.94}),matB=matA.clone();matB.color.offsetHSL(.02,-.03,.035);
     const geo=new THREE.PlaneGeometry(.48,.28);geo.translate(0,.14,0);const meshA=new THREE.InstancedMesh(geo,matA,count),meshB=new THREE.InstancedMesh(geo,matB,count),meshC=['minimal','performance','low'].includes(quality)?null:new THREE.InstancedMesh(geo,matA.clone(),count);
     const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),q2=new THREE.Quaternion(),scale=new THREE.Vector3();let used=0;
-    for(let i=0;i<count*4&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||Math.abs(x-riverCenter(z))<14||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;const yaw=random()*Math.PI*2,sc=.55+random()*.65;q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));scale.set(sc*(.8+random()*.35),sc,sc);const pos=new THREE.Vector3(lx,y+.012,lz);matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);if(meshC){q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);}used++;}
+    for(let i=0;i<count*4&&used<count;i+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>70||pointInsideWaterFeature(x,z,2)||this.pointNearChunkRoad(chunk,x,z,.55)||chunk.villages.some(v=>Math.hypot(x-v.x,z-v.z)<30))continue;const yaw=random()*Math.PI*2,sc=.55+random()*.65;q.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw,(random()-.5)*.2));q2.setFromEuler(new THREE.Euler((random()-.5)*.1,yaw+Math.PI/2,(random()-.5)*.2));scale.set(sc*(.8+random()*.35),sc,sc);const pos=new THREE.Vector3(lx,y+.012,lz);matrix.compose(pos,q,scale);meshA.setMatrixAt(used,matrix);matrix.compose(pos,q2,scale);meshB.setMatrixAt(used,matrix);if(meshC){q2.setFromEuler(new THREE.Euler((random()-.5)*.08,yaw+Math.PI/4,(random()-.5)*.16));matrix.compose(pos,q2,scale.clone().multiplyScalar(.88));meshC.setMatrixAt(used,matrix);}used++;}
     for(const mesh of [meshA,meshB,meshC].filter(Boolean)){mesh.count=used;mesh.instanceMatrix.needsUpdate=true;}meshA.name='grass-clumps-a';meshB.name='grass-clumps-b';chunk.group.add(meshA,meshB);if(meshC){meshC.name='grass-clumps-c';chunk.group.add(meshC);}this.seasonMaterials.push({material:matA,kind:'grass',chunkKey:chunk.key},{material:matB,kind:'grassAlt',chunkKey:chunk.key});
+  }
+
+  buildChunkPlantsAndFlowers(chunk){
+    const quality=this.state.world?.graphicsQuality||'medium';if(quality==='minimal')return;
+    const random=seededRandom((Math.imul(chunk.cx+17011,2654435761)^Math.imul(chunk.cz+19001,1597334677)^(WORLD_SEED+3303))>>>0),density=densityMultiplier(this.state.world?.density)*this.performanceDensityFactor();
+    const flowerBase=quality==='performance'?12:quality==='low'?20:quality==='medium'?34:quality==='high'?48:quality==='ultra'?62:quality==='maximum'?78:96,seasonFactor=this.state.season===3?.14:this.state.season===2?.62:1,flowerCount=Math.floor(flowerBase*density*seasonFactor),plantCount=Math.floor((flowerBase*.8+12)*density);
+    const stemMat=new THREE.MeshStandardMaterial({color:0x47713a,roughness:1}),stemGeo=new THREE.CylinderGeometry(.018,.028,.32,4),stemMesh=new THREE.InstancedMesh(stemGeo,stemMat,flowerCount);
+    const bloomGeo=new THREE.OctahedronGeometry(.085,0),bloomMats=[new THREE.MeshStandardMaterial({color:0xf0c64b,roughness:.9}),new THREE.MeshStandardMaterial({color:0xe9869c,roughness:.9}),new THREE.MeshStandardMaterial({color:0x889ee9,roughness:.9})],blooms=bloomMats.map((mat)=>new THREE.InstancedMesh(bloomGeo,mat,flowerCount));
+    const matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),scale=new THREE.Vector3(),counts=[0,0,0];let used=0;
+    for(let tries=0;tries<flowerCount*6&&used<flowerCount;tries+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>58||pointInsideWaterFeature(x,z,4)||this.pointNearChunkRoad(chunk,x,z,.75))continue;const vd=chunk.villages.length?Math.min(...chunk.villages.map((v)=>Math.hypot(x-v.x,z-v.z))):999;if(vd<13)continue;const sc=.72+random()*.8;q.setFromAxisAngle(new THREE.Vector3(0,1,0),random()*Math.PI*2);scale.set(sc,sc,sc);matrix.compose(new THREE.Vector3(lx,y+.16*sc,lz),q,scale);stemMesh.setMatrixAt(used,matrix);const colorIndex=Math.floor(random()*blooms.length),bi=counts[colorIndex]++;matrix.compose(new THREE.Vector3(lx,y+.34*sc,lz),q,new THREE.Vector3(sc,sc,sc));blooms[colorIndex].setMatrixAt(bi,matrix);used++;}
+    stemMesh.count=used;stemMesh.instanceMatrix.needsUpdate=true;stemMesh.name='v300-wildflower-stems';if(used)chunk.group.add(stemMesh);blooms.forEach((mesh,i)=>{mesh.count=counts[i];mesh.instanceMatrix.needsUpdate=true;mesh.name=`v300-wildflowers-${i}`;if(counts[i])chunk.group.add(mesh);});
+    const fernGeo=new THREE.ConeGeometry(.18,.48,5),fernMat=new THREE.MeshStandardMaterial({color:0x386a39,roughness:1,flatShading:true}),ferns=new THREE.InstancedMesh(fernGeo,fernMat,plantCount);let plantUsed=0;
+    for(let tries=0;tries<plantCount*5&&plantUsed<plantCount;tries+=1){const lx=3+random()*(CHUNK_SIZE-6),lz=3+random()*(CHUNK_SIZE-6),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);if(y>62||pointInsideWaterFeature(x,z,3)||this.pointNearChunkRoad(chunk,x,z,.6)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<15))continue;const sc=.65+random()*.9;q.setFromAxisAngle(new THREE.Vector3(0,1,0),random()*Math.PI*2);matrix.compose(new THREE.Vector3(lx,y+.23*sc,lz),q,new THREE.Vector3(sc,sc,sc));ferns.setMatrixAt(plantUsed++,matrix);}
+    ferns.count=plantUsed;ferns.instanceMatrix.needsUpdate=true;ferns.name='v300-ground-plants';if(plantUsed)chunk.group.add(ferns);
   }
 
   async prepareNpcWhiteTemplate() {
@@ -2105,86 +2224,56 @@ buildChunkGrass(chunk) {
   }
 
   buildChunkVillage(chunk) {
-    const chance=hash2(chunk.cx,chunk.cz,WORLD_SEED+707);
-    if(chance<.76)return;
-    const random=seededRandom((Math.imul(chunk.cx+512,1640531513)^Math.imul(chunk.cz+512,2246822519)^(WORLD_SEED+701))>>>0);
-    const lx=45+random()*(CHUNK_SIZE-90),lz=45+random()*(CHUNK_SIZE-90),x=chunk.originX+lx,z=chunk.originZ+lz,y=terrainHeightAt(x,z);
-    if(y>48||y<-3||Math.abs(x-riverCenter(z))<38)return;
+    const candidate=villageCandidateForChunk(chunk.cx,chunk.cz);if(!candidate)return;
+    const random=seededRandom((Math.imul(chunk.cx+512,1640531513)^Math.imul(chunk.cz+512,2246822519)^(WORLD_SEED+701))>>>0);random();random();
+    const {lx,lz,x,z}=candidate,y=terrainHeightAt(x,z);
     const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen','Drachen','Königs'];
     const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see','mark','hof'];
     const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
     const villageType=random()<.26?'Bergdorf':random()<.55?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
-    const wallColors={Bergdorf:0xaaa391,Bauerndorf:0xbda77c,Handelsdorf:0xc0aa82,Jägerdorf:0x9e8e69};
-    const wallMat=new THREE.MeshStandardMaterial({color:wallColors[villageType],roughness:1});
-    const timberMat=new THREE.MeshStandardMaterial({color:0x513321,roughness:1});
-    const roofMat=new THREE.MeshStandardMaterial({color:villageType==='Bergdorf'?0x494541:0x5b3326,roughness:1});
-    const glassMat=new THREE.MeshStandardMaterial({color:0xb8d5dc,emissive:0x182d32,emissiveIntensity:.22,roughness:.3});
-    const roadMat=new THREE.MeshStandardMaterial({color:0x76644c,roughness:1,polygonOffset:true,polygonOffsetFactor:-3});
-    this.createTerrainCircle(chunk,x,z,15,roadMat,40);
+    const timberMat=new THREE.MeshStandardMaterial({color:0x513321,roughness:1}),roadMat=this.groundPathMaterial('gravel'),sandMat=this.groundPathMaterial('sand');
+    this.createTerrainCircle(chunk,x,z,17,sandMat,44);this.createTerrainCircle(chunk,x,z,14.5,roadMat,44);
 
-    const houseCount=7+Math.floor(random()*6);
-    const housePositions=[];
+    const houseCount=7+Math.floor(random()*5),housePositions=[];
     for(let i=0;i<houseCount;i+=1){
-      const angle=i/houseCount*Math.PI*2+(random()-.5)*.22,radius=21+(i%2)*10+random()*3,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,hy=terrainHeightAt(hx,hz),yaw=-angle+Math.PI/2,localX=hx-chunk.originX,localZ=hz-chunk.originZ;
-      const group=this.createVillageHouseVariant(i,5.45+(i%3)*.52)||new THREE.Group();
-      if(group.children.length===0){const base=new THREE.Mesh(new THREE.BoxGeometry(6,4,5),wallMat);base.position.y=2;group.add(base);const roof=new THREE.Mesh(new THREE.ConeGeometry(4.8,2.8,4),roofMat);roof.position.y=5.1;roof.rotation.y=Math.PI/4;group.add(roof);}
-      group.position.set(localX,hy,localZ);group.rotation.y=yaw;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
-      const radiusValue=3.05+(i%3)*.2,collider=this.registerCollider(hx,hz,radiusValue,'village',chunk.key);collider.height=7.6;chunk.colliders.push(collider);
-      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:radiusValue*2,d:radiusValue*2});
-      const length=Math.max(4,radius-8),roadEndX=x+Math.cos(angle)*(radius-2.2),roadEndZ=z+Math.sin(angle)*(radius-2.2);this.createTerrainStrip(chunk,x,z,roadEndX,roadEndZ,3.35,roadMat,Math.max(6,Math.ceil(length/3)));
+      const angle=i/houseCount*Math.PI*2+(random()-.5)*.20,radius=22+(i%2)*10+random()*3,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,localX=hx-chunk.originX,localZ=hz-chunk.originZ;
+      const group=this.createVillageHouseVariant(i,5.35+(i%3)*.46);
+      // V300: Keine alten prozeduralen Ersatzhäuser mehr. Wenn das Pack wirklich fehlt,
+      // wird lieber dieses Haus ausgelassen als wieder ein alter Kasten erzeugt.
+      if(!group){if(i===0)console.warn('V300: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
+      group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),halfW=Math.max(1.65,size.x*.43),halfD=Math.max(1.55,size.z*.43),samples=this.sampleVillageFootprint(hx,hz,halfW,halfD,yaw),baseY=samples.max+.045;
+      this.addVillageFoundation(chunk,hx,hz,halfW,halfD,yaw,baseY,samples.min);
+      group.position.set(localX,baseY,localZ);group.rotation.y=yaw;group.name=`v300-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
+      this.registerVillageRectColliders(chunk,hx,hz,halfW,halfD,yaw,Math.max(5.8,size.y*1.03));
+      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:halfW*2,d:halfD*2});
+      const length=Math.max(4,radius-8),roadEndX=x+Math.cos(angle)*(radius-2.2),roadEndZ=z+Math.sin(angle)*(radius-2.2);this.createTerrainStrip(chunk,x,z,roadEndX,roadEndZ,4.5,sandMat,Math.max(6,Math.ceil(length/3)));this.createTerrainStrip(chunk,x,z,roadEndX,roadEndZ,3.25,roadMat,Math.max(6,Math.ceil(length/3)));
     }
 
     const stoneMat=new THREE.MeshStandardMaterial({color:0x7f817d,roughness:1});
     const wellGroup=new THREE.Group();const well=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.35,1.25,16),stoneMat);well.position.y=.62;wellGroup.add(well);
-    for(const sx of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.22,3.2,.22),timberMat);post.position.set(sx*1.55,2,0);wellGroup.add(post);}
-    const beam=new THREE.Mesh(new THREE.BoxGeometry(3.5,.22,.22),timberMat);beam.position.y=3.45;wellGroup.add(beam);wellGroup.position.set(lx,y,lz);chunk.group.add(wellGroup);
+    for(const sx of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.22,3.2,.22),timberMat);post.position.set(sx*1.55,2,0);wellGroup.add(post);}const beam=new THREE.Mesh(new THREE.BoxGeometry(3.5,.22,.22),timberMat);beam.position.y=3.45;wellGroup.add(beam);wellGroup.position.set(lx,y,lz);chunk.group.add(wellGroup);
     {const collider=this.registerCollider(x,z,2.1,'village',chunk.key);collider.height=1.35;chunk.colliders.push(collider);}
 
-    const market=new THREE.Group();market.position.set(lx+8,y,lz+5);
-    const table=new THREE.Mesh(new THREE.BoxGeometry(5,.32,2.3),timberMat);table.position.y=1;market.add(table);
-    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),timberMat);post.position.set(sx*2.1,1.55,sz*.9);market.add(post);}
-    const canopy=new THREE.Mesh(new THREE.BoxGeometry(5.4,.12,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x9b4237:0x4f7663,roughness:.9}));canopy.position.y=3.05;market.add(canopy);
-    for(let crate=0;crate<4;crate++){const box=new THREE.Mesh(new THREE.BoxGeometry(.72,.55,.72),new THREE.MeshStandardMaterial({color:0x76502e,roughness:1}));box.position.set(-1.7+crate*1.1,.3,1.4);market.add(box);}
-    market.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});
-    chunk.group.add(market);
+    const market=new THREE.Group();market.position.set(lx+8,y,lz+5);const table=new THREE.Mesh(new THREE.BoxGeometry(5,.32,2.3),timberMat);table.position.y=1;market.add(table);
+    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),timberMat);post.position.set(sx*2.1,1.55,sz*.9);market.add(post);}const canopy=new THREE.Mesh(new THREE.BoxGeometry(5.4,.12,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x9b4237:0x4f7663,roughness:.9}));canopy.position.y=3.05;market.add(canopy);
+    for(let crate=0;crate<4;crate++){const crateMesh=new THREE.Mesh(new THREE.BoxGeometry(.72,.55,.72),new THREE.MeshStandardMaterial({color:0x76502e,roughness:1}));crateMesh.position.set(-1.7+crate*1.1,.3,1.4);market.add(crateMesh);}market.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(market);
     for(const [ox,oz,radius,height] of [[8,5,2.35,1.25],[5.9,5,0.34,3.2],[10.1,5,0.34,3.2]]){const collider=this.registerCollider(x+ox,z+oz,radius,'village',chunk.key);collider.height=height;chunk.colliders.push(collider);}
 
-    const fieldCount=villageType==='Bauerndorf'?4:2;
-    const soilMat=new THREE.MeshStandardMaterial({color:0x5b3b23,roughness:1}),furrowMat=new THREE.MeshStandardMaterial({color:0x79522e,roughness:1}),cropMat=new THREE.MeshStandardMaterial({color:0xa8b64f,roughness:1});
-    for(let f=0;f<fieldCount;f+=1){
-      const fieldAngle=2.25+(f%2)*.42,fieldDistance=48+Math.floor(f/2)*15,worldFx=x+Math.cos(fieldAngle)*fieldDistance,worldFz=z+Math.sin(fieldAngle)*fieldDistance;
-      if(housePositions.some(hp=>Math.hypot(worldFx-hp.x,worldFz-hp.z)<15))continue;
-      const dirX=Math.cos(fieldAngle+.35),dirZ=Math.sin(fieldAngle+.35),perpX=-dirZ,perpZ=dirX;
-      for(let row=-4;row<=4;row+=1.45){
-        const cx=worldFx+perpX*row,cz=worldFz+perpZ*row;
-        this.createTerrainStrip(chunk,cx-dirX*6,cz-dirZ*6,cx+dirX*6,cz+dirZ*6,1.08,row===-4||row>3.5?soilMat:furrowMat,6);
-        for(let c=-5.2;c<=5.2;c+=1.25){const px=cx+dirX*c,pz=cz+dirZ*c;const crop=new THREE.Mesh(new THREE.ConeGeometry(.09,.5,5),cropMat);crop.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.25,pz-chunk.originZ);crop.castShadow=!!this.state.world?.shadows;chunk.group.add(crop);}
-      }
-      for(const side of [-1,1])for(let c=-6;c<=6;c+=1.5){const px=worldFx+dirX*c+perpX*side*5.2,pz=worldFz+dirZ*c+perpZ*side*5.2;const post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.05,.12),timberMat);post.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.52,pz-chunk.originZ);post.castShadow=!!this.state.world?.shadows;chunk.group.add(post);}
-    }
+    // Kleine Blumen-/Kräuterinseln am Dorfplatz.
+    const flowerColors=[0xf0c84f,0xdd738d,0x798fe0],stemMat=new THREE.MeshStandardMaterial({color:0x47723b,roughness:1});
+    for(let p=0;p<18;p++){const a=p/18*Math.PI*2+(random()-.5)*.12,r=10.5+random()*3.2,fx=x+Math.cos(a)*r,fz=z+Math.sin(a)*r,fy=terrainHeightAt(fx,fz),stem=new THREE.Mesh(new THREE.CylinderGeometry(.025,.03,.35,4),stemMat);stem.position.set(fx-chunk.originX,fy+.17,fz-chunk.originZ);chunk.group.add(stem);const bloom=new THREE.Mesh(new THREE.OctahedronGeometry(.09,0),new THREE.MeshStandardMaterial({color:flowerColors[p%flowerColors.length],roughness:.9}));bloom.position.set(fx-chunk.originX,fy+.39,fz-chunk.originZ);chunk.group.add(bloom);}
 
-    const barn=new THREE.Group();barn.position.set(lx-27,terrainHeightAt(x-27,z-20),lz-20);
-    const barnBase=new THREE.Mesh(new THREE.BoxGeometry(9,4.8,7),timberMat);barnBase.position.y=2.4;barn.add(barnBase);
-    const barnRoof=new THREE.Mesh(new THREE.ConeGeometry(6.7,3.3,4),roofMat);barnRoof.position.y=6;barnRoof.rotation.y=Math.PI/4;barnRoof.scale.z=.78;barn.add(barnRoof);
-    const barnDoor=new THREE.Mesh(new THREE.BoxGeometry(2.4,3.2,.2),new THREE.MeshStandardMaterial({color:0x342116,roughness:1}));barnDoor.position.set(0,1.6,3.6);barn.add(barnDoor);chunk.group.add(barn);
-    {const collider=this.registerCollider(x-27,z-20,4.1,'village',chunk.key);collider.height=7;chunk.colliders.push(collider);}
+    const fieldCount=villageType==='Bauerndorf'?4:2,soilMat=new THREE.MeshStandardMaterial({color:0x5b3b23,roughness:1}),furrowMat=new THREE.MeshStandardMaterial({color:0x79522e,roughness:1}),cropMat=new THREE.MeshStandardMaterial({color:0xa8b64f,roughness:1});
+    for(let f=0;f<fieldCount;f+=1){const fieldAngle=2.25+(f%2)*.42,fieldDistance=48+Math.floor(f/2)*15,worldFx=x+Math.cos(fieldAngle)*fieldDistance,worldFz=z+Math.sin(fieldAngle)*fieldDistance;if(housePositions.some(hp=>Math.hypot(worldFx-hp.x,worldFz-hp.z)<15)||pointInsideWaterFeature(worldFx,worldFz,8))continue;const dirX=Math.cos(fieldAngle+.35),dirZ=Math.sin(fieldAngle+.35),perpX=-dirZ,perpZ=dirX;for(let row=-4;row<=4;row+=1.45){const cx=worldFx+perpX*row,cz=worldFz+perpZ*row;this.createTerrainStrip(chunk,cx-dirX*6,cz-dirZ*6,cx+dirX*6,cz+dirZ*6,1.08,row===-4||row>3.5?soilMat:furrowMat,6);for(let c=-5.2;c<=5.2;c+=1.25){const px=cx+dirX*c,pz=cz+dirZ*c,crop=new THREE.Mesh(new THREE.ConeGeometry(.09,.5,5),cropMat);crop.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.25,pz-chunk.originZ);crop.castShadow=!!this.state.world?.shadows;chunk.group.add(crop);}}for(const side of [-1,1])for(let c=-6;c<=6;c+=1.5){const px=worldFx+dirX*c+perpX*side*5.2,pz=worldFz+dirZ*c+perpZ*side*5.2,post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.05,.12),timberMat);post.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.52,pz-chunk.originZ);post.castShadow=!!this.state.world?.shadows;chunk.group.add(post);}}
 
-    const peopleCount=6+Math.floor(random()*4);
-    const firstNames=['Mara','Freya','Liv','Runa','Hilda','Edda','Alrik','Konrad','Sven','Borin','Tamme','Jorin','Lene','Falk','Rika'];
-    const people=Array.from({length:peopleCount},(_,i)=>firstNames[(i+Math.floor(random()*firstNames.length))%firstNames.length]);
-    const village={name,x,z,people,buildings:houseCount+2,npcs:[],chunkKey:chunk.key,type:villageType};
-    chunk.villages.push(village);this.villages.push(village);
-    for(let i=0;i<peopleCount;i+=1){
-      const angle=random()*Math.PI*2,radius=5+random()*12,worldPx=x+Math.cos(angle)*radius,worldPz=z+Math.sin(angle)*radius,px=worldPx-chunk.originX,pz=worldPz-chunk.originZ;
-      const group=this.createVillageNpcPlaceholder(chunk,px,pz,worldPx,worldPz,i);
-      const npc={id:`npc-${chunk.key}-${i}`,name:people[i],village:name,group,x:worldPx,z:worldPz,angle:angle+random()*2,nextTurn:0,chunkKey:chunk.key};
-      village.npcs.push(npc);chunk.npcs.push(npc);this.npcs.push(npc);
-      const hotspot={id:npc.id,type:'npc',x:worldPx,z:worldPz,radius:2.4,label:`Mit ${people[i]} sprechen`,data:npc,chunkKey:chunk.key};chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);
-    }
-    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:30,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
-    const marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+8,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key};
-    const wellHotspot={id:`well-${chunk.key}`,type:'well',x,z,radius:5,label:'Am Dorfbrunnen Wasser holen',data:{village:name},chunkKey:chunk.key};
-    chunk.hotspots.push(villageHotspot,marketHotspot,wellHotspot);this.hotspots.push(villageHotspot,marketHotspot,wellHotspot);
+    // Alte prozedurale Scheune entfernt: auch das größere Gemeinschaftsgebäude kommt
+    // jetzt aus demselben Dorf-Hauspack und erhält Fundament + präzise Hitbox.
+    const communityX=x-29,communityZ=z-21,communityYaw=.12,community=this.createVillageHouseVariant(houseCount+2,6.35);
+    if(community){community.updateMatrixWorld(true);const cbox=new THREE.Box3().setFromObject(community),csize=cbox.getSize(new THREE.Vector3()),halfW=Math.max(1.8,csize.x*.43),halfD=Math.max(1.7,csize.z*.43),samples=this.sampleVillageFootprint(communityX,communityZ,halfW,halfD,communityYaw),baseY=samples.max+.045;this.addVillageFoundation(chunk,communityX,communityZ,halfW,halfD,communityYaw,baseY,samples.min);community.position.set(communityX-chunk.originX,baseY,communityZ-chunk.originZ);community.rotation.y=communityYaw;community.name=`v300-${name}-gemeinschaftshaus`;chunk.group.add(community);this.registerVillageRectColliders(chunk,communityX,communityZ,halfW,halfD,communityYaw,Math.max(6,csize.y*1.04));}
+
+    const peopleCount=6+Math.floor(random()*4),firstNames=['Mara','Freya','Liv','Runa','Hilda','Edda','Alrik','Konrad','Sven','Borin','Tamme','Jorin','Lene','Falk','Rika'],people=Array.from({length:peopleCount},(_,i)=>firstNames[(i+Math.floor(random()*firstNames.length))%firstNames.length]),village={name,x,z,people,buildings:housePositions.length+(community?1:0)+1,npcs:[],chunkKey:chunk.key,type:villageType};chunk.villages.push(village);this.villages.push(village);
+    for(let i=0;i<peopleCount;i+=1){const angle=random()*Math.PI*2,radius=5+random()*12,worldPx=x+Math.cos(angle)*radius,worldPz=z+Math.sin(angle)*radius,px=worldPx-chunk.originX,pz=worldPz-chunk.originZ,group=this.createVillageNpcPlaceholder(chunk,px,pz,worldPx,worldPz,i),npc={id:`npc-${chunk.key}-${i}`,name:people[i],village:name,group,x:worldPx,z:worldPz,angle:angle+random()*2,nextTurn:0,chunkKey:chunk.key};village.npcs.push(npc);chunk.npcs.push(npc);this.npcs.push(npc);const hotspot={id:npc.id,type:'npc',x:worldPx,z:worldPz,radius:2.4,label:`Mit ${people[i]} sprechen`,data:npc,chunkKey:chunk.key};chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);}
+    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:30,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key},marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+8,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key},wellHotspot={id:`well-${chunk.key}`,type:'well',x,z,radius:5,label:'Am Dorfbrunnen Wasser holen',data:{village:name},chunkKey:chunk.key};chunk.hotspots.push(villageHotspot,marketHotspot,wellHotspot);this.hotspots.push(villageHotspot,marketHotspot,wellHotspot);
   }
 
   buildChunkLandmarks(chunk) {
@@ -2261,29 +2350,29 @@ buildChunkGrass(chunk) {
   }
 
   buildWater() {
-    const material=new THREE.MeshPhysicalMaterial({color:0x3e7890,transparent:true,opacity:.80,roughness:.18,metalness:.04,transmission:.10,side:THREE.DoubleSide});
-    const vertices=[],indices=[],segments=360;
+    const material=new THREE.MeshPhysicalMaterial({color:0x3e7890,transparent:true,opacity:.82,roughness:.15,metalness:.03,transmission:.08,side:THREE.DoubleSide});
+    const vertices=[],indices=[],segments=420;
     for(let i=0;i<=segments;i+=1){const z=-WORLD_HALF+(WORLD_HALF*2)*i/segments,center=riverCenter(z),width=14+4*Math.sin(i*.29)**2;vertices.push(center-width,WATER_LEVEL,z,center+width,WATER_LEVEL,z);if(i<segments){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}}
-    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);geometry.computeVertexNormals();this.river=new THREE.Mesh(geometry,material);this.river.name='center-main-river';this.scene.add(this.river);
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);geometry.computeVertexNormals();this.river=new THREE.Mesh(geometry,material);this.river.name='center-main-river-v300';this.scene.add(this.river);
     this.waterMaterials=[material];this.lakeZones=[];
-    const lakes=[
-      {x:188,z:-185,rx:58,rz:42,name:'Waldsee'},
-      {x:-340,z:270,rx:43,rz:31,name:'Birkenweiher'},
-      {x:415,z:245,rx:69,rz:45,name:'Großer Silbersee'},
-      {x:-510,z:-360,rx:52,rz:36,name:'Nebelmoorsee'}
-    ];
-    const shoreMat=new THREE.MeshStandardMaterial({color:0x8b795b,roughness:1,polygonOffset:true,polygonOffsetFactor:-2});
-    lakes.forEach((lake,index)=>{const y=terrainHeightAt(lake.x,lake.z)+.055,shore=new THREE.Mesh(new THREE.CircleGeometry(1,64),shoreMat.clone());shore.rotation.x=-Math.PI/2;shore.scale.set(lake.rx+4,lake.rz+4,1);shore.position.set(lake.x,y-.035,lake.z);shore.name=`center-lake-shore-${index}`;this.scene.add(shore);const water=new THREE.Mesh(new THREE.CircleGeometry(1,64),material.clone());water.rotation.x=-Math.PI/2;water.scale.set(lake.rx,lake.rz,1);water.position.set(lake.x,y,lake.z);water.name=`center-lake-${index}`;this.scene.add(water);this.waterMaterials.push(water.material);this.lakeZones.push({...lake,y,mesh:water});this.hotspots.push({id:`lake-water-${index}`,type:'water',x:lake.x,z:lake.z,radius:Math.max(lake.rx,lake.rz)*.78,label:`Wasser aus ${lake.name} schöpfen`});});
+    const shoreMat=new THREE.MeshStandardMaterial({color:0xa18b63,roughness:1,polygonOffset:true,polygonOffsetFactor:-2});
+    WORLD_LAKES.forEach((lake,index)=>{
+      const y=lakeWaterLevel(lake),shore=new THREE.Mesh(new THREE.RingGeometry(.96,1.16,72),shoreMat.clone());shore.rotation.x=-Math.PI/2;shore.scale.set(lake.rx,lake.rz,1);shore.position.set(lake.x,y-.045,lake.z);shore.name=`center-lake-shore-v300-${index}`;this.scene.add(shore);
+      const water=new THREE.Mesh(new THREE.CircleGeometry(1,72),material.clone());water.rotation.x=-Math.PI/2;water.scale.set(lake.rx,lake.rz,1);water.position.set(lake.x,y,lake.z);water.name=`center-lake-v300-${index}`;this.scene.add(water);this.waterMaterials.push(water.material);this.lakeZones.push({...lake,y,mesh:water});
+      // Schilf am Ufer macht die Seen klar erkennbar, auch aus der Entfernung.
+      const reedMat=new THREE.MeshStandardMaterial({color:0x59713b,roughness:1}),reedGeo=new THREE.CylinderGeometry(.025,.04,.75,5),reeds=new THREE.InstancedMesh(reedGeo,reedMat,24),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),rnd=seededRandom(WORLD_SEED+index*173+701);
+      for(let r=0;r<24;r++){const a=r/24*Math.PI*2+(rnd()-.5)*.14,rr=.94+rnd()*.10,rx=lake.x+Math.cos(a)*lake.rx*rr,rz=lake.z+Math.sin(a)*lake.rz*rr,gy=terrainHeightAt(rx,rz),sc=.7+rnd()*.8;matrix.compose(new THREE.Vector3(rx,Math.max(gy,y-.2)+.36*sc,rz),q,new THREE.Vector3(sc,sc,sc));reeds.setMatrixAt(r,matrix);}reeds.instanceMatrix.needsUpdate=true;reeds.name=`v300-lake-reeds-${index}`;this.scene.add(reeds);
+      this.hotspots.push({id:`lake-water-${index}`,type:'water',x:lake.x,z:lake.z,radius:Math.max(lake.rx,lake.rz)*.78,label:`Wasser aus ${lake.name} schöpfen`});
+    });
     this.hotspots.push({id:'river-water',type:'water',x:-5,z:120,radius:40,label:'Wasser schöpfen'});
   }
 
   buildOceanZone(){
-    const mat=new THREE.MeshPhysicalMaterial({color:0x245c78,transparent:true,opacity:.86,roughness:.15,metalness:.02,transmission:.06,side:THREE.DoubleSide});
-    // Das Meer liegt bewusst sichtbar oberhalb der normalen Bodendecke und nah genug,
-    // dass es ohne Owner-Teleport erreichbar bleibt. Fische schwimmen unter dieser Hoehe.
-    const seaX=820,seaZ=-610,seaY=terrainHeightAt(820,-610)+.045,seaWidth=980,seaDepth=720;
-    const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaWidth,seaDepth,1,1),mat);sea.rotation.x=-Math.PI/2;sea.position.set(seaX,seaY,seaZ);sea.name='center-ocean-zone';this.scene.add(sea);this.oceanZone={x:seaX,z:seaZ,y:seaY,width:seaWidth,depth:seaDepth,mesh:sea};this.waterMaterials.push(mat);
-    this.hotspots.push({id:'ocean-water',type:'water',x:seaX-seaWidth*.34,z:seaZ,radius:95,label:'Meerwasser'});
+    const mat=new THREE.MeshPhysicalMaterial({color:0x245c78,transparent:true,opacity:.87,roughness:.12,metalness:.02,transmission:.05,side:THREE.DoubleSide});
+    const sea=new THREE.Mesh(new THREE.CircleGeometry(1,96),mat);sea.rotation.x=-Math.PI/2;sea.scale.set(WORLD_OCEAN.rx,WORLD_OCEAN.rz,1);sea.position.set(WORLD_OCEAN.x,WORLD_OCEAN.level,WORLD_OCEAN.z);sea.name='center-ocean-zone-v300';this.scene.add(sea);
+    const beach=new THREE.Mesh(new THREE.RingGeometry(.98,1.09,96),new THREE.MeshStandardMaterial({color:0xb39a6b,roughness:1}));beach.rotation.x=-Math.PI/2;beach.scale.set(WORLD_OCEAN.rx,WORLD_OCEAN.rz,1);beach.position.set(WORLD_OCEAN.x,WORLD_OCEAN.level-.055,WORLD_OCEAN.z);beach.name='v300-ocean-beach';this.scene.add(beach);
+    this.oceanZone={x:WORLD_OCEAN.x,z:WORLD_OCEAN.z,y:WORLD_OCEAN.level,width:WORLD_OCEAN.rx*2,depth:WORLD_OCEAN.rz*2,rx:WORLD_OCEAN.rx,rz:WORLD_OCEAN.rz,mesh:sea};this.waterMaterials.push(mat);
+    this.hotspots.push({id:'ocean-water',type:'water',x:WORLD_OCEAN.x-WORLD_OCEAN.rx*.55,z:WORLD_OCEAN.z,radius:110,label:'Meerwasser'});
   }
 
   spawnMagicSpider(){
@@ -2359,13 +2448,9 @@ buildChunkGrass(chunk) {
   }
 
   buildVillages() {
-    const configs = [
-      { name: 'Falkenau', x: 112, z: 72, color: 0x9b6a3e, people: ['Alrik','Mara','Hilda'] },
-      { name: 'Steinfurt', x: -182, z: -72, color: 0x77543b, people: ['Edda','Konrad','Runa'] },
-      { name: 'Seehof', x: 174, z: -210, color: 0x8d7144, people: ['Borin','Liv','Tamme'] },
-      { name: 'Hochwald', x: -88, z: -286, color: 0x6c6941, people: ['Wigand','Freya','Sven'] }
-    ];
-    for (const config of configs) this.createVillage(config);
+    // V300: Das alte statische Dorf-/Kastenhaus-System ist vollständig deaktiviert.
+    // Es werden ausschließlich die gestreamten Dörfer mit dem echten Dorf-Hauspack gebaut.
+    return;
   }
 
   createVillage(config) {
