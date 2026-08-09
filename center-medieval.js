@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v295-missing-village-asset-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v296-code-clouds-no-legacy-cloud-pack';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -129,7 +129,6 @@ const RUN_MODEL_PATHS = Object.freeze({
 });
 const CENTER_ASSET_PATHS = Object.freeze({
   basicTools: `${CENTER_ASSET_ROOT}basic-tools.glb`,
-  naturePack: `${CENTER_ASSET_ROOT}baum-wolken-pack.glb`,
   firewood: `${CENTER_ASSET_ROOT}feuerholz.glb`,
   fox: `${CENTER_ASSET_ROOT}fuchs.glb?v=20260808-v260-pbr`,
   shark: `${CENTER_ASSET_ROOT}hai.glb?v=20260808-v260-pbr`,
@@ -672,9 +671,10 @@ class CenterDynastyGame {
     this.gltfLoader = new GLTFLoader(this.loadingManager);
     this.centerAssetTemplates = new Map();
     this.centerAssetLoadPromise = null;
-    // V269: Nur eindeutig bodengebundene Baumgruppen. Group4/5/6 wurden aus dem
-    // Pack entfernt, weil sie je nach Export wie schwebende Baum-Wolken erschienen.
-    this.natureTreeNames = ['ARVORE_SEM','Branches01','Componen12','Group23','Group27'];
+    // V296: Das alte Baum/Wolken-GLB wird überhaupt nicht mehr geladen.
+    // Bäume und Wolken werden vollständig im Code erzeugt, damit niemals ein
+    // Baum-Node versehentlich als Wolke in der Luft landen kann.
+    this.natureTreeNames = ['pine','broad','slimPine','doubleCrown','birch'];
     this.natureCloudNames = [];
     this.ownerScooterObject = null;
     this.scooterTuningBar = null;
@@ -1553,49 +1553,92 @@ class CenterDynastyGame {
 
   installNatureClouds(){
     if(!this.cloudGroup)return;
-    // V291: Alle alten/importierten Himmel-Objekte werden verworfen.
-    // Wolken bestehen nur noch aus eigener prozeduraler Geometrie.
+    // V296: Eigene Wolken zu 100 % aus Three.js-Code. Keine GLB-Datei, kein
+    // Baum-/Wolken-Pack und keine importierten Nodes werden dafür verwendet.
     for(const child of [...this.cloudGroup.children])child.removeFromParent?.();
     this.cloudGroup.clear();
-    const rnd=seededRandom(WORLD_SEED+2917401);
-    const cloudGeo=new THREE.SphereGeometry(1,14,9);
-    const cloudCount=this.isMobile?14:22;
+    const rnd=seededRandom(WORLD_SEED+2967401);
+    const puffGeo=new THREE.SphereGeometry(1,12,8);
+    const baseGeo=new THREE.SphereGeometry(1,12,8);
+    const cloudCount=this.isMobile?12:20;
     for(let i=0;i<cloudCount;i+=1){
-      const cloud=new THREE.Group();cloud.name='center-v291-own-cloud';cloud.userData.baseOpacity=.34+rnd()*.16;
-      const puffCount=6+Math.floor(rnd()*5);
+      const cloud=new THREE.Group();
+      cloud.name='center-v296-code-cloud';
+      cloud.userData.baseOpacity=.50+rnd()*.15;
+      cloud.userData.drift=.72+rnd()*.58;
+      // Flacher Grundkörper macht die Silhouette klar zu einer Wolke statt zu
+      // einzelnen Kugeln oder einem importierten Baumobjekt.
+      const baseMat=new THREE.MeshBasicMaterial({color:0xf2f5f7,transparent:true,opacity:cloud.userData.baseOpacity*.88,depthWrite:false,fog:true});
+      const base=new THREE.Mesh(baseGeo,baseMat);base.name='center-v296-cloud-base';base.scale.set(7+rnd()*5,1.4+rnd()*.65,3.4+rnd()*2.8);base.position.y=-.45;cloud.add(base);
+      const puffCount=5+Math.floor(rnd()*5);
       for(let p=0;p<puffCount;p+=1){
-        const mat=new THREE.MeshStandardMaterial({color:0xf5f7fa,roughness:1,metalness:0,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
-        const puff=new THREE.Mesh(cloudGeo,mat);puff.name='center-v291-cloud-puff';
-        const centerFactor=1-Math.min(1,Math.abs(p-(puffCount-1)/2)/Math.max(1,puffCount*.5));
-        puff.scale.set(4.0+rnd()*4.5+centerFactor*2.0,1.45+rnd()*1.35+centerFactor*.55,3.0+rnd()*3.7);
-        puff.position.set((p-(puffCount-1)/2)*(2.9+rnd()*.95)+(rnd()-.5)*1.8,(rnd()-.5)*1.1+centerFactor*.4,(rnd()-.5)*3.8);
+        const mat=new THREE.MeshBasicMaterial({color:0xf8fafc,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
+        const puff=new THREE.Mesh(puffGeo,mat);puff.name='center-v296-cloud-puff';
+        const t=puffCount<=1?0:p/(puffCount-1),center=1-Math.abs(t*2-1);
+        puff.scale.set(2.8+rnd()*3.1+center*1.3,1.5+rnd()*1.5+center*.9,2.4+rnd()*2.9);
+        puff.position.set((t-.5)*(9+rnd()*5)+(rnd()-.5)*1.6,(rnd()-.5)*.8+center*.9,(rnd()-.5)*3.4);
         cloud.add(puff);
       }
-      cloud.position.set(-330+rnd()*660,76+rnd()*50,-270+rnd()*540);
-      cloud.rotation.y=rnd()*Math.PI*2;cloud.scale.setScalar(.8+rnd()*.58);
+      cloud.position.set(-360+rnd()*720,72+rnd()*54,-300+rnd()*600);
+      cloud.rotation.y=rnd()*Math.PI*2;
+      cloud.scale.setScalar(.82+rnd()*.62);
       this.cloudGroup.add(cloud);
     }
     this.removeLegacyAirNature(true);
   }
 
   removeLegacyAirNature(force=false){
-    const now=performance.now();if(!force&&now-(this.lastLegacyAirNatureCleanupAt||0)<1000)return;this.lastLegacyAirNatureCleanupAt=now;
-    const legacyNames=new Set(['ARVORE_SEM','Branches01','Componen12','Group23','Group27','Group4','Group5','Group6']);
+    const now=performance.now();if(!force&&now-(this.lastLegacyAirNatureCleanupAt||0)<750)return;this.lastLegacyAirNatureCleanupAt=now;
     const kill=[];
     this.scene?.traverse?.((node)=>{
       if(!node||node===this.cloudGroup||node.parent===this.cloudGroup)return;
-      const name=String(node.name||'');
-      if(!(name==='asset-tree'||legacyNames.has(name)||/baum.?wolken|cloud.?tree|sky.?tree/i.test(name)))return;
+      const name=String(node.name||'').toLowerCase();
+      // Nur bekannte alte Luft-Natur-Objekte entfernen. Eigene V296-Wolken liegen
+      // ausschließlich im cloudGroup und werden dadurch niemals hier getroffen.
+      const legacy=/baum.?wolken|cloud.?tree|sky.?tree|arvore_sem|branches01|componen12|group23|group27|group4|group5|group6|asset-tree/.test(name);
+      if(!legacy)return;
       const wp=node.getWorldPosition?.(new THREE.Vector3());if(!wp)return;
       const ground=terrainHeightAt(wp.x,wp.z);
-      if(wp.y>ground+10||wp.y>68)kill.push(node);
+      if(wp.y>ground+9||wp.y>64)kill.push(node);
     });
     for(const node of kill)node.removeFromParent?.();
   }
 
+  createProceduralNatureTree(variant=0,targetHeight=7){
+    const group=new THREE.Group();variant=Math.abs(Math.floor(Number(variant)||0))%5;
+    const foliage=new THREE.Color(SEASONS[this.state.season]?.foliage||0x3f7a35);
+    const trunkMat=new THREE.MeshStandardMaterial({color:variant===4?0xd2c5a8:0x5f3a22,roughness:1,flatShading:true});
+    const leafMat=new THREE.MeshStandardMaterial({color:foliage,roughness:1,flatShading:true});
+    const leafMat2=leafMat.clone();leafMat2.color.offsetHSL(.02,.04,.07);
+    const add=(mesh,x,y,z)=>{mesh.position.set(x,y,z);mesh.castShadow=!!this.state.world?.shadows;mesh.receiveShadow=!!this.state.world?.shadows;group.add(mesh);};
+    if(variant===0||variant===2){
+      const h=variant===2?3.7:4.4;add(new THREE.Mesh(new THREE.CylinderGeometry(.24,.42,h,7),trunkMat),0,h*.5,0);
+      add(new THREE.Mesh(new THREE.ConeGeometry(1.75,3.5,8,2),leafMat),0,h*.72,0);add(new THREE.Mesh(new THREE.ConeGeometry(1.35,3.0,8,2),leafMat2),0,h*1.18,0);
+    }else if(variant===1){
+      add(new THREE.Mesh(new THREE.CylinderGeometry(.30,.48,3.9,8),trunkMat),0,1.95,0);
+      add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.65,1),leafMat),0,4.2,0);add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.2,1),leafMat2),.75,4.35,.2);
+    }else if(variant===3){
+      add(new THREE.Mesh(new THREE.CylinderGeometry(.28,.46,4.1,8),trunkMat),0,2.05,0);
+      add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.45,1),leafMat),-.65,4.2,0);add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.45,1),leafMat2),.72,4.45,.05);
+    }else{
+      add(new THREE.Mesh(new THREE.CylinderGeometry(.22,.34,4.7,7),trunkMat),0,2.35,0);
+      add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.35,1),leafMat),0,4.75,0);add(new THREE.Mesh(new THREE.IcosahedronGeometry(.95,1),leafMat2),-.6,5.1,.2);
+    }
+    group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3());const scale=targetHeight/Math.max(.001,size.y);group.scale.setScalar(scale);group.name='center-v296-code-tree';return group;
+  }
+
 decorateChunkWithAssetTrees(chunk){
-    if(!this.centerAssetTemplates.has('naturePack'))return;const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+991))>>>0),quality=this.state.world?.graphicsQuality||'medium';const count=quality==='minimal'?0:quality==='extreme'?6:quality==='maximum'?5:quality==='ultra'&&this.performanceTier==='high'?4:quality==='high'?3:quality==='performance'?1:2;
-    for(let i=0;i<count;i+=1){const lx=18+rnd()*(CHUNK_SIZE-36),lz=18+rnd()*(CHUNK_SIZE-36),x=chunk.originX+lx,z=chunk.originZ+lz;if(Math.abs(x-riverCenter(z))<27||this.pointNearChunkRoad(chunk,x,z,4)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<48))continue;const y=terrainHeightAt(x,z);if(y>58)continue;const name=this.natureTreeNames[Math.floor(rnd()*this.natureTreeNames.length)],tree=this.cloneCenterAsset('naturePack',{nodeName:name,targetSize:5.6+rnd()*4.8,bottomAlign:true});if(!tree)continue;tree.position.set(lx,y,lz);tree.rotation.y=rnd()*Math.PI*2;tree.name='asset-tree';chunk.group.add(tree);const radius=.75+(rnd()*.55);const collider=this.registerCollider(x,z,radius,'decorative-tree',chunk.key,tree);chunk.colliders.push(collider);}
+    // Das alte baum-wolken-pack.glb ist in V296 vollständig entfernt. Für ein
+    // paar zusätzliche Bodenbäume verwenden wir ausschließlich Code-Geometrie.
+    const rnd=seededRandom((Math.imul(chunk.cx+2701,1103515245)^Math.imul(chunk.cz+4409,12345)^(WORLD_SEED+296991))>>>0),quality=this.state.world?.graphicsQuality||'medium';
+    const count=quality==='minimal'?0:quality==='extreme'?5:quality==='maximum'?4:quality==='ultra'&&this.performanceTier==='high'?4:quality==='high'?3:quality==='performance'?1:2;
+    for(let i=0;i<count;i+=1){
+      const lx=18+rnd()*(CHUNK_SIZE-36),lz=18+rnd()*(CHUNK_SIZE-36),x=chunk.originX+lx,z=chunk.originZ+lz;
+      if(Math.abs(x-riverCenter(z))<27||this.pointNearChunkRoad(chunk,x,z,4)||chunk.villages.some((v)=>Math.hypot(x-v.x,z-v.z)<48))continue;
+      const y=terrainHeightAt(x,z);if(y>58)continue;
+      const tree=this.createProceduralNatureTree(Math.floor(rnd()*5),5.8+rnd()*4.5);tree.position.set(lx,y,lz);tree.rotation.y=rnd()*Math.PI*2;chunk.group.add(tree);
+      const radius=.75+rnd()*.55,collider=this.registerCollider(x,z,radius,'decorative-tree',chunk.key,tree);chunk.colliders.push(collider);
+    }
   }
 
   createFirewoodVisual(targetSize=1.6){const root=this.cloneCenterAsset('firewood',{targetSize,bottomAlign:true});if(root)root.name='center-firewood-asset';return root;}
@@ -1635,7 +1678,7 @@ decorateChunkWithAssetTrees(chunk){
     const glowCanvas=document.createElement('canvas');glowCanvas.width=128;glowCanvas.height=128;const glowCtx=glowCanvas.getContext('2d');const grad=glowCtx.createRadialGradient(64,64,3,64,64,62);grad.addColorStop(0,'rgba(255,244,188,1)');grad.addColorStop(.25,'rgba(255,213,104,.8)');grad.addColorStop(1,'rgba(255,176,52,0)');glowCtx.fillStyle=grad;glowCtx.fillRect(0,0,128,128);const glowTex=new THREE.CanvasTexture(glowCanvas);glowTex.colorSpace=THREE.SRGBColorSpace;this.sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));this.sunGlow.scale.set(70,70,1);this.sunGlow.renderOrder=3;this.scene.add(this.sunGlow);
     this.moonMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,uniforms:{phase:{value:.5},glow:{value:new THREE.Color(0xdce8ff)}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'uniform float phase;uniform vec3 glow;varying vec2 vUv;void main(){vec2 p=vUv*2.0-1.0;float r=dot(p,p);if(r>1.0)discard;float edge=smoothstep(1.0,.82,r);float shift=(phase-.5)*1.7;float lit=smoothstep(-.08,.08,p.x+shift);if(phase>.5)lit=1.0-lit;float full=1.0-abs(phase-.5)*2.0;float mask=max(full,lit*(1.0-full));gl_FragColor=vec4(glow,edge*mask*.96);}' });
     this.moonDisc=new THREE.Mesh(new THREE.PlaneGeometry(15,15),this.moonMaterial);this.moonDisc.renderOrder=3;this.scene.add(this.moonDisc);
-    this.cloudGroup=new THREE.Group();this.cloudGroup.name='center-v291-procedural-clouds';this.scene.add(this.cloudGroup);
+    this.cloudGroup=new THREE.Group();this.cloudGroup.name='center-v296-code-clouds';this.scene.add(this.cloudGroup);
     const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array(750*3);for(let i=0;i<750;i+=1){const a=Math.random()*Math.PI*2,b=Math.acos(Math.random()*.82+.18),r=700;starPos[i*3]=Math.sin(b)*Math.cos(a)*r;starPos[i*3+1]=Math.cos(b)*r;starPos[i*3+2]=Math.sin(b)*Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));this.starMaterial=new THREE.PointsMaterial({color:0xffffff,size:1.15,transparent:true,opacity:0,depthWrite:false,fog:false});this.stars=new THREE.Points(starGeo,this.starMaterial);this.scene.add(this.stars);
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
   }
@@ -3084,14 +3127,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
       }
     }else if(kind==='tree'){
       const variant=Math.max(0,Math.floor(Number(this.state.ownerAppearance?.treeVariant)||0))%Math.max(1,this.natureTreeNames.length);
-      const nodeName=this.natureTreeNames[variant];
-      const assetTree=this.cloneCenterAsset('naturePack',{nodeName,targetSize:3.2,bottomAlign:true});
-      if(assetTree){assetTree.name=`owner-tree-variant-${variant}`;form.add(assetTree);form.userData.treeVariant=variant;form.userData.treeName=nodeName;}
-      else{
-        const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.28,1.7,9),new THREE.MeshStandardMaterial({color:0x6d3d22,roughness:1}));trunk.position.y=.85;trunk.castShadow=true;form.add(trunk);
-        const leafMat=new THREE.MeshStandardMaterial({color:0x2f7138,roughness:1,flatShading:true});
-        const crown=new THREE.Mesh(new THREE.ConeGeometry(.95,1.65,9),leafMat);crown.position.y=2.05;crown.castShadow=true;form.add(crown);
-      }
+      const tree=this.createProceduralNatureTree(variant,3.2);tree.name=`owner-tree-variant-${variant}`;form.add(tree);form.userData.treeVariant=variant;form.userData.treeName=this.natureTreeNames[variant]||`tree-${variant}`;
     }else if(kind==='rock'){
       const rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.82,1),new THREE.MeshStandardMaterial({color:0x707671,roughness:1,flatShading:true}));rock.position.y=.62;rock.scale.set(1.2,.8,1);rock.castShadow=true;form.add(rock);
     }else if(kind==='grass'){
@@ -3816,7 +3852,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     if(this.moonDisc){this.moonDisc.position.copy(moonVector).normalize().multiplyScalar(700).add(skyOrigin);this.moonDisc.lookAt(this.camera.position);this.moonDisc.visible=moonAltitude>-.1;const lunarDay=((this.state.day-1)%29.53)/29.53;this.moonMaterial.uniforms.phase.value=lunarDay;}
     if(this.starMaterial)this.starMaterial.opacity=clamp((.38-daylight)*3.1,0,.92);
     this.removeLegacyAirNature(false);
-    if(this.cloudGroup){const weatherCloud={clear:.16,cloudy:.62,rain:.82,storm:.94,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.slice().forEach((cloud)=>{if(cloud.name!=='center-v291-own-cloud'){cloud.removeFromParent();return;}cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2);if(cloud.position.x>320)cloud.position.x=-320;cloud.traverse((node)=>{if(!node.isMesh)return;const mats=Array.isArray(node.material)?node.material:[node.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=(cloud.userData.baseOpacity||.4)*weatherCloud*(daylight*.5+.32);mat.color?.set?.(this.state.weather==='storm'?0x59616b:0xe7edf2);}});});}
+    if(this.cloudGroup){const weatherCloud={clear:.16,cloudy:.62,rain:.82,storm:.94,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.slice().forEach((cloud)=>{if(cloud.name!=='center-v296-code-cloud'){cloud.removeFromParent();return;}cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2)*(cloud.userData.drift||1);if(cloud.position.x>320)cloud.position.x=-320;cloud.traverse((node)=>{if(!node.isMesh)return;const mats=Array.isArray(node.material)?node.material:[node.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=(cloud.userData.baseOpacity||.4)*weatherCloud*(daylight*.5+.32);mat.color?.set?.(this.state.weather==='storm'?0x59616b:0xe7edf2);}});});}
     const season=SEASONS[this.state.season];
     const nightColor=new THREE.Color(0x071225);
     const clearDay=new THREE.Color(season.sky);
