@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v318-white-team-character-v309-rollback';
+const CENTER_VERSION = '2026-08-09-jkgames-v319-great-sword-back-higher-jump-leg-stable';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -435,7 +435,7 @@ function normalizeSaveState(raw) {
   state.ownerAppearance.ownerGreatSwordDamage = Math.floor(clamp(Number(state.ownerAppearance.ownerGreatSwordDamage)||5000,1,100000));
   const legacyGreatSwordHeld = String(raw.ownerAppearance?.heldItem||'')==='greatSword';
   state.ownerAppearance.ownerGreatSwordCarried = !!(raw.ownerAppearance?.ownerGreatSwordCarried ?? legacyGreatSwordHeld);
-  state.ownerAppearance.ownerGreatSwordCarryPosition = ['back','hip'].includes(String(raw.ownerAppearance?.ownerGreatSwordCarryPosition||'')) ? String(raw.ownerAppearance.ownerGreatSwordCarryPosition) : 'back';
+  state.ownerAppearance.ownerGreatSwordCarryPosition = 'back';
   state.ownerAppearance.ownerGreatSwordActive = !!raw.ownerAppearance?.ownerGreatSwordActive && state.ownerAppearance.ownerGreatSwordCarried;
   if(state.ownerAppearance.heldItem==='greatSword')state.ownerAppearance.heldItem='none';
   state.ownerAppearance.ownerGreatSwordSpecials = { lightning:false, teleport:false, throw:true, ...(raw.ownerAppearance?.ownerGreatSwordSpecials||{}) };
@@ -3548,12 +3548,23 @@ buildChunkGrass(chunk) {
       if(rightUpper){rightUpper.rotateX(-.12*swing);rightUpper.rotateZ(-.12*swing);}
       if(leftUpper){leftUpper.rotateX(-.12*swing);leftUpper.rotateZ(.12*swing);}
       if(rightLower)rightLower.rotateX(-.08*swing);if(leftLower)leftLower.rotateX(-.08*swing);
-      if(this.playerBones.upperLegRight)this.playerBones.upperLegRight.rotateX(-.245*swing);
-      if(this.playerBones.lowerLegRight)this.playerBones.lowerLegRight.rotateX(.42*swing);
-      if(this.playerBones.upperLegLeft)this.playerBones.upperLegLeft.rotateX(-.19*swing);
-      if(this.playerBones.lowerLegLeft)this.playerBones.lowerLegLeft.rotateX(.34*swing);
-      if(this.playerBones.footRight)this.playerBones.footRight.rotateX(-.08*swing);
-      if(this.playerBones.footLeft)this.playerBones.footLeft.rotateX(-.06*swing);
+      // V319: Beinpose beim Sprung NICHT mehr additiv pro Frame drehen.
+      // Dadurch können sich die Beine nicht mehr hochschaukeln/überschlagen.
+      // Beide Beine starten gerade, werden in der Sprungmitte leicht angewinkelt
+      // und gehen anschließend sauber auf die Ausgangspose zurück.
+      const jumpLeg=(bone,x=0,y=0,z=0)=>{
+        if(!bone)return;
+        const base=bone.userData.__centerIdleQuaternion||bone.userData.__centerBindQuaternion;
+        if(!base)return;
+        const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x*swing,y*swing,z*swing,'XYZ')));
+        bone.quaternion.slerp(target,.92);
+      };
+      jumpLeg(this.playerBones.upperLegRight,-.16);
+      jumpLeg(this.playerBones.lowerLegRight,.32);
+      jumpLeg(this.playerBones.upperLegLeft,-.16);
+      jumpLeg(this.playerBones.lowerLegLeft,.32);
+      jumpLeg(this.playerBones.footRight,-.035);
+      jumpLeg(this.playerBones.footLeft,-.035);
       if(chest)chest.rotateX(.012*swing);
     }else if(action.kind==='punch-right'||action.kind==='punch-left'){
       const left=action.kind==='punch-left',upper=left?leftUpper:rightUpper,lower=left?leftLower:rightLower;
@@ -3566,12 +3577,6 @@ buildChunkGrass(chunk) {
       if(rightUpper){rightUpper.rotateX(.48*phase);rightUpper.rotateZ(-.72*phase);rightUpper.rotateY(-.22*phase);}
       if(rightLower){rightLower.rotateX(-1.02*phase);rightLower.rotateY(.20*phase);}
       if(chest)chest.rotateY(-.15*phase);
-      this.curlFingers('right',Math.max(.25,phase));
-    }else if(action.kind==='great-sword-draw-hip'||action.kind==='great-sword-sheath-hip'){
-      const phase=swing;
-      if(rightUpper){rightUpper.rotateX(-.42*phase);rightUpper.rotateZ(.72*phase);rightUpper.rotateY(-.30*phase);}
-      if(rightLower){rightLower.rotateX(-.86*phase);rightLower.rotateY(.18*phase);}
-      if(chest)chest.rotateY(-.24*phase);
       this.curlFingers('right',Math.max(.25,phase));
     }else if(action.kind==='weapon-attack'||action.kind==='attack'){
       if(rightUpper){rightUpper.rotateX(-1.35*swing);rightUpper.rotateZ(-.28*swing);}
@@ -3653,25 +3658,25 @@ updateOwnerAura(delta=.016,now=performance.now()) {
 
   createOwnerGreatSwordVisual(){const asset=this.cloneCenterAsset('ownerGreatSword',{targetSize:1.92,bottomAlign:false,center:true});if(!asset)return null;asset.rotation.set(0,0,Math.PI/2);asset.name='center-owner-great-sword';asset.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.35,Number(mat.metalness)||0);mat.roughness=Math.min(.48,Number(mat.roughness)||.5);}}});return asset;}
 
-  createOwnerGreatSwordCarryVisual(position='back'){
+  createOwnerGreatSwordCarryVisual(){
     const root=new THREE.Group(),asset=this.createOwnerGreatSwordVisual();if(!asset)return null;
-    root.name=`owner-great-sword-carry-${position}`;root.userData.carryPosition=position;root.userData.ownerGreatSwordCarry=true;root.add(asset);
-    // Das Schwert ist im Hand-Visual bereits längs zur Y-Achse ausgerichtet.
-    // Hier drehen wir nur die komplette Scheide-/Trageposition.
-    if(position==='hip')asset.rotation.z+=-.10;
-    else asset.rotation.z+=-.08;
+    root.name='owner-great-sword-carry-back';root.userData.carryPosition='back';root.userData.ownerGreatSwordCarry=true;root.add(asset);
+    // V319: nur Rücken-Trageweise. Das Schwert bleibt diagonal über dem Rücken.
+    asset.rotation.z+=-.08;
     return root;
   }
 
   applyOwnerGreatSwordCarryVisual(){
-    const appearance=this.state.ownerAppearance||{},carried=this.ownerGreatSwordCarried(),active=this.ownerGreatSwordEquipped(),position=appearance.ownerGreatSwordCarryPosition==='hip'?'hip':'back',allowed=carried&&['normal','galaxy'].includes(appearance.skin||'normal')&&appearance.vehicle!=='plane';
-    if(this.ownerGreatSwordCarryObject&&this.ownerGreatSwordCarryObject.userData?.carryPosition!==position){this.disposeGeneratedVisual(this.ownerGreatSwordCarryObject);this.ownerGreatSwordCarryObject=null;}
+    const appearance=this.state.ownerAppearance||{},carried=this.ownerGreatSwordCarried(),active=this.ownerGreatSwordEquipped(),allowed=carried&&['normal','galaxy'].includes(appearance.skin||'normal')&&appearance.vehicle!=='plane';
+    appearance.ownerGreatSwordCarryPosition='back';
+    if(this.ownerGreatSwordCarryObject&&this.ownerGreatSwordCarryObject.userData?.carryPosition!=='back'){this.disposeGeneratedVisual(this.ownerGreatSwordCarryObject);this.ownerGreatSwordCarryObject=null;}
     if(!allowed&&this.ownerGreatSwordCarryObject){this.disposeGeneratedVisual(this.ownerGreatSwordCarryObject);this.ownerGreatSwordCarryObject=null;return;}
     if(allowed&&!this.ownerGreatSwordCarryObject){
-      const carry=this.createOwnerGreatSwordCarryVisual(position);if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
-      const bone=position==='hip'?(this.playerBones?.hips||this.playerBones?.chest):(this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck);
-      const pos=position==='hip'?new THREE.Vector3(-.42,1.03,-.08):new THREE.Vector3(0,1.28,-.27);
-      const q=new THREE.Quaternion().setFromEuler(position==='hip'?new THREE.Euler(.04,.02,-.20):new THREE.Euler(.05,.02,-.62));
+      const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
+      const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
+      // Deutlich höher als V318: Mittelpunkt sitzt jetzt am oberen Rücken statt bei Hüfte/Beinen.
+      const pos=new THREE.Vector3(0,1.74,-.28);
+      const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
     }
@@ -3684,7 +3689,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(!appearance.ownerGreatSwordCarried){this.toast('Owner Great Sword zuerst im Mod-Menü ausrüsten.');return false;}
     if(this.greatSwordThrowState){this.toast('Das Great Sword ist gerade unterwegs.');return false;}
     const next=force===null?!appearance.ownerGreatSwordActive:!!force;if(next===!!appearance.ownerGreatSwordActive)return true;
-    const position=appearance.ownerGreatSwordCarryPosition==='hip'?'hip':'back',token=++this.greatSwordDrawToken;
+    const position='back',token=++this.greatSwordDrawToken;
     this.endGreatSwordAim();
     this.triggerActionAnimation(next?`great-sword-draw-${position}`:`great-sword-sheath-${position}`,620);
     setTimeout(()=>{
@@ -6086,7 +6091,7 @@ renderOwnerMenu(){
     const themeSection=(theme,title)=>{const cls=`mdc-${theme}-action`,heading=`mdc-${theme}-heading`,skinOn=appearance.staffSkinTheme===theme,item=(kind)=>appearance.heldItem===kind&&appearance.heldItemTheme===theme,toggle=(key)=>!!appearance[key]&&appearance[`${key}Theme`]===theme;return `<h3 class="${heading}" data-owner-nav="gear">${title}</h3><div class="mdc-owner-actions three"><button class="${cls} ${skinOn?'active':''}" data-owner-action="toggle-staff-skin" data-owner-theme="${theme}">${skinOn?'✓':'○'} ${staffThemeConfig(theme).label} Skin</button><button class="${cls} ${item('sword')?'active':''}" data-owner-action="admin-item" data-owner-item="sword" data-owner-theme="${theme}">${title} Schwert</button><button class="${cls} ${item('staff')?'active':''}" data-owner-action="admin-item" data-owner-item="staff" data-owner-theme="${theme}">${title} Stab</button><button class="${cls} ${item('eternalFlame')?'active':''}" data-owner-action="admin-item" data-owner-item="eternalFlame" data-owner-theme="${theme}">${title} Ewige Flamme</button><button class="${cls} ${toggle('aura')?'active':''}" data-owner-action="toggle-aura" data-owner-theme="${theme}">${toggle('aura')?'✓':'○'} ${title} Aura</button><button class="${cls} ${toggle('cape')?'active':''}" data-owner-action="toggle-cape" data-owner-theme="${theme}">${toggle('cape')?'✓':'○'} ${title} Wings</button><button class="${cls} ${toggle('cloak')?'active':''}" data-owner-action="toggle-cloak" data-owner-theme="${theme}">${toggle('cloak')?'✓':'○'} ${title} Umhang</button><button class="${cls} ${toggle('hat')?'active':''}" data-owner-action="toggle-hat" data-owner-theme="${theme}">${toggle('hat')?'✓':'○'} ${title} Krone</button></div>`;};
     sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div>`);
     if(this.isOwnerActive){const masked=appearance.ownerBaseModel==='masked';sections.push(`<h3 data-owner-nav="owner-skin">OWNER SPEZIAL-SKIN</h3><div class="mdc-owner-character"><div class="mdc-owner-actions"><button class="${!masked?'active ':''}" data-owner-action="owner-base-default">Standard Owner</button><button class="${masked?'active ':''}" data-owner-action="owner-base-masked">Owner Masked Character</button></div><p class="mdc-note">Der Owner Masked Character nutzt seine eigene Stand-, Lauf- und Rennanimation und behält seine Originaloptik. Wings, Umhang, Krone, Aura, Stab, Schwert und weitere Galaxy-Ausrüstung bleiben separat nutzbar.</p></div>`);}
-    if(this.isOwnerActive){const carried=!!appearance.ownerGreatSwordCarried,active=this.ownerGreatSwordEquipped(),carryPos=appearance.ownerGreatSwordCarryPosition==='hip'?'hip':'back',greatDamage=this.ownerGreatSwordDamage(),specials=appearance.ownerGreatSwordSpecials||{},greatKey=KEYBIND_LABELS[this.state.keybinds?.greatSword]||this.state.keybinds?.greatSword||'O';sections.push(`<h3 data-owner-nav="great-sword">OWNER GREAT SWORD</h3><div class="mdc-owner-character"><p class="mdc-note">Ausgerüstet bedeutet: Das Schwert bleibt dauerhaft an deinem Körper. Du kannst trotzdem andere Items in der Hand benutzen. Mit deiner Great-Sword-Taste (${greatKey}) ziehst du es in die rechte Hand bzw. steckst es wieder weg.</p><div class="mdc-owner-actions"><button class="${carried?'active ':''}" data-owner-action="toggle-great-sword-carry">${carried?'✓ Great Sword ausgerüstet':'○ Great Sword ausrüsten'}</button>${carried?`<button class="${active?'active ':''}" data-owner-action="toggle-great-sword-active">${active?'✓ In der Hand':'Schwert ziehen'}</button>`:''}</div>${carried?`<div class="mdc-owner-actions two"><button class="${carryPos==='back'?'active ':''}" data-owner-action="great-sword-carry-position" data-great-carry-position="back">Am Rücken tragen</button><button class="${carryPos==='hip'?'active ':''}" data-owner-action="great-sword-carry-position" data-great-carry-position="hip">Links an der Hüfte tragen</button></div>`:''}<label>Great-Sword-Schaden <input data-owner-great-sword-damage type="number" min="1" max="100000" step="1" value="${greatDamage}"><b>${greatDamage.toLocaleString('de-DE')}</b></label><div class="mdc-owner-actions three"><button class="${specials.lightning?'active ':''}" data-owner-action="great-sword-special" data-great-special="lightning">${specials.lightning?'✓':'○'} Blitzschlag</button><button class="${specials.teleport?'active ':''}" data-owner-action="great-sword-special" data-great-special="teleport">${specials.teleport?'✓':'○'} Teleport-Schlag</button><button class="${specials.throw?'active ':''}" data-owner-action="great-sword-special" data-great-special="throw">${specials.throw?'✓':'○'} Schwert werfen</button></div><p class="mdc-note">Aktiv in der Hand: gleiche Griffposition wie das Owner Galaxy-Schwert. Rechtsklick halten = Zielmodus für Werfen. Linksklick = Angriff/Wurf.</p></div>`);}
+    if(this.isOwnerActive){const carried=!!appearance.ownerGreatSwordCarried,active=this.ownerGreatSwordEquipped(),greatDamage=this.ownerGreatSwordDamage(),specials=appearance.ownerGreatSwordSpecials||{},greatKey=KEYBIND_LABELS[this.state.keybinds?.greatSword]||this.state.keybinds?.greatSword||'O';sections.push(`<h3 data-owner-nav="great-sword">OWNER GREAT SWORD</h3><div class="mdc-owner-character"><p class="mdc-note">Ausgerüstet bedeutet: Das Great Sword wird dauerhaft hoch am Rücken getragen. Du kannst trotzdem andere Items in der Hand benutzen. Mit deiner Great-Sword-Taste (${greatKey}) ziehst du es in die rechte Hand bzw. steckst es wieder auf den Rücken.</p><div class="mdc-owner-actions"><button class="${carried?'active ':''}" data-owner-action="toggle-great-sword-carry">${carried?'✓ Great Sword am Rücken ausgerüstet':'○ Great Sword am Rücken ausrüsten'}</button>${carried?`<button class="${active?'active ':''}" data-owner-action="toggle-great-sword-active">${active?'✓ In der Hand':'Schwert ziehen'}</button>`:''}</div><label>Great-Sword-Schaden <input data-owner-great-sword-damage type="number" min="1" max="100000" step="1" value="${greatDamage}"><b>${greatDamage.toLocaleString('de-DE')}</b></label><div class="mdc-owner-actions three"><button class="${specials.lightning?'active ':''}" data-owner-action="great-sword-special" data-great-special="lightning">${specials.lightning?'✓':'○'} Blitzschlag</button><button class="${specials.teleport?'active ':''}" data-owner-action="great-sword-special" data-great-special="teleport">${specials.teleport?'✓':'○'} Teleport-Schlag</button><button class="${specials.throw?'active ':''}" data-owner-action="great-sword-special" data-great-special="throw">${specials.throw?'✓':'○'} Schwert werfen</button></div><p class="mdc-note">Aktiv in der Hand: gleiche Griffposition wie das Owner Galaxy-Schwert. Rechtsklick halten = Zielmodus für Werfen. Linksklick = Angriff/Wurf.</p></div>`);}
     if(['owner','admin'].includes(this.activeStaffRole)){const publicStyle=this.effectivePublicStaffStyle(),roleButtons=this.isOwnerActive?`<button class="${publicStyle==='owner'?'active ':''}" data-owner-action="public-mode-owner">Als Owner</button><button class="${publicStyle==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${publicStyle==='moderator'?'active ':''}" data-owner-action="public-mode-moderator">Als Moderator</button><button class="${publicStyle==='supporter'?'active ':''}" data-owner-action="public-mode-supporter">Als Supporter</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`:`<button class="${publicStyle==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`;sections.push(`<h3 data-owner-nav="identity">Öffentliche Identität</h3><div class="mdc-owner-character"><div class="mdc-owner-actions three">${roleButtons}</div><div class="mdc-owner-actions"><button class="${appearance.publicGender==='male'?'active ':''}" data-owner-action="public-gender-male">Mann</button><button class="${appearance.publicGender==='female'?'active ':''}" data-owner-action="public-gender-female">Frau</button></div><label>Öffentlicher Spielername<input data-owner-public-alias maxlength="30" value="${escapeHtml(appearance.publicAlias||'Center Spieler')}"></label><p class="mdc-note">Der Owner kann sich öffentlich als Owner, Admin, Moderator, Supporter oder normaler Spieler darstellen. Die echten Rechte bleiben intern erhalten.</p></div>`);}
     sections.push(`<h3 data-owner-nav="movement">Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
     {const maxHealth=this.effectiveMaxHealth(),levelHealth=this.playerLevelMaxHealth(),staffDamage=this.staffDamageAmount();sections.push(`<h3 data-owner-nav="combat">Kampf</h3><div class="mdc-owner-character"><p class="mdc-note">Hauptlevel ${this.mainAccountLevel()} · Level-Leben ${levelHealth.toLocaleString('de-DE')} · Aktuelles Maximum ${maxHealth.toLocaleString('de-DE')}</p>${['owner','admin'].includes(this.activeStaffRole)?`<label>Zusätzliches Staff-Max-Leben <input data-owner-health-max type="number" min="100" max="10000" step="50" value="${Math.floor(Number(appearance.staffMaxHealth)||500)}"><b>${maxHealth}</b></label><label>Stab-Schaden <input data-owner-staff-damage type="number" min="10" max="2500" step="10" value="${staffDamage}"><b>${staffDamage}</b></label><div class="mdc-owner-actions"><button data-owner-action="fill-staff-health">❤ Leben auf Maximum</button></div>`:`<div class="mdc-owner-actions"><button data-owner-action="fill-staff-health">❤ Leben auf Maximum</button></div>`}</div>`);}
@@ -6155,7 +6160,6 @@ handleOwnerInput(event){
     if(action==='refresh-online-players'){this.toast('Online-Spieler werden aktualisiert …');if(!this.onlineConnected)await this.connectMultiplayer();else{await this.publishPresence(true).catch(()=>{});await this.rebuildMergedPresence().catch(()=>{});}this.renderOwnerMenu();return;}
     if(action==='toggle-great-sword-carry'){if(!this.ownerOnly())return;const appearance=this.state.ownerAppearance;appearance.ownerGreatSwordCarried=!appearance.ownerGreatSwordCarried;if(!appearance.ownerGreatSwordCarried){appearance.ownerGreatSwordActive=false;this.greatSwordDrawToken+=1;this.endGreatSwordAim();if(this.greatSwordThrowState){this.disposeGeneratedVisual(this.greatSwordThrowState.visual);this.greatSwordThrowState=null;}}this.applyHeldItemVisual();this.applyOwnerGreatSwordCarryVisual();this.saveState(true);this.renderOwnerMenu();this.renderHud(true);this.publishPresence(true).catch(()=>{});return;}
     if(action==='toggle-great-sword-active'){if(!this.ownerOnly())return;this.toggleOwnerGreatSwordActive();this.renderOwnerMenu();return;}
-    if(action==='great-sword-carry-position'){if(!this.ownerOnly())return;const position=button.dataset.greatCarryPosition;if(!['back','hip'].includes(position))return;this.state.ownerAppearance.ownerGreatSwordCarryPosition=position;if(this.ownerGreatSwordCarryObject){this.disposeGeneratedVisual(this.ownerGreatSwordCarryObject);this.ownerGreatSwordCarryObject=null;}this.applyOwnerGreatSwordCarryVisual();this.saveState(true);this.renderOwnerMenu();return;}
     if(action==='great-sword-special'){if(!this.ownerOnly())return;const key=button.dataset.greatSpecial;if(!['lightning','teleport','throw'].includes(key))return;const settings=this.state.ownerAppearance.ownerGreatSwordSpecials||(this.state.ownerAppearance.ownerGreatSwordSpecials={lightning:false,teleport:false,throw:true});settings[key]=!settings[key];if(key==='throw'&&!settings.throw)this.endGreatSwordAim();this.saveState(true);this.renderOwnerMenu();return;}
     const required={ ground:'fly',unstuck:'fly','toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime',heal:'heal',reveal:'world','time-day':'world','time-night':'world','weather-clear':'world','weather-rain':'world','weather-snow':'world','season-next':'world','grant-resource':'resources','grant-all':'resources','grant-tools':'resources','grant-skills':'resources','respawn-resources':'resources','tp-spawn':'teleport','tp-river':'teleport','tp-random':'teleport','tp-player':'teleport','tp-village':'teleport','tp-landmark':'teleport'}[action];
     if(required&&!caps[required]){this.toast('Deine Teamrolle darf diese Funktion nicht verwenden.');return;}
