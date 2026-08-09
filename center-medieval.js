@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v281-local-vanish-ghost';
+const CENTER_VERSION = '2026-08-09-jkgames-v282-skin-cloak-runtime-final-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -146,7 +146,7 @@ const CENTER_ASSET_PATHS = Object.freeze({
   firstPersonArms: `./assets/shared/arme-first-person.glb`,
   scooter: `${CENTER_ASSET_ROOT}electro-scooter-weiss.glb`,
   ownerWings: `${CENTER_ASSET_ROOT}angel_wings.glb?v=20260808-v264`,
-  staffCape: `./staff-cape-v280.glb?v=20260809-v280`,
+  staffCape: `./staff-cape-v282.glb?v=20260809-v282`,
   staffPlane: `${CENTER_ASSET_ROOT}saegelflugzeug.glb?v=20260808-v264`
 });
 const ANIMAL_PROFILES = Object.freeze({
@@ -1350,10 +1350,12 @@ class CenterDynastyGame {
     this.centerAssetLoadPromise=(async()=>{
       const entries=Object.entries(CENTER_ASSET_PATHS);
       const loaded=await Promise.allSettled(entries.map(async([key,url])=>{
-        const gltf=await this.loadCenterGltf(url);
-        gltf.scene.updateMatrixWorld(true);
-        this.centerAssetTemplates.set(key,{root:gltf.scene,animations:gltf.animations||[],url});
-        return key;
+        try{
+          const gltf=await this.loadCenterGltf(url);
+          gltf.scene.updateMatrixWorld(true);
+          this.centerAssetTemplates.set(key,{root:gltf.scene,animations:gltf.animations||[],url});
+          return {key,url};
+        }catch(error){throw {key,url,error};}
       }));
       const failed=loaded.filter((entry)=>entry.status==='rejected');
       if(failed.length)console.warn(`Center-Assetpaket: ${failed.length} Datei(en) konnten nicht geladen werden.`,failed.map((entry)=>entry.reason));
@@ -3297,13 +3299,28 @@ createGalaxyOwnerCape(theme='owner',compact=false){
   }
 
 createStaffCloak(theme='owner',compact=false){
-    theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme),root=this.cloneCenterAsset('staffCape',{targetHeight:compact?1.24:1.38,bottomAlign:false,center:true});if(!root)return new THREE.Group();
-    root.updateMatrixWorld(true);const capeBox=new THREE.Box3().setFromObject(root);if(!capeBox.isEmpty())root.position.y-=capeBox.max.y;root.updateMatrixWorld(true);
+    theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme);
+    let root=this.cloneCenterAsset('staffCape',{targetHeight:compact?1.24:1.38,bottomAlign:false,center:true});
+    // V282: Falls das GLB aus irgendeinem Hosting-/Cache-Grund nicht verfügbar ist,
+    // wird ein sichtbarer Galaxy-Umhang als Fallback erzeugt, statt eines leeren Groups.
+    if(!root){
+      root=new THREE.Group();
+      const h=compact?1.18:1.34,wTop=compact?.34:.40,wBottom=compact?.56:.66,z=0;
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute([
+        -wTop,0,z,  wTop,0,z, -wBottom,-h,z,
+         wTop,0,z,  wBottom,-h,z, -wBottom,-h,z
+      ],3));
+      geo.computeVertexNormals();
+      const tex=this.createGalaxyTexture(compact?160:320,compact?320:640,theme);tex.repeat.set(.88,1.34);
+      const mat=new THREE.MeshStandardMaterial({map:tex,emissiveMap:tex,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide});
+      const mesh=new THREE.Mesh(geo,mat);mesh.castShadow=!compact;mesh.receiveShadow=false;root.add(mesh);root.userData.fallback=true;
+    }else{
+      root.updateMatrixWorld(true);const capeBox=new THREE.Box3().setFromObject(root);if(!capeBox.isEmpty())root.position.y-=capeBox.max.y;root.updateMatrixWorld(true);
+      const texture=this.createGalaxyTexture(compact?160:320,compact?320:640,theme);texture.repeat.set(.88,1.34);
+      root.traverse((object)=>{if(!object.isMesh&&!object.isSkinnedMesh)return;const galaxyMat=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide,transparent:false});object.material=galaxyMat;object.castShadow=!compact;object.receiveShadow=false;});
+    }
     root.name=compact?`remote-${theme}-staff-cloak`:`${theme}-staff-cloak`;root.userData.theme=theme;root.userData.compact=compact;root.userData.cloakSway=0;
-    const texture=this.createGalaxyTexture(compact?160:320,compact?320:640,theme);texture.repeat.set(.88,1.34);
-    root.traverse((object)=>{if(!object.isMesh&&!object.isSkinnedMesh)return;const galaxyMat=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide,transparent:false});object.material=galaxyMat;object.castShadow=!compact;object.receiveShadow=false;});
-    // Das Asset hängt direkt hinter dem Hals/Rücken. Die Wings sitzen weiter hinten,
-    // dadurch verdeckt der Umhang die Flügel nicht.
     root.rotation.set(.06,0,0);root.userData.baseRotationX=.06;return root;
   }
 
@@ -3355,6 +3372,36 @@ applyOwnerWearables(){
       if(this.ownerCapeObject.userData?.sparkles)this.ownerCapeObject.userData.sparkles.rotation.y=Math.sin(now*.0013)*.08;if(this.ownerCapeObject.userData?.light)this.ownerCapeObject.userData.light.intensity=.66+Math.sin(now*.003)*.11;
     }
     if(this.ownerHatObject){this.updateWearableFollower(this.ownerHatObject);if(this.ownerHatObject.userData?.halo)this.ownerHatObject.userData.halo.rotation.z=now*.00055;if(this.ownerHatObject.userData?.light)this.ownerHatObject.userData.light.intensity=.44+Math.sin(now*.002)*.07;}
+  }
+
+
+  // V282: In V280/V281 versehentlich beim Einbau des Umhangs entfernte Methoden.
+  // Sie werden von Skinwechsel, Verwandlung und dem Effects-Perf-Task benötigt.
+  spawnTransformationEffectAt(position,compact=false){
+    if(!this.scene||!position)return;
+    const group=new THREE.Group();group.name='center-transformation-cloud';group.position.copy(position);group.position.y+=compact?.68:.88;
+    const radius=compact?.52:.7,puffSize=compact?.11:.15,colors=[0xe8e4ff,0xa36cff,0x6dd7ff,0xff7bd5];
+    const geometry=new THREE.IcosahedronGeometry(puffSize,1),puffs=[];
+    for(let i=0;i<14;i+=1){
+      const angle=(i/14)*Math.PI*2+Math.random()*.35,up=(Math.random()-.15)*.5;
+      const material=new THREE.MeshBasicMaterial({color:colors[i%colors.length],transparent:true,opacity:.58,depthWrite:false,blending:THREE.AdditiveBlending});
+      const puff=new THREE.Mesh(geometry,material),r=.12+Math.random()*radius*.35;
+      puff.position.set(Math.cos(angle)*r,(Math.random()-.35)*.34,Math.sin(angle)*r);
+      puff.scale.setScalar(.65+Math.random()*.75);group.add(puff);
+      puffs.push({mesh:puff,velocity:new THREE.Vector3(Math.cos(angle)*(radius*.78+Math.random()*.35),up+.34+Math.random()*.28,Math.sin(angle)*(radius*.78+Math.random()*.35)),spin:(Math.random()-.5)*3});
+    }
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(compact?.34:.46,.025,8,32),new THREE.MeshBasicMaterial({color:0xb96cff,transparent:true,opacity:.48,depthWrite:false,blending:THREE.AdditiveBlending}));ring.rotation.x=Math.PI/2;ring.position.y=-.42;group.add(ring);
+    const light=new THREE.PointLight(0x8a4cff,compact?.6:1.05,compact?2.4:3.6,2);light.position.y=.1;group.add(light);
+    this.scene.add(group);this.transformationEffects.push({group,puffs,ring,light,geometry,start:performance.now(),duration:compact?620:760});
+    while(this.transformationEffects.length>10){const old=this.transformationEffects.shift();this.disposeTransformationEffect(old);}
+  }
+
+  disposeTransformationEffect(effect){
+    if(!effect)return;effect.group?.removeFromParent?.();effect.group?.traverse?.((object)=>{if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats)mat?.dispose?.();}if(object.geometry&&object.geometry!==effect.geometry)object.geometry.dispose?.();});effect.geometry?.dispose?.();
+  }
+
+  updateTransformationEffects(delta=.016,now=performance.now()){
+    for(let i=this.transformationEffects.length-1;i>=0;i-=1){const effect=this.transformationEffects[i],t=clamp((now-effect.start)/effect.duration,0,1),fade=1-t;for(const puff of effect.puffs){puff.mesh.position.addScaledVector(puff.velocity,delta);puff.mesh.rotation.y+=puff.spin*delta;puff.mesh.rotation.x+=puff.spin*.45*delta;puff.mesh.scale.multiplyScalar(1+delta*.55);puff.mesh.material.opacity=.58*fade*fade;}if(effect.ring){const scale=1+t*1.7;effect.ring.scale.setScalar(scale);effect.ring.material.opacity=.45*fade;}if(effect.light)effect.light.intensity=(1-t)*(effect.duration<700?.6:1.05);if(t>=1){this.disposeTransformationEffect(effect);this.transformationEffects.splice(i,1);}}
   }
 
 applyOwnerAppearance() {
@@ -4958,7 +5005,7 @@ handleOwnerInput(event){
     if(action==='public-gender-male'||action==='public-gender-female'){if(!['owner','admin'].includes(this.activeStaffRole))return;this.state.ownerAppearance.publicGender=action.endsWith('female')?'female':'male';if(this.isPublicPlayerMode())await this.ensureCorrectPlayerModel();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
     if(action.startsWith('toggle-')){const map={'toggle-vanish':'vanish','toggle-god':'god','toggle-noclip':'noclip','toggle-fly':'fly','toggle-time':'freezeTime'},key=map[action];if(key){if(['vanish','god','fly'].includes(key)){this.toggleStaffFlag(key);return;}this.ownerFlags[key]=!this.ownerFlags[key];this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}}
     if(action==='toggle-owner-galaxy-skin'||action==='toggle-staff-skin'){
-      const theme=requestedTheme||'owner';if(!this.allowedCosmeticThemes().includes(theme))return;const appearance=this.state.ownerAppearance;appearance.staffSkinTheme=appearance.staffSkinTheme===theme?'none':theme;this.spawnTransformationEffectAt(this.player.position);this.setShadowCharacterMode(appearance.staffSkinTheme!=='none',appearance.staffSkinTheme==='none'?'owner':appearance.staffSkinTheme);this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;
+      const theme=requestedTheme||'owner';if(!this.allowedCosmeticThemes().includes(theme))return;const appearance=this.state.ownerAppearance;appearance.staffSkinTheme=appearance.staffSkinTheme===theme?'none':theme;this.spawnTransformationEffectAt?.(this.player.position);this.setShadowCharacterMode(appearance.staffSkinTheme!=='none',appearance.staffSkinTheme==='none'?'owner':appearance.staffSkinTheme);this.applyOwnerAppearance();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;
     }
     if(action.startsWith('skin-')){const skin=action.replace('skin-','')==='shadow'?'galaxy':action.replace('skin-','');this.applyStaffForm(skin,{cycleTree:true});return;}
     if(action==='admin-item'){const item=button.dataset.ownerItem||'none';if(!caps.items.includes(item)){this.toast('Dieses Item ist ausschließlich für eine höhere Teamrolle.');return;}const appearance=this.state.ownerAppearance,nextTheme=requestedTheme||this.appearanceTheme('heldItem'),same=item!=='none'&&appearance.heldItem===item&&appearance.heldItemTheme===nextTheme;appearance.heldItem=same?'none':item;if(item!=='none')appearance.heldItemTheme=nextTheme;this.applyHeldItemVisual();this.saveState(true);this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});return;}
