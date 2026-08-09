@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v284-cloak-neck-anchor-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v285-cloak-neck-body-follow-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3300,14 +3300,14 @@ createGalaxyOwnerCape(theme='owner',compact=false){
 
 createStaffCloak(theme='owner',compact=false){
     theme=normalizeStaffTheme(theme);const cfg=staffThemeConfig(theme);
-    const asset=this.cloneCenterAsset('staffCape',{targetHeight:compact?1.24:1.38,bottomAlign:false,center:true});
-    // V284: Der sichtbare GLB-Inhalt sitzt in einem eigenen Wrapper. Wichtig:
-    // configureWearableFollower() setzt die Position des WRAPPERS in jedem Frame neu.
-    // In V280-V283 wurde die Normalisierung direkt auf root.position gelegt und damit
-    // beim Anheften wieder überschrieben. Deshalb schwebte der Umhang über dem Kopf.
-    const root=new THREE.Group();
+    // V285: etwas groesser als V284, damit der Umhang nicht schon auf Brusthoehe endet.
+    const asset=this.cloneCenterAsset('staffCape',{targetHeight:compact?1.30:1.47,bottomAlign:false,center:true});
+    // Root = fester Knochen-Anker. visualPivot = NUR Stoffbewegung. Dadurch kann die
+    // Flug-/Laufbewegung nicht mehr die Knochenrotation ueberschreiben und der Umhang
+    // bleibt in jeder Pose fest am oberen Ruecken/Hals.
+    const root=new THREE.Group(),visualPivot=new THREE.Group();root.add(visualPivot);root.userData.visualPivot=visualPivot;
     if(!asset){
-      const h=compact?1.18:1.34,wTop=compact?.34:.40,wBottom=compact?.56:.66,z=0;
+      const h=compact?1.25:1.42,wTop=compact?.35:.42,wBottom=compact?.59:.70,z=0;
       const geo=new THREE.BufferGeometry();
       geo.setAttribute('position',new THREE.Float32BufferAttribute([
         -wTop,0,z,  wTop,0,z, -wBottom,-h,z,
@@ -3316,22 +3316,20 @@ createStaffCloak(theme='owner',compact=false){
       geo.computeVertexNormals();
       const tex=this.createGalaxyTexture(compact?160:320,compact?320:640,theme);tex.repeat.set(.88,1.34);
       const mat=new THREE.MeshStandardMaterial({map:tex,emissiveMap:tex,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide});
-      const mesh=new THREE.Mesh(geo,mat);mesh.castShadow=!compact;mesh.receiveShadow=false;root.add(mesh);root.userData.fallback=true;
+      const mesh=new THREE.Mesh(geo,mat);mesh.castShadow=!compact;mesh.receiveShadow=false;visualPivot.add(mesh);root.userData.fallback=true;
     }else{
-      asset.updateMatrixWorld(true);
-      const capeBox=new THREE.Box3().setFromObject(asset);
+      asset.updateMatrixWorld(true);const capeBox=new THREE.Box3().setFromObject(asset);
       if(!capeBox.isEmpty()){
-        // Oberkante des echten Cape-Modells exakt auf y=0 legen. So beginnt der
-        // Umhang am Hals/Rückenanker und der gesamte Stoff hängt NUR nach unten.
-        asset.position.y-=capeBox.max.y;
+        // Oberkante exakt auf den Halsanker legen und seitlich mittig halten.
+        const center=capeBox.getCenter(new THREE.Vector3());asset.position.x-=center.x;asset.position.z-=center.z;asset.position.y-=capeBox.max.y;
       }
-      root.add(asset);
-      root.updateMatrixWorld(true);
+      visualPivot.add(asset);visualPivot.updateMatrixWorld(true);
       const texture=this.createGalaxyTexture(compact?160:320,compact?320:640,theme);texture.repeat.set(.88,1.34);
-      root.traverse((object)=>{if(!object.isMesh&&!object.isSkinnedMesh)return;const galaxyMat=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide,transparent:false});object.material=galaxyMat;object.castShadow=!compact;object.receiveShadow=false;});
+      visualPivot.traverse((object)=>{if(!object.isMesh&&!object.isSkinnedMesh)return;const galaxyMat=new THREE.MeshStandardMaterial({map:texture,emissiveMap:texture,color:0xffffff,emissive:cfg.emissive,emissiveIntensity:compact?.52:.82,metalness:.04,roughness:.48,side:THREE.DoubleSide,transparent:false});object.material=galaxyMat;object.castShadow=!compact;object.receiveShadow=false;});
     }
     root.name=compact?`remote-${theme}-staff-cloak`:`${theme}-staff-cloak`;root.userData.theme=theme;root.userData.compact=compact;root.userData.cloakSway=0;
-    root.rotation.set(.06,0,0);root.userData.baseRotationX=.06;return root;
+    // Die leichte Grundneigung sitzt nur auf dem Stoff-Pivot, niemals auf dem Anker.
+    visualPivot.rotation.set(.035,0,0);root.userData.baseRotationX=.035;return root;
   }
 
   createGalaxyOwnerHat(theme='owner',compact=false){
@@ -3343,7 +3341,7 @@ applyOwnerWearables(){
     const appearance=this.state.ownerAppearance||{},cloakTheme=this.appearanceTheme('cloak'),capeTheme=this.appearanceTheme('cape'),hatTheme=this.appearanceTheme('hat'),allowed=!!(this.isStaffActive&&this.staffCapabilities?.ownerCosmetics&&!this.isPublicPlayerMode()&&['normal','galaxy'].includes(appearance.skin||'normal')),wantCloak=allowed&&!!appearance.cloak,wantCape=allowed&&!!appearance.cape,wantHat=allowed&&!!appearance.hat;
     if(this.ownerCloakObject&&this.ownerCloakObject.userData?.theme!==cloakTheme){this.disposeGeneratedVisual(this.ownerCloakObject);this.ownerCloakObject=null;}if(this.ownerCapeObject&&this.ownerCapeObject.userData?.theme!==capeTheme){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(this.ownerHatObject&&this.ownerHatObject.userData?.theme!==hatTheme){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
     if(!wantCloak&&this.ownerCloakObject){this.disposeGeneratedVisual(this.ownerCloakObject);this.ownerCloakObject=null;}if(!wantCape&&this.ownerCapeObject){this.disposeGeneratedVisual(this.ownerCapeObject);this.ownerCapeObject=null;}if(!wantHat&&this.ownerHatObject){this.disposeGeneratedVisual(this.ownerHatObject);this.ownerHatObject=null;}
-    if(wantCloak&&!this.ownerCloakObject){const cloak=this.createStaffCloak(cloakTheme);this.modelPivot.add(cloak);this.ownerCloakObject=cloak;cloak.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones),backPos=new THREE.Vector3(0,1.55,-.08),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cloak,this.modelPivot,backBone,backPos,backQ)){cloak.position.copy(backPos);cloak.quaternion.copy(backQ);}}
+    if(wantCloak&&!this.ownerCloakObject){const cloak=this.createStaffCloak(cloakTheme);this.modelPivot.add(cloak);this.ownerCloakObject=cloak;cloak.userData.centerBackAttachment=true;const backBone=this.playerBones?.neck||this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.spine,backPos=new THREE.Vector3(0,1.62,-.05),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cloak,this.modelPivot,backBone,backPos,backQ)){cloak.position.copy(backPos);cloak.quaternion.copy(backQ);}this.updateWearableFollower(cloak);}}
     if(wantCape&&!this.ownerCapeObject){const cape=this.createGalaxyOwnerCape(capeTheme);this.modelPivot.add(cape);this.ownerCapeObject=cape;cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();if(!this.configureWearableFollower(cape,this.modelPivot,backBone,backPos,backQ)){cape.position.copy(backPos);cape.quaternion.copy(backQ);}}
     if(wantHat&&!this.ownerHatObject){const hat=this.createGalaxyOwnerHat(hatTheme);this.modelPivot.add(hat);this.ownerHatObject=hat;const head=this.playerBones.head||this.playerBones.neck;if(!this.configureWearableFollower(hat,this.modelPivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))hat.position.set(0,1.84,.005);}
   }
@@ -3373,8 +3371,8 @@ applyOwnerWearables(){
   updateOwnerWearables(delta=.016,now=performance.now()){
     const flying=this.isStaffActive&&this.ownerFlags.fly,motion=clamp(this.flightInputMagnitude||0,0,1);
     if(this.ownerCloakObject){
-      this.updateWearableFollower(this.ownerCloakObject);const data=this.ownerCloakObject.userData||(this.ownerCloakObject.userData={}),targetPitch=flying?-.16:(motion>.08?-.05:.02),targetRoll=Math.sin(now*.0013)*(flying?.02:.012)+(motion*.04),alpha=1-Math.exp(-Math.max(.001,Number(delta)||.016)*(flying?3.2:2.3));
-      data.pitch=THREE.MathUtils.lerp(Number(data.pitch)||0,targetPitch,alpha);data.roll=THREE.MathUtils.lerp(Number(data.roll)||0,targetRoll,alpha*.7);this.ownerCloakObject.rotation.x=data.pitch;this.ownerCloakObject.rotation.z=data.roll;if(this.ownerCloakObject.userData?.glow)this.ownerCloakObject.userData.glow.material.opacity=(this.ownerCloakObject.userData.compact?.11:.16)+Math.sin(now*.0022)*.015;if(this.ownerCloakObject.userData?.light)this.ownerCloakObject.userData.light.intensity=.34+Math.sin(now*.0028)*.05;
+      this.updateWearableFollower(this.ownerCloakObject);const data=this.ownerCloakObject.userData||(this.ownerCloakObject.userData={}),visual=data.visualPivot||this.ownerCloakObject,targetPitch=flying?-.11:(motion>.08?-.035:.015),targetRoll=Math.sin(now*.0013)*(flying?.016:.009)+(motion*.025),alpha=1-Math.exp(-Math.max(.001,Number(delta)||.016)*(flying?3.0:2.4));
+      data.pitch=THREE.MathUtils.lerp(Number(data.pitch)||0,targetPitch,alpha);data.roll=THREE.MathUtils.lerp(Number(data.roll)||0,targetRoll,alpha*.7);visual.rotation.x=(Number(data.baseRotationX)||.035)+data.pitch;visual.rotation.z=data.roll;if(this.ownerCloakObject.userData?.glow)this.ownerCloakObject.userData.glow.material.opacity=(this.ownerCloakObject.userData.compact?.11:.16)+Math.sin(now*.0022)*.015;if(this.ownerCloakObject.userData?.light)this.ownerCloakObject.userData.light.intensity=.34+Math.sin(now*.0028)*.05;
     }
     if(this.ownerCapeObject){
       this.updateWearableFollower(this.ownerCapeObject);const left=this.ownerCapeObject.userData?.left?.pivot,right=this.ownerCapeObject.userData?.right?.pivot,vertical=this.flightVerticalVelocity||0,speedBoost=clamp(Number(this.ownerFlags.speedMultiplier)||1,1,5),targetPose=this.wingFlightPose(flying,motion,vertical,now,speedBoost,!!this.sprinting),{sweep,spread}=this.smoothWingFlightPose(this.ownerCapeObject,targetPose,delta);
@@ -4903,7 +4901,7 @@ applyRemoteOwnerAura(remote) {
     if(remote.aura&&(remote.aura.userData?.theme!==auraTheme||remote.aura.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.aura);remote.aura=null;}if(auraActive&&!remote.aura){remote.aura=tier==='low'?this.createCheapRemoteAura(auraTheme):this.createGalaxyAuraGroup(true,auraTheme);remote.aura.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.aura,tier);remote.pivot.add(remote.aura);}if(remote.aura)remote.aura.visible=auraActive;
     const visible=isStaffVisual&&!hidden&&!remote.formObject&&remote.vehicle!=='plane';if(remote.cape&&(remote.cape.userData?.theme!==capeTheme||remote.cape.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cape);remote.cape=null;}if(remote.cloak&&(remote.cloak.userData?.theme!==cloakTheme||remote.cloak.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.cloak);remote.cloak=null;}if(remote.hat&&(remote.hat.userData?.theme!==hatTheme||remote.hat.userData?.qualityTier!==tier)){this.disposeGeneratedVisual(remote.hat);remote.hat=null;}
     if(visible&&remote.ownerCape&&!remote.cape){remote.cape=tier==='minimal'||tier==='low'?this.createCheapRemoteWings(capeTheme):this.createGalaxyOwnerCape(capeTheme,tier!=='high');remote.cape.userData.qualityTier=tier;remote.cape.scale.setScalar(tier==='minimal'?.82:.9);this.simplifyRemoteVisual(remote.cape,tier);remote.pivot.add(remote.cape);remote.cape.userData.centerBackAttachment=true;const backBone=this.resolveBackAttachmentBone(remote.model,remote.bones),backPos=new THREE.Vector3(0,1.46,-.22),backQ=new THREE.Quaternion();/* V277: Auch bei Online-Spielern fest am Oberkoerper statt nur am Root-Pivot. */if(!this.configureWearableFollower(remote.cape,remote.pivot,backBone,backPos,backQ)){remote.cape.position.copy(backPos);remote.cape.quaternion.copy(backQ);}}if(remote.cape)remote.cape.visible=visible&&remote.ownerCape;
-    if(visible&&remote.staffCloak&&tier!=='minimal'&&!remote.cloak){remote.cloak=this.createStaffCloak(cloakTheme,tier!=='high');remote.cloak.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.cloak,tier);remote.pivot.add(remote.cloak);const backBone=this.resolveBackAttachmentBone(remote.model,remote.bones),neckPos=new THREE.Vector3(0,1.55,-.115),q=new THREE.Quaternion();if(!this.configureWearableFollower(remote.cloak,remote.pivot,backBone,neckPos,q)){remote.cloak.position.copy(neckPos);remote.cloak.quaternion.copy(q);}}if(remote.cloak)remote.cloak.visible=visible&&remote.staffCloak&&tier!=='minimal';
+    if(visible&&remote.staffCloak&&tier!=='minimal'&&!remote.cloak){remote.cloak=this.createStaffCloak(cloakTheme,tier!=='high');remote.cloak.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.cloak,tier);remote.pivot.add(remote.cloak);const backBone=remote.bones?.neck||this.resolveBackAttachmentBone(remote.model,remote.bones)||remote.bones?.chest||remote.bones?.spine,neckPos=new THREE.Vector3(0,1.62,-.07),q=new THREE.Quaternion();if(!this.configureWearableFollower(remote.cloak,remote.pivot,backBone,neckPos,q)){remote.cloak.position.copy(neckPos);remote.cloak.quaternion.copy(q);}this.updateWearableFollower(remote.cloak);}if(remote.cloak)remote.cloak.visible=visible&&remote.staffCloak&&tier!=='minimal';
     if(visible&&remote.ownerHat&&tier!=='minimal'&&!remote.hat){remote.hat=this.createGalaxyOwnerHat(hatTheme,tier!=='high');remote.hat.userData.qualityTier=tier;this.simplifyRemoteVisual(remote.hat,tier);remote.pivot.add(remote.hat);const head=remote.bones?.head;if(!this.configureWearableFollower(remote.hat,remote.pivot,head,new THREE.Vector3(0,1.84,.005),new THREE.Quaternion()))remote.hat.position.set(0,1.84,.01);}if(remote.hat)remote.hat.visible=visible&&remote.ownerHat&&tier!=='minimal';
   }
 
@@ -4937,7 +4935,7 @@ applyRemoteHeldItem(remote){
       if(remote.aura?.visible&&quality!=='minimal'&&quality!=='performance')this.animateGalaxyAura(remote.aura,delta,now);
       if(remote.cape?.visible){this.updateWearableFollower(remote.cape);const l=remote.cape.userData?.left?.pivot,r=remote.cape.userData?.right?.pivot,remoteSpeed=Math.hypot(Number(remote.velocityX)||0,Number(remote.velocityZ)||0),speedBoost=clamp(1+remoteSpeed*.10,1,5),targetPose=this.wingFlightPose(remote.flying,remote.walking?1:0,remote.verticalVelocity||0,now,speedBoost,!!remote.sprinting),{sweep,spread}=this.smoothWingFlightPose(remote.cape,targetPose,delta);if(l){l.rotation.x=.01;l.rotation.y=-sweep;l.rotation.z=spread;}if(r){r.rotation.x=.01;r.rotation.y=sweep;r.rotation.z=-spread;}}
       if(remote.vehicleObject?.userData?.mixer){const a=remote.vehicleObject.userData.propellerAction,spin=remote.flying||remote.walking||remote.targetY>terrainHeightAt(remote.group.position.x,remote.group.position.z)+.24;if(a){a.paused=!spin;a.timeScale=remote.flying?1.5:1.05;}if(spin)remote.vehicleObject.userData.mixer.update(delta);}
-      if(remote.cloak?.visible){this.updateWearableFollower(remote.cloak);const rs=Math.hypot(Number(remote.velocityX)||0,Number(remote.velocityZ)||0);const target=(remote.flying?.16:.05)+clamp(rs*.012,0,.08);remote.cloak.rotation.x+=(target-remote.cloak.rotation.x)*(1-Math.exp(-delta*4));remote.cloak.rotation.z=Math.sin(now*.003+remote.group.position.x)*.012;}
+      if(remote.cloak?.visible){this.updateWearableFollower(remote.cloak);const visual=remote.cloak.userData?.visualPivot||remote.cloak,rs=Math.hypot(Number(remote.velocityX)||0,Number(remote.velocityZ)||0),target=(remote.flying?-.10:-.01)-clamp(rs*.006,0,.045),base=Number(remote.cloak.userData?.baseRotationX)||.035;visual.rotation.x+=(base+target-visual.rotation.x)*(1-Math.exp(-delta*4));visual.rotation.z=Math.sin(now*.003+remote.group.position.x)*.010;}
       if(remote.hat?.visible)this.updateWearableFollower(remote.hat);if(remote.heldAnchor?.visible){this.syncRemoteHeldAnchorPose(remote);if(!['minimal','performance'].includes(quality))this.animateHeldItemEffects(remote.heldObject,now);}this.updateRemoteStaffBeam(remote,now,perfNow);
       this.updateRemoteAnimalForm(remote,delta);const humanWalking=remote.walking&&!remote.formObject&&!remote.vehicleObject&&!airborne&&!remote.flying;
       if(remote.dualLocomotion&&(remote.walkMixer||remote.runMixer)){const running=!!(humanWalking&&remote.sprinting&&remote.runAction);if(remote.walkVisual)remote.walkVisual.visible=!running;if(remote.runVisual)remote.runVisual.visible=running;if(humanWalking){if(running){if(remote.walkAction)remote.walkAction.paused=true;if(remote.runAction){remote.runAction.enabled=true;remote.runAction.paused=false;remote.runAction.setEffectiveWeight?.(1);remote.runMixer.timeScale=1.05;remote.runMixer.update(delta);}}else{if(remote.runAction)remote.runAction.paused=true;if(remote.walkAction){remote.walkAction.enabled=true;remote.walkAction.paused=false;remote.walkAction.setEffectiveWeight?.(1);remote.walkMixer.timeScale=1;remote.walkMixer.update(delta);}}remote.wasWalking=true;}else{if(remote.walkAction)remote.walkAction.paused=true;if(remote.runAction)remote.runAction.paused=true;remote.wasWalking=false;this.applyRemoteIdlePose(remote,delta,false);}}
