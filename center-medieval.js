@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v320-great-sword-wing-height-jump-knees';
+const CENTER_VERSION = '2026-08-09-jkgames-v321-health-persistence-login-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -339,7 +339,7 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 13,
+    version: 14,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
     world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 2, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
     day: 1,
@@ -377,6 +377,31 @@ function defaultSaveState() {
     horseTamed: false,
     lastSavedAt: Date.now()
   };
+}
+
+function centerHealthCheckpointKey(slot=null){
+  const resolved=Math.max(0,Math.floor(Number(slot ?? bridgeSnapshot().slot)||0));
+  return `jk-games-center-health-slot-${resolved}`;
+}
+
+function readCenterHealthCheckpoint(slot=null){
+  try{
+    const value=JSON.parse(localStorage.getItem(centerHealthCheckpointKey(slot))||'null');
+    if(!value||typeof value!=='object')return null;
+    const health=Number(value.health),savedAt=Number(value.savedAt);
+    if(!Number.isFinite(health)||!Number.isFinite(savedAt))return null;
+    return {health:Math.max(0,health),savedAt,slot:Math.max(0,Math.floor(Number(value.slot)||0))};
+  }catch{return null;}
+}
+
+function writeCenterHealthCheckpoint(state,slot=null){
+  try{
+    const resolved=Math.max(0,Math.floor(Number(slot ?? bridgeSnapshot().slot)||0));
+    const health=Number(state?.needs?.health);
+    if(!Number.isFinite(health))return;
+    const savedAt=Math.max(0,Number(state?.lastSavedAt)||Date.now());
+    localStorage.setItem(centerHealthCheckpointKey(resolved),JSON.stringify({slot:resolved,health,savedAt}));
+  }catch{}
 }
 
 function normalizeSaveState(raw) {
@@ -477,8 +502,16 @@ function normalizeSaveState(raw) {
   state.time = ((Number(state.time) || 8) % 24 + 24) % 24;
   state.weather = WEATHER[state.weather] ? state.weather : 'clear';
   state.weatherRemaining = Number.isFinite(Number(state.weatherRemaining)) ? clamp(state.weatherRemaining, .5, 12) : 4 + Math.random() * 4;
-  const storedHealthCap=Math.floor(clamp(Number(raw.ownerAppearance?.staffMaxHealth)||500,100,10000));
-  for (const key of Object.keys(base.needs)) state.needs[key] = clamp(state.needs[key], 0, key==='health'?storedHealthCap:100);
+  // V321: Lebenspunkte beim Laden NICHT mehr pauschal auf 500 begrenzen.
+  // Hauptlevel 1 = 100 HP, Hauptlevel 100 = 5.000 HP; Owner/Admin können darüber
+  // hinaus ihren gespeicherten Staff-Maxwert besitzen.
+  const snapshot=bridgeSnapshot(),accountLevel=Math.floor(clamp(Number(snapshot.level)||1,1,100));
+  const levelHealthCap=Math.round(100+(accountLevel-1)*(4900/99));
+  const staffHealthCap=Math.floor(clamp(Number(raw.ownerAppearance?.staffMaxHealth)||500,100,10000));
+  const storedHealthCap=Math.max(levelHealthCap,staffHealthCap);
+  const checkpoint=readCenterHealthCheckpoint(snapshot.slot),rawSavedAt=Math.max(0,Number(raw.lastSavedAt)||0);
+  if(checkpoint&&checkpoint.savedAt>=rawSavedAt&&Number.isFinite(checkpoint.health))state.needs.health=checkpoint.health;
+  for (const key of Object.keys(base.needs)) state.needs[key] = clamp(Number(state.needs[key])||0, 0, key==='health'?storedHealthCap:100);
   for (const key of Object.keys(base.inventory)) state.inventory[key] = Math.max(0, Math.floor(Number(state.inventory[key]) || 0));
   for (const key of Object.keys(base.tools)) state.tools[key] = clamp(state.tools[key], 0, 100);
   for (const key of Object.keys(base.skills)) state.skills[key] = Math.floor(clamp(state.skills[key], 0, 5));
@@ -1309,6 +1342,7 @@ class CenterDynastyGame {
       },Math.max(150,Number(delay)||450));
     };
     window.addEventListener('pagehide', () => { this.saveState(true); this.disconnectMultiplayer().catch(() => {}); });
+    window.addEventListener('beforeunload', () => { if(this.opened)this.saveState(true); });
     window.addEventListener('pageshow', () => resumeCenterOnline(550));
     window.addEventListener('online', () => resumeCenterOnline(300));
     document.addEventListener('visibilitychange', () => {
@@ -4295,9 +4329,12 @@ saveState(force=false) {
     const now=Date.now();
     if(!force&&now-this.lastSaveAt<5000) return;
     this.lastSaveAt=now;
-    this.state.version=7;
+    this.state.version=14;
     const savePos=this.inHouseInterior?(this.houseExteriorReturn?.building||this.houseExteriorReturn||null):null;this.state.position={x:Number((savePos?Number(savePos.x||0):this.player.position.x).toFixed(2)),z:Number((savePos?Number(savePos.z||0):this.player.position.z).toFixed(2)),yaw:Number(this.yaw.toFixed(4)),view:this.firstPerson?'first':'third'};
     this.state.lastSavedAt=now;
+    // V321: HP sofort lokal sichern, bevor der Bridge-/Cloud-Save startet.
+    // So bleibt auch beim direkten Tab-Schließen exakt der zuletzt vorhandene Lebenswert erhalten.
+    writeCenterHealthCheckpoint(this.state,this.currentSlot);
     const bridge=window.JKGamesCenterBridge;
     if(bridge?.saveCenterState) bridge.saveCenterState(this.state);
     else { try{localStorage.setItem('jk-games-center-medieval',JSON.stringify(this.state));}catch{} }
