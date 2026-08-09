@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v310-step4-well-foundation-plots-water-volume';
+const CENTER_VERSION = '2026-08-09-jkgames-v311-underwater-crash-hotfix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1019,7 +1019,7 @@ class CenterDynastyGame {
     overlay.setAttribute('aria-label', 'Center – mittelalterliche Dynastie-Welt');
     overlay.innerHTML = `
       <div class="c3d-stage"><canvas aria-label="Center 3D-Spielwelt" tabindex="0"></canvas></div>
-      <div class="c3d-vignette"></div><div class="mdc-danger-vignette" aria-hidden="true"></div><div data-mdc-underwater aria-hidden="true" style="position:absolute;inset:0;z-index:7;pointer-events:none;background:linear-gradient(rgba(19,89,112,.46),rgba(7,48,66,.60));opacity:0;transition:opacity .18s ease;mix-blend-mode:multiply"></div><div class="c3d-crosshair" aria-hidden="true"></div>
+      <div class="c3d-vignette"></div><div class="mdc-danger-vignette" aria-hidden="true"></div><div data-mdc-underwater aria-hidden="true" style="position:absolute;inset:0;z-index:7;pointer-events:none;background:linear-gradient(rgba(20,96,122,.34),rgba(6,48,68,.52));opacity:0;transition:opacity .18s ease"></div><div class="c3d-crosshair" aria-hidden="true"></div>
       <header class="c3d-topbar mdc-topbar">
         <div class="mdc-world-status"><span data-mdc-season>🌱 Frühling</span><span data-mdc-daytime>Tag 1 · 08:15</span><span data-mdc-weather>☀ Klar</span></div>
         <div class="c3d-top-actions">
@@ -4256,12 +4256,27 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   }
 
   updateUnderwaterVisual(){
-    if(!this.underwaterOverlay||!this.player||this.inHouseInterior){if(this.underwaterOverlay)this.underwaterOverlay.style.opacity='0';this.underwaterActive=false;return;}
-    const info=this.waterInfoAt(this.player.position.x,this.player.position.z),cameraY=this.camera?.position?.y??this.player.position.y,submerged=!!info&&cameraY<info.surface-.18;
-    this.underwaterOverlay.style.opacity=submerged?'1':'0';
-    if(submerged&&this.scene?.fog){this.scene.fog.color.set(0x174f62);this.scene.fog.density=Math.max(.0065,Number(this.scene.fog.density)||.00165);}
-    else if(this.underwaterActive&&this.scene?.fog){this.scene.fog.color.set(SEASONS[this.state.season].fog);const distance=this.state.world?.renderDistance||3;this.scene.fog.density=clamp(.00335-distance*.00045,.00082,.0029);}
-    this.underwaterActive=submerged;
+    // V311: Unterwasser-Effekt bleibt rein als HUD-Overlay. Keine direkte Manipulation
+    // von Three.js-Fog/Renderer-Zuständen mehr beim Eintauchen – das verhindert den
+    // Absturzpfad beim Wechsel über die Wasseroberfläche.
+    if(!this.underwaterOverlay||!this.player||this.inHouseInterior){
+      if(this.underwaterOverlay)this.underwaterOverlay.style.opacity='0';
+      this.underwaterActive=false;return;
+    }
+    try{
+      const info=this.waterInfoAt(this.player.position.x,this.player.position.z);
+      const cameraY=Number(this.camera?.position?.y);
+      const safeCameraY=Number.isFinite(cameraY)?cameraY:Number(this.player.position.y);
+      const submerged=!!info&&Number.isFinite(info.surface)&&safeCameraY<info.surface-.18;
+      this.underwaterOverlay.style.opacity=submerged?'1':'0';
+      this.underwaterActive=submerged;
+    }catch(error){
+      this.underwaterOverlay.style.opacity='0';this.underwaterActive=false;
+      if(!this.underwaterVisualErrorAt||performance.now()-this.underwaterVisualErrorAt>5000){
+        this.underwaterVisualErrorAt=performance.now();
+        console.warn('Unterwasseranzeige wurde sicher zurückgesetzt:',error);
+      }
+    }
   }
 
   updateMovement(delta) {
@@ -4302,10 +4317,18 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     }
     const terrainFloor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;
     if(inWater&&waterInfo){
-      // V309: echte Schwimm-/Tauchhöhe. Wasser besitzt keine unsichtbare Boden-Hitbox mehr auf
-      // Oberflächenniveau; der Spieler kann bis zum tatsächlich abgesenkten Gewässerboden tauchen.
-      const bottom=terrainHeightAt(this.player.position.x,this.player.position.z)+.18,surface=waterInfo.surface-.12,vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0),targetVy=vertical*3.1+(vertical===0&&this.player.position.y<surface-.75?.32:0);
-      this.velocityY+=(targetVy-this.velocityY)*(1-Math.exp(-delta*5.5));this.player.position.y=clamp(this.player.position.y+this.velocityY*delta,bottom,surface);this.onGround=this.player.position.y<=bottom+.03;this.fallStartY=null;
+      // V311: stabile Schwimm-/Tauchhöhe. Unterkante kommt direkt aus waterInfo,
+      // damit beim Tauchen keine widersprüchlichen Terrain-Abfragen entstehen.
+      const rawBottom=Number(waterInfo.bottom),rawSurface=Number(waterInfo.surface);
+      const bottom=(Number.isFinite(rawBottom)?rawBottom:terrainHeightAt(this.player.position.x,this.player.position.z))+.28;
+      const surface=(Number.isFinite(rawSurface)?rawSurface:this.player.position.y+.5)-.12;
+      const safeBottom=Math.min(bottom,surface-.45);
+      const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
+      const targetVy=vertical*3.1+(vertical===0&&this.player.position.y<surface-.75?.32:0);
+      this.velocityY+=(targetVy-this.velocityY)*(1-Math.exp(-delta*5.5));
+      const nextWaterY=this.player.position.y+this.velocityY*delta;
+      this.player.position.y=clamp(Number.isFinite(nextWaterY)?nextWaterY:surface,safeBottom,surface);
+      this.onGround=this.player.position.y<=safeBottom+.03;this.fallStartY=null;
     }else if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
       const minimumY=terrainFloor+.22,maximumY=Math.min(MAX_FLY_HEIGHT,terrainFloor+150);
@@ -4337,10 +4360,18 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   }
 
   waterInfoAt(x,z){
-    if(Math.abs(x-riverCenter(z))<14.5)return {type:'river',surface:WATER_LEVEL,depth:Math.max(1.5,WATER_LEVEL-terrainHeightAt(x,z))};
-    for(const zone of this.lakeZones||[]){if(ellipseDistance(x,z,zone)<1)return {type:'lake',surface:Number(zone.y??lakeWaterLevel(zone)),depth:Math.max(1.5,Number(zone.y??lakeWaterLevel(zone))-terrainHeightAt(x,z))};}
-    if(this.oceanZone&&ellipseDistance(x,z,this.oceanZone)<1)return {type:'ocean',surface:Number(this.oceanZone.y??WORLD_OCEAN.level),depth:Math.max(3,Number(this.oceanZone.y??WORLD_OCEAN.level)-terrainHeightAt(x,z))};
-    const cx=worldToChunk(x),cz=worldToChunk(z);for(const feature of villageWaterFeaturesForChunk(cx,cz)){if(ellipseDistance(x,z,feature)<1)return {type:'village',surface:feature.level,depth:Math.max(1.5,feature.level-terrainHeightAt(x,z)),feature};}
+    if(!Number.isFinite(x)||!Number.isFinite(z))return null;
+    const make=(type,surface,minimumDepth=1.5,feature=null)=>{
+      surface=Number(surface);if(!Number.isFinite(surface))return null;
+      let ground=terrainHeightAt(x,z);if(!Number.isFinite(ground))ground=surface-minimumDepth;
+      const depth=Math.max(minimumDepth,surface-ground),bottom=surface-depth;
+      return {type,surface,depth,bottom,...(feature?{feature}:{})};
+    };
+    if(Math.abs(x-riverCenter(z))<14.5)return make('river',WATER_LEVEL,1.5);
+    for(const zone of this.lakeZones||[]){if(ellipseDistance(x,z,zone)<1)return make('lake',zone.y??lakeWaterLevel(zone),1.5);}
+    if(this.oceanZone&&ellipseDistance(x,z,this.oceanZone)<1)return make('ocean',this.oceanZone.y??WORLD_OCEAN.level,3);
+    const cx=worldToChunk(x),cz=worldToChunk(z);
+    for(const feature of villageWaterFeaturesForChunk(cx,cz)){if(ellipseDistance(x,z,feature)<1)return make('village',feature.level,Math.max(2.5,Number(feature.depth)||2.5),feature);}
     return null;
   }
 
@@ -4809,8 +4840,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   }
 
   ensureValidWorldPosition() {
-    if(!this.player)return;const x=this.player.position.x,z=this.player.position.z,ground=terrainHeightAt(x,z);
-    const invalid=!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(this.player.position.y)||this.player.position.y<ground-1||this.player.position.y>MAX_FLY_HEIGHT+80;
+    if(!this.player)return;const x=this.player.position.x,z=this.player.position.z,ground=terrainHeightAt(x,z),water=this.waterInfoAt(x,z),lowerLimit=water?Math.min(ground-.5,Number(water.bottom)-1):ground-1;
+    const invalid=!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(this.player.position.y)||this.player.position.y<lowerLimit||this.player.position.y>MAX_FLY_HEIGHT+80;
     if(!invalid)return;const safe=this.lastSafePosition?.clone?.()||new THREE.Vector3(Number(this.state.world.spawnX||0),terrainHeightAt(Number(this.state.world.spawnX||0),Number(this.state.world.spawnZ||0)),Number(this.state.world.spawnZ||0));
     safe.y=Math.max(terrainHeightAt(safe.x,safe.z),safe.y);this.player.position.copy(safe);this.velocityY=0;this.onGround=true;this.ownerFlags.fly=false;this.fallStartY=null;this.snapCamera();this.toast('Sicherheitsrettung: Du wurdest auf festen Boden gesetzt.');
   }
