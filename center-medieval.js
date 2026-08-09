@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v311-underwater-crash-hotfix';
+const CENTER_VERSION = '2026-08-09-jkgames-v312-underwater-render-safe-hotfix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -2376,7 +2376,7 @@ async updateChunkStreaming(force = false) {
     chunk.villageWaterFeatures=[];chunk.villageFish=[];
     const plan=chunk.villageRoadPlan;if(!plan)return;
     const features=villageWaterFeaturesForChunk(chunk.cx,chunk.cz);if(!features.length)return;
-    const waterMaterial=()=>new THREE.MeshPhysicalMaterial({color:0x2d7892,transparent:true,opacity:.78,roughness:.10,metalness:.01,transmission:.14,side:THREE.DoubleSide,depthWrite:true});
+    const waterMaterial=()=>new THREE.MeshStandardMaterial({color:0x2d7892,transparent:true,opacity:.70,roughness:.38,metalness:0,side:THREE.DoubleSide,depthWrite:false});
     const shoreMaterial=()=>new THREE.MeshStandardMaterial({color:0x9b825e,roughness:1,metalness:0,side:THREE.DoubleSide});
     const earthMaterial=()=>new THREE.MeshStandardMaterial({color:0x5c4936,roughness:1,metalness:0,flatShading:true,side:THREE.DoubleSide});
     const stoneMaterial=()=>new THREE.MeshStandardMaterial({color:0x656a67,roughness:1,metalness:0,flatShading:true});
@@ -2385,7 +2385,7 @@ async updateChunkStreaming(force = false) {
       const feature=features[index],holder=new THREE.Group();holder.position.set(feature.x-chunk.originX,feature.level,feature.z-chunk.originZ);holder.rotation.y=-feature.yaw;holder.name=`v310-village-water-holder-${index}`;
 
       const shore=new THREE.Mesh(new THREE.RingGeometry(.97,1.19,72),shoreMaterial());shore.rotation.x=-Math.PI/2;shore.scale.set(feature.rx,feature.rz,1);shore.position.y=-.055;shore.name=`v310-village-water-shore-${index}`;shore.receiveShadow=true;holder.add(shore);
-      const water=new THREE.Mesh(new THREE.CircleGeometry(1,72),waterMaterial());water.rotation.x=-Math.PI/2;water.scale.set(feature.rx,feature.rz,1);water.position.y=.018;water.name=`v310-village-water-surface-${index}`;holder.add(water);
+      const water=new THREE.Mesh(new THREE.CircleGeometry(1,72),waterMaterial());water.rotation.x=-Math.PI/2;water.scale.set(feature.rx,feature.rz,1);water.position.y=.018;water.name=`v310-village-water-surface-${index}`;water.userData.centerWaterSurface=true;holder.add(water);
 
       // Sichtbare Erde unter dem Wasser: konische Innenwand plus geschlossener Gewässerboden.
       // Dadurch gibt es aus niedriger Perspektive keine transparente Lücke unter dem Tümpel.
@@ -2712,15 +2712,15 @@ buildChunkGrass(chunk) {
   }
 
   buildWater() {
-    const material=new THREE.MeshPhysicalMaterial({color:0x3e7890,transparent:true,opacity:.82,roughness:.15,metalness:.03,transmission:.08,side:THREE.DoubleSide});
+    const material=new THREE.MeshStandardMaterial({color:0x3e7890,transparent:true,opacity:.72,roughness:.36,metalness:0,side:THREE.DoubleSide,depthWrite:false});
     const vertices=[],indices=[],segments=420;
     for(let i=0;i<=segments;i+=1){const z=-WORLD_HALF+(WORLD_HALF*2)*i/segments,center=riverCenter(z),width=14+4*Math.sin(i*.29)**2;vertices.push(center-width,WATER_LEVEL,z,center+width,WATER_LEVEL,z);if(i<segments){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}}
-    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);geometry.computeVertexNormals();this.river=new THREE.Mesh(geometry,material);this.river.name='center-main-river-v300';this.scene.add(this.river);
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);geometry.computeVertexNormals();this.river=new THREE.Mesh(geometry,material);this.river.name='center-main-river-v300';this.river.userData.centerWaterSurface=true;this.scene.add(this.river);
     this.waterMaterials=[material];this.lakeZones=[];
     const shoreMat=new THREE.MeshStandardMaterial({color:0xa18b63,roughness:1,polygonOffset:true,polygonOffsetFactor:-2});
     WORLD_LAKES.forEach((lake,index)=>{
       const y=lakeWaterLevel(lake),shore=new THREE.Mesh(new THREE.RingGeometry(.96,1.16,72),shoreMat.clone());shore.rotation.x=-Math.PI/2;shore.scale.set(lake.rx,lake.rz,1);shore.position.set(lake.x,y-.045,lake.z);shore.name=`center-lake-shore-v300-${index}`;this.scene.add(shore);
-      const water=new THREE.Mesh(new THREE.CircleGeometry(1,72),material.clone());water.rotation.x=-Math.PI/2;water.scale.set(lake.rx,lake.rz,1);water.position.set(lake.x,y,lake.z);water.name=`center-lake-v300-${index}`;this.scene.add(water);this.waterMaterials.push(water.material);this.lakeZones.push({...lake,y,mesh:water});
+      const water=new THREE.Mesh(new THREE.CircleGeometry(1,72),material.clone());water.rotation.x=-Math.PI/2;water.scale.set(lake.rx,lake.rz,1);water.position.set(lake.x,y,lake.z);water.name=`center-lake-v300-${index}`;water.userData.centerWaterSurface=true;this.scene.add(water);this.waterMaterials.push(water.material);this.lakeZones.push({...lake,y,mesh:water});
       // Schilf am Ufer macht die Seen klar erkennbar, auch aus der Entfernung.
       const reedMat=new THREE.MeshStandardMaterial({color:0x59713b,roughness:1}),reedGeo=new THREE.CylinderGeometry(.025,.04,.75,5),reeds=new THREE.InstancedMesh(reedGeo,reedMat,24),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),rnd=seededRandom(WORLD_SEED+index*173+701);
       for(let r=0;r<24;r++){const a=r/24*Math.PI*2+(rnd()-.5)*.14,rr=.94+rnd()*.10,rx=lake.x+Math.cos(a)*lake.rx*rr,rz=lake.z+Math.sin(a)*lake.rz*rr,gy=terrainHeightAt(rx,rz),sc=.7+rnd()*.8;matrix.compose(new THREE.Vector3(rx,Math.max(gy,y-.2)+.36*sc,rz),q,new THREE.Vector3(sc,sc,sc));reeds.setMatrixAt(r,matrix);}reeds.instanceMatrix.needsUpdate=true;reeds.name=`v300-lake-reeds-${index}`;this.scene.add(reeds);
@@ -2730,8 +2730,8 @@ buildChunkGrass(chunk) {
   }
 
   buildOceanZone(){
-    const mat=new THREE.MeshPhysicalMaterial({color:0x245c78,transparent:true,opacity:.87,roughness:.12,metalness:.02,transmission:.05,side:THREE.DoubleSide});
-    const sea=new THREE.Mesh(new THREE.CircleGeometry(1,96),mat);sea.rotation.x=-Math.PI/2;sea.scale.set(WORLD_OCEAN.rx,WORLD_OCEAN.rz,1);sea.position.set(WORLD_OCEAN.x,WORLD_OCEAN.level,WORLD_OCEAN.z);sea.name='center-ocean-zone-v300';this.scene.add(sea);
+    const mat=new THREE.MeshStandardMaterial({color:0x245c78,transparent:true,opacity:.76,roughness:.32,metalness:0,side:THREE.DoubleSide,depthWrite:false});
+    const sea=new THREE.Mesh(new THREE.CircleGeometry(1,96),mat);sea.rotation.x=-Math.PI/2;sea.scale.set(WORLD_OCEAN.rx,WORLD_OCEAN.rz,1);sea.position.set(WORLD_OCEAN.x,WORLD_OCEAN.level,WORLD_OCEAN.z);sea.name='center-ocean-zone-v300';sea.userData.centerWaterSurface=true;this.scene.add(sea);
     const beach=new THREE.Mesh(new THREE.RingGeometry(.98,1.09,96),new THREE.MeshStandardMaterial({color:0xb39a6b,roughness:1}));beach.rotation.x=-Math.PI/2;beach.scale.set(WORLD_OCEAN.rx,WORLD_OCEAN.rz,1);beach.position.set(WORLD_OCEAN.x,WORLD_OCEAN.level-.055,WORLD_OCEAN.z);beach.name='v300-ocean-beach';this.scene.add(beach);
     this.oceanZone={x:WORLD_OCEAN.x,z:WORLD_OCEAN.z,y:WORLD_OCEAN.level,width:WORLD_OCEAN.rx*2,depth:WORLD_OCEAN.rz*2,rx:WORLD_OCEAN.rx,rz:WORLD_OCEAN.rz,mesh:sea};this.waterMaterials.push(mat);
     this.hotspots.push({id:'ocean-water',type:'water',x:WORLD_OCEAN.x-WORLD_OCEAN.rx*.55,z:WORLD_OCEAN.z,radius:110,label:'Meerwasser'});
@@ -4255,28 +4255,54 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     return !!(this.ownerFlags.fly||plane||this.walking||Math.hypot(this.input?.forward||0,this.input?.right||0)>.05);
   }
 
+  updateWaterRenderSafety(info,submerged){
+    // V312: Der Renderer muss beim Durchqueren einer Wasserfläche keinen physikalischen
+    // Transmission-Shader mehr umschalten. Zusätzlich wird die direkt über der Kamera liegende
+    // Wasserfläche unter Wasser etwas transparenter. Das vermeidet den problematischen
+    // Oberflächen-Crossing-Pfad auf WebGL/GPU-Treibern.
+    const targetOpacity=submerged?.34:null;
+    if(this.river?.material){
+      this.river.material.depthWrite=false;
+      if(info?.type==='river'&&submerged)this.river.material.opacity=.34;
+    }
+    for(const zone of this.lakeZones||[]){
+      const mat=zone?.mesh?.material;if(!mat)continue;mat.depthWrite=false;
+      if(info?.type==='lake'&&submerged&&ellipseDistance(this.player.position.x,this.player.position.z,zone)<1.05)mat.opacity=.34;
+    }
+    if(this.oceanZone?.mesh?.material){
+      this.oceanZone.mesh.material.depthWrite=false;
+      if(info?.type==='ocean'&&submerged)this.oceanZone.mesh.material.opacity=.34;
+    }
+    for(const chunk of this.chunks?.values?.()||[]){
+      for(const feature of chunk.villageWaterFeatures||[]){
+        const holder=chunk.group?.children?.find?.((node)=>node.name?.startsWith?.('v310-village-water-holder')&&Math.hypot((chunk.originX+node.position.x)-feature.x,(chunk.originZ+node.position.z)-feature.z)<.5);
+        const surface=holder?.children?.find?.((node)=>node.userData?.centerWaterSurface);
+        if(!surface?.material)continue;
+        surface.material.depthWrite=false;
+        if(info?.type==='village'&&submerged&&ellipseDistance(this.player.position.x,this.player.position.z,feature)<1.05)surface.material.opacity=.34;
+      }
+    }
+  }
+
   updateUnderwaterVisual(){
-    // V311: Unterwasser-Effekt bleibt rein als HUD-Overlay. Keine direkte Manipulation
-    // von Three.js-Fog/Renderer-Zuständen mehr beim Eintauchen – das verhindert den
-    // Absturzpfad beim Wechsel über die Wasseroberfläche.
     if(!this.underwaterOverlay||!this.player||this.inHouseInterior){
       if(this.underwaterOverlay)this.underwaterOverlay.style.opacity='0';
       this.underwaterActive=false;return;
     }
+    let info=null,submerged=false;
     try{
-      const info=this.waterInfoAt(this.player.position.x,this.player.position.z);
-      const cameraY=Number(this.camera?.position?.y);
-      const safeCameraY=Number.isFinite(cameraY)?cameraY:Number(this.player.position.y);
-      const submerged=!!info&&Number.isFinite(info.surface)&&safeCameraY<info.surface-.18;
-      this.underwaterOverlay.style.opacity=submerged?'1':'0';
-      this.underwaterActive=submerged;
+      info=this.waterInfoAt(this.player.position.x,this.player.position.z);
+      const cameraY=Number(this.camera?.position?.y),playerY=Number(this.player.position.y),safeY=Number.isFinite(cameraY)?cameraY:playerY;
+      submerged=!!info&&Number.isFinite(info.surface)&&Number.isFinite(safeY)&&safeY<info.surface-.22;
     }catch(error){
-      this.underwaterOverlay.style.opacity='0';this.underwaterActive=false;
+      info=null;submerged=false;
       if(!this.underwaterVisualErrorAt||performance.now()-this.underwaterVisualErrorAt>5000){
-        this.underwaterVisualErrorAt=performance.now();
-        console.warn('Unterwasseranzeige wurde sicher zurückgesetzt:',error);
+        this.underwaterVisualErrorAt=performance.now();console.warn('Unterwasserprüfung sicher abgefangen:',error);
       }
     }
+    this.underwaterOverlay.style.opacity=submerged?'1':'0';
+    this.underwaterActive=submerged;
+    this.updateWaterRenderSafety(info,submerged);
   }
 
   updateMovement(delta) {
@@ -4450,7 +4476,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     this.skyMaterial.uniforms.bottomColor.value.set(0x151d2d).lerp(horizonDay,daylight);
     this.renderer.setClearColor(this.skyMaterial.uniforms.topColor.value,1);
     this.renderer.toneMappingExposure=.58+daylight*.7;
-    if(this.waterMaterials) this.waterMaterials.forEach((m)=>{m.opacity=.62+daylight*.2;});
+    if(this.waterMaterials) this.waterMaterials.forEach((m)=>{if(this.underwaterActive)return;m.depthWrite=false;m.opacity=.62+daylight*.12;});
     if(this.state.world?.shadows&&this.sun?.shadow?.camera){this.sun.shadow.camera.updateProjectionMatrix();}
   }
 
@@ -5907,7 +5933,7 @@ handleOwnerInput(event){
 startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;this.updateRoleHud();const expected=(this.isOwnerActive&&!this.isPublicPlayerMode()&&this.state.ownerAppearance?.ownerBaseModel==='masked')?'maskedOwner':(this.isStaffActive&&!this.isPublicPlayerMode())?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();},3000);}
 
 startLoop() {
-    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.updateAmbientCreatures(delta,now);this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.smoothDynamicActors(delta,now);this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.updateUnderwaterVisual();this.updateWaypointMarkers();this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.inHouseInterior&&this.houseInteriorScene?this.houseInteriorScene:this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
+    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.updateAmbientCreatures(delta,now);this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.smoothDynamicActors(delta,now);this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.updateUnderwaterVisual();this.updateWaypointMarkers();this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost&&this.renderer?.getContext?.()?.isContextLost?.()!==true)this.renderer.render(this.inHouseInterior&&this.houseInteriorScene?this.houseInteriorScene:this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
   }
 
 resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(this.performancePixelRatio());this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
