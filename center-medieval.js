@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v294-owner-masked-skin-walk-run-idle';
+const CENTER_VERSION = '2026-08-09-jkgames-v295-missing-village-asset-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1397,7 +1397,7 @@ class CenterDynastyGame {
         }catch(error){throw {key,url,error};}
       }));
       const failed=loaded.filter((entry)=>entry.status==='rejected');
-      if(failed.length)console.warn(`Center-Assetpaket: ${failed.length} Datei(en) konnten nicht geladen werden.`,failed.map((entry)=>entry.reason));
+      if(failed.length){const details=failed.map((entry)=>entry.reason).map((reason)=>({key:reason?.key||'unbekannt',url:reason?.url||'',message:String(reason?.error?.message||reason?.error||'Unbekannter Ladefehler')}));console.warn(`Center-Assetpaket: ${failed.length} Datei(en) konnten nicht geladen werden.`,details);}
       return this.centerAssetTemplates;
     })();
     return this.centerAssetLoadPromise;
