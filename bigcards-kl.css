@@ -157,7 +157,7 @@ body.bigcards-kl-open{overflow:hidden!important}
 
 
 /* V341 – interaktiver Kartenkampf, Reparaturen und Exclusive-Combat-Balancing */
-.bc-card-art,.bc-slot-art,.bc-battle-icon{position:relative}
+.bc-card-art,.bc-battle-icon{position:relative}.bc-slot-art{position:absolute}
 .bc-card-crack{position:absolute!important;inset:0!important;z-index:12!important;pointer-events:none!important;overflow:hidden!important}
 .bc-card-crack:before{content:"";position:absolute;left:4%;right:5%;top:12%;height:18%;background:#111;opacity:.92;clip-path:polygon(0 42%,10% 30%,19% 52%,30% 32%,39% 60%,50% 35%,59% 55%,69% 29%,80% 51%,90% 31%,100% 45%,100% 55%,90% 43%,80% 63%,69% 41%,59% 68%,50% 47%,39% 72%,30% 44%,19% 64%,10% 42%,0 55%);transform:rotate(3deg);filter:drop-shadow(0 1px 1px rgba(255,255,255,.25))}
 .bc-inventory-card.broken,.bc-detail-card.broken,.bc-battle-fighter.broken{box-shadow:inset 0 0 0 3px rgba(25,25,25,.65),0 10px 24px rgba(20,20,20,.16)!important}
@@ -228,3 +228,22 @@ body.bigcards-kl-open{overflow:hidden!important}
 
 .bc-mod-grid label select+select{margin-top:1px}
 @media(max-width:700px){.bc-help-grid,.bc-shiny-info-steps{grid-template-columns:1fr}.bc-shop-panels article.bc-shop-info-card{padding-right:50px}.bc-atlas-toolbar .bc-field-actions>button[data-bc-smart]{width:100%!important;min-width:0!important}}
+
+
+/* V344 – Spielfeld-Layout-Fix, Daily-Haupt-XP und Kartenwerkstatt */
+/* Der Riss braucht nur einen positionierten Container; das Spielfeld-Artwork muss
+   weiterhin absolut links in der Karte sitzen. Dadurch bleibt das alte Kartendesign erhalten. */
+.bc-slot>.bc-slot-art{position:absolute!important}
+.bc-daily .bc-quest small strong{color:#1f6072;font-weight:1000}
+.bc-shop-dual-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:stretch;margin-top:auto}
+.bc-shop-dual-actions>button{margin:0!important}
+.bc-shop-dual-actions .bc-rep-short{min-width:58px;background:linear-gradient(180deg,#ef8a60,#d85b49)!important;color:#fff!important;border-color:#bd493b!important;font-weight:1000!important}
+.bc-repair-stock{display:block;margin-top:7px;color:#6c6658;font-size:9px;font-weight:850}
+.bc-repair-shop>small{font-size:9px;letter-spacing:.14em;font-weight:950;color:#776849}.bc-repair-shop h2{margin:4px 0 6px;font:900 30px Georgia,serif;color:#203b49}.bc-repair-shop>p{margin:0 0 12px;color:#5d5a50;font-size:11px;line-height:1.5}
+.bc-repair-kit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:52vh;overflow:auto;padding:2px 4px 4px 2px}
+.bc-repair-kit-grid article,.bc-exclusive-repair-kit{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px;border:2px solid var(--rar,#b9a675);border-radius:12px;box-shadow:0 4px 11px rgba(57,51,37,.10)}
+.bc-repair-kit-grid article>span,.bc-exclusive-repair-kit>span{font-size:27px}.bc-repair-kit-grid b,.bc-repair-kit-grid small,.bc-repair-kit-grid em,.bc-exclusive-repair-kit b,.bc-exclusive-repair-kit small,.bc-exclusive-repair-kit em{display:block}.bc-repair-kit-grid small,.bc-exclusive-repair-kit small{margin-top:2px;font-size:9px;line-height:1.35}.bc-repair-kit-grid em,.bc-exclusive-repair-kit em{margin-top:4px;font-size:9px;font-style:normal;font-weight:950}
+.bc-repair-kit-grid button,.bc-exclusive-repair-kit button{border:0;border-radius:9px;padding:8px 9px;background:#1f6072;color:#fff;font-size:9px;font-weight:950;cursor:pointer;white-space:nowrap}
+.bc-exclusive-repair-kit{margin-top:9px}.bc-repair-explain{display:grid;gap:3px;margin-top:10px;padding:10px;border-radius:11px;background:rgba(31,96,114,.08);border:1px solid rgba(31,96,114,.16);font-size:10px;line-height:1.45;color:#4e584f}
+.bc-repair-box-actions{display:grid;grid-template-columns:1fr auto;gap:7px}.bc-repair-box-actions button.secondary{background:#315d72}
+@media(max-width:700px){.bc-repair-kit-grid{grid-template-columns:1fr}.bc-repair-kit-grid article,.bc-exclusive-repair-kit{grid-template-columns:34px minmax(0,1fr)}.bc-repair-kit-grid button,.bc-exclusive-repair-kit button{grid-column:1/-1;width:100%}.bc-repair-box-actions{grid-template-columns:1fr}.bc-shop-dual-actions{grid-template-columns:1fr auto}}
