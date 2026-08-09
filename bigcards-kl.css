@@ -247,3 +247,155 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-exclusive-repair-kit{margin-top:9px}.bc-repair-explain{display:grid;gap:3px;margin-top:10px;padding:10px;border-radius:11px;background:rgba(31,96,114,.08);border:1px solid rgba(31,96,114,.16);font-size:10px;line-height:1.45;color:#4e584f}
 .bc-repair-box-actions{display:grid;grid-template-columns:1fr auto;gap:7px}.bc-repair-box-actions button.secondary{background:#315d72}
 @media(max-width:700px){.bc-repair-kit-grid{grid-template-columns:1fr}.bc-repair-kit-grid article,.bc-exclusive-repair-kit{grid-template-columns:34px minmax(0,1fr)}.bc-repair-kit-grid button,.bc-exclusive-repair-kit button{grid-column:1/-1;width:100%}.bc-repair-box-actions{grid-template-columns:1fr}.bc-shop-dual-actions{grid-template-columns:1fr auto}}
+
+/* V345 – Kartenkampf: Attacken direkt um VS + Scrollposition bei jedem Zug erhalten */
+.bc-battle-arena.active-fight{
+  grid-template-columns:minmax(190px,1fr) minmax(250px,.9fr) minmax(190px,1fr);
+  gap:12px;
+  align-items:center;
+}
+.bc-battle-center-controls{
+  align-self:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  min-width:0;
+  padding:10px 6px;
+  text-align:center;
+}
+.bc-battle-turn-state{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:28px;
+  padding:6px 11px;
+  border-radius:999px;
+  background:#183f4f;
+  color:#fff;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.09em;
+  box-shadow:0 4px 10px rgba(23,58,72,.18);
+}
+.bc-battle-turn-state.enemy{background:#5b3232}
+.bc-battle-control-row{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(82px,1fr) 72px minmax(82px,1fr);
+  align-items:center;
+  justify-items:center;
+  gap:7px;
+}
+.bc-battle-action-side{
+  min-width:0;
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.bc-battle-action-side.special-side.count-2,
+.bc-battle-action-side.special-side.count-3,
+.bc-battle-action-side.special-side.count-4{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:5px;
+}
+.bc-battle-orb{
+  appearance:none;
+  -webkit-appearance:none;
+  width:88px;
+  height:88px;
+  min-width:88px;
+  border-radius:50%;
+  border:3px solid #123f50;
+  padding:7px 5px 6px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  background:radial-gradient(circle at 36% 28%,#fffaf0 0 18%,#dcebe9 43%,#91bac1 100%);
+  color:#12394a;
+  box-shadow:0 5px 0 #0e3445,0 10px 20px rgba(18,52,69,.20);
+  cursor:pointer;
+  transform:translateY(0);
+  transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;
+}
+.bc-battle-orb.special{
+  border-color:#b66d27;
+  background:radial-gradient(circle at 36% 28%,#fff8e7 0 18%,#f4d9a2 45%,#e99c4f 100%);
+  color:#613215;
+  box-shadow:0 5px 0 #9a5620,0 10px 20px rgba(133,76,28,.22);
+}
+.bc-battle-orb:hover:not(:disabled){transform:translateY(-2px)}
+.bc-battle-orb:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 #0e3445,0 5px 10px rgba(18,52,69,.16)}
+.bc-battle-orb.special:active:not(:disabled){box-shadow:0 2px 0 #9a5620,0 5px 10px rgba(133,76,28,.16)}
+.bc-battle-orb>span{font-size:25px;line-height:1;margin-bottom:3px}
+.bc-battle-orb>b{display:block;max-width:76px;font-size:9px;line-height:1.05;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-battle-orb>small{display:block;max-width:72px;margin-top:3px;font-size:6.5px;line-height:1.05;font-weight:850;text-align:center;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-battle-orb:disabled{opacity:.38;filter:grayscale(.58);cursor:not-allowed;transform:none}
+.bc-battle-action-side.special-side.count-2 .bc-battle-orb,
+.bc-battle-action-side.special-side.count-3 .bc-battle-orb,
+.bc-battle-action-side.special-side.count-4 .bc-battle-orb{
+  width:68px;
+  height:68px;
+  min-width:68px;
+  border-width:2px;
+  box-shadow:0 4px 0 #9a5620,0 7px 14px rgba(133,76,28,.18);
+}
+.bc-battle-action-side.special-side.count-2 .bc-battle-orb>span,
+.bc-battle-action-side.special-side.count-3 .bc-battle-orb>span,
+.bc-battle-action-side.special-side.count-4 .bc-battle-orb>span{font-size:19px}
+.bc-battle-action-side.special-side.count-2 .bc-battle-orb>b,
+.bc-battle-action-side.special-side.count-3 .bc-battle-orb>b,
+.bc-battle-action-side.special-side.count-4 .bc-battle-orb>b{max-width:58px;font-size:7px}
+.bc-battle-action-side.special-side.count-2 .bc-battle-orb>small,
+.bc-battle-action-side.special-side.count-3 .bc-battle-orb>small,
+.bc-battle-action-side.special-side.count-4 .bc-battle-orb>small{max-width:55px;font-size:5.5px}
+.bc-battle-vs.compact{min-height:0}
+.bc-battle-vs.compact span{width:66px;height:66px;font-size:24px}
+.bc-battle-vs.compact small{margin-top:8px;font-size:8px;font-weight:950}
+.bc-battle-no-special{
+  width:76px;
+  height:76px;
+  border-radius:50%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  border:2px dashed rgba(87,75,56,.34);
+  color:#81735f;
+  background:rgba(255,250,235,.52);
+}
+.bc-battle-no-special>span{font-size:22px}.bc-battle-no-special>small{font-size:7px;font-weight:900}
+.bc-battle-center-controls>p{margin:0;max-width:230px;color:#6d6557;font-size:8px;font-weight:800;line-height:1.25}
+.bc-battle-live-panel{
+  margin-top:12px;
+  padding:11px 13px;
+  border-radius:16px;
+  background:rgba(255,249,229,.90);
+  border:2px solid #bca873;
+}
+.bc-battle-live-panel>div:first-child{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}.bc-battle-live-panel>div:first-child small{font-size:8px;letter-spacing:.1em;font-weight:950;color:#7b6b4c}.bc-battle-live-panel>div:first-child b{font-size:12px}
+
+/* Bei der typischen Desktop-Spielbreite um 800 px bleiben Karte – Attacken/VS – Karte nebeneinander. */
+@media (min-width:681px) and (max-width:900px){
+  .bc-battle-arena.active-fight{grid-template-columns:minmax(180px,1fr) minmax(220px,.9fr) minmax(180px,1fr)!important;gap:8px}
+  .bc-battle-control-row{grid-template-columns:minmax(70px,1fr) 58px minmax(70px,1fr);gap:4px}
+  .bc-battle-orb{width:76px;height:76px;min-width:76px}
+  .bc-battle-vs.compact span{width:54px;height:54px;font-size:20px}
+  .bc-battle-action-side.special-side.count-2 .bc-battle-orb,
+  .bc-battle-action-side.special-side.count-3 .bc-battle-orb,
+  .bc-battle-action-side.special-side.count-4 .bc-battle-orb{width:58px;height:58px;min-width:58px}
+}
+@media(max-width:680px){
+  .bc-battle-arena.active-fight{grid-template-columns:1fr!important}
+  .bc-battle-center-controls{order:2;padding:9px 0}
+  .bc-battle-arena.active-fight .bc-battle-fighter:first-child{order:1}
+  .bc-battle-arena.active-fight .bc-battle-fighter.enemy{order:3}
+  .bc-battle-control-row{max-width:340px;grid-template-columns:1fr 64px 1fr}
+}
