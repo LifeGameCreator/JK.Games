@@ -30,3 +30,64 @@ body.bigcards-kl-open{overflow:hidden!important}
 /* V332 Top-Games-Liste bleibt mit dem neuen Eintrag auf PC und Handy vollständig erreichbar. */
 .topgames-launcher{max-height:min(74vh,820px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:3px}
 .bc-inventory-card.unknown{filter:saturate(.35);opacity:.68;cursor:default}.bc-inventory-card.unknown .bc-card-art{background:linear-gradient(145deg,#353c3b,#151d20)!important;color:#8d9994}.bc-inventory-card.unknown>b{letter-spacing:.12em}
+
+
+/* BigCards.kl V333 – Reveal badge, legibility, scroll memory and Shiny manager fixes */
+.bc-reveal-card .bc-card-art{position:relative!important}
+.bc-reveal-card .bc-card-art em{right:7px!important;top:7px!important;z-index:3}
+.bc-auto-opener select,.bc-auto-opener button{color:#172128!important}
+.bc-auto-opener select option{color:#111820!important;background:#fff3d8!important}
+.bc-auto-opener button.active{color:#fff!important}
+.bc-market-own{color:#343a3d}
+.bc-market-own button{color:#343a3d!important}
+.bc-market-own button small{color:#66615b!important}
+.bc-shiny-card-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:12px}
+.bc-shiny-card-list button{border:1px solid #bca873;border-radius:10px;background:#fff7df;color:#26343a;padding:10px;text-align:left;cursor:pointer}
+.bc-shiny-card-list b,.bc-shiny-card-list small{display:block}.bc-shiny-card-list small{margin-top:4px;color:#69645b}
+
+
+/* BigCards.kl V334 – kräftigere Raritäten, manuelles Pack-Opening, stabile Badges */
+.bc-pack-card[class*="rar-"],.bc-rarity-tabs button[class*="rar-"]{position:relative;isolation:isolate;overflow:hidden;border-width:2px!important;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}
+.bc-pack-card[class*="rar-"]::before,.bc-rarity-tabs button[class*="rar-"]::before{content:"";position:absolute;inset:-45%;z-index:-1;pointer-events:none;background:conic-gradient(from 0deg,transparent 0 18%,rgba(255,255,255,.52) 24%,transparent 31% 62%,rgba(255,255,255,.28) 70%,transparent 77%);animation:bcRarityOrbit 7s linear infinite;opacity:.42}
+.bc-pack-card[class*="rar-"]::after,.bc-rarity-tabs button[class*="rar-"]::after{content:"✦  ·  ✧";position:absolute;right:7px;top:5px;z-index:-1;letter-spacing:5px;font-size:12px;color:rgba(255,255,255,.75);text-shadow:0 0 8px currentColor;animation:bcRaritySpark 2.4s ease-in-out infinite;pointer-events:none}
+.bc-pack-card[class*="rar-"]:hover{transform:translateY(-3px);filter:saturate(1.18) brightness(1.03)}
+
+.rar-common{--rar:#8c96a3;background:linear-gradient(135deg,#f9fafb,#bdc7d2 52%,#f1f4f7)!important;color:#14202a!important;border-color:#8b98a7!important;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7),0 7px 20px rgba(90,105,120,.24)!important}
+.rar-uncommon{--rar:#00c853;background:linear-gradient(135deg,#b7ffca,#25d56a 52%,#ecfff2)!important;color:#053d1a!important;border-color:#00a73f!important;box-shadow:0 0 20px rgba(0,208,83,.32),inset 0 0 0 2px rgba(255,255,255,.42)!important}
+.rar-rare{--rar:#1688ff;background:linear-gradient(135deg,#b9e4ff,#1688ff 48%,#d9f2ff)!important;color:#062d56!important;border-color:#0071dc!important;box-shadow:0 0 22px rgba(0,125,255,.38),inset 0 0 0 2px rgba(255,255,255,.4)!important}
+.rar-epic{--rar:#a63cff;background:linear-gradient(135deg,#e8c4ff,#9c2cff 46%,#ffb8f1)!important;color:#3d075d!important;border-color:#8520df!important;box-shadow:0 0 24px rgba(165,57,255,.42),inset 0 0 0 2px rgba(255,255,255,.38)!important}
+.rar-legendary{--rar:#ff8a00;background:linear-gradient(135deg,#ffe4a0,#ff8a00 48%,#ffca54)!important;color:#542800!important;border-color:#df6f00!important;box-shadow:0 0 26px rgba(255,130,0,.44),inset 0 0 0 2px rgba(255,247,214,.5)!important}
+.rar-special{--rar:#ff2449;background:linear-gradient(135deg,#ffb1bd,#ff2449 48%,#ff785a)!important;color:#560514!important;border-color:#db0f35!important;box-shadow:0 0 27px rgba(255,36,73,.44),inset 0 0 0 2px rgba(255,255,255,.36)!important}
+.rar-mythic{--rar:#ffd000;background:linear-gradient(135deg,#fff1a0,#ffd000 43%,#ff8d19 78%,#fff2b5)!important;color:#513600!important;border-color:#e7a900!important;box-shadow:0 0 29px rgba(255,201,0,.48),inset 0 0 0 2px rgba(255,255,255,.44)!important}
+.rar-exotic{--rar:#00f0e8;background:linear-gradient(135deg,#9efffb,#00cfc8 42%,#23f0a5 72%,#d3fffb)!important;color:#004b4d!important;border-color:#00aaa7!important;box-shadow:0 0 30px rgba(0,226,216,.5),inset 0 0 0 2px rgba(255,255,255,.45)!important}
+.rar-universe{--rar:#725cff;background:linear-gradient(120deg,#08051e,#281477,#14a5e9,#7e43ff,#08051e)!important;background-size:320% 320%!important;color:#fff!important;border-color:#8b74ff!important;box-shadow:0 0 34px rgba(83,65,255,.58),inset 0 0 24px rgba(62,194,255,.24)!important;animation:bcGalaxy 6s ease infinite!important}
+.rar-blackhole{--rar:#d14cff;background:radial-gradient(circle at 50% 48%,#000 0 20%,#4b055a 23%,#fd5be7 25%,#13021c 31%,#020207 62%,#4b075b 100%)!important;color:#fff0ff!important;border-color:#d85bff!important;box-shadow:0 0 38px rgba(197,62,255,.62),inset 0 0 30px rgba(255,66,226,.19)!important;animation:bcBlackHolePulse 3.6s ease-in-out infinite!important}
+.rar-galaxy{--rar:#ff49ca;background:linear-gradient(125deg,#080319,#561068,#ff3aaf,#1253a5,#6e2fff,#080319)!important;background-size:360% 360%!important;color:#fff!important;border-color:#ff64d9!important;box-shadow:0 0 40px rgba(255,50,194,.58),inset 0 0 30px rgba(78,128,255,.2)!important;animation:bcGalaxy 5.2s ease infinite!important}
+.rar-cosmic{--rar:#ffb000;background:linear-gradient(120deg,#190026,#8e155d,#ff4b16,#ffd84e,#302080,#190026)!important;background-size:360% 360%!important;color:#fff!important;border-color:#ffd34d!important;box-shadow:0 0 44px rgba(255,107,25,.62),0 0 22px rgba(118,45,255,.45),inset 0 0 25px rgba(255,229,102,.18)!important;animation:bcGalaxy 4.5s ease infinite!important}
+.rar-godly{--rar:#fff06a;background:linear-gradient(120deg,#fffceb,#ffd443,#fff,#e7a411,#fff3a1,#fffceb)!important;background-size:360% 360%!important;color:#472b00!important;border-color:#fff59e!important;box-shadow:0 0 50px rgba(255,220,70,.82),0 0 22px rgba(255,255,255,.85),inset 0 0 28px rgba(255,255,255,.65)!important;animation:bcGodly 3.6s ease infinite!important}
+
+.bc-pack-stage,.bc-reveal-stage{overflow:hidden!important;scrollbar-width:none!important}
+.bc-pack-stage::-webkit-scrollbar,.bc-reveal-stage::-webkit-scrollbar,.bc-pack-summary::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+.bc-pack-summary{scrollbar-width:none!important}
+.bc-pack-object{border:0;cursor:pointer;position:relative;z-index:2}
+.bc-pack-object:hover{transform:translateY(-7px) scale(1.025)!important;filter:brightness(1.08)}
+.bc-pack-tap{display:inline-block;margin-top:5px;padding:8px 13px;border-radius:999px;background:rgba(23,62,80,.13);color:#173e50;font-size:11px;letter-spacing:.08em;animation:bcTapPulse 1.3s ease-in-out infinite}
+.exclusive-pack .bc-pack-tap{color:#ffe9e7;background:rgba(255,255,255,.1)}
+.bc-reveal-card .bc-card-art{position:relative!important;isolation:isolate!important}
+.bc-reveal-card .bc-card-art .bc-reveal-status{position:absolute!important;right:8px!important;top:8px!important;left:auto!important;bottom:auto!important;transform:none!important;margin:0!important;z-index:20!important;display:block!important;float:none!important;line-height:1!important;background:#e44b45!important;color:white!important;border:2px solid rgba(255,255,255,.9)!important;box-shadow:0 4px 12px rgba(0,0,0,.25)!important}
+.bc-reveal-card .bc-card-art .bc-reveal-status.is-dupe{background:#5c6673!important}
+.bc-mini-card{position:relative;padding-top:27px!important;border:2px solid var(--rar,rgba(0,0,0,.1))!important}
+.bc-mini-status{position:absolute;top:5px;right:6px;border-radius:999px;padding:3px 6px;font-size:8px;font-weight:1000;letter-spacing:.04em;background:#e44b45;color:#fff;box-shadow:0 2px 7px rgba(0,0,0,.18)}
+.bc-mini-status.is-dupe{background:#596474}
+.bc-auto em{display:block;margin-top:5px;font-size:9px;font-style:normal;color:#5b665d}
+.bc-auto button:disabled{opacity:.58;cursor:not-allowed}
+@keyframes bcRarityOrbit{to{transform:rotate(360deg)}}
+@keyframes bcRaritySpark{0%,100%{opacity:.25;transform:translateY(1px)}50%{opacity:.95;transform:translateY(-2px)}}
+@keyframes bcBlackHolePulse{0%,100%{filter:saturate(1) brightness(.95)}50%{filter:saturate(1.35) brightness(1.15)}}
+@keyframes bcTapPulse{0%,100%{transform:scale(1);opacity:.72}50%{transform:scale(1.05);opacity:1}}
+
+/* V335 – sichtbare Exemplar-/Duplikat-Anzahl direkt auf Albumkarten */
+.bc-inventory-card .bc-card-art .bc-copy-count{position:absolute;right:7px;top:7px;left:auto;bottom:auto;z-index:8;display:flex;flex-direction:column;align-items:flex-end;gap:1px;background:rgba(18,29,35,.88);color:#fff;border:1px solid rgba(255,255,255,.72);border-radius:9px;padding:5px 7px;font-style:normal;line-height:1;box-shadow:0 4px 12px rgba(0,0,0,.22)}
+.bc-inventory-card .bc-card-art .bc-copy-count strong{font-size:13px;line-height:1}.bc-inventory-card .bc-card-art .bc-copy-count small{font-size:8px;white-space:nowrap;color:#fff;opacity:.92}
+.bc-inventory-card .bc-card-art .bc-favorite-badge{position:absolute;left:7px;right:auto;top:7px;z-index:7;background:#e64c47;color:#fff;font-size:10px;padding:4px 6px;border-radius:6px;font-style:normal;font-weight:900}
+.bc-detail-actions button.bc-remove-field{background:#8b5b24;color:#fff}
