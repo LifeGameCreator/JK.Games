@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v290-clouds-no-sky-trees-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v291-own-clouds-remove-legacy-sky-trees';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1464,28 +1464,44 @@ class CenterDynastyGame {
 
   installNatureClouds(){
     if(!this.cloudGroup)return;
+    // V291: Alle alten/importierten Himmel-Objekte werden verworfen.
+    // Wolken bestehen nur noch aus eigener prozeduraler Geometrie.
+    for(const child of [...this.cloudGroup.children])child.removeFromParent?.();
     this.cloudGroup.clear();
-    // V258: Keine Cloud-Nodes mehr aus dem Baum/Wolken-Pack. Einige davon
-    // enthielten importierte Zweige/Objekte und erschienen als schwebende Stöcke.
-    // Die Wolken werden vollständig prozedural und damit sauber kontrollierbar gebaut.
-    const rnd=seededRandom(WORLD_SEED+7401);
-    const cloudGeo=new THREE.IcosahedronGeometry(1,2);
-    for(let i=0;i<18;i+=1){
-      const cloud=new THREE.Group();cloud.name='center-procedural-cloud';cloud.userData.baseOpacity=.28+rnd()*.16;
-      const puffCount=5+Math.floor(rnd()*4);
+    const rnd=seededRandom(WORLD_SEED+2917401);
+    const cloudGeo=new THREE.SphereGeometry(1,14,9);
+    const cloudCount=this.isMobile?14:22;
+    for(let i=0;i<cloudCount;i+=1){
+      const cloud=new THREE.Group();cloud.name='center-v291-own-cloud';cloud.userData.baseOpacity=.34+rnd()*.16;
+      const puffCount=6+Math.floor(rnd()*5);
       for(let p=0;p<puffCount;p+=1){
-        const mat=new THREE.MeshStandardMaterial({color:0xf0f3f5,roughness:1,metalness:0,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
-        const puff=new THREE.Mesh(cloudGeo,mat);
-        const sx=4.8+rnd()*5.8,sy=1.7+rnd()*2.4,sz=3.2+rnd()*4.8;
-        puff.scale.set(sx,sy,sz);
-        puff.position.set((p-(puffCount-1)/2)*(3.8+rnd()*1.4)+(rnd()-.5)*2.2,(rnd()-.5)*1.7,(rnd()-.5)*4.2);
+        const mat=new THREE.MeshStandardMaterial({color:0xf5f7fa,roughness:1,metalness:0,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
+        const puff=new THREE.Mesh(cloudGeo,mat);puff.name='center-v291-cloud-puff';
+        const centerFactor=1-Math.min(1,Math.abs(p-(puffCount-1)/2)/Math.max(1,puffCount*.5));
+        puff.scale.set(4.0+rnd()*4.5+centerFactor*2.0,1.45+rnd()*1.35+centerFactor*.55,3.0+rnd()*3.7);
+        puff.position.set((p-(puffCount-1)/2)*(2.9+rnd()*.95)+(rnd()-.5)*1.8,(rnd()-.5)*1.1+centerFactor*.4,(rnd()-.5)*3.8);
         cloud.add(puff);
       }
-      cloud.position.set(-305+rnd()*610,78+rnd()*58,-245+rnd()*490);
-      cloud.rotation.y=rnd()*Math.PI*2;
-      cloud.scale.setScalar(.72+rnd()*.58);
+      cloud.position.set(-330+rnd()*660,76+rnd()*50,-270+rnd()*540);
+      cloud.rotation.y=rnd()*Math.PI*2;cloud.scale.setScalar(.8+rnd()*.58);
       this.cloudGroup.add(cloud);
     }
+    this.removeLegacyAirNature(true);
+  }
+
+  removeLegacyAirNature(force=false){
+    const now=performance.now();if(!force&&now-(this.lastLegacyAirNatureCleanupAt||0)<1000)return;this.lastLegacyAirNatureCleanupAt=now;
+    const legacyNames=new Set(['ARVORE_SEM','Branches01','Componen12','Group23','Group27','Group4','Group5','Group6']);
+    const kill=[];
+    this.scene?.traverse?.((node)=>{
+      if(!node||node===this.cloudGroup||node.parent===this.cloudGroup)return;
+      const name=String(node.name||'');
+      if(!(name==='asset-tree'||legacyNames.has(name)||/baum.?wolken|cloud.?tree|sky.?tree/i.test(name)))return;
+      const wp=node.getWorldPosition?.(new THREE.Vector3());if(!wp)return;
+      const ground=terrainHeightAt(wp.x,wp.z);
+      if(wp.y>ground+10||wp.y>68)kill.push(node);
+    });
+    for(const node of kill)node.removeFromParent?.();
   }
 
 decorateChunkWithAssetTrees(chunk){
@@ -1530,7 +1546,7 @@ decorateChunkWithAssetTrees(chunk){
     const glowCanvas=document.createElement('canvas');glowCanvas.width=128;glowCanvas.height=128;const glowCtx=glowCanvas.getContext('2d');const grad=glowCtx.createRadialGradient(64,64,3,64,64,62);grad.addColorStop(0,'rgba(255,244,188,1)');grad.addColorStop(.25,'rgba(255,213,104,.8)');grad.addColorStop(1,'rgba(255,176,52,0)');glowCtx.fillStyle=grad;glowCtx.fillRect(0,0,128,128);const glowTex=new THREE.CanvasTexture(glowCanvas);glowTex.colorSpace=THREE.SRGBColorSpace;this.sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));this.sunGlow.scale.set(70,70,1);this.sunGlow.renderOrder=3;this.scene.add(this.sunGlow);
     this.moonMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,fog:false,uniforms:{phase:{value:.5},glow:{value:new THREE.Color(0xdce8ff)}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'uniform float phase;uniform vec3 glow;varying vec2 vUv;void main(){vec2 p=vUv*2.0-1.0;float r=dot(p,p);if(r>1.0)discard;float edge=smoothstep(1.0,.82,r);float shift=(phase-.5)*1.7;float lit=smoothstep(-.08,.08,p.x+shift);if(phase>.5)lit=1.0-lit;float full=1.0-abs(phase-.5)*2.0;float mask=max(full,lit*(1.0-full));gl_FragColor=vec4(glow,edge*mask*.96);}' });
     this.moonDisc=new THREE.Mesh(new THREE.PlaneGeometry(15,15),this.moonMaterial);this.moonDisc.renderOrder=3;this.scene.add(this.moonDisc);
-    this.cloudGroup=new THREE.Group();this.cloudGroup.name='center-asset-clouds';this.scene.add(this.cloudGroup);
+    this.cloudGroup=new THREE.Group();this.cloudGroup.name='center-v291-procedural-clouds';this.scene.add(this.cloudGroup);
     const starGeo=new THREE.BufferGeometry(),starPos=new Float32Array(750*3);for(let i=0;i<750;i+=1){const a=Math.random()*Math.PI*2,b=Math.acos(Math.random()*.82+.18),r=700;starPos[i*3]=Math.sin(b)*Math.cos(a)*r;starPos[i*3+1]=Math.cos(b)*r;starPos[i*3+2]=Math.sin(b)*Math.sin(a)*r;}starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));this.starMaterial=new THREE.PointsMaterial({color:0xffffff,size:1.15,transparent:true,opacity:0,depthWrite:false,fog:false});this.stars=new THREE.Points(starGeo,this.starMaterial);this.scene.add(this.stars);
     this.scene.add(new THREE.AmbientLight(0xffffff, .18));
   }
@@ -3730,7 +3746,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     if(this.sunGlow){this.sunGlow.position.copy(this.sunDisc.position);this.sunGlow.visible=this.sunDisc.visible;this.sunGlow.material.opacity=clamp((sunAltitude+.12)*2.5,0,1);}
     if(this.moonDisc){this.moonDisc.position.copy(moonVector).normalize().multiplyScalar(700).add(skyOrigin);this.moonDisc.lookAt(this.camera.position);this.moonDisc.visible=moonAltitude>-.1;const lunarDay=((this.state.day-1)%29.53)/29.53;this.moonMaterial.uniforms.phase.value=lunarDay;}
     if(this.starMaterial)this.starMaterial.opacity=clamp((.38-daylight)*3.1,0,.92);
-    if(this.cloudGroup){const weatherCloud={clear:.16,cloudy:.62,rain:.82,storm:.94,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.forEach((cloud)=>{cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2);if(cloud.position.x>320)cloud.position.x=-320;cloud.traverse((node)=>{if(!node.isMesh)return;const mats=Array.isArray(node.material)?node.material:[node.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=(cloud.userData.baseOpacity||.4)*weatherCloud*(daylight*.5+.32);mat.color?.set?.(this.state.weather==='storm'?0x59616b:0xe7edf2);}});});}
+    this.removeLegacyAirNature(false);
+    if(this.cloudGroup){const weatherCloud={clear:.16,cloudy:.62,rain:.82,storm:.94,snow:.72}[this.state.weather]??.3;this.cloudGroup.visible=weatherCloud>.05;this.cloudGroup.children.slice().forEach((cloud)=>{if(cloud.name!=='center-v291-own-cloud'){cloud.removeFromParent();return;}cloud.position.x+=delta*(this.state.weather==='storm'?8:2.2);if(cloud.position.x>320)cloud.position.x=-320;cloud.traverse((node)=>{if(!node.isMesh)return;const mats=Array.isArray(node.material)?node.material:[node.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=(cloud.userData.baseOpacity||.4)*weatherCloud*(daylight*.5+.32);mat.color?.set?.(this.state.weather==='storm'?0x59616b:0xe7edf2);}});});}
     const season=SEASONS[this.state.season];
     const nightColor=new THREE.Color(0x071225);
     const clearDay=new THREE.Color(season.sky);
