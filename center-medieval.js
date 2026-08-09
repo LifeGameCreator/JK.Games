@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v298-house-door-hitbox-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v299-player-markers-village-pack-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -31,7 +31,7 @@ const GRAPHICS_QUALITIES = Object.freeze(['minimal','performance','low','medium'
 const SHADOW_MODES = Object.freeze(['off','character','world']);
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const OWNER_MAX_SPEED_MULTIPLIER = 12;
-const DEFAULT_KEYBINDS = Object.freeze({ overview:'KeyM', inventory:'KeyI', crafting:'KeyC', building:'KeyB', perspective:'KeyV', interact:'KeyE', jump:'Space', staffMenu:'Period', vanish:'KeyG', god:'KeyH', fly:'KeyF', transform:'KeyT' });
+const DEFAULT_KEYBINDS = Object.freeze({ overview:'KeyM', inventory:'KeyI', crafting:'KeyC', building:'KeyB', marker:'KeyP', perspective:'KeyV', interact:'KeyE', jump:'Space', staffMenu:'Period', vanish:'KeyG', god:'KeyH', fly:'KeyF', transform:'KeyT' });
 const KEYBIND_OPTIONS = Object.freeze(['KeyM','KeyI','KeyC','KeyB','KeyV','KeyE','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','KeyO','KeyP','KeyR','KeyT','KeyU','KeyY','Period','NumpadDecimal','Space']);
 const KEYBIND_LABELS = Object.freeze({KeyM:'M',KeyI:'I',KeyC:'C',KeyB:'B',KeyV:'V',KeyE:'E',KeyF:'F',KeyG:'G',KeyH:'H',KeyJ:'J',KeyK:'K',KeyL:'L',KeyO:'O',KeyP:'P',KeyR:'R',KeyT:'T',KeyU:'U',KeyY:'Y',Period:'.',NumpadDecimal:'Numpad .',Space:'Leertaste'});
 const STAFF_ROLE_LEVELS = Object.freeze({ player: 0, supporter: 1, moderator: 2, admin: 3, owner: 4 });
@@ -149,7 +149,7 @@ const CENTER_ASSET_PATHS = Object.freeze({
   ownerWings: `${CENTER_ASSET_ROOT}angel_wings.glb?v=20260808-v264`,
   staffCape: `./staff-cape-v282.glb?v=20260809-v282`,
   staffPlane: `${CENTER_ASSET_ROOT}saegelflugzeug.glb?v=20260808-v264`,
-  villageHousePack: `./village-house-pack-v292.glb?v=20260809-v292`,
+  villageHousePack: `./village-house-pack-v299.glb?v=20260809-v299`,
   playerHouseLevel1: `./player-house-level1-v293.glb?v=20260809-v293`,
   playerHouseLevel2: `./player-house-level2-v293.glb?v=20260809-v293`,
   playerHouseLevel3: `./player-house-level3-v293.glb?v=20260809-v293`,
@@ -307,7 +307,7 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 8,
+    version: 9,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
     world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 2, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
     day: 1,
@@ -323,6 +323,7 @@ function defaultSaveState() {
     equippedTool: '',
     ownerAppearance: { skin: 'normal', ownerBaseModel: 'default', staffSkinTheme: 'none', aura: false, auraTheme: 'owner', size: 1, heldItem: 'none', heldItemTheme: 'owner', cape: false, capeTheme: 'owner', cloak: false, cloakTheme: 'owner', hat: false, hatTheme: 'owner', vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0, publicMode: 'staff', publicGender: 'male', publicAlias: 'Center Spieler', staffMaxHealth: 500, staffDamage: 180 },
     keybinds: { ...DEFAULT_KEYBINDS },
+    markers: [],
     deathLoot: null,
     tutorial: { done: false, step: 'sticks', sticks: 0, stones: 0, berries: 0, mushrooms: 0, treeChopped: false },
     xp: 0,
@@ -400,6 +401,13 @@ function normalizeSaveState(raw) {
   state.horseTamed = !!raw.horseTamed;
   state.keybinds = { ...DEFAULT_KEYBINDS, ...(raw.keybinds || {}) };
   for (const [action, fallback] of Object.entries(DEFAULT_KEYBINDS)) if (!KEYBIND_OPTIONS.includes(state.keybinds[action])) state.keybinds[action] = fallback;
+  state.markers = Array.isArray(raw.markers) ? raw.markers.slice(0,30).map((entry,index)=>{
+    if(!entry||typeof entry!=='object')return null;
+    const x=Number(entry.x),z=Number(entry.z);if(!Number.isFinite(x)||!Number.isFinite(z))return null;
+    const id=String(entry.id||`marker-${index}-${Math.abs(Math.floor(x*17+z*31))}`).replace(/[^a-z0-9_-]/gi,'').slice(0,48)||`marker-${index}`;
+    const name=String(entry.name||`Markierung ${index+1}`).trim().slice(0,32)||`Markierung ${index+1}`;
+    return {id,name,x:clamp(x,-WORLD_HALF+8,WORLD_HALF-8),z:clamp(z,-WORLD_HALF+8,WORLD_HALF-8),createdAt:Math.max(0,Number(entry.createdAt)||Date.now())};
+  }).filter(Boolean) : [];
   state.deathLoot = raw.deathLoot && typeof raw.deathLoot === 'object' && Number(raw.deathLoot.expiresAt||0) > Date.now() ? raw.deathLoot : null;
   state.skills = { ...base.skills, ...(raw.skills || {}) };
   state.placeables = { ...base.placeables, ...(raw.placeables || {}) };
@@ -684,6 +692,11 @@ class CenterDynastyGame {
     this.oceanFish = [];
     this.lakeZones = [];
     this.villageHouseVariantTemplates = new Map();
+    this.waypointElements = new Map();
+    this.waypointLayer = null;
+    this.waypointForward = new THREE.Vector3();
+    this.waypointWorld = new THREE.Vector3();
+    this.waypointProjected = new THREE.Vector3();
     this.inHouseInterior = false;
     this.houseInteriorScene = null;
     this.houseInteriorRoot = null;
@@ -896,6 +909,7 @@ class CenterDynastyGame {
       <aside class="mdc-quest-card" data-mdc-quest></aside>
       <div class="mdc-compass"><span>W</span><strong data-mdc-compass>N</strong><span>O</span></div>
       <canvas class="mdc-minimap" data-mdc-minimap width="220" height="220"></canvas>
+      <div data-mdc-waypoint-layer aria-hidden="true" style="position:absolute;inset:0;z-index:18;pointer-events:none;overflow:hidden"></div>
       <div class="c3d-loading mdc-loading" data-c3d-loading>
         <div class="c3d-loading-card">
           <div class="mdc-loading-scene"><i class="mountain one"></i><i class="mountain two"></i><i class="hut"></i><i class="tree a"></i><i class="tree b"></i><i class="tree c"></i></div>
@@ -961,6 +975,7 @@ class CenterDynastyGame {
     this.joystickKnob = overlay.querySelector('[data-c3d-joystick-knob]');
     this.sprintButton = overlay.querySelector('[data-c3d-sprint]');
     this.minimap = overlay.querySelector('[data-mdc-minimap]');
+    this.waypointLayer = overlay.querySelector('[data-mdc-waypoint-layer]');
     this.needsElement = overlay.querySelector('[data-mdc-needs]');
     this.questElement = overlay.querySelector('[data-mdc-quest]');
     this.hotbarElement = overlay.querySelector('[data-mdc-hotbar]');
@@ -1074,6 +1089,7 @@ class CenterDynastyGame {
       if (event.code === binds.inventory && !event.repeat) { this.toggleManagement('inventory'); return; }
       if (event.code === binds.crafting && !event.repeat) { this.toggleManagement('crafting'); return; }
       if (event.code === binds.building && !event.repeat) { this.toggleManagement('building'); return; }
+      if (event.code === binds.marker && !event.repeat) { this.createWaypointMarker('',true); return; }
       if (!event.repeat && this.isStaffActive && event.code===binds.vanish && this.canStaff('vanish')) { this.toggleStaffFlag('vanish'); return; }
       if (!event.repeat && this.isStaffActive && event.code===binds.god && this.canStaff('god')) { this.toggleStaffFlag('god'); return; }
       if (!event.repeat && this.isStaffActive && event.code===binds.fly && this.canStaff('fly')) { this.toggleStaffFlag('fly'); return; }
@@ -1397,7 +1413,11 @@ class CenterDynastyGame {
         }catch(error){throw {key,url,error};}
       }));
       const failed=loaded.filter((entry)=>entry.status==='rejected');
-      if(failed.length){const details=failed.map((entry)=>entry.reason).map((reason)=>({key:reason?.key||'unbekannt',url:reason?.url||'',message:String(reason?.error?.message||reason?.error||'Unbekannter Ladefehler')}));console.warn(`Center-Assetpaket: ${failed.length} Datei(en) konnten nicht geladen werden.`,details);}
+      if(failed.length){
+        const details=failed.map((entry)=>entry.reason).map((reason)=>({key:reason?.key||'unbekannt',url:reason?.url||'',message:String(reason?.error?.message||reason?.error||'Unbekannter Ladefehler')}));
+        console.warn(`Center-Assetpaket: ${failed.length} Datei(en) konnten nicht geladen werden.`,details);
+        for(const detail of details)console.error(`[CENTER ASSET FEHLT] ${detail.key} · ${detail.url} · ${detail.message}`);
+      }
       return this.centerAssetTemplates;
     })();
     return this.centerAssetLoadPromise;
@@ -4609,8 +4629,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     this.keys.clear();
     this.input.forward=0;
     this.input.right=0;
-    const tabs=['overview','inventory','crafting','building','skills','village','dynasty','map','settings'];
-    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',dynasty:'Dynastie',map:'Karte',settings:'Welt'};
+    const tabs=['overview','inventory','crafting','building','skills','village','dynasty','map','settings','markers'];
+    const labels={overview:'Übersicht',inventory:'Inventar',crafting:'Herstellen',building:'Bauen',skills:'Fähigkeiten',village:'Dorf',dynasty:'Dynastie',map:'Karte',settings:'Welt',markers:'Markierungen'};
     const nav=`<nav class="mdc-panel-tabs">${tabs.map((id)=>`<button class="${id===tab?'active':''}" data-mdc-tab="${id}">${labels[id]}</button>`).join('')}</nav>`;
     let body='';
     if(tab==='overview')body=this.renderOverviewPanel();
@@ -4622,6 +4642,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     if(tab==='dynasty')body=this.renderDynastyPanel();
     if(tab==='map')body=this.renderMapPanel();
     if(tab==='settings')body=this.renderWorldSettingsPanel();
+    if(tab==='markers')body=this.renderMarkersPanel();
     this.openPanel('CENTER',labels[tab],nav+body);
   }
 
@@ -4676,14 +4697,77 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       <div class="mdc-panel-actions"><button data-mdc-action="courtship" ${family.partner||this.state.inventory.coins<20?'disabled':''}>Dorffest besuchen · 20 Münzen</button><button data-mdc-action="family" ${!family.partner||family.heir||this.state.inventory.coins<50?'disabled':''}>Familie gründen · 50 Münzen</button></div>`;
   }
 
+  renderMarkersPanel() {
+    const markers=this.state.markers||[],px=this.player?.position.x||0,pz=this.player?.position.z||0,bind=KEYBIND_LABELS[this.state.keybinds?.marker]||this.state.keybinds?.marker||'P';
+    const list=markers.length?markers.map((marker,index)=>{
+      const distance=Math.round(Math.hypot(marker.x-px,marker.z-pz));
+      return `<article style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid rgba(210,180,110,.25);border-radius:12px;background:rgba(12,20,15,.55)"><span style="font-size:22px">⌖</span><div><input data-mdc-marker-name data-marker-id="${escapeHtml(marker.id)}" maxlength="32" value="${escapeHtml(marker.name)}" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,.28);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:9px 10px"><small style="display:block;margin-top:5px;opacity:.72">${distance.toLocaleString('de-DE')} m entfernt · Markierung ${index+1}</small></div><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button data-mdc-action="marker-save" data-marker-id="${escapeHtml(marker.id)}">Speichern</button><button data-mdc-action="marker-delete" data-marker-id="${escapeHtml(marker.id)}">Löschen</button></div></article>`;
+    }).join(''):`<p class="mdc-note">Noch keine Markierung gesetzt.</p>`;
+    return `<div class="mdc-settings-card"><small>WEGPUNKTE</small><h3>Eigene Markierungen</h3><p>Drücke <b>${escapeHtml(bind)}</b>, um direkt an deiner aktuellen Position einen Wegpunkt zu setzen. Danach kannst du ihn benennen. Die Markierungen bleiben gespeichert, erscheinen auf Karte und Minikarte und werden in der 3D-Welt mit Name und Entfernung eingeblendet, sobald du in ihre Richtung schaust.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><input data-mdc-marker-new-name maxlength="32" placeholder="z. B. Meine Base" style="flex:1;min-width:180px;background:rgba(0,0,0,.28);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px 12px"><button data-mdc-action="marker-add">Hier Markierung setzen</button></div><small style="display:block;margin-top:8px;opacity:.68">Maximal 30 eigene Markierungen.</small></div><div style="display:grid;gap:8px">${list}</div>`;
+  }
+
+  createWaypointMarker(name='',openEditor=false){
+    if(!this.player)return null;
+    if(this.inHouseInterior){this.toast('Markierungen können nur draußen gesetzt werden.');return null;}
+    const markers=this.state.markers||(this.state.markers=[]);if(markers.length>=30){this.toast('Du hast bereits 30 Markierungen. Lösche zuerst eine alte.');if(openEditor)this.openManagement('markers');return null;}
+    const clean=String(name||'').trim().slice(0,32),id=`marker-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`,marker={id,name:clean||`Markierung ${markers.length+1}`,x:Number(this.player.position.x.toFixed(2)),z:Number(this.player.position.z.toFixed(2)),createdAt:Date.now()};
+    markers.push(marker);this.saveState(true);this.refreshWaypointElements();this.toast(`⌖ ${marker.name} gesetzt.`);
+    if(openEditor){this.openManagement('markers');requestAnimationFrame(()=>{const input=[...this.panelBody.querySelectorAll('[data-mdc-marker-name]')].find((el)=>el.dataset.markerId===id);input?.focus?.();input?.select?.();});}
+    return marker;
+  }
+
+  renameWaypointMarker(id,name){
+    const marker=(this.state.markers||[]).find((entry)=>entry.id===id);if(!marker)return;
+    const clean=String(name||'').trim().slice(0,32);if(!clean){this.toast('Bitte gib der Markierung einen Namen.');return;}
+    marker.name=clean;this.saveState(true);this.refreshWaypointElements();this.openManagement('markers');this.toast(`Markierung heißt jetzt „${clean}“.`);
+  }
+
+  deleteWaypointMarker(id){
+    const marker=(this.state.markers||[]).find((entry)=>entry.id===id);if(!marker)return;
+    this.state.markers=this.state.markers.filter((entry)=>entry.id!==id);this.saveState(true);this.refreshWaypointElements();this.openManagement('markers');this.toast(`Markierung „${marker.name}“ gelöscht.`);
+  }
+
+  refreshWaypointElements(){
+    if(!this.waypointLayer)return;
+    const active=new Set((this.state.markers||[]).map((marker)=>marker.id));
+    for(const [id,element] of this.waypointElements){if(active.has(id))continue;element.remove();this.waypointElements.delete(id);}
+    for(const marker of this.state.markers||[]){
+      let element=this.waypointElements.get(marker.id);
+      if(!element){
+        element=document.createElement('div');element.dataset.waypointId=marker.id;
+        Object.assign(element.style,{position:'absolute',transform:'translate(-50%,-100%)',display:'none',alignItems:'center',gap:'7px',padding:'7px 10px',borderRadius:'10px',background:'rgba(9,15,12,.82)',border:'1px solid rgba(236,198,103,.72)',boxShadow:'0 4px 18px rgba(0,0,0,.38)',color:'#fff',fontFamily:'system-ui,sans-serif',whiteSpace:'nowrap',backdropFilter:'blur(3px)'});
+        element.innerHTML='<span style="font-size:19px;color:#f0c76d">⌖</span><span><b style="display:block;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis"></b><small style="display:block;font-size:10px;opacity:.72"></small></span>';
+        this.waypointLayer.appendChild(element);this.waypointElements.set(marker.id,element);
+      }
+      element.querySelector('b').textContent=marker.name;
+    }
+  }
+
+  updateWaypointMarkers(){
+    if(!this.waypointLayer||!this.camera||!this.player||this.inHouseInterior){if(this.waypointLayer)this.waypointLayer.style.display='none';return;}
+    this.waypointLayer.style.display='block';this.refreshWaypointElements();
+    const width=Math.max(1,this.overlay?.clientWidth||window.innerWidth),height=Math.max(1,this.overlay?.clientHeight||window.innerHeight),camera=this.camera;
+    camera.getWorldDirection(this.waypointForward);
+    for(const marker of this.state.markers||[]){
+      const element=this.waypointElements.get(marker.id);if(!element)continue;
+      const ground=terrainHeightAt(marker.x,marker.z),wy=ground+3.4,dx=marker.x-camera.position.x,dy=wy-camera.position.y,dz=marker.z-camera.position.z,len=Math.max(.001,Math.hypot(dx,dy,dz)),dot=(dx*this.waypointForward.x+dy*this.waypointForward.y+dz*this.waypointForward.z)/len;
+      if(dot<=.08){element.style.display='none';continue;}
+      this.waypointWorld.set(marker.x,wy,marker.z);this.waypointProjected.copy(this.waypointWorld).project(camera);
+      const p=this.waypointProjected;if(p.z<-1||p.z>1||Math.abs(p.x)>.96||Math.abs(p.y)>.88){element.style.display='none';continue;}
+      const left=(p.x*.5+.5)*width,top=(-p.y*.5+.5)*height,distance=Math.round(Math.hypot(marker.x-this.player.position.x,marker.z-this.player.position.z));
+      element.style.display='flex';element.style.left=`${left}px`;element.style.top=`${top}px`;element.querySelector('small').textContent=`${distance.toLocaleString('de-DE')} m`;
+    }
+  }
+
   renderMapPanel() {
     const px=this.player?.position.x||0,pz=this.player?.position.z||0,range=Math.max(650,(this.state.world?.renderDistance||2)*CHUNK_SIZE*1.25);
     const marker=(name,x,z,icon,known=true)=>{if(!known)return'';const left=clamp(50+(x-px)/range*50,2,98).toFixed(2),top=clamp(50+(z-pz)/range*50,2,98).toFixed(2);return `<i style="left:${left}%;top:${top}%" title="${escapeHtml(name)}"><span>${icon}</span><em>${escapeHtml(name)}</em></i>`;};
     const villages=this.villages.map((v)=>marker(v.name,v.x,v.z,'♜',this.state.discovered.includes(v.name)||Math.hypot(v.x-px,v.z-pz)<80)).join('');
     const landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)&&Math.hypot(h.x-px,h.z-pz)<range).map((h)=>{const name=h.data?.title||h.label;return marker(name,h.x,h.z,h.type==='cave'?'◒':h.type==='mine'?'⛏':h.type==='encounter'?'⛺':'◆',this.state.discovered.includes(name));}).join('');
     const buildings=this.state.buildings.filter((b)=>Math.hypot(b.x-px,b.z-pz)<range).map((b)=>marker(BUILDINGS[b.type].name,b.x,b.z,BUILDINGS[b.type].icon,true)).join('');
+    const waypoints=(this.state.markers||[]).map((m)=>marker(`${m.name} · ${Math.round(Math.hypot(m.x-px,m.z-pz))} m`,m.x,m.z,'⌖',true)).join('');
     const lost=this.state.deathLoot&&Date.now()<Number(this.state.deathLoot.expiresAt||0)?marker(`Verlorener Loot · ${Math.round(Math.hypot(Number(this.state.deathLoot.x||0)-px,Number(this.state.deathLoot.z||0)-pz))} m`,Number(this.state.deathLoot.x||0),Number(this.state.deathLoot.z||0),'☠',true):'';
-    return `<div class="mdc-map-current"><small>AKTUELLER ORT</small><strong>${escapeHtml(this.currentRegion||'Offene Wildnis')}</strong></div><div class="mdc-world-map streamed"><div class="local-grid"></div>${villages}${landmarks}${buildings}${lost}<b style="left:50%;top:50%" title="Deine Position">▲</b></div><p class="mdc-note">Entdeckte Dörfer und Orte bleiben dauerhaft auf der Karte sichtbar. Du befindest dich aktuell in <b>${escapeHtml(this.currentRegion||'Offene Wildnis')}</b>.</p>`;
+    return `<div class="mdc-map-current"><small>AKTUELLER ORT</small><strong>${escapeHtml(this.currentRegion||'Offene Wildnis')}</strong></div><div class="mdc-world-map streamed"><div class="local-grid"></div>${villages}${landmarks}${buildings}${waypoints}${lost}<b style="left:50%;top:50%" title="Deine Position">▲</b></div><p class="mdc-note">Eigene Markierungen sind immer auf der Karte sichtbar. Entdeckte Dörfer und Orte bleiben ebenfalls gespeichert. Du befindest dich aktuell in <b>${escapeHtml(this.currentRegion||'Offene Wildnis')}</b>.</p>`;
   }
 
   renderWorldSettingsPanel() {
@@ -4694,7 +4778,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     return `<div class="mdc-settings-card"><small>ONLINE</small><h3>Online-Modus</h3><p>Wenn Online aktiviert ist, siehst du andere Spieler im Center, die Online ebenfalls eingeschaltet haben. Die Einstellung bleibt aktiv und verbindet sich bei einer kurzen Unterbrechung automatisch neu.</p><div class="mdc-setting-options"><button class="${onlineEnabled?'active':''}" data-mdc-action="world-online" data-value="${onlineEnabled?'off':'on'}">${onlineEnabled?'Online ausschalten':'Online einschalten'}<small>${onlineEnabled?'Aktiviert':'Ausgeschaltet'}</small></button></div></div>
       <div class="mdc-settings-card"><small>GRAFIKQUALITÄT</small><h3>Darstellung und Leistung</h3><p>Minimal reduziert auch fremde Wings/Auren stark. Extreme ist die neue HD-Stufe mit maximaler Dichte, Auflösung und hochwertigen Online-Effekten.</p><div class="mdc-setting-options">${[['minimal','Minimal'],['performance','Performance'],['low','Niedrig'],['medium','Mittel'],['high','Hoch'],['ultra','Ultra'],['maximum','Maximum'],['extreme','Extreme HD']].map(([id,label])=>`<button class="${quality===id?'active':''}" data-mdc-action="world-quality" data-value="${id}">${label}<small>${id==='minimal'?'Extrem sparsam · Remote-Effekte reduziert':id==='performance'?'Sehr geringe Last':id==='low'?'Sparsam':id==='medium'?'Ausgewogen':id==='high'?'Mehr Details':id==='ultra'?'HD & Welt-Schatten':id==='maximum'?'Sehr hohe Dichte':'Höchste lokale & Online-Details'}</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>SCHATTEN</small><h3>Schattenmodus</h3><p>Der Modus kann unabhängig von der Grafikstufe angepasst werden.</p><div class="mdc-setting-options three">${[['off','Aus'],['character','Nur Charakter'],['world','Gesamte Welt']].map(([id,label])=>`<button class="${shadowMode===id?'active':''}" data-mdc-action="world-shadow-mode" data-value="${id}">${label}</button>`).join('')}</div></div>
-      <div class="mdc-settings-card"><small>TASTENBELEGUNG</small><h3>Menüs und Aktionen</h3><p>Du kannst die wichtigsten Center-Tasten direkt ändern.</p><div class="mdc-keybind-grid">${[['overview','Übersicht'],['inventory','Inventar'],['crafting','Herstellen'],['building','Bauen'],['perspective','Perspektive'],['interact','Interagieren'],['jump','Springen']].map(([id,label])=>`<label>${label}<select data-keybind-action="${id}">${this.keybindOptions(this.state.keybinds?.[id])}</select></label>`).join('')}</div></div>
+      <div class="mdc-settings-card"><small>TASTENBELEGUNG</small><h3>Menüs und Aktionen</h3><p>Du kannst die wichtigsten Center-Tasten direkt ändern.</p><div class="mdc-keybind-grid">${[['overview','Übersicht'],['inventory','Inventar'],['crafting','Herstellen'],['building','Bauen'],['marker','Markierung setzen'],['perspective','Perspektive'],['interact','Interagieren'],['jump','Springen']].map(([id,label])=>`<label>${label}<select data-keybind-action="${id}">${this.keybindOptions(this.state.keybinds?.[id])}</select></label>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>STEUERUNGSHILFE</small><h3>Tastenanzeige</h3><p>Standardmäßig wird die Tastenhilfe beim Betreten nur einige Sekunden eingeblendet.</p><div class="mdc-setting-options three">${[['auto','Kurz beim Start'],['always','Immer anzeigen'],['hidden','Ausblenden']].map(([id,label])=>`<button class="${controls===id?'active':''}" data-mdc-action="world-controls" data-value="${id}">${label}</button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>DYNAMISCHES WELT-STREAMING</small><h3>Sichtweite</h3><p>Nur Regionen rund um dich werden geladen. Entfernte Regionen werden automatisch aus dem Speicher entfernt.</p><div class="mdc-setting-options">${[1,2,3,4,5].map((value)=>`<button class="${distance===value?'active':''}" data-mdc-action="world-distance" data-value="${value}">${value===1?'Kurz':value===2?'Mittel':value===3?'Weit':value===4?'Sehr weit':'Extrem'}<small>${(value*CHUNK_SIZE).toLocaleString('de-DE')} m Radius</small></button>`).join('')}</div></div>
       <div class="mdc-settings-card"><small>OBJEKTDICHTE</small><h3>Wälder und Landschaft</h3><p>Bestimmt, wie viele Bäume, Felsen und Büsche pro Region erzeugt werden.</p><div class="mdc-setting-options three">${[['low','Niedrig'],['normal','Normal'],['high','Sehr dicht']].map(([id,label])=>`<button class="${density===id?'active':''}" data-mdc-action="world-density" data-value="${id}">${label}</button>`).join('')}</div></div>
@@ -4750,6 +4834,9 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     if(action==='trade-sell')this.trade(button.dataset.item,Number(button.dataset.price),false);
     if(action==='sleep')this.sleepUntilMorning();
     if(action==='open-map')this.openManagement('map');
+    if(action==='marker-add'){const input=this.panelBody.querySelector('[data-mdc-marker-new-name]');this.createWaypointMarker(input?.value||'',false);this.openManagement('markers');}
+    if(action==='marker-save'){const id=button.dataset.markerId||'',input=[...this.panelBody.querySelectorAll('[data-mdc-marker-name]')].find((el)=>el.dataset.markerId===id);this.renameWaypointMarker(id,input?.value||'');}
+    if(action==='marker-delete')this.deleteWaypointMarker(button.dataset.markerId||'');
     if(action==='pay-tax')this.payTax();
     if(action==='world-distance'){this.state.world.renderDistance=Math.floor(clamp(Number(button.dataset.value),MIN_RENDER_DISTANCE,MAX_RENDER_DISTANCE));this.applyWorldRenderSettings(true);this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Sichtweite: ${this.state.world.renderDistance} Regionen.`);}
     if(action==='world-density'){const value=button.dataset.value;this.state.world.density=['low','normal','high'].includes(value)?value:'normal';this.rebuildStreamedWorld();this.saveState(true);this.openManagement('settings');this.toast(`Objektdichte: ${this.state.world.density}.`);}
@@ -4821,7 +4908,9 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     ctx.strokeStyle='rgba(75,145,176,.8)';ctx.lineWidth=10;ctx.beginPath();for(let z=pz-range;z<=pz+range;z+=4){const x=riverCenter(z);const sx=w/2+(x-px)*scale,sy=h/2+(z-pz)*scale;if(z===pz-range)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);}ctx.stroke();
     ctx.fillStyle='#d4b36c';ctx.font='bold 9px system-ui';for(const v of this.villages){const x=w/2+(v.x-px)*scale,y=h/2+(v.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-3,y-3,6,6);if(this.state.discovered.includes(v.name)||Math.hypot(v.x-px,v.z-pz)<70){ctx.fillStyle='rgba(255,244,206,.92)';ctx.fillText(v.name,x+5,y-5);ctx.fillStyle='#d4b36c';}}}
     ctx.fillStyle='#d98b60';for(const hspot of this.hotspots){if(!['cave','mine','landmark','encounter'].includes(hspot.type))continue;const x=w/2+(hspot.x-px)*scale,y=h/2+(hspot.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);ctx.fill();}}
-    ctx.fillStyle='#e8f2d0';for(const b of this.state.buildings){const x=w/2+(b.x-px)*scale,y=h/2+(b.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-2,y-2,4,4);}}const lost=this.state.deathLoot;if(lost&&Date.now()<Number(lost.expiresAt||0)){const x=w/2+(Number(lost.x||0)-px)*scale,y=h/2+(Number(lost.z||0)-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillStyle='#c26cff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 8px system-ui';ctx.fillText(`${Math.round(Math.hypot(Number(lost.x||0)-px,Number(lost.z||0)-pz))}m`,x+7,y-5);}}
+    ctx.fillStyle='#e8f2d0';for(const b of this.state.buildings){const x=w/2+(b.x-px)*scale,y=h/2+(b.z-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillRect(x-2,y-2,4,4);}}
+    ctx.fillStyle='#f0c76d';ctx.font='bold 8px system-ui';for(const m of this.state.markers||[]){const x=w/2+(m.x-px)*scale,y=h/2+(m.z-pz)*scale;if(x>5&&x<w-5&&y>5&&y<h-5){ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,247,220,.95)';ctx.fillText(String(m.name||'Markierung').slice(0,18),x+6,y-5);ctx.fillStyle='#f0c76d';}}
+    const lost=this.state.deathLoot;if(lost&&Date.now()<Number(lost.expiresAt||0)){const x=w/2+(Number(lost.x||0)-px)*scale,y=h/2+(Number(lost.z||0)-pz)*scale;if(x>0&&x<w&&y>0&&y<h){ctx.fillStyle='#c26cff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 8px system-ui';ctx.fillText(`${Math.round(Math.hypot(Number(lost.x||0)-px,Number(lost.z||0)-pz))}m`,x+7,y-5);}}
     ctx.translate(w/2,h/2);ctx.rotate(-this.yaw);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-9);ctx.lineTo(6,7);ctx.lineTo(0,4);ctx.lineTo(-6,7);ctx.closePath();ctx.fill();ctx.restore();ctx.strokeStyle='rgba(225,194,120,.85)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(w/2,h/2,w*.46,0,Math.PI*2);ctx.stroke();
   }
 
@@ -5290,7 +5379,7 @@ handleOwnerInput(event){
 startRolePolling(){clearInterval(this.rolePollTimer);this.rolePollTimer=setInterval(async()=>{if(!this.opened)return;this.updateRoleHud();const expected=(this.isStaffActive&&!this.isPublicPlayerMode())?'owner':this.isPublicPlayerMode()?this.state.ownerAppearance.publicGender:bridgeSnapshot().gender;if(this.playerSkin&&this.playerSkin!==expected)await this.ensureCorrectPlayerModel();},3000);}
 
 startLoop() {
-    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.updateAmbientCreatures(delta,now);this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.smoothDynamicActors(delta,now);this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.inHouseInterior&&this.houseInteriorScene?this.houseInteriorScene:this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
+    cancelAnimationFrame(this.raf);const frame=(now)=>{if(!this.opened)return;this.raf=requestAnimationFrame(frame);const quality=this.state.world?.graphicsQuality||'medium',minFrame=quality==='minimal'?66:quality==='performance'?50:quality==='low'?Math.max(33,this.performanceTier==='low'?40:33):this.performanceTier==='low'?33:this.performanceTier==='balanced'?22:16;if(now-this.lastRenderedAt<minFrame)return;this.lastRenderedAt=now;const delta=Math.min(.06,Math.max(.001,(now-this.lastFrameAt)/1000));this.lastFrameAt=now;if(document.hidden)return;const workStart=performance.now(),slow=quality==='minimal'?2.5:quality==='performance'?1.9:quality==='low'?1.35:1;try{this.updateMovement(delta);this.updateActiveStaffBeam(now);this.updateChunkStreaming();this.runPerfTask('world',now,PERF_TASK_INTERVALS.world*slow,(d)=>this.updateWorldTime(d));this.runPerfTask('needs',now,PERF_TASK_INTERVALS.needs*slow,(d)=>this.updateNeeds(d));this.runPerfTask('animals',now,(this.performanceTier==='low'?90:PERF_TASK_INTERVALS.animals)*slow,(d)=>this.updateAnimals(d,now));this.updateAmbientCreatures(delta,now);this.runPerfTask('npcs',now,(this.performanceTier==='low'?150:PERF_TASK_INTERVALS.npcs)*slow,(d)=>this.updateNpcs(d,now));this.smoothDynamicActors(delta,now);this.runPerfTask('death',now,PERF_TASK_INTERVALS.death*slow,()=>this.ensureDeathLootMarker());this.runPerfTask('thrown',now,PERF_TASK_INTERVALS.thrown*slow,(d)=>this.updateOwnerThrownObjects(d,now));this.runPerfTask('remote',now,quality==='minimal'?80:quality==='performance'?66:quality==='low'?40:16,(d)=>this.updateRemotePlayers(d));this.runPerfTask('effects',now,PERF_TASK_INTERVALS.effects*slow,(d)=>{this.updateTransformationEffects(d,now);this.updateStaffLightningEffects(now);});this.runPerfTask('weather',now,PERF_TASK_INTERVALS.weather*slow,(d)=>this.animateWeather(d));this.updateCamera(delta);this.updateWaypointMarkers();this.runPerfTask('hotspots',now,PERF_TASK_INTERVALS.hotspots*slow,()=>this.updateHotspots());this.renderHud();this.saveState();if(!this.webglContextLost)this.renderer.render(this.inHouseInterior&&this.houseInteriorScene?this.houseInteriorScene:this.scene,this.camera);this.recordFrameCost(performance.now()-workStart,now);}catch(error){this.ensureValidWorldPosition();const msg=String(error?.message||error||'');if(/Cannot set properties of undefined|refreshMaterialUniforms/i.test(msg)){this.renderer?.resetState?.();if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Materialzustand wurde bereinigt:',error);}return;}if(now-this.runtimeErrorAt>5000){this.runtimeErrorAt=now;console.warn('Center-Laufzeitfehler wurde abgefangen:',error);this.toast('Ein Weltfehler wurde abgefangen. Deine Position wurde gesichert.');}}};this.raf=requestAnimationFrame(frame);
   }
 
 resize(){if(!this.renderer||!this.camera||this.overlay.hidden)return;const rect=this.overlay.getBoundingClientRect(),w=Math.max(1,Math.round(rect.width)),h=Math.max(1,Math.round(rect.height));this.renderer.setPixelRatio(this.performancePixelRatio());this.renderer.setSize(w,h,false);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
