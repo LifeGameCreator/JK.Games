@@ -399,3 +399,56 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-battle-arena.active-fight .bc-battle-fighter.enemy{order:3}
   .bc-battle-control-row{max-width:340px;grid-template-columns:1fr 64px 1fr}
 }
+
+/* V346 – Kampf-Tränke + Trefferanimationen direkt auf den Kampfkarten */
+.bc-shop-dual-actions{grid-template-columns:minmax(0,1fr) auto auto}
+.bc-shop-dual-actions .bc-potion-short{
+  min-width:68px;
+  background:linear-gradient(180deg,#4f9f88,#28725f)!important;
+  color:#fff!important;
+  border-color:#246454!important;
+  font-weight:1000!important;
+}
+.bc-mini-effect.potion{background:linear-gradient(145deg,#e6fff6,#7ac5ad)!important;color:#164f40!important;border-color:#4a9a83!important}
+.bc-potion-shop>small{font-size:9px;letter-spacing:.14em;font-weight:950;color:#776849}
+.bc-potion-shop h2{margin:4px 0 6px;font:900 30px Georgia,serif;color:#203b49}
+.bc-potion-shop>p{margin:0 0 12px;color:#5d5a50;font-size:11px;line-height:1.5}
+.bc-potion-tier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:52vh;overflow:auto;padding:2px 4px 4px 2px}
+.bc-potion-tier-grid>button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left;padding:10px;border:2px solid rgba(38,72,78,.16);border-radius:12px;background:#f8f2df;color:#173b48;box-shadow:0 4px 11px rgba(57,51,37,.10);cursor:pointer}
+.bc-potion-tier-grid>button>span{font-size:24px}.bc-potion-tier-grid>button b,.bc-potion-tier-grid>button small{display:block}.bc-potion-tier-grid>button small{margin-top:2px;font-size:8px;color:#6d6659}.bc-potion-tier-grid>button em{font-size:8px;font-style:normal;font-weight:950;white-space:nowrap}
+.bc-potion-back{border:0;border-radius:9px;padding:7px 10px;margin-bottom:9px;background:#315d72;color:#fff;font-size:9px;font-weight:950;cursor:pointer}
+.bc-potion-list{display:grid;gap:8px;margin-top:11px}
+.bc-potion-list article{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px;border:2px solid rgba(38,72,78,.16);border-radius:13px;background:#fbf5e2;box-shadow:0 5px 13px rgba(57,51,37,.10)}
+.bc-potion-list article>span{font-size:28px}.bc-potion-list b,.bc-potion-list small,.bc-potion-list strong,.bc-potion-list em{display:block}.bc-potion-list small{margin-top:2px;font-size:9px;line-height:1.35;color:#655f54}.bc-potion-list strong{margin-top:5px;font-size:11px;color:#1f6d59}.bc-potion-list em{margin-top:3px;font-size:8px;font-style:normal;font-weight:900;color:#766b57}
+.bc-potion-list button{border:0;border-radius:9px;padding:9px 10px;background:#1f6072;color:#fff;font-size:9px;font-weight:950;cursor:pointer;white-space:nowrap}
+.bc-card-potion-section{border-color:rgba(50,136,110,.30)!important;background:rgba(80,175,145,.07)!important}
+.bc-card-potion-section .bc-potion-open-inline{background:#28725f!important;color:#fff!important}
+.bc-active-potion{margin-top:8px!important;padding:5px 8px;border-radius:999px;background:rgba(64,158,129,.16);color:inherit;font-size:8px!important;font-weight:950!important}
+
+.bc-battle-fighter{position:relative;overflow:visible}
+.bc-battle-hit{position:absolute;z-index:12;left:50%;top:28%;min-width:92px;transform:translate(-50%,-50%) scale(.72);padding:8px 10px;border-radius:13px;background:rgba(42,15,15,.94);color:#fff;border:2px solid #ff8c73;box-shadow:0 8px 24px rgba(86,26,22,.38);pointer-events:none;text-align:center;animation:bcBattleDamagePop .95s ease-out both}
+.bc-battle-hit strong{display:block;font:1000 27px/1 Arial,sans-serif;color:#ffdb73;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.bc-battle-hit small{display:block;margin-top:4px;font-size:8px;font-weight:950;letter-spacing:.03em;color:#fff}
+.bc-battle-fighter.hit-now{animation:bcBattleCardHit .52s ease-out both}
+.bc-battle-fighter.enemy .bc-battle-hit{background:rgba(74,18,18,.96)}
+@keyframes bcBattleDamagePop{
+  0%{opacity:0;transform:translate(-50%,-42%) scale(.55)}
+  16%{opacity:1;transform:translate(-50%,-58%) scale(1.14)}
+  38%{opacity:1;transform:translate(-50%,-62%) scale(1)}
+  76%{opacity:1;transform:translate(-50%,-72%) scale(.98)}
+  100%{opacity:0;transform:translate(-50%,-88%) scale(.86)}
+}
+@keyframes bcBattleCardHit{
+  0%,100%{filter:none;transform:translateX(0)}
+  18%{filter:brightness(1.22) saturate(1.2);transform:translateX(-5px)}
+  36%{transform:translateX(5px)}
+  56%{transform:translateX(-3px)}
+  75%{transform:translateX(2px)}
+}
+@media(max-width:700px){
+  .bc-shop-dual-actions{grid-template-columns:1fr auto auto}
+  .bc-potion-tier-grid{grid-template-columns:1fr}
+  .bc-potion-list article{grid-template-columns:36px minmax(0,1fr)}
+  .bc-potion-list article>button{grid-column:1/-1;width:100%}
+  .bc-battle-hit{top:25%;min-width:82px}.bc-battle-hit strong{font-size:23px}
+}
