@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v327-great-sword-horizontal-hand-back-center-running-slash';
+const CENTER_VERSION = '2026-08-09-jkgames-v328-great-sword-back-right-lower-hand-90-fixed-grip';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3825,12 +3825,12 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(handGrip){
       // V327: Das Original-GLB ist nach dem Import längs auf der lokalen X-Achse.
       // Der Griff liegt am positiven X-Ende. Deshalb wird NICHT mehr um Z aufgestellt.
-      // So bleibt das Schwert waagerecht/horizontal. Die Drehung um die eigene Längsachse
-      // legt die breite Klingenseite senkrecht, sodass die Schneid-/Klingenseite zum Boden zeigt.
+      // V328: Das Schwert bleibt längs horizontal, wird aber um weitere 90° um seine Längsachse gedreht.
+      // Dadurch steht die Klinge hochkant/edge-down statt flach und sitzt korrekt in der Hand.
       asset.updateMatrixWorld(true);
       const box=new THREE.Box3().setFromObject(asset),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),gripX=box.max.x-size.x*.075;
       asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;
-      asset.rotation.set(Math.PI,-.18,0);
+      asset.rotation.set(Math.PI*1.5,-.18,0);
     }else asset.rotation.set(0,0,Math.PI/2);
     asset.name='center-owner-great-sword';asset.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.35,Number(mat.metalness)||0);mat.roughness=Math.min(.48,Number(mat.roughness)||.5);}}});return asset;
   }
@@ -3851,8 +3851,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(allowed&&!this.ownerGreatSwordCarryObject){
       const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
       const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
-      // V327: kleinere Rücken-Version bleibt erhalten. X wird bewusst in die Gegenrichtung korrigiert, damit die Klinge aus Rückansicht wieder mittig/rechts am Rücken sitzt statt im linken Arm.
-      const pos=new THREE.Vector3(-.08,2.58,-.22);
+      // V328: aus Rückansicht ein Stück weiter nach rechts und etwas tiefer gesetzt. Größe und Rückenabstand bleiben unverändert.
+      const pos=new THREE.Vector3(.08,2.42,-.22);
       const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
@@ -4115,7 +4115,14 @@ applyHeldItemVisual() {
       axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},
       hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}
     };
-    const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
+    const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];
+    if(kind==='greatSword'){
+      // V328: Great Sword ist wirklich an der rechten Hand fixiert. Position UND Rotation
+      // folgen dem Hand-Bone, damit die Schlaganimation beim Stehen, Laufen und Rennen sauber mitgeht.
+      hand.getWorldQuaternion(this.tmpQuaternion);this.modelPivot.getWorldQuaternion(this.tmpQuaternion2);
+      anchor.quaternion.copy(this.tmpQuaternion2).invert().multiply(this.tmpQuaternion);
+      anchor.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,Math.PI/2,'XYZ')));
+    }else anchor.rotation.set(...tr.r);
   }
 
   animateHeldItemEffects(item,now=performance.now()) {
@@ -6240,7 +6247,12 @@ applyRemoteOwnerAura(remote) {
   syncRemoteHeldAnchorPose(remote){
     const anchor=remote?.heldAnchor;if(!anchor||!remote?.pivot)return;const hand=remote.bones?.handRight,kind=anchor.userData.kind||remote.heldItem||'none';
     if(hand){remote.pivot.updateWorldMatrix?.(true,false);hand.updateWorldMatrix?.(true,false);hand.getWorldPosition(this.tmpVector);remote.pivot.worldToLocal(this.tmpVector);anchor.position.copy(this.tmpVector);}else anchor.position.set(.42,1.13,.02);
-    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.012,-.018,.012],r:[0,0,0]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
+    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.012,-.018,.012],r:[0,0,0]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];
+    if(kind==='greatSword'&&hand){
+      hand.getWorldQuaternion(this.tmpQuaternion);remote.pivot.getWorldQuaternion(this.tmpQuaternion2);
+      anchor.quaternion.copy(this.tmpQuaternion2).invert().multiply(this.tmpQuaternion);
+      anchor.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0,0,Math.PI/2,'XYZ')));
+    }else anchor.rotation.set(...tr.r);
   }
 
 applyRemoteHeldItem(remote){
