@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-08-jkcoin-v263-real-galaxy-skin";
+  const VERSION = "2026-08-09-jkcoin-v332-bigcards-store";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -180,6 +180,27 @@
     { game:"speedcar", id:"speedcar-fuel-5", name:"5 Premium-Kanister", cost:100, text:"Fünf Reservekanister für lange Fluchten.", grant:{kind:"fuelCan",amount:5} },
     { game:"speedcar", id:"speedcar-tune-3", name:"3 Tuning-Chips", cost:300, text:"Drei kostenlose Tuning-Stufen in der Speed Car.KL-Werkstatt.", grant:{kind:"tuneToken",amount:3} },
     { game:"speedcar", id:"speedcar-coins-50000", name:"50.000 Speed Coins", cost:250, text:"Guthaben für Fahrzeugkäufe und Tuning in Speed Car.KL.", grant:{kind:"speedCoins",amount:1} },
+
+    { game:"bigcards", id:"bigcards-pack-common", name:"Gewöhnlich-Pack", cost:5, text:"1 Credit für ein BigCards.kl Gewöhnlich-Pack mit 10 Karten.", grant:{kind:"pack:common",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-uncommon", name:"Ungewöhnlich-Pack", cost:10, text:"1 Credit für ein Ungewöhnlich-Pack.", grant:{kind:"pack:uncommon",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-rare", name:"Selten-Pack", cost:18, text:"1 Credit für ein Selten-Pack.", grant:{kind:"pack:rare",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-epic", name:"Episch-Pack", cost:30, text:"1 Credit für ein Episch-Pack.", grant:{kind:"pack:epic",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-legendary", name:"Legendär-Pack", cost:50, text:"1 Credit für ein Legendär-Pack.", grant:{kind:"pack:legendary",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-special", name:"Special-Pack", cost:80, text:"1 Credit für ein Special-Pack.", grant:{kind:"pack:special",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-mythic", name:"Mythisch-Pack", cost:120, text:"1 Credit für ein Mythisch-Pack.", grant:{kind:"pack:mythic",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-exotic", name:"Exotisch-Pack", cost:200, text:"1 Credit für ein Exotisch-Pack.", grant:{kind:"pack:exotic",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-universe", name:"Universe-Pack", cost:400, text:"1 Credit für ein Universe-Pack.", grant:{kind:"pack:universe",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-blackhole", name:"Black-Hole-Pack", cost:750, text:"1 Credit für ein Black-Hole-Pack.", grant:{kind:"pack:blackhole",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-galaxy", name:"Galaxy-Pack", cost:1200, text:"1 Credit für ein Galaxy-Pack.", grant:{kind:"pack:galaxy",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-cosmic", name:"Kosmisch-Pack", cost:1800, text:"1 Credit für ein Kosmisch-Pack.", grant:{kind:"pack:cosmic",amount:1} },
+    { game:"bigcards", id:"bigcards-pack-godly", name:"Göttlich-Pack", cost:2500, text:"1 Credit für ein Göttlich-Pack.", grant:{kind:"pack:godly",amount:1} },
+    { game:"bigcards", id:"bigcards-exclusive", name:"EXCLUSIVE PACK", cost:500, text:"5 Ziehungen aus dem exklusiven Vampir-/Blutkarten-Pool.", grant:{kind:"exclusivePack",amount:1} },
+    { game:"bigcards", id:"bigcards-auto-opener", name:"Auto-Opener · 1 Stunde", cost:750, text:"Komfort: öffnet gewählte Point-Packs automatisch, ohne Drop-Bonus.", grant:{kind:"autoOpenerHour",amount:1} },
+    { game:"bigcards", id:"bigcards-auto-collector", name:"Auto-Collector · 1 Stunde", cost:500, text:"Sammelt produzierte BigCards-Points eine Stunde automatisch ein.", grant:{kind:"autoCollectorHour",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-galaxy", name:"Galaxy Aura", cost:1500, text:"Eine Galaxy Aura x6 Points für genau eine Karteninstanz.", grant:{kind:"aura:galaxy",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-cosmic", name:"Cosmic Aura", cost:2600, text:"Eine Cosmic Aura x8 Points für genau eine Karteninstanz.", grant:{kind:"aura:cosmic",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-wizard", name:"Magierbindung", cost:900, text:"Eine Magierbindung x3 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:wizard",amount:1} },
+    { game:"bigcards", id:"bigcards-points-20m", name:"20 Min. dynamische Points", cost:300, text:"Points im Wert von ca. 20 Minuten deiner aktuellen BigCards-Produktion.", grant:{kind:"pointsMinutes:20",amount:1} },
 
     { game:"egoshoot", id:"egoshoot-kills-10", name:"10 Kills", cost:100, text:"10 Kills und 10 Kill-Punkte für Egoshoot.KL.", grant:{kind:"kills",amount:10} },
     { game:"egoshoot", id:"egoshoot-kills-44", name:"44 Kills · +10 %", cost:400, text:"40 Kills Basiswert plus 10 % Bonus: 44 Kills und Kill-Punkte.", grant:{kind:"kills",amount:44} },
@@ -371,7 +392,7 @@
 
   function buyGameItem(id,item){const entry=GAME_STORE.find(x=>x.id===id),c=coinState();if(!entry||!c)return toast("JK/Coin wartet noch auf deinen Spielstand.");let amount=entry.grant.amount;if(entry.variable){const raw=prompt(`Wie viele JK/Coins möchtest du zum aktuellen Kurs in Jetons umwandeln?\n1 JK/Coin = ${euro(currentRate())} Jetons`);if(raw==null)return;amount=Math.max(1,Math.floor(Number(raw)||0));if(amount>c.balance)return toast("Nicht genug JK/Coins.");}const cost=entry.variable?amount:entry.cost;if(!confirm(`${entry.name} für ${cost} JK/Coin kaufen?`))return;if(!spend(cost,entry.name))return;grantGamePurchase(entry,{...entry.grant,amount});persist();toast(`${entry.name} wurde deinem Spiel hinzugefügt.`);refreshPhone(item);}
   function grantGamePurchase(entry,grant){const c=coinState();c.gamePurchases[entry.id]=Number(c.gamePurchases[entry.id]||0)+1;c.entitlements[entry.id]=Number(c.entitlements[entry.id]||0)+Number(grant.amount||1);const rate=currentRate();if(entry.game==="casino"&&grant.kind==="jetons"){const eur=grant.amount*rate;const root=rootState();root.casinoWalletCents=Math.round(Number(root.casinoWalletCents||root.casinoWallet*100||0)+eur*100);root.casinoWallet=root.casinoWalletCents/100;c.appliedEntitlements[entry.id]=Number(c.entitlements[entry.id]||0);return;}applyPendingGameEntitlements();}
-  function applyPendingGameEntitlements(){const c=coinState();if(!c)return false;const apiMap={runner:window.RunnerKL,city:window.CityKL,match:window.MatchKL,fight:window.FightKL,dungeon:window.DungeonKL,money:window.MoneyKL,speedcar:window.SpeedCarKL,egoshoot:window.EgoShootKL,weed:window.WeedKL,casino:window.JKCasinoV82};for(const entry of GAME_STORE){if(entry.game==="casino"&&entry.variable)continue;const total=Number(c.entitlements?.[entry.id]||0),applied=Number(c.appliedEntitlements?.[entry.id]||0),delta=Math.max(0,total-applied);if(!delta)continue;try{const api=apiMap[entry.game];const grant=api?.grantJkCoinPurchase;if(typeof grant!=="function")continue;const ok=grant.call(api,entry.grant.kind,delta,{sku:entry.id,name:entry.name});if(ok!==false)c.appliedEntitlements[entry.id]=total;}catch(error){console.warn("JK/Coin Spiel-Gutschrift",entry.game,error);}}persist();return true;}
+  function applyPendingGameEntitlements(){const c=coinState();if(!c)return false;const apiMap={runner:window.RunnerKL,city:window.CityKL,match:window.MatchKL,fight:window.FightKL,dungeon:window.DungeonKL,money:window.MoneyKL,speedcar:window.SpeedCarKL,bigcards:window.BigCardsKL,egoshoot:window.EgoShootKL,weed:window.WeedKL,casino:window.JKCasinoV82};for(const entry of GAME_STORE){if(entry.game==="casino"&&entry.variable)continue;const total=Number(c.entitlements?.[entry.id]||0),applied=Number(c.appliedEntitlements?.[entry.id]||0),delta=Math.max(0,total-applied);if(!delta)continue;try{const api=apiMap[entry.game];const grant=api?.grantJkCoinPurchase;if(typeof grant!=="function")continue;const ok=grant.call(api,entry.grant.kind,delta,{sku:entry.id,name:entry.name});if(ok!==false)c.appliedEntitlements[entry.id]=total;}catch(error){console.warn("JK/Coin Spiel-Gutschrift",entry.game,error);}}persist();return true;}
 
   function bankPanelHtml(){const c=coinState();if(!c)return `<section class="jkc-bank-panel"><small>JK/COIN-KONTO</small><h3>Wird geladen …</h3></section>`;const rate=currentRate();return `<section class="jkc-bank-panel" data-jkc-bank-panel><small>JK/COIN-KONTO</small><h3>Premium-Währung</h3><div class="jkc-bank-summary"><div><small>GUTHABEN</small><b>${c.balance.toLocaleString("de-DE")} JK/Coin</b></div><div><small>AKTUELLER KURS</small><b>1 = ${euro(rate)}</b></div><div><small>AUSGEGEBEN</small><b>${Math.round(c.totalSpent).toLocaleString("de-DE")}</b></div></div><div class="jkc-actions"><button class="jkc-button gold" data-jkc-bank-exchange>JK/Coin in Euro tauschen</button><button class="jkc-button secondary" data-jkc-bank-ledger>Kontobewegungen</button></div></section>`;}
   function bindBank(container){
@@ -523,7 +544,7 @@
     document.querySelectorAll(".device-shell .jkc-app").forEach(app=>{if(app.dataset.jkcBound)return;app.dataset.jkcBound="1";bind(app.closest(".device-shell")||document,window.JKGamesOwnedPhoneItem?.()||"Smartphone");});
     document.querySelectorAll(".jk-bank-app-v58, .device-active-bank").forEach(bank=>bindBank(bank));
   }
-  const GAME_LABELS={runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",speedcar:"Speed Car.KL",egoshoot:"Egoshoot.KL",weed:"Weed Business",casino:"Casino"};
+  const GAME_LABELS={runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",speedcar:"Speed Car.KL",bigcards:"BigCards.kl",egoshoot:"Egoshoot.KL",weed:"Weed Business",casino:"Casino"};
 
   function renderGameOverlay(game){
     const old=document.querySelector(".jkc-ingame-overlay");
