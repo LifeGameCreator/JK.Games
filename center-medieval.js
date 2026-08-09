@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v319-great-sword-back-higher-jump-leg-stable';
+const CENTER_VERSION = '2026-08-09-jkgames-v320-great-sword-wing-height-jump-knees';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3559,12 +3559,14 @@ buildChunkGrass(chunk) {
         const target=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x*swing,y*swing,z*swing,'XYZ')));
         bone.quaternion.slerp(target,.92);
       };
-      jumpLeg(this.playerBones.upperLegRight,-.16);
-      jumpLeg(this.playerBones.lowerLegRight,.32);
-      jumpLeg(this.playerBones.upperLegLeft,-.16);
-      jumpLeg(this.playerBones.lowerLegLeft,.32);
-      jumpLeg(this.playerBones.footRight,-.035);
-      jumpLeg(this.playerBones.footLeft,-.035);
+      // V320: deutlicher Knie-Sprung, aber weiterhin ausschließlich um die lokale X-Achse.
+      // Dadurch winkeln die Knie sichtbar an, ohne dass sich die Beine seitlich verdrehen/kreuzen.
+      jumpLeg(this.playerBones.upperLegRight,-.34);
+      jumpLeg(this.playerBones.lowerLegRight,.70);
+      jumpLeg(this.playerBones.upperLegLeft,-.34);
+      jumpLeg(this.playerBones.lowerLegLeft,.70);
+      jumpLeg(this.playerBones.footRight,-.075);
+      jumpLeg(this.playerBones.footLeft,-.075);
       if(chest)chest.rotateX(.012*swing);
     }else if(action.kind==='punch-right'||action.kind==='punch-left'){
       const left=action.kind==='punch-left',upper=left?leftUpper:rightUpper,lower=left?leftLower:rightLower;
@@ -3674,8 +3676,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(allowed&&!this.ownerGreatSwordCarryObject){
       const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
       const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
-      // Deutlich höher als V318: Mittelpunkt sitzt jetzt am oberen Rücken statt bei Hüfte/Beinen.
-      const pos=new THREE.Vector3(0,1.74,-.28);
+      // V320: nochmals deutlich höher – optisch auf Höhe des Angel-Wings-/Schulterbereichs.
+      const pos=new THREE.Vector3(0,2.20,-.28);
       const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
