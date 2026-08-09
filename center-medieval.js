@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v306-step3-village-water-landscape';
+const CENTER_VERSION = '2026-08-09-jkgames-v307-closed-smooth-village-paths';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -2104,17 +2104,50 @@ async updateChunkStreaming(force = false) {
     return {x:centerX+c*along-s*side,z:centerZ+s*along+c*side};
   }
 
+  createContinuousVillageRibbon(chunk,curve,width,material,name='v307-village-road'){
+    const length=Math.max(1,curve.getLength()),samples=Math.max(18,Math.ceil(length/1.15)),vertices=[],uvs=[],indices=[],points=[];
+    let runningDistance=0,previous=null;
+    for(let i=0;i<=samples;i+=1){
+      const t=i/samples,p=curve.getPoint(t),tan=curve.getTangent(t).normalize(),nx=-tan.z,nz=tan.x,half=width*.5;
+      if(previous)runningDistance+=Math.hypot(p.x-previous.x,p.z-previous.z);
+      const lx=p.x+nx*half,lz=p.z+nz*half,rx=p.x-nx*half,rz=p.z-nz*half;
+      // Beide Seiten benutzen dieselbe fortlaufende Kurve. Dadurch gibt es an Kurven
+      // keine einzelnen Rechtecke/Dreiecks-Lücken mehr.
+      vertices.push(
+        lx-chunk.originX,terrainHeightAt(lx,lz)+.030,lz-chunk.originZ,
+        rx-chunk.originX,terrainHeightAt(rx,rz)+.030,rz-chunk.originZ
+      );
+      const v=runningDistance/3.0,u=Math.max(1,width/2.35);uvs.push(0,v,u,v);
+      points.push({x:p.x,z:p.z});
+      if(i<samples){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}
+      previous=p;
+    }
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
+    const mesh=new THREE.Mesh(geo,material);mesh.name=name;mesh.receiveShadow=!!this.state.world?.shadows;chunk.group.add(mesh);
+    return {mesh,points,length};
+  }
+
   buildCurvedVillagePath(chunk,points,width,kind='gravel',shoulderKind=null){
     if(!Array.isArray(points)||points.length<2)return;
-    const vectors=points.map((p)=>new THREE.Vector3(p.x,0,p.z)),curve=new THREE.CatmullRomCurve3(vectors,false,'centripetal',.36),length=Math.max(1,curve.getLength()),samples=Math.max(8,Math.ceil(length/4.4));
+    const vectors=points.map((p)=>new THREE.Vector3(p.x,0,p.z)),curve=new THREE.CatmullRomCurve3(vectors,false,'centripetal',.28);
     const mainMaterial=this.groundPathMaterial(kind),shoulderMaterial=shoulderKind?this.groundPathMaterial(shoulderKind):null;
-    let previous=curve.getPoint(0);
-    for(let i=1;i<=samples;i+=1){
-      const current=curve.getPoint(i/samples),ax=previous.x,az=previous.z,bx=current.x,bz=current.z;
-      if(shoulderMaterial)this.createTerrainStrip(chunk,ax,az,bx,bz,width+1.15,shoulderMaterial,2);
-      this.createTerrainStrip(chunk,ax,az,bx,bz,width,mainMaterial,2);
-      chunk.roadSegments.push({ax,az,bx,bz,width,kind});
-      previous=current;
+
+    // V307: zuerst ein durchgehender Randweg, danach ein durchgehender Hauptweg.
+    // Kein Aneinanderkleben einzelner Plane-Stücke mehr.
+    if(shoulderMaterial){
+      const shoulder=this.createContinuousVillageRibbon(chunk,curve,width+1.20,shoulderMaterial,'v307-village-road-shoulder');
+      // Runde Enden schließen die Außenkante vollständig.
+      this.createTerrainCircle(chunk,points[0].x,points[0].z,(width+1.20)*.5,shoulderMaterial,28);
+      this.createTerrainCircle(chunk,points[points.length-1].x,points[points.length-1].z,(width+1.20)*.5,shoulderMaterial,28);
+    }
+    const main=this.createContinuousVillageRibbon(chunk,curve,width,mainMaterial,'v307-village-road-main');
+    this.createTerrainCircle(chunk,points[0].x,points[0].z,width*.5,mainMaterial,28);
+    this.createTerrainCircle(chunk,points[points.length-1].x,points[points.length-1].z,width*.5,mainMaterial,28);
+
+    // Kollisions-/Vegetationsprüfung folgt derselben fein abgetasteten Kurve.
+    for(let i=1;i<main.points.length;i+=1){
+      const a=main.points[i-1],b=main.points[i];
+      chunk.roadSegments.push({ax:a.x,az:a.z,bx:b.x,bz:b.z,width,kind});
     }
   }
 
@@ -2137,16 +2170,23 @@ async updateChunkStreaming(force = false) {
   }
 
   buildChunkPaths(chunk) {
-    // V306: Das V305-Wegenetz bleibt unverändert. Schritt 3 ergänzt danach nur Wasser am Dorfrand.
-    // Weiterhin KEINE Betonplatten, KEIN Brunnen und KEINE Häuser.
+    // V307: Das Wegenetz wurde als geschlossene, durchgehende Bänder neu aufgebaut.
+    // Das V306-Dorfwasser bleibt erhalten; weiterhin KEINE Betonplatten, KEIN Brunnen und KEINE Häuser.
     chunk.roadSegments=[];
     const plan=this.createVillageRoadPlan(chunk);chunk.villageRoadPlan=plan;if(!plan)return;
     this.buildCurvedVillagePath(chunk,plan.main,4.7,plan.mainKind,plan.shoulderKind);
     this.buildCurvedVillagePath(chunk,plan.loop,3.65,plan.secondaryKind,plan.mainKind==='gravel'?'dirt':'gravel');
     for(const lane of plan.lanes)this.buildCurvedVillagePath(chunk,lane,2.8,plan.secondaryKind,plan.shoulderKind);
-    // Kleine Übergangsflächen nur an echten Einmündungen; kein großer Stern-/Kreuzplatz.
+    // V307: echte geschlossene Übergangsflächen an Einmündungen. Die Kreise überlappen
+    // die beiden Wegbänder bewusst deutlich, damit keine dreieckigen Bodenlöcher sichtbar bleiben.
     const junctionMat=this.groundPathMaterial(plan.secondaryKind);
-    for(const p of [plan.loop[0],plan.loop[plan.loop.length-1],plan.lanes[0][0],plan.lanes[1][0]])this.createTerrainCircle(chunk,p.x,p.z,2.15,junctionMat,18);
+    const junctions=[
+      {p:plan.loop[0],r:3.25},
+      {p:plan.loop[plan.loop.length-1],r:3.25},
+      {p:plan.lanes[0][0],r:2.75},
+      {p:plan.lanes[1][0],r:2.75}
+    ];
+    for(const {p,r} of junctions)this.createTerrainCircle(chunk,p.x,p.z,r,junctionMat,32);
   }
 
   buildChunkVillageWater(chunk){
