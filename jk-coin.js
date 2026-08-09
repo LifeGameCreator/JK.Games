@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-09-jkcoin-v338-safe-game-labels-bigcards-open-fix";
+  const VERSION = "2026-08-09-jkcoin-v347-bigcards-trails";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -200,6 +200,19 @@
     { game:"bigcards", id:"bigcards-aura-galaxy", name:"Galaxy Aura", cost:1500, text:"Eine Galaxy Aura x6 Points für genau eine Karteninstanz.", grant:{kind:"aura:galaxy",amount:1} },
     { game:"bigcards", id:"bigcards-aura-cosmic", name:"Cosmic Aura", cost:2600, text:"Eine Cosmic Aura x8 Points für genau eine Karteninstanz.", grant:{kind:"aura:cosmic",amount:1} },
     { game:"bigcards", id:"bigcards-bind-wizard", name:"Magierbindung", cost:900, text:"Eine Magierbindung x3 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:wizard",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-common", name:"Gewöhnliche Spur", cost:25, text:"Eine Gewöhnliche Spur für deine persönliche BigCards-Karte. Ausrüsten erst nach normaler Spuren-Freischaltung.", grant:{kind:"trail:common",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-uncommon", name:"Ungewöhnliche Spur", cost:50, text:"Eine Ungewöhnliche Spur für deine persönliche Karte.", grant:{kind:"trail:uncommon",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-rare", name:"Seltene Spur", cost:90, text:"Eine Seltene Spur mit stärkeren Karten-Slot- und Kampfboni.", grant:{kind:"trail:rare",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-epic", name:"Epische Spur", cost:150, text:"Eine Epische Spur für deine persönliche Karte.", grant:{kind:"trail:epic",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-legendary", name:"Legendäre Spur", cost:250, text:"Eine Legendäre Spur für deine persönliche Karte.", grant:{kind:"trail:legendary",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-special", name:"Special Spur", cost:400, text:"Eine Special Spur für deine persönliche Karte.", grant:{kind:"trail:special",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-mythic", name:"Mythische Spur", cost:650, text:"Eine Mythische Spur mit starken persönlichen Kartenboni.", grant:{kind:"trail:mythic",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-exotic", name:"Exotische Spur", cost:1000, text:"Eine Exotische Spur für deine persönliche Karte.", grant:{kind:"trail:exotic",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-universe", name:"Universe Spur", cost:1500, text:"Eine Universe Spur für deine persönliche Karte.", grant:{kind:"trail:universe",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-blackhole", name:"Black Hole Spur", cost:2200, text:"Black-Hole-Design plus sehr starke Karten-Slot- und Kampfboni.", grant:{kind:"trail:blackhole",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-galaxy", name:"Galaxy Spur", cost:3200, text:"Galaxy-Design plus sehr starke persönliche Kartenboni.", grant:{kind:"trail:galaxy",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-cosmic", name:"Kosmische Spur", cost:4500, text:"Kosmisches Design plus extreme Karten-Slot- und Kampfboni.", grant:{kind:"trail:cosmic",amount:1} },
+    { game:"bigcards", id:"bigcards-trail-godly", name:"Göttliche Spur", cost:6500, text:"Die stärkste Spur mit göttlichem Design. Es gibt keine Exclusive-Spur.", grant:{kind:"trail:godly",amount:1} },
     { game:"bigcards", id:"bigcards-points-20m", name:"20 Min. dynamische Points", cost:300, text:"Points im Wert von ca. 20 Minuten deiner aktuellen BigCards-Produktion.", grant:{kind:"pointsMinutes:20",amount:1} },
 
     { game:"egoshoot", id:"egoshoot-kills-10", name:"10 Kills", cost:100, text:"10 Kills und 10 Kill-Punkte für Egoshoot.KL.", grant:{kind:"kills",amount:10} },
