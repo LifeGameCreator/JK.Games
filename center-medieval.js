@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v308-worldwide-connected-ground-paths';
+const CENTER_VERSION = '2026-08-09-jkgames-v309-step3-deep-water-mod-speed-control';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -43,7 +43,7 @@ const GRAPHICS_QUALITIES = Object.freeze(['minimal','performance','low','medium'
 const SHADOW_MODES = Object.freeze(['off','character','world']);
 const OWNER_SPEED_LEVELS = Object.freeze([1, 1.65, 2.6]);
 const OWNER_MAX_SPEED_MULTIPLIER = 12;
-const DEFAULT_KEYBINDS = Object.freeze({ overview:'KeyM', inventory:'KeyI', crafting:'KeyC', building:'KeyB', marker:'KeyP', perspective:'KeyV', interact:'KeyE', jump:'Space', staffMenu:'Period', vanish:'KeyG', god:'KeyH', fly:'KeyF', transform:'KeyT' });
+const DEFAULT_KEYBINDS = Object.freeze({ overview:'KeyM', inventory:'KeyI', crafting:'KeyC', building:'KeyB', marker:'KeyP', perspective:'KeyV', interact:'KeyE', jump:'Space', staffMenu:'Period', vanish:'KeyG', god:'KeyH', fly:'KeyF', transform:'KeyT', speedUp:'KeyU', speedDown:'KeyJ' });
 const KEYBIND_OPTIONS = Object.freeze(['KeyM','KeyI','KeyC','KeyB','KeyV','KeyE','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','KeyO','KeyP','KeyR','KeyT','KeyU','KeyY','Period','NumpadDecimal','Space']);
 const KEYBIND_LABELS = Object.freeze({KeyM:'M',KeyI:'I',KeyC:'C',KeyB:'B',KeyV:'V',KeyE:'E',KeyF:'F',KeyG:'G',KeyH:'H',KeyJ:'J',KeyK:'K',KeyL:'L',KeyO:'O',KeyP:'P',KeyR:'R',KeyT:'T',KeyU:'U',KeyY:'Y',Period:'.',NumpadDecimal:'Numpad .',Space:'Leertaste'});
 const STAFF_ROLE_LEVELS = Object.freeze({ player: 0, supporter: 1, moderator: 2, admin: 3, owner: 4 });
@@ -318,7 +318,7 @@ function createElement(tag, className, html = '') {
 
 function defaultSaveState() {
   return {
-    version: 9,
+    version: 10,
     position: { x: 0, z: 0, yaw: Math.PI, view: 'third' },
     world: { spawnAssigned: false, spawnIndex: -1, spawnX: 0, spawnZ: 0, renderDistance: 2, density: 'normal', landmarkDensity: 'normal', graphicsQuality: 'medium', shadowMode: 'off', controlsHint: 'auto', shadows: false, onlineEnabled: false },
     day: 1,
@@ -334,6 +334,7 @@ function defaultSaveState() {
     equippedTool: '',
     ownerAppearance: { skin: 'normal', ownerBaseModel: 'default', staffSkinTheme: 'none', aura: false, auraTheme: 'owner', size: 1, heldItem: 'none', heldItemTheme: 'owner', cape: false, capeTheme: 'owner', cloak: false, cloakTheme: 'owner', hat: false, hatTheme: 'owner', vehicle: 'none', scooterTuning: 0, quickForm: 'fox', treeVariant: 0, publicMode: 'staff', publicGender: 'male', publicAlias: 'Center Spieler', staffMaxHealth: 500, staffDamage: 180 },
     keybinds: { ...DEFAULT_KEYBINDS },
+    staffSettings: { speedControlMode: 'wheel', speedMultiplier: 1 },
     markers: [],
     deathLoot: null,
     tutorial: { done: false, step: 'sticks', sticks: 0, stones: 0, berries: 0, mushrooms: 0, treeChopped: false },
@@ -412,6 +413,9 @@ function normalizeSaveState(raw) {
   state.horseTamed = !!raw.horseTamed;
   state.keybinds = { ...DEFAULT_KEYBINDS, ...(raw.keybinds || {}) };
   for (const [action, fallback] of Object.entries(DEFAULT_KEYBINDS)) if (!KEYBIND_OPTIONS.includes(state.keybinds[action])) state.keybinds[action] = fallback;
+  state.staffSettings = { ...base.staffSettings, ...(raw.staffSettings || {}) };
+  state.staffSettings.speedControlMode = ['wheel','keys','off'].includes(state.staffSettings.speedControlMode) ? state.staffSettings.speedControlMode : 'wheel';
+  state.staffSettings.speedMultiplier = clamp(Number(state.staffSettings.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER);
   state.markers = Array.isArray(raw.markers) ? raw.markers.slice(0,30).map((entry,index)=>{
     if(!entry||typeof entry!=='object')return null;
     const x=Number(entry.x),z=Number(entry.z);if(!Number.isFinite(x)||!Number.isFinite(z))return null;
@@ -516,34 +520,29 @@ const VILLAGE_WATER_CACHE=new Map();
 function villageWaterFeaturesForChunk(cx,cz){
   const cacheKey=`${cx}:${cz}`;if(VILLAGE_WATER_CACHE.has(cacheKey))return VILLAGE_WATER_CACHE.get(cacheKey);
   const candidate=villageCandidateForChunk(cx,cz);if(!candidate){VILLAGE_WATER_CACHE.set(cacheKey,[]);return [];}
-  // Gleiche Grundausrichtung wie das V305-Wegenetz, damit Wasser bewusst am Dorfrand
-  // und nicht quer durch Hauptweg oder Schleife liegt.
   const roadRnd=seededRandom((Math.imul(cx+2048,1103515245)^Math.imul(cz+2048,12345)^(WORLD_SEED+30502))>>>0),yaw=roadRnd()*Math.PI*2;
-  const rnd=seededRandom((Math.imul(cx+4096,214013)^Math.imul(cz+4096,2531011)^(WORLD_SEED+30603))>>>0),roll=rnd();
-  // Rund ein Drittel der Dörfer bleibt bewusst trocken. So wirkt die Welt abwechslungsreicher.
-  if(roll<.31){VILLAGE_WATER_CACHE.set(cacheKey,[]);return [];}
-  const P=(along,side)=>{
-    const c=Math.cos(yaw),s=Math.sin(yaw);
-    return {x:candidate.x+c*along-s*side,z:candidate.z+s*along+c*side};
-  };
+  const rnd=seededRandom((Math.imul(cx+4096,214013)^Math.imul(cz+4096,2531011)^(WORLD_SEED+30903))>>>0),roll=rnd();
+  if(roll<.24){VILLAGE_WATER_CACHE.set(cacheKey,[]);return [];}
+  const P=(along,side)=>{const c=Math.cos(yaw),s=Math.sin(yaw);return {x:candidate.x+c*along-s*side,z:candidate.z+s*along+c*side};};
   const make=(id,along,side,rx,rz,angleOffset=0,label='Dorfteich')=>{
-    const p=P(along,side),level=clamp(rawTerrainHeightAt(p.x,p.z)-.58,-4.2,46);
-    return {id:`village-water-${cx}-${cz}-${id}`,x:p.x,z:p.z,rx,rz,yaw:yaw+angleOffset,level,label};
+    const p=P(along,side),fyaw=yaw+angleOffset,c=Math.cos(fyaw),s=Math.sin(fyaw);
+    const samples=[];
+    for(const [ux,uz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1],[.75,.75],[-.75,.75],[.75,-.75],[-.75,-.75]]){
+      const lx=ux*rx,lz=uz*rz,wx=p.x+lx*c-lz*s,wz=p.z+lx*s+lz*c;samples.push(rawTerrainHeightAt(wx,wz));
+    }
+    const low=Math.min(...samples),high=Math.max(...samples),slope=high-low,center=samples[0];
+    // Auf Hängen entsteht ein in den Berg eingeschnittener, tiefer Bergteich. Die Wasserlinie
+    // liegt niedrig genug, damit die hohe Seite in den Hang geschnitten wird; die niedrige Seite
+    // erhält beim Terraforming einen Erd-/Steinwall bis knapp unter die Wasserlinie.
+    const mountain=slope>3.2;
+    const level=clamp(mountain?Math.max(low+.85,Math.min(center-.28,low+Math.min(2.4,slope*.44))):center-.42,-4.4,48);
+    const depth=mountain?clamp(3.6+slope*.24,3.8,6.2):clamp(2.7+Math.max(rx,rz)*.055,2.8,4.8);
+    return {id:`village-water-${cx}-${cz}-${id}`,x:p.x,z:p.z,rx,rz,yaw:fyaw,level,depth,label,mountain,slope};
   };
   let features=[];
-  if(roll<.60){
-    // Ein klarer Dorfteich neben dem Wegenetz.
-    features=[make('pond',5,38,13+rnd()*3.5,8.5+rnd()*2.5,(rnd()-.5)*.24,'Dorfteich')];
-  }else if(roll<.83){
-    // Zwei kleinere Wasserstellen an gegenüberliegenden Dorfrändern.
-    features=[
-      make('pond-a',-31,35,8.5+rnd()*2.2,6.5+rnd()*1.8,(rnd()-.5)*.35,'Kleiner Dorfteich'),
-      make('pond-b',30,-31,7.5+rnd()*2.0,6+rnd()*1.7,(rnd()-.5)*.35,'Kleine Wasserstelle')
-    ];
-  }else{
-    // Schmaler, länglicher Dorfweiher/Bachlauf parallel zum äußeren Dorfbereich.
-    features=[make('brook',4,40,20+rnd()*5,5.2+rnd()*1.6,(rnd()-.5)*.12,'Dorfweiher')];
-  }
+  if(roll<.57)features=[make('pond',5,39,13+rnd()*4.5,9+rnd()*3,(rnd()-.5)*.24,'Dorfteich')];
+  else if(roll<.82)features=[make('pond-a',-31,36,9+rnd()*2.8,7+rnd()*2,(rnd()-.5)*.35,'Kleiner Dorfteich'),make('pond-b',30,-32,8+rnd()*2.3,6.5+rnd()*1.8,(rnd()-.5)*.35,'Kleine Wasserstelle')];
+  else features=[make('brook',4,41,21+rnd()*6,5.6+rnd()*1.9,(rnd()-.5)*.12,'Dorfweiher')];
   VILLAGE_WATER_CACHE.set(cacheKey,features);return features;
 }
 
@@ -557,19 +556,19 @@ function terrainHeightAt(x, z) {
   // Der Fluss erhält jetzt garantiert ein sichtbares Bett unterhalb des Wassers.
   const riverDistance=Math.abs(x-riverCenter(z));
   if(riverDistance<31){const weight=1-smoothRange(11,31,riverDistance),target=WATER_LEVEL-.72-(1-clamp(riverDistance/31,0,1))*.8;h=h*(1-weight)+target*weight;}
-  // Seen werden wirklich in den Boden eingeschnitten statt nur als Fläche darüber gelegt.
-  for(const lake of WORLD_LAKES){const d=ellipseDistance(x,z,lake);if(d>=1.2)continue;const level=lakeWaterLevel(lake),weight=1-smoothRange(.78,1.18,d),target=level-1.05-(1-clamp(d,0,1))*.95;h=h*(1-weight)+target*weight;}
-  // V306 Schritt 3: Wasser an einem Teil der Dörfer wird ebenfalls wirklich in den Boden
-  // eingeschnitten. Dadurch liegt die Wasserfläche nie einfach auf einem Hügel.
+  // V309: Seen besitzen jetzt ein echtes tiefes Becken. In der Mitte kann man mehrere Meter tauchen.
+  for(const lake of WORLD_LAKES){const d=ellipseDistance(x,z,lake);if(d>=1.22)continue;const level=lakeWaterLevel(lake),inside=clamp(d,0,1),depth=3.2+Math.max(lake.rx,lake.rz)*.018;if(d<1){const bowl=Math.pow(1-inside,.58),target=level-(.72+depth*(.38+.62*bowl)),weight=1-smoothRange(.82,1,d);h=h*(1-weight)+target*weight;}else{const rim=1-smoothRange(1,1.20,d),rimTarget=level-.18;h=Math.max(h,h*(1-rim)+rimTarget*rim);}}
+  // V309 Schritt 3 FINAL: Bergteiche werden hinten in den Hang eingeschnitten und auf der
+  // talwärts liegenden Seite mit einem natürlichen Erdwall aufgefüllt. Innen ist das Becken tief.
   const vcx=worldToChunk(x),vcz=worldToChunk(z);
   for(const villageWater of villageWaterFeaturesForChunk(vcx,vcz)){
-    const d=ellipseDistance(x,z,villageWater);if(d>=1.22)continue;
-    const weight=1-smoothRange(.80,1.20,d),target=villageWater.level-.72-(1-clamp(d,0,1))*.82;
-    h=h*(1-weight)+target*weight;
+    const d=ellipseDistance(x,z,villageWater);if(d>=1.23)continue;
+    if(d<1){const bowl=Math.pow(1-clamp(d,0,1),.55),target=villageWater.level-(.58+villageWater.depth*(.34+.66*bowl)),weight=1-smoothRange(.84,1,d);h=h*(1-weight)+target*weight;}
+    else{const rim=1-smoothRange(1,1.21,d),rimTarget=villageWater.level-.16;h=Math.max(h,h*(1-rim)+rimTarget*rim);}
   }
   // Das Meer besitzt eine eigene Küstenmulde; so ist die Wasserfläche nicht mehr unter
   // normalem Terrain versteckt und am Rand entsteht ein sichtbarer Strand.
-  const oceanD=ellipseDistance(x,z,WORLD_OCEAN);if(oceanD<1.18){const weight=1-smoothRange(.78,1.16,oceanD),target=WORLD_OCEAN.level-1.35-(1-clamp(oceanD,0,1))*.65;h=h*(1-weight)+target*weight;}
+  const oceanD=ellipseDistance(x,z,WORLD_OCEAN);if(oceanD<1.18){const inside=clamp(oceanD,0,1),weight=1-smoothRange(.80,1.16,oceanD),bowl=Math.pow(1-inside,.52),target=WORLD_OCEAN.level-(1.25+5.4*bowl);h=h*(1-weight)+target*weight;}
   return clamp(h,-9,112);
 }
 
@@ -799,6 +798,7 @@ class CenterDynastyGame {
     this.magicSpider = null;
     this.ambientBirds = [];
     this.oceanFish = [];
+    this.villageFish = [];
     this.lakeZones = [];
     this.villageHouseVariantTemplates = new Map();
     this.pathTextureCache = new Map();
@@ -853,7 +853,7 @@ class CenterDynastyGame {
     this.ownerVerifiedByFirebase = false;
     this.verifiedStaffRole = 'player';
     this.verifiedStaffRoleRaw = 'player';
-    this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, speedMultiplier: 1, freezeTime: false };
+    this.ownerFlags = { vanish: false, god: false, noclip: false, fly: false, speedLevel: 0, speedMultiplier: clamp(Number(this.state.staffSettings?.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER), freezeTime: false };
     this.ownerAura = null;
     this.transformationEffects = [];
     this.wingGeometryTemplate = null;
@@ -1204,6 +1204,10 @@ class CenterDynastyGame {
       if (!event.repeat && this.isStaffActive && event.code===binds.god && this.canStaff('god')) { this.toggleStaffFlag('god'); return; }
       if (!event.repeat && this.isStaffActive && event.code===binds.fly && this.canStaff('fly')) { this.toggleStaffFlag('fly'); return; }
       if (!event.repeat && this.isStaffActive && event.code===binds.transform && (this.staffCapabilities?.forms||[]).length>1) { this.activateQuickTransformation(); return; }
+      if(!event.repeat&&this.isStaffActive&&this.canStaff('speed')&&this.state.staffSettings?.speedControlMode==='keys'&&this.staffSpeedControlActive()){
+        if(event.code===binds.speedUp){this.adjustStaffSpeed(1,'key');return;}
+        if(event.code===binds.speedDown){this.adjustStaffSpeed(-1,'key');return;}
+      }
       if (event.code === 'KeyR' && !event.repeat && this.buildMode) this.rotateBuildGhost();
       if (event.code === 'Escape') {
         if (this.exitConfirm && !this.exitConfirm.hidden) this.closeExitConfirmation();
@@ -1214,6 +1218,10 @@ class CenterDynastyGame {
         else this.openExitConfirmation();
       }
     }, true);
+    document.addEventListener('wheel',(event)=>{
+      if(!this.opened||isEditableTarget(event.target)||this.ownerPanel?.classList.contains('is-open')||this.panel?.classList.contains('is-open')||this.state.staffSettings?.speedControlMode!=='wheel'||!this.staffSpeedControlActive())return;
+      event.preventDefault();this.adjustStaffSpeed(event.deltaY<0?1:-1,'wheel');
+    },{capture:true,passive:false});
     document.addEventListener('keyup', (event) => {
       this.keys.delete(event.code);
       if(event.code==='ShiftLeft'||event.code==='ShiftRight')this.releaseSprintLockIfReady();
@@ -2062,7 +2070,7 @@ async updateChunkStreaming(force = false) {
     const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     const terrain = new THREE.Mesh(makeTerrainGeometry(CHUNK_SIZE, segments, originX, originZ), terrainMaterial);
     group.add(terrain);
-    const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [], npcs: [], doors: [] };
+    const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [], npcs: [], doors: [], villageFish: [] };
     // V308: weltweite Wege + Dorfanschlüsse werden zuerst erzeugt; Wasser und Vegetation respektieren dieses Netz.
     // Fundamente/Brunnen/Häuser bleiben weiterhin für die späteren Schritte deaktiviert.
     this.buildChunkPaths(chunk);
@@ -2255,29 +2263,28 @@ async updateChunkStreaming(force = false) {
   }
 
   buildChunkVillageWater(chunk){
-    // V306 SCHRITT 3 — bewusst nur Wasser/Landschaft am Dorfrand.
-    // Keine Betonplatten, kein Brunnen und keine Häuser in diesem Schritt.
-    chunk.villageWaterFeatures=[];
+    // V309 SCHRITT 3 FINAL — tiefes Wasser, echte Bergmulden und kleine Wasser-Tiere.
+    // Betonplatten, Brunnen und Häuser bleiben weiterhin deaktiviert.
+    chunk.villageWaterFeatures=[];chunk.villageFish=[];
     const plan=chunk.villageRoadPlan;if(!plan)return;
     const features=villageWaterFeaturesForChunk(chunk.cx,chunk.cz);if(!features.length)return;
-    const waterMaterial=()=>new THREE.MeshPhysicalMaterial({color:0x3f8295,transparent:true,opacity:.82,roughness:.16,metalness:.02,transmission:.07,side:THREE.DoubleSide});
-    const shoreMaterial=()=>new THREE.MeshStandardMaterial({color:0xa68d64,roughness:1,metalness:0});
+    const waterMaterial=()=>new THREE.MeshPhysicalMaterial({color:0x32788f,transparent:true,opacity:.84,roughness:.12,metalness:.01,transmission:.10,side:THREE.DoubleSide});
+    const shoreMaterial=()=>new THREE.MeshStandardMaterial({color:0x9a8059,roughness:1,metalness:0});
+    const bankMaterial=()=>new THREE.MeshStandardMaterial({color:0x66533e,roughness:1,metalness:0,flatShading:true});
     const reedMat=new THREE.MeshStandardMaterial({color:0x526d36,roughness:1}),reedGeo=new THREE.CylinderGeometry(.025,.042,.72,5);
     for(let index=0;index<features.length;index+=1){
-      const feature=features[index],holder=new THREE.Group();holder.position.set(feature.x-chunk.originX,feature.level,feature.z-chunk.originZ);holder.rotation.y=-feature.yaw;holder.name=`v306-village-water-holder-${index}`;
-      // Sand-/Erdsaum ist etwas größer als das eigentliche Wasser und macht den Rand klar sichtbar.
-      const shore=new THREE.Mesh(new THREE.RingGeometry(.97,1.17,56),shoreMaterial());shore.rotation.x=-Math.PI/2;shore.scale.set(feature.rx,feature.rz,1);shore.position.y=-.055;shore.name=`v306-village-water-shore-${index}`;shore.receiveShadow=true;holder.add(shore);
-      const water=new THREE.Mesh(new THREE.CircleGeometry(1,56),waterMaterial());water.rotation.x=-Math.PI/2;water.scale.set(feature.rx,feature.rz,1);water.position.y=.018;water.name=`v306-village-water-surface-${index}`;holder.add(water);
-      // Schilf sitzt nur an einem Teil des Ufers und lässt dadurch Wege/Ansicht frei.
-      const reedCount=18, reeds=new THREE.InstancedMesh(reedGeo,reedMat.clone(),reedCount),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),rnd=seededRandom((WORLD_SEED+30611+chunk.cx*97+chunk.cz*193+index*37)>>>0);
-      for(let r=0;r<reedCount;r++){
-        const a=(r/reedCount)*Math.PI*2+(rnd()-.5)*.18,rr=.95+rnd()*.11,lx=Math.cos(a)*feature.rx*rr,lz=Math.sin(a)*feature.rz*rr,sc=.65+rnd()*.85;
-        matrix.compose(new THREE.Vector3(lx,.34*sc,lz),q,new THREE.Vector3(sc,sc,sc));reeds.setMatrixAt(r,matrix);
-      }
-      reeds.instanceMatrix.needsUpdate=true;reeds.name=`v306-village-water-reeds-${index}`;holder.add(reeds);
-      chunk.group.add(holder);
-      const hotspot={id:feature.id,type:'water',x:feature.x,z:feature.z,radius:Math.max(feature.rx,feature.rz)*.72,label:`Wasser aus ${feature.label} schöpfen`,chunkKey:chunk.key};
-      chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);chunk.villageWaterFeatures.push(feature);
+      const feature=features[index],holder=new THREE.Group();holder.position.set(feature.x-chunk.originX,feature.level,feature.z-chunk.originZ);holder.rotation.y=-feature.yaw;holder.name=`v309-village-water-holder-${index}`;
+      const shore=new THREE.Mesh(new THREE.RingGeometry(.97,1.18,64),shoreMaterial());shore.rotation.x=-Math.PI/2;shore.scale.set(feature.rx,feature.rz,1);shore.position.y=-.045;shore.name=`v309-village-water-shore-${index}`;shore.receiveShadow=true;holder.add(shore);
+      const water=new THREE.Mesh(new THREE.CircleGeometry(1,64),waterMaterial());water.rotation.x=-Math.PI/2;water.scale.set(feature.rx,feature.rz,1);water.position.y=.018;water.name=`v309-village-water-surface-${index}`;holder.add(water);
+      // Auf steilem Gelände macht ein niedriger Erd-/Steinwall die talwärts liegende Kante sichtbar.
+      if(feature.mountain){const bank=new THREE.Mesh(new THREE.TorusGeometry(1.075,.055,6,48),bankMaterial());bank.rotation.x=Math.PI/2;bank.scale.set(feature.rx,feature.rz,Math.max(feature.rx,feature.rz));bank.position.y=-.10;bank.name=`v309-mountain-pond-rim-${index}`;holder.add(bank);}
+      const reedCount=22,reeds=new THREE.InstancedMesh(reedGeo,reedMat.clone(),reedCount),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),rnd=seededRandom((WORLD_SEED+30911+chunk.cx*97+chunk.cz*193+index*37)>>>0);
+      for(let r=0;r<reedCount;r++){const a=(r/reedCount)*Math.PI*2+(rnd()-.5)*.18,rr=.96+rnd()*.10,lx=Math.cos(a)*feature.rx*rr,lz=Math.sin(a)*feature.rz*rr,sc=.65+rnd()*.85;matrix.compose(new THREE.Vector3(lx,.34*sc,lz),q,new THREE.Vector3(sc,sc,sc));reeds.setMatrixAt(r,matrix);}
+      reeds.instanceMatrix.needsUpdate=true;reeds.name=`v309-village-water-reeds-${index}`;holder.add(reeds);chunk.group.add(holder);
+      const hotspot={id:feature.id,type:'water',x:feature.x,z:feature.z,radius:Math.max(feature.rx,feature.rz)*.72,label:`Wasser aus ${feature.label} schöpfen`,chunkKey:chunk.key};chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);chunk.villageWaterFeatures.push(feature);
+      // Kleine Gewässer: Clownfisch/Nemo. Die Fische bleiben deutlich unter der Oberfläche.
+      const fishCount=Math.max(feature.rx,feature.rz)>18?4:2;
+      for(let f=0;f<fishCount;f+=1){const visual=this.createAnimalVisual('clownfish');if(!visual)continue;const group=new THREE.Group();group.add(visual);chunk.group.add(group);const fish={group,visual,type:'clownfish',feature,angle:(f/fishCount)*Math.PI*2,phase:f*1.47,speed:.22+f*.025,radiusFactor:.32+f*.09,chunk};chunk.villageFish.push(fish);this.villageFish.push(fish);}
     }
   }
 
@@ -2535,6 +2542,7 @@ buildChunkGrass(chunk) {
     this.hotspots=this.hotspots.filter((node)=>!hotspots.has(node));
     this.villages=this.villages.filter((v)=>!villages.has(v));
     this.npcs=this.npcs.filter((npc)=>!npcs.has(npc));
+    const villageFishSet=new Set(chunk.villageFish||[]);this.villageFish=this.villageFish.filter((fish)=>!villageFishSet.has(fish));
     for(const doorId of chunk.doors||[])this.villageDoors.delete(doorId);
     this.seasonMaterials=this.seasonMaterials.filter((entry)=>entry.chunkKey!==key);
     this.chunks.delete(key);
@@ -2618,6 +2626,7 @@ buildChunkGrass(chunk) {
     const px=this.player?.position.x||0,pz=this.player?.position.z||0;
     for(const bird of this.ambientBirds){bird.angle+=delta*bird.speed;const r=bird.radius+Math.sin(now*.0004+bird.phase)*8,bx=px+Math.cos(bird.angle)*r,bz=pz+Math.sin(bird.angle)*r,by=terrainHeightAt(bx,bz)+bird.height+Math.sin(now*.002+bird.phase)*2;bird.group.position.set(bx,by,bz);bird.group.rotation.y=-bird.angle+Math.PI/2;this.setAnimalAnimation(bird.visual,true,delta);}
     if(this.oceanZone){for(const fish of this.oceanFish){fish.angle+=delta*fish.speed;const bx=this.oceanZone.x+Math.cos(fish.angle+fish.phase)*fish.radius,bz=this.oceanZone.z+Math.sin(fish.angle*1.13+fish.phase)*Math.min(this.oceanZone.depth*.34,fish.radius*1.35),by=(this.oceanZone.y??WATER_LEVEL)-1.35-Math.sin(now*.0014+fish.phase)*.35;fish.group.position.set(bx,by,bz);fish.group.rotation.y=-fish.angle;this.setAnimalAnimation(fish.visual,true,delta);}}
+    for(const fish of this.villageFish||[]){const feature=fish.feature,chunk=fish.chunk;if(!feature||!chunk?.group?.parent)continue;fish.angle+=delta*fish.speed;const a=fish.angle+fish.phase,rx=feature.rx*fish.radiusFactor,rz=feature.rz*fish.radiusFactor,bx=feature.x+Math.cos(a)*rx,bz=feature.z+Math.sin(a*1.07)*rz,bottom=terrainHeightAt(bx,bz),targetY=feature.level-Math.min(feature.depth*.45,1.05+fish.radiusFactor*1.5)+Math.sin(now*.0018+fish.phase)*.18,by=Math.max(bottom+.28,Math.min(feature.level-.32,targetY));fish.group.position.set(bx-chunk.originX,by,bz-chunk.originZ);fish.group.rotation.y=-a+Math.PI/2;this.setAnimalAnimation(fish.visual,true,delta);}
   }
 
   makePath(points, width = 5.5, color = 0x776246) {
@@ -3966,7 +3975,7 @@ updateRoleHud() {
     const previousRole=this.activeStaffRole,previousDetail=this.activeStaffDetailRole,local=roleSnapshot();let detailRole=local.detailRole||detailedStaffRole(local.rawRole),activeRole=canonicalStaffRole(detailRole);if(this.onlineUser&&this.ownerVerificationChecked){detailRole=detailedStaffRole(this.verifiedStaffRoleRaw||this.verifiedStaffRole);activeRole=canonicalStaffRole(detailRole);}this.activeStaffDetailRole=detailRole;this.activeStaffRole=activeRole;this.staffCapabilities=staffCapabilities(activeRole,detailRole);this.isStaffActive=detailRole!=='player';this.isOwnerActive=detailRole==='owner';if(!['owner','admin'].includes(activeRole)&&Number(this.state?.needs?.health)>100)this.state.needs.health=100;
     this.overlay.classList.toggle('is-owner',this.isOwnerActive);this.overlay.classList.toggle('is-staff',this.isStaffActive);this.overlay.dataset.staffRole=detailRole;if(this.ownerMenuButton){this.ownerMenuButton.hidden=!this.isStaffActive;this.ownerMenuButton.title=`${STAFF_ROLE_LABELS[detailRole]||STAFF_ROLE_LABELS[activeRole]||'Team'}-Menü (Punkt)`;}
     const caps=this.staffCapabilities,appearance=this.state.ownerAppearance,before=`${appearance.skin}|${appearance.ownerBaseModel||'default'}|${appearance.staffSkinTheme}|${appearance.aura}|${appearance.auraTheme}|${appearance.size}|${appearance.heldItem}|${appearance.heldItemTheme}|${appearance.cape}|${appearance.capeTheme}|${appearance.cloak}|${appearance.cloakTheme}|${appearance.hat}|${appearance.hatTheme}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(!caps.size)appearance.size=1;if(!caps.forms.includes(appearance.skin))appearance.skin='normal';if(!caps.items.includes(appearance.heldItem))appearance.heldItem='none';if(!(caps.vehicles||['none']).includes(appearance.vehicle))appearance.vehicle='none';if(!caps.ownerCosmetics){appearance.aura=false;appearance.cape=false;appearance.cloak=false;appearance.hat=false;}const ownTheme=staffThemeForDetailedRole(detailRole);if(!this.isOwnerActive){if(['admin','moderator','supporter'].includes(ownTheme)){appearance.auraTheme=ownTheme;appearance.capeTheme=ownTheme;appearance.cloakTheme=ownTheme;appearance.hatTheme=ownTheme;appearance.heldItemTheme=ownTheme;if(!['none',ownTheme].includes(appearance.staffSkinTheme))appearance.staffSkinTheme='none';}else{appearance.staffSkinTheme='none';appearance.aura=false;appearance.cape=false;appearance.cloak=false;appearance.hat=false;appearance.heldItem='none';}}if(!['owner','admin'].includes(activeRole))appearance.publicMode='staff';else if(activeRole==='admin'&&!['admin','player','staff'].includes(appearance.publicMode))appearance.publicMode='admin';
-    for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1;if(!this.isStaffActive)this.closeOwnerMenu();const after=`${appearance.skin}|${appearance.ownerBaseModel||'default'}|${appearance.staffSkinTheme}|${appearance.aura}|${appearance.auraTheme}|${appearance.size}|${appearance.heldItem}|${appearance.heldItemTheme}|${appearance.cape}|${appearance.capeTheme}|${appearance.cloak}|${appearance.cloakTheme}|${appearance.hat}|${appearance.hatTheme}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(previousRole!==activeRole||previousDetail!==detailRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
+    for(const [flag,cap] of [['vanish','vanish'],['god','god'],['noclip','noclip'],['fly','fly'],['freezeTime','freezeTime']])if(!caps[cap])this.ownerFlags[flag]=false;if(!caps.speed){this.ownerFlags.speedLevel=0;this.ownerFlags.speedMultiplier=1;}else if(!Number.isFinite(Number(this.ownerFlags.speedMultiplier)))this.ownerFlags.speedMultiplier=clamp(Number(this.state.staffSettings?.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER);if(!this.isStaffActive)this.closeOwnerMenu();const after=`${appearance.skin}|${appearance.ownerBaseModel||'default'}|${appearance.staffSkinTheme}|${appearance.aura}|${appearance.auraTheme}|${appearance.size}|${appearance.heldItem}|${appearance.heldItemTheme}|${appearance.cape}|${appearance.capeTheme}|${appearance.cloak}|${appearance.cloakTheme}|${appearance.hat}|${appearance.hatTheme}|${appearance.vehicle}|${appearance.publicMode}|${appearance.publicGender}`;if(previousRole!==activeRole||previousDetail!==detailRole||before!==after||!this.playerModel)this.applyOwnerAppearance();else this.applyOwnerVisualState();
   }
 
   async verifyLocalOwnerRole() {
@@ -3983,6 +3992,7 @@ updateRoleHud() {
     const changedSlot = latest.slot !== this.currentSlot;
     this.currentSlot = latest.slot;
     this.state = nextState;
+    this.ownerFlags.speedMultiplier=clamp(Number(this.state.staffSettings?.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER);this.ownerFlags.speedLevel=0;
     this.ensureOpenWorldState();
     this.yaw = Number(this.state.position.yaw || Math.PI);
     this.firstPerson = this.state.position.view === 'first';
@@ -4095,18 +4105,33 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     return false;
   }
 
+  adjustStaffSpeed(direction=1,source='control'){
+    if(!this.isStaffActive||!this.canStaff('speed'))return false;
+    const step=.25,next=clamp((Number(this.ownerFlags.speedMultiplier)||1)+(direction>0?step:-step),1,OWNER_MAX_SPEED_MULTIPLIER);if(Math.abs(next-(Number(this.ownerFlags.speedMultiplier)||1))<.001)return false;
+    this.ownerFlags.speedMultiplier=next;this.ownerFlags.speedLevel=0;this.state.staffSettings.speedMultiplier=next;this.saveState(true);
+    const slider=this.ownerPanelBody?.querySelector?.('[data-owner-speed]');if(slider){slider.value=String(next);const label=slider.parentElement?.querySelector('b');if(label)label.textContent=`${next.toFixed(2)}×`;}
+    this.toast(`Tempo ${next.toFixed(2)}×${source==='wheel'?' · Scrollrad':''}`);return true;
+  }
+
+  staffSpeedControlActive(){
+    if(!this.opened||!this.isStaffActive||!this.canStaff('speed'))return false;
+    const mode=this.state.staffSettings?.speedControlMode||'wheel';if(mode==='off')return false;
+    const plane=this.state.ownerAppearance?.vehicle==='plane'&&!!this.ownerPlaneObject;
+    return !!(this.ownerFlags.fly||plane||this.walking||Math.hypot(this.input?.forward||0,this.input?.right||0)>.05);
+  }
+
   updateMovement(delta) {
     if(this.deathScreenOpen)return;
     if(this.inHouseInterior){const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05,sprint=!!input.sprint,speed=sprint?6.3:4.25,startX=this.player.position.x,startZ=this.player.position.z;if(moving){const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length),sin=Math.sin(this.yaw),cos=Math.cos(this.yaw),dx=(r*cos-f*sin)*speed*delta,dz=(-r*sin-f*cos)*speed*delta,nx=clamp(this.player.position.x+dx,-3.55,3.55),nz=clamp(this.player.position.z+dz,-4.35,4.35);this.player.position.x=nx;this.player.position.z=nz;const targetYaw=Math.atan2(nx-startX,nz-startZ);if(Math.hypot(nx-startX,nz-startZ)>.0005)this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,targetYaw,Math.min(1,delta*9));}this.player.position.y=0;this.velocityY=0;this.onGround=true;this.walking=moving;this.sprinting=moving&&sprint;this.motionVelocityX=(this.player.position.x-startX)/Math.max(.001,delta);this.motionVelocityY=0;this.motionVelocityZ=(this.player.position.z-startZ)/Math.max(.001,delta);this.updatePlayerAnimation(delta,moving,sprint);return;}
 
     const input=this.currentInput(),length=Math.hypot(input.forward,input.right),moving=length>.05,startX=this.player.position.x,startY=this.player.position.y,startZ=this.player.position.z;
     const owner=this.isStaffActive,fly=owner&&this.ownerFlags.fly,god=owner&&this.ownerFlags.god,scooter=owner&&this.state.ownerAppearance?.vehicle==='scooter'&&!!this.ownerScooterObject,plane=owner&&this.state.ownerAppearance?.vehicle==='plane'&&!!this.ownerPlaneObject,mounted=!!this.mountedHorse;
-    const inWater=!fly&&!mounted&&!scooter&&!plane&&this.isInWater(this.player.position.x,this.player.position.z);
+    const waterInfo=!fly&&!mounted&&!scooter&&!plane?this.waterInfoAt(this.player.position.x,this.player.position.z):null,inWater=!!waterInfo&&this.player.position.y<=waterInfo.surface+.45;
     const sprint=input.sprint&&(god||this.state.needs.stamina>2)&&!inWater;
     const speedBoost=owner?clamp(Number(this.ownerFlags.speedMultiplier)||OWNER_SPEED_LEVELS[Math.floor(clamp(this.ownerFlags.speedLevel,0,OWNER_SPEED_LEVELS.length-1))]||1,1,OWNER_MAX_SPEED_MULTIPLIER):1;
     const scooterKmh=[40,80,120,150][Math.floor(clamp(Number(this.state.ownerAppearance?.scooterTuning)||0,0,3))]||40;
     const baseSpeed=plane?(fly?(sprint?27:20):7.2):scooter?scooterKmh/3.6:mounted?(sprint?13.2:8.9):(sprint?8.8:5.1);
-    const healthRatio=this.state.needs.health/Math.max(1,this.effectiveMaxHealth());const speed=baseSpeed*(inWater?.48:1)*((healthRatio<.25&&!god)?.72:1)*((scooter||plane)?1:speedBoost);
+    const healthRatio=this.state.needs.health/Math.max(1,this.effectiveMaxHealth());const speed=baseSpeed*(inWater?.48:1)*((healthRatio<.25&&!god)?.72:1)*(scooter?1:speedBoost);
     let movedDistance=0;
     if(moving){
       const f=input.forward/Math.max(1,length),r=input.right/Math.max(1,length),sin=Math.sin(this.yaw),cos=Math.cos(this.yaw);
@@ -4132,7 +4157,12 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       this.modelPivot.rotation.y=lerpAngle(this.modelPivot.rotation.y,lookYaw,Math.min(1,delta*10));
     }
     const terrainFloor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;
-    if(fly){
+    if(inWater&&waterInfo){
+      // V309: echte Schwimm-/Tauchhöhe. Wasser besitzt keine unsichtbare Boden-Hitbox mehr auf
+      // Oberflächenniveau; der Spieler kann bis zum tatsächlich abgesenkten Gewässerboden tauchen.
+      const bottom=terrainHeightAt(this.player.position.x,this.player.position.z)+.18,surface=waterInfo.surface-.12,vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0),targetVy=vertical*3.1+(vertical===0&&this.player.position.y<surface-.75?.32:0);
+      this.velocityY+=(targetVy-this.velocityY)*(1-Math.exp(-delta*5.5));this.player.position.y=clamp(this.player.position.y+this.velocityY*delta,bottom,surface);this.onGround=this.player.position.y<=bottom+.03;this.fallStartY=null;
+    }else if(fly){
       const vertical=(this.keys.has('Space')?1:0)-((this.keys.has('ControlLeft')||this.keys.has('ControlRight'))?1:0);
       const minimumY=terrainFloor+.22,maximumY=Math.min(MAX_FLY_HEIGHT,terrainFloor+150);
       let targetVertical=vertical*speed*.78;
@@ -4151,7 +4181,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     }else{
       const wasGrounded=this.onGround;if(!wasGrounded&&this.fallStartY===null)this.fallStartY=this.player.position.y;
       this.velocityY-=15.5*delta;this.player.position.y+=this.velocityY*delta;
-      const ground=Math.max(this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y),inWater?WATER_LEVEL-1.05:-999);
+      const ground=this.supportHeightAt(this.player.position.x,this.player.position.z,this.player.position.y);
       if(this.player.position.y<=ground){this.player.position.y=ground;this.velocityY=0;this.onGround=true;
         if(!wasGrounded&&this.fallStartY!==null){const fallDistance=Math.max(0,this.fallStartY-ground);if(fallDistance>4.25&&!god){const damage=Math.min(100,Math.max(1,Math.round(Math.pow(fallDistance-3.5,1.22)*8.6)));this.state.needs.health=Math.max(0,this.state.needs.health-damage);this.toast(`Fallschaden: -${damage} Leben`);}this.publishPresence(true).catch(()=>{});}
         this.fallStartY=null;
@@ -4162,7 +4192,15 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     this.walking=moving;this.sprinting=!!(moving&&sprint);const invDt=1/Math.max(.001,delta);this.motionVelocityX=clamp((this.player.position.x-startX)*invDt,-200,200);this.motionVelocityY=clamp((this.player.position.y-startY)*invDt,-200,200);this.motionVelocityZ=clamp((this.player.position.z-startZ)*invDt,-200,200);if(!moving){this.motionVelocityX*=.2;this.motionVelocityZ*=.2;}this.renderScooterTuningBar();this.updatePlayerAnimation(delta,moving&&!(!this.onGround&&!fly),sprint);this.updateCurrentRegion();if(this.buildMode)this.updateBuildGhost();
   }
 
-  isInWater(x,z) { const river=Math.abs(x-riverCenter(z))<14.5,lake=(this.lakeZones||[]).some((zone)=>Math.pow((x-zone.x)/Math.max(1,zone.rx),2)+Math.pow((z-zone.z)/Math.max(1,zone.rz),2)<1),ocean=this.oceanZone&&Math.abs(x-this.oceanZone.x)<this.oceanZone.width*.5&&Math.abs(z-this.oceanZone.z)<this.oceanZone.depth*.5; return river||lake||!!ocean; }
+  waterInfoAt(x,z){
+    if(Math.abs(x-riverCenter(z))<14.5)return {type:'river',surface:WATER_LEVEL,depth:Math.max(1.5,WATER_LEVEL-terrainHeightAt(x,z))};
+    for(const zone of this.lakeZones||[]){if(ellipseDistance(x,z,zone)<1)return {type:'lake',surface:Number(zone.y??lakeWaterLevel(zone)),depth:Math.max(1.5,Number(zone.y??lakeWaterLevel(zone))-terrainHeightAt(x,z))};}
+    if(this.oceanZone&&ellipseDistance(x,z,this.oceanZone)<1)return {type:'ocean',surface:Number(this.oceanZone.y??WORLD_OCEAN.level),depth:Math.max(3,Number(this.oceanZone.y??WORLD_OCEAN.level)-terrainHeightAt(x,z))};
+    const cx=worldToChunk(x),cz=worldToChunk(z);for(const feature of villageWaterFeaturesForChunk(cx,cz)){if(ellipseDistance(x,z,feature)<1)return {type:'village',surface:feature.level,depth:Math.max(1.5,feature.level-terrainHeightAt(x,z)),feature};}
+    return null;
+  }
+
+  isInWater(x,z){return !!this.waterInfoAt(x,z);}
 
   updateCurrentRegion() {
     if(!this.player)return;
@@ -5602,7 +5640,7 @@ renderOwnerMenu(){
     if(['owner','admin'].includes(this.activeStaffRole)){const publicStyle=this.effectivePublicStaffStyle(),roleButtons=this.isOwnerActive?`<button class="${publicStyle==='owner'?'active ':''}" data-owner-action="public-mode-owner">Als Owner</button><button class="${publicStyle==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${publicStyle==='moderator'?'active ':''}" data-owner-action="public-mode-moderator">Als Moderator</button><button class="${publicStyle==='supporter'?'active ':''}" data-owner-action="public-mode-supporter">Als Supporter</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`:`<button class="${publicStyle==='admin'?'active ':''}" data-owner-action="public-mode-admin">Als Admin</button><button class="${disguised?'active ':''}" data-owner-action="public-mode-player">Als normaler Spieler</button>`;sections.push(`<h3>Öffentliche Identität</h3><div class="mdc-owner-character"><div class="mdc-owner-actions three">${roleButtons}</div><div class="mdc-owner-actions"><button class="${appearance.publicGender==='male'?'active ':''}" data-owner-action="public-gender-male">Mann</button><button class="${appearance.publicGender==='female'?'active ':''}" data-owner-action="public-gender-female">Frau</button></div><label>Öffentlicher Spielername<input data-owner-public-alias maxlength="30" value="${escapeHtml(appearance.publicAlias||'Center Spieler')}"></label><p class="mdc-note">Der Owner kann sich öffentlich als Owner, Admin, Moderator, Supporter oder normaler Spieler darstellen. Die echten Rechte bleiben intern erhalten.</p></div>`);}
     sections.push(`<h3>Schutz und Bewegung</h3><div class="mdc-owner-toggle-grid">${movement}</div>${utility?`<div class="mdc-owner-actions">${utility}</div>`:''}`);
     if(['owner','admin'].includes(this.activeStaffRole)){const maxHealth=this.effectiveMaxHealth(),staffDamage=this.staffDamageAmount();sections.push(`<h3>Staff-Kampfwerte</h3><div class="mdc-owner-character"><label>Maximales Leben <input data-owner-health-max type="number" min="100" max="10000" step="50" value="${maxHealth}"><b>${maxHealth}</b></label><label>Stab-Schaden <input data-owner-staff-damage type="number" min="10" max="2500" step="10" value="${staffDamage}"><b>${staffDamage}</b></label><div class="mdc-owner-actions"><button data-owner-action="fill-staff-health">❤ Leben auf Maximum</button></div></div>`);}
-    if(caps.speed)sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label></div>`);
+    if(caps.speed){const speedMode=this.state.staffSettings?.speedControlMode||'wheel';sections.push(`<h3>Geschwindigkeit</h3><div class="mdc-owner-character"><label>Tempo <input data-owner-speed type="range" min="1" max="${OWNER_MAX_SPEED_MULTIPLIER}" step="0.25" value="${speedMultiplier}"><b>${speedMultiplier.toFixed(2)}×</b></label><label>Tempo-Steuerung<select data-owner-speed-control><option value="wheel" ${speedMode==='wheel'?'selected':''}>Scrollrad beim Laufen/Fly/Flieger</option><option value="keys" ${speedMode==='keys'?'selected':''}>Eigene Tasten</option><option value="off" ${speedMode==='off'?'selected':''}>Aus</option></select></label>${speedMode==='keys'?`<div class="mdc-keybind-grid"><label>Schneller<select data-keybind-action="speedUp">${this.keybindOptions(this.state.keybinds?.speedUp)}</select></label><label>Langsamer<select data-keybind-action="speedDown">${this.keybindOptions(this.state.keybinds?.speedDown)}</select></label></div>`:''}<p class="mdc-note">Scroll hoch = schneller · Scroll runter = langsamer. Funktioniert nur für Teamrollen mit Tempo-Recht und nur beim Laufen, Fly oder im Sägelflugzeug.</p></div>`);}
     if(caps.size||forms.length>1)sections.push(`<h3>Charakter</h3><div class="mdc-owner-character">${caps.size?`<label>Größe <input data-owner-size type="range" min="0.45" max="2.5" step="0.05" value="${appearance.size}"><b>${Number(appearance.size).toFixed(2)}×</b></label>`:''}<div class="mdc-owner-actions three">${forms.map(([id,label])=>`<button class="${appearance.skin===id?'active ':''}" data-owner-action="skin-${id}">${label}</button>`).join('')}</div></div>`);
     if(teamToolIds.length>1)sections.push(`<h3>Team-Werkzeuge</h3><div class="mdc-owner-actions three">${teamToolIds.map((id)=>`<button class="${appearance.heldItem===id?'active ':''}" data-owner-action="admin-item" data-owner-item="${id}">${itemLabels[id]||id}</button>`).join('')}</div>`);
     const availableThemes=this.allowedCosmeticThemes();if(availableThemes.length){const titles={owner:'Owner Galaxy',admin:'Admin Red Galaxy',moderator:'Moderator Grün',supporter:'Supporter Blau'};for(const theme of availableThemes)sections.push(themeSection(theme,titles[theme]));}else if(this.isStaffActive)sections.push(`<h3>Team-Skin</h3><div class="mdc-owner-character"><p class="mdc-note">${detailRole==='testsupporter'?'Testsupporter':'Teammitglied'} nutzt den weißen Team-Skin${detailRole==='testsupporter'?' und darf Fly benutzen':''}.</p></div>`);
@@ -5632,14 +5670,14 @@ renderOwnerMenu(){
   }
 
   keybindOptions(selected){return KEYBIND_OPTIONS.map((code)=>`<option value="${code}" ${code===selected?'selected':''}>${KEYBIND_LABELS[code]||code}</option>`).join('');}
-  handleKeybindChange(event){const quick=event.target.closest?.('[data-owner-quick-form]');if(quick){const form=quick.value,caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole);if(caps.forms?.includes(form)){this.state.ownerAppearance.quickForm=form;this.saveState(true);this.toast(`Verwandlungs-Keybind: ${form}`);}return;}const select=event.target.closest?.('[data-keybind-action]');if(!select)return;const action=select.dataset.keybindAction,code=select.value;if(!(action in DEFAULT_KEYBINDS)||!KEYBIND_OPTIONS.includes(code))return;this.state.keybinds[action]=code;this.saveState(true);this.toast(`Tastenbelegung gespeichert: ${KEYBIND_LABELS[code]||code}`);}
+  handleKeybindChange(event){const speedControl=event.target.closest?.('[data-owner-speed-control]');if(speedControl&&this.canStaff('speed')){this.state.staffSettings.speedControlMode=['wheel','keys','off'].includes(speedControl.value)?speedControl.value:'wheel';this.saveState(true);this.renderOwnerMenu();this.toast(`Tempo-Steuerung: ${this.state.staffSettings.speedControlMode==='wheel'?'Scrollrad':this.state.staffSettings.speedControlMode==='keys'?'Tasten':'Aus'}.`);return;}const quick=event.target.closest?.('[data-owner-quick-form]');if(quick){const form=quick.value,caps=this.staffCapabilities||staffCapabilities(this.activeStaffRole);if(caps.forms?.includes(form)){this.state.ownerAppearance.quickForm=form;this.saveState(true);this.toast(`Verwandlungs-Keybind: ${form}`);}return;}const select=event.target.closest?.('[data-keybind-action]');if(!select)return;const action=select.dataset.keybindAction,code=select.value;if(!(action in DEFAULT_KEYBINDS)||!KEYBIND_OPTIONS.includes(code))return;this.state.keybinds[action]=code;this.saveState(true);this.toast(`Tastenbelegung gespeichert: ${KEYBIND_LABELS[code]||code}`);}
   toggleStaffFlag(key){if(!this.isStaffActive)return;const capability={vanish:'vanish',god:'god',fly:'fly'}[key];if(!capability||!this.canStaff(capability))return;this.ownerFlags[key]=!this.ownerFlags[key];if(key==='vanish')this.applyOwnerVisualState();if(key==='god'&&this.ownerFlags.god)for(const need of Object.keys(this.state.needs))this.state.needs[need]=need==='health'?this.effectiveMaxHealth():100;if(key==='fly'){this.flightVerticalVelocity=0;this.flightInputMagnitude=0;const floor=terrainHeightAt(this.player.position.x,this.player.position.z)+MIN_WORLD_CLEARANCE;if(this.ownerFlags.fly){this.velocityY=0;this.player.position.y=Math.max(this.player.position.y,floor);this.flightTakeoffTargetY=floor+2;this.flightTakeoffActive=true;}else{this.flightTakeoffActive=false;this.flightTakeoffTargetY=null;this.flightLean=0;this.flightRoll=0;if(this.flightVisualPivot){this.flightVisualPivot.rotation.x=0;this.flightVisualPivot.rotation.z=0;}}}this.renderOwnerMenu();this.publishPresence(true).catch(()=>{});}
 
 handleOwnerInput(event){
     if(!this.staffOnly())return;const alias=event.target.closest?.('[data-owner-public-alias]');if(alias&&['owner','admin'].includes(this.activeStaffRole)){this.state.ownerAppearance.publicAlias=String(alias.value||'Center Spieler').trim().slice(0,30)||'Center Spieler';this.saveState(true);if(this.isPublicPlayerMode())this.publishPresence(true).catch(()=>{});return;}
     const healthInput=event.target.closest?.('[data-owner-health-max]');if(healthInput&&['owner','admin'].includes(this.activeStaffRole)){const old=this.effectiveMaxHealth(),value=Math.floor(clamp(Number(healthInput.value)||old,100,10000));this.state.ownerAppearance.staffMaxHealth=value;if(value>old)this.state.needs.health=Math.min(value,this.state.needs.health+(value-old));else this.state.needs.health=Math.min(value,this.state.needs.health);const label=healthInput.parentElement?.querySelector('b');if(label)label.textContent=String(value);this.renderHud(true);this.saveState(true);return;}
     const damageInput=event.target.closest?.('[data-owner-staff-damage]');if(damageInput&&['owner','admin'].includes(this.activeStaffRole)){const value=Math.floor(clamp(Number(damageInput.value)||180,10,2500));this.state.ownerAppearance.staffDamage=value;const label=damageInput.parentElement?.querySelector('b');if(label)label.textContent=String(value);this.saveState(true);return;}
-    const speedInput=event.target.closest?.('[data-owner-speed]');if(speedInput&&this.canStaff('speed')){this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);this.ownerFlags.speedLevel=0;const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;return;}const sizeInput=event.target.closest?.('[data-owner-size]');if(sizeInput&&this.canStaff('size')){this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});}
+    const speedInput=event.target.closest?.('[data-owner-speed]');if(speedInput&&this.canStaff('speed')){this.ownerFlags.speedMultiplier=clamp(Number(speedInput.value)||1,1,OWNER_MAX_SPEED_MULTIPLIER);this.ownerFlags.speedLevel=0;this.state.staffSettings.speedMultiplier=this.ownerFlags.speedMultiplier;this.saveState(true);const label=speedInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.ownerFlags.speedMultiplier.toFixed(2)}×`;return;}const sizeInput=event.target.closest?.('[data-owner-size]');if(sizeInput&&this.canStaff('size')){this.state.ownerAppearance.size=clamp(Number(sizeInput.value)||1,.45,2.5);const label=sizeInput.parentElement?.querySelector('b');if(label)label.textContent=`${this.state.ownerAppearance.size.toFixed(2)}×`;this.applyOwnerAppearance();this.saveState(true);this.publishPresence(true).catch(()=>{});}
   }
 
   async handleOwnerAction(event){
