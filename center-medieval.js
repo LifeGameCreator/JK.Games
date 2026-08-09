@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v303-village-pack-recenter-foundation-clean-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v306-step3-village-water-landscape';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -161,7 +161,6 @@ const CENTER_ASSET_PATHS = Object.freeze({
   ownerWings: `${CENTER_ASSET_ROOT}angel_wings.glb?v=20260808-v264`,
   staffCape: `./staff-cape-v282.glb?v=20260809-v282`,
   staffPlane: `${CENTER_ASSET_ROOT}saegelflugzeug.glb?v=20260808-v264`,
-  villageHousePack: `./village-house-pack-v303.glb?v=20260809-v303`,
   playerHouseLevel1: `./player-house-level1-v293.glb?v=20260809-v293`,
   playerHouseLevel2: `./player-house-level2-v293.glb?v=20260809-v293`,
   playerHouseLevel3: `./player-house-level3-v293.glb?v=20260809-v293`,
@@ -463,14 +462,18 @@ function smoothRange(edge0,edge1,value){
 }
 
 function ellipseDistance(x,z,feature,padding=0){
-  const rx=Math.max(1,Number(feature?.rx||1)+padding),rz=Math.max(1,Number(feature?.rz||1)+padding);
-  return Math.hypot((x-Number(feature?.x||0))/rx,(z-Number(feature?.z||0))/rz);
+  const rx=Math.max(1,Number(feature?.rx||1)+padding),rz=Math.max(1,Number(feature?.rz||1)+padding),dx=x-Number(feature?.x||0),dz=z-Number(feature?.z||0),yaw=Number(feature?.yaw)||0,c=Math.cos(yaw),s=Math.sin(yaw);
+  const lx=dx*c+dz*s,lz=-dx*s+dz*c;
+  return Math.hypot(lx/rx,lz/rz);
 }
 
 function pointInsideWaterFeature(x,z,padding=0){
   if(Math.abs(x-riverCenter(z))<18+padding)return true;
   for(const lake of WORLD_LAKES)if(ellipseDistance(x,z,lake,padding)<1)return true;
-  return ellipseDistance(x,z,WORLD_OCEAN,padding)<1;
+  if(ellipseDistance(x,z,WORLD_OCEAN,padding)<1)return true;
+  const cx=worldToChunk(x),cz=worldToChunk(z);
+  for(const water of villageWaterFeaturesForChunk(cx,cz))if(ellipseDistance(x,z,water,padding)<1)return true;
+  return false;
 }
 
 function rawTerrainHeightAt(x,z){
@@ -508,25 +511,62 @@ function villageCandidateForChunk(cx,cz){
   const candidate={cx,cz,lx,lz,x,z,y:rawY};VILLAGE_TERRAIN_CACHE.set(cacheKey,candidate);return candidate;
 }
 
+
+const VILLAGE_WATER_CACHE=new Map();
+function villageWaterFeaturesForChunk(cx,cz){
+  const cacheKey=`${cx}:${cz}`;if(VILLAGE_WATER_CACHE.has(cacheKey))return VILLAGE_WATER_CACHE.get(cacheKey);
+  const candidate=villageCandidateForChunk(cx,cz);if(!candidate){VILLAGE_WATER_CACHE.set(cacheKey,[]);return [];}
+  // Gleiche Grundausrichtung wie das V305-Wegenetz, damit Wasser bewusst am Dorfrand
+  // und nicht quer durch Hauptweg oder Schleife liegt.
+  const roadRnd=seededRandom((Math.imul(cx+2048,1103515245)^Math.imul(cz+2048,12345)^(WORLD_SEED+30502))>>>0),yaw=roadRnd()*Math.PI*2;
+  const rnd=seededRandom((Math.imul(cx+4096,214013)^Math.imul(cz+4096,2531011)^(WORLD_SEED+30603))>>>0),roll=rnd();
+  // Rund ein Drittel der Dörfer bleibt bewusst trocken. So wirkt die Welt abwechslungsreicher.
+  if(roll<.31){VILLAGE_WATER_CACHE.set(cacheKey,[]);return [];}
+  const P=(along,side)=>{
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    return {x:candidate.x+c*along-s*side,z:candidate.z+s*along+c*side};
+  };
+  const make=(id,along,side,rx,rz,angleOffset=0,label='Dorfteich')=>{
+    const p=P(along,side),level=clamp(rawTerrainHeightAt(p.x,p.z)-.58,-4.2,46);
+    return {id:`village-water-${cx}-${cz}-${id}`,x:p.x,z:p.z,rx,rz,yaw:yaw+angleOffset,level,label};
+  };
+  let features=[];
+  if(roll<.60){
+    // Ein klarer Dorfteich neben dem Wegenetz.
+    features=[make('pond',5,38,13+rnd()*3.5,8.5+rnd()*2.5,(rnd()-.5)*.24,'Dorfteich')];
+  }else if(roll<.83){
+    // Zwei kleinere Wasserstellen an gegenüberliegenden Dorfrändern.
+    features=[
+      make('pond-a',-31,35,8.5+rnd()*2.2,6.5+rnd()*1.8,(rnd()-.5)*.35,'Kleiner Dorfteich'),
+      make('pond-b',30,-31,7.5+rnd()*2.0,6+rnd()*1.7,(rnd()-.5)*.35,'Kleine Wasserstelle')
+    ];
+  }else{
+    // Schmaler, länglicher Dorfweiher/Bachlauf parallel zum äußeren Dorfbereich.
+    features=[make('brook',4,40,20+rnd()*5,5.2+rnd()*1.6,(rnd()-.5)*.12,'Dorfweiher')];
+  }
+  VILLAGE_WATER_CACHE.set(cacheKey,features);return features;
+}
+
 function lakeWaterLevel(lake){return clamp(rawTerrainHeightAt(lake.x,lake.z)-.72,-4.5,48);}
 
 function terrainHeightAt(x, z) {
   let h=rawTerrainHeightAt(x,z);
-  // V300: Dörfer bekommen schon im eigentlichen Höhenfeld eine sanfte Terrasse.
-  // Gebäude stehen dadurch nicht mehr halb im Hang. Die äußere Übergangszone bleibt
-  // weich, damit keine künstliche senkrechte Kante rund um das Dorf entsteht.
-  const centerCx=worldToChunk(x),centerCz=worldToChunk(z);
-  for(let dz=-1;dz<=1;dz+=1)for(let dx=-1;dx<=1;dx+=1){
-    const village=villageCandidateForChunk(centerCx+dx,centerCz+dz);if(!village)continue;
-    const d=Math.hypot(x-village.x,z-village.z);if(d>=72)continue;
-    const weight=1-smoothRange(38,72,d),gentle=village.y+Math.sin((x-village.x)*.045)*.08+Math.cos((z-village.z)*.042)*.07;
-    h=h*(1-weight)+gentle*weight;
-  }
+  // V304 Schritt 1: kompletter Dorf-Neustart.
+  // Die alte Dorf-Terrassierung ist bewusst entfernt. Bis Schritt 2+ bleibt hier
+  // normales Weltgelände; neue Dorf-Flächen werden später aus einem frischen Plan erzeugt.
   // Der Fluss erhält jetzt garantiert ein sichtbares Bett unterhalb des Wassers.
   const riverDistance=Math.abs(x-riverCenter(z));
   if(riverDistance<31){const weight=1-smoothRange(11,31,riverDistance),target=WATER_LEVEL-.72-(1-clamp(riverDistance/31,0,1))*.8;h=h*(1-weight)+target*weight;}
   // Seen werden wirklich in den Boden eingeschnitten statt nur als Fläche darüber gelegt.
   for(const lake of WORLD_LAKES){const d=ellipseDistance(x,z,lake);if(d>=1.2)continue;const level=lakeWaterLevel(lake),weight=1-smoothRange(.78,1.18,d),target=level-1.05-(1-clamp(d,0,1))*.95;h=h*(1-weight)+target*weight;}
+  // V306 Schritt 3: Wasser an einem Teil der Dörfer wird ebenfalls wirklich in den Boden
+  // eingeschnitten. Dadurch liegt die Wasserfläche nie einfach auf einem Hügel.
+  const vcx=worldToChunk(x),vcz=worldToChunk(z);
+  for(const villageWater of villageWaterFeaturesForChunk(vcx,vcz)){
+    const d=ellipseDistance(x,z,villageWater);if(d>=1.22)continue;
+    const weight=1-smoothRange(.80,1.20,d),target=villageWater.level-.72-(1-clamp(d,0,1))*.82;
+    h=h*(1-weight)+target*weight;
+  }
   // Das Meer besitzt eine eigene Küstenmulde; so ist die Wasserfläche nicht mehr unter
   // normalem Terrain versteckt und am Rand entsteht ein sichtbarer Strand.
   const oceanD=ellipseDistance(x,z,WORLD_OCEAN);if(oceanD<1.18){const weight=1-smoothRange(.78,1.16,oceanD),target=WORLD_OCEAN.level-1.35-(1-clamp(oceanD,0,1))*.65;h=h*(1-weight)+target*weight;}
@@ -1633,7 +1673,7 @@ class CenterDynastyGame {
 
   groundPathTexture(kind='gravel'){
     if(this.pathTextureCache?.has(kind))return this.pathTextureCache.get(kind);
-    const palette={gravel:['#766c59','#9a907c','#504b42'],sand:['#a78c62','#c3aa7d','#806b4f'],dirt:['#6f5437','#8d6d48','#4f3d2d']}[kind]||['#766c59','#9a907c','#504b42'];
+    const palette={gravel:['#766c59','#9a907c','#504b42'],sand:['#a78c62','#c3aa7d','#806b4f'],dirt:['#6f5437','#8d6d48','#4f3d2d'],sod:['#5d6f45','#78895a','#425237']}[kind]||['#766c59','#9a907c','#504b42'];
     const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d'),rnd=seededRandom(WORLD_SEED+kind.length*991);ctx.fillStyle=palette[0];ctx.fillRect(0,0,128,128);
     for(let i=0;i<680;i++){const x=rnd()*128,y=rnd()*128,r=.35+rnd()*1.8;ctx.globalAlpha=.16+rnd()*.36;ctx.fillStyle=rnd()<.72?palette[1]:palette[2];ctx.beginPath();ctx.ellipse(x,y,r,r*(.45+rnd()*.75),rnd()*Math.PI,0,Math.PI*2);ctx.fill();}
     ctx.globalAlpha=1;const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(1,1);tex.anisotropy=2;this.pathTextureCache?.set(kind,tex);return tex;
@@ -2023,9 +2063,11 @@ async updateChunkStreaming(force = false) {
     const terrain = new THREE.Mesh(makeTerrainGeometry(CHUNK_SIZE, segments, originX, originZ), terrainMaterial);
     group.add(terrain);
     const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [], npcs: [], doors: [] };
-    this.buildChunkVillage(chunk);
-    this.buildChunkLandmarks(chunk);
+    // V306 Schritt 3: alter Dorf-Inhalt bleibt weiterhin vollständig entfernt.
+    // Reihenfolge bisher: Wege -> Dorfwasser -> Vegetation. Fundamente/Brunnen/Häuser kommen erst später.
     this.buildChunkPaths(chunk);
+    this.buildChunkVillageWater(chunk);
+    this.buildChunkLandmarks(chunk);
     this.buildChunkForest(chunk);
     this.decorateChunkWithAssetTrees(chunk);
     this.buildChunkRocksAndBushes(chunk);
@@ -2057,48 +2099,81 @@ async updateChunkStreaming(force = false) {
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,material);mesh.name='terrain-road-junction';mesh.receiveShadow=!!this.state.world?.shadows;chunk.group.add(mesh);return mesh;
   }
 
-  buildChunkPaths(chunk) {
-    const random = seededRandom((Math.imul(chunk.cx + 4096, 73856093) ^ Math.imul(chunk.cz + 4096, 19349663) ^ WORLD_SEED) >>> 0);
-    const gravel = this.groundPathMaterial('gravel'), sand=this.groundPathMaterial('sand');
-    const hub = chunk.villages[0]
-      ? { x: chunk.villages[0].x - chunk.originX, z: chunk.villages[0].z - chunk.originZ }
-      : { x: CHUNK_SIZE * (.43 + random() * .14), z: CHUNK_SIZE * (.43 + random() * .14) };
-    const horizontalOffset = (boundaryZ) => 18 + hash2(chunk.cx, boundaryZ, WORLD_SEED + 5101) * (CHUNK_SIZE - 36);
-    const verticalOffset = (boundaryX) => 18 + hash2(boundaryX, chunk.cz, WORLD_SEED + 5107) * (CHUNK_SIZE - 36);
-    const endpoints = [
-      { x: horizontalOffset(chunk.cz), z: -.35, seed: 11 },
-      { x: horizontalOffset(chunk.cz + 1), z: CHUNK_SIZE + .35, seed: 23 },
-      { x: -.35, z: verticalOffset(chunk.cx), seed: 37 },
-      { x: CHUNK_SIZE + .35, z: verticalOffset(chunk.cx + 1), seed: 53 }
-    ];
-    chunk.roadSegments = [];
-    const addRoad = (from, to, seed = 0, width = 5.8) => {
-      const bend = (hash2(chunk.cx + seed, chunk.cz - seed, WORLD_SEED + 5147) - .5) * 19;
-      const vx = to.x - from.x, vz = to.z - from.z, length = Math.hypot(vx, vz) || 1;
-      const px = -vz / length, pz = vx / length;
-      const control = { x: (from.x + to.x) * .5 + px * bend, z: (from.z + to.z) * .5 + pz * bend };
-      let previous = from;
-      const pieces = 9;
-      for (let i = 1; i <= pieces; i += 1) {
-        const t = i / pieces, it = 1 - t;
-        const current = { x: it * it * from.x + 2 * it * t * control.x + t * t * to.x, z: it * it * from.z + 2 * it * t * control.z + t * t * to.z };
-        const worldA = { x: chunk.originX + previous.x, z: chunk.originZ + previous.z };
-        const worldB = { x: chunk.originX + current.x, z: chunk.originZ + current.z };
-        // Breiter heller Sand-/Erdsaum + echter Kieskern. Das sieht deutlich natürlicher
-        // aus als die frühere einfarbige braune Fläche.
-        this.createTerrainStrip(chunk,worldA.x,worldA.z,worldB.x,worldB.z,width+1.5,sand,5);
-        this.createTerrainStrip(chunk,worldA.x,worldA.z,worldB.x,worldB.z,width,gravel,5);
-        chunk.roadSegments.push({ ax: worldA.x, az: worldA.z, bx: worldB.x, bz: worldB.z, width:width+1.1 });
-        previous = current;
-      }
-    };
-    endpoints.forEach((endpoint) => addRoad(hub, endpoint, endpoint.seed));
-    for (const hotspot of chunk.hotspots || []) {
-      if (!['cave','mine','landmark','encounter'].includes(hotspot.type)) continue;
-      addRoad(hub, { x: hotspot.x - chunk.originX, z: hotspot.z - chunk.originZ }, 71 + String(hotspot.id || '').length, 3.2);
+  villageRoadLocalPoint(centerX,centerZ,yaw,along,side){
+    const c=Math.cos(yaw),s=Math.sin(yaw);
+    return {x:centerX+c*along-s*side,z:centerZ+s*along+c*side};
+  }
+
+  buildCurvedVillagePath(chunk,points,width,kind='gravel',shoulderKind=null){
+    if(!Array.isArray(points)||points.length<2)return;
+    const vectors=points.map((p)=>new THREE.Vector3(p.x,0,p.z)),curve=new THREE.CatmullRomCurve3(vectors,false,'centripetal',.36),length=Math.max(1,curve.getLength()),samples=Math.max(8,Math.ceil(length/4.4));
+    const mainMaterial=this.groundPathMaterial(kind),shoulderMaterial=shoulderKind?this.groundPathMaterial(shoulderKind):null;
+    let previous=curve.getPoint(0);
+    for(let i=1;i<=samples;i+=1){
+      const current=curve.getPoint(i/samples),ax=previous.x,az=previous.z,bx=current.x,bz=current.z;
+      if(shoulderMaterial)this.createTerrainStrip(chunk,ax,az,bx,bz,width+1.15,shoulderMaterial,2);
+      this.createTerrainStrip(chunk,ax,az,bx,bz,width,mainMaterial,2);
+      chunk.roadSegments.push({ax,az,bx,bz,width,kind});
+      previous=current;
     }
-    this.createTerrainCircle(chunk,chunk.originX+hub.x,chunk.originZ+hub.z,8.2,sand,32);
-    this.createTerrainCircle(chunk,chunk.originX+hub.x,chunk.originZ+hub.z,6.9,gravel,32);
+  }
+
+  createVillageRoadPlan(chunk){
+    const candidate=villageCandidateForChunk(chunk.cx,chunk.cz);if(!candidate)return null;
+    const rnd=seededRandom((Math.imul(chunk.cx+2048,1103515245)^Math.imul(chunk.cz+2048,12345)^(WORLD_SEED+30502))>>>0),yaw=rnd()*Math.PI*2,centerX=candidate.x,centerZ=candidate.z;
+    const styles=['gravel','dirt','sod'],mainKind=styles[Math.floor(rnd()*styles.length)],secondaryKind=mainKind==='gravel'?'dirt':mainKind==='dirt'?'sod':'dirt',shoulderKind=mainKind==='sod'?'dirt':'sod';
+    const P=(a,s)=>this.villageRoadLocalPoint(centerX,centerZ,yaw,a,s);
+    // Ein ruhiger Hauptweg läuft durch das Dorf und weicht dem späteren Brunnenplatz aus.
+    const main=[P(-40,-1),P(-29,-3.5),P(-18,-7.2),P(-7,-10.2),P(7,-9.5),P(20,-6),P(31,-2.5),P(40,1.2)];
+    // Eine zweite, gebogene Dorfstraße bildet zusammen mit dem Hauptweg eine klare Schleife.
+    // Dadurch entstehen echte Straßenzüge statt sternförmiger Speichen vom Dorfzentrum.
+    const loop=[P(-18,-7.1),P(-20,4),P(-13,13),P(0,16),P(14,13),P(21,4),P(20,-5.8)];
+    // Zwei kurze Wohnwege zweigen von der Schleife ab; ihre Enden sind schon für spätere
+    // Grundstücke reserviert, ohne in Schritt 2 bereits Fundamente oder Häuser zu erzeugen.
+    const laneA=[P(-12,12.5),P(-20,19),P(-27,24)];
+    const laneB=[P(13,12.5),P(21,18),P(29,22.5)];
+    const futurePlots=[P(-30,18),P(-20,30),P(-2,28),P(18,29),P(31,17),P(31,-13),P(14,-22),P(-8,-24),P(-28,-15)];
+    return {center:{x:centerX,z:centerZ},well:{x:centerX,z:centerZ},yaw,mainKind,secondaryKind,shoulderKind,main,loop,lanes:[laneA,laneB],futurePlots};
+  }
+
+  buildChunkPaths(chunk) {
+    // V306: Das V305-Wegenetz bleibt unverändert. Schritt 3 ergänzt danach nur Wasser am Dorfrand.
+    // Weiterhin KEINE Betonplatten, KEIN Brunnen und KEINE Häuser.
+    chunk.roadSegments=[];
+    const plan=this.createVillageRoadPlan(chunk);chunk.villageRoadPlan=plan;if(!plan)return;
+    this.buildCurvedVillagePath(chunk,plan.main,4.7,plan.mainKind,plan.shoulderKind);
+    this.buildCurvedVillagePath(chunk,plan.loop,3.65,plan.secondaryKind,plan.mainKind==='gravel'?'dirt':'gravel');
+    for(const lane of plan.lanes)this.buildCurvedVillagePath(chunk,lane,2.8,plan.secondaryKind,plan.shoulderKind);
+    // Kleine Übergangsflächen nur an echten Einmündungen; kein großer Stern-/Kreuzplatz.
+    const junctionMat=this.groundPathMaterial(plan.secondaryKind);
+    for(const p of [plan.loop[0],plan.loop[plan.loop.length-1],plan.lanes[0][0],plan.lanes[1][0]])this.createTerrainCircle(chunk,p.x,p.z,2.15,junctionMat,18);
+  }
+
+  buildChunkVillageWater(chunk){
+    // V306 SCHRITT 3 — bewusst nur Wasser/Landschaft am Dorfrand.
+    // Keine Betonplatten, kein Brunnen und keine Häuser in diesem Schritt.
+    chunk.villageWaterFeatures=[];
+    const plan=chunk.villageRoadPlan;if(!plan)return;
+    const features=villageWaterFeaturesForChunk(chunk.cx,chunk.cz);if(!features.length)return;
+    const waterMaterial=()=>new THREE.MeshPhysicalMaterial({color:0x3f8295,transparent:true,opacity:.82,roughness:.16,metalness:.02,transmission:.07,side:THREE.DoubleSide});
+    const shoreMaterial=()=>new THREE.MeshStandardMaterial({color:0xa68d64,roughness:1,metalness:0});
+    const reedMat=new THREE.MeshStandardMaterial({color:0x526d36,roughness:1}),reedGeo=new THREE.CylinderGeometry(.025,.042,.72,5);
+    for(let index=0;index<features.length;index+=1){
+      const feature=features[index],holder=new THREE.Group();holder.position.set(feature.x-chunk.originX,feature.level,feature.z-chunk.originZ);holder.rotation.y=-feature.yaw;holder.name=`v306-village-water-holder-${index}`;
+      // Sand-/Erdsaum ist etwas größer als das eigentliche Wasser und macht den Rand klar sichtbar.
+      const shore=new THREE.Mesh(new THREE.RingGeometry(.97,1.17,56),shoreMaterial());shore.rotation.x=-Math.PI/2;shore.scale.set(feature.rx,feature.rz,1);shore.position.y=-.055;shore.name=`v306-village-water-shore-${index}`;shore.receiveShadow=true;holder.add(shore);
+      const water=new THREE.Mesh(new THREE.CircleGeometry(1,56),waterMaterial());water.rotation.x=-Math.PI/2;water.scale.set(feature.rx,feature.rz,1);water.position.y=.018;water.name=`v306-village-water-surface-${index}`;holder.add(water);
+      // Schilf sitzt nur an einem Teil des Ufers und lässt dadurch Wege/Ansicht frei.
+      const reedCount=18, reeds=new THREE.InstancedMesh(reedGeo,reedMat.clone(),reedCount),matrix=new THREE.Matrix4(),q=new THREE.Quaternion(),rnd=seededRandom((WORLD_SEED+30611+chunk.cx*97+chunk.cz*193+index*37)>>>0);
+      for(let r=0;r<reedCount;r++){
+        const a=(r/reedCount)*Math.PI*2+(rnd()-.5)*.18,rr=.95+rnd()*.11,lx=Math.cos(a)*feature.rx*rr,lz=Math.sin(a)*feature.rz*rr,sc=.65+rnd()*.85;
+        matrix.compose(new THREE.Vector3(lx,.34*sc,lz),q,new THREE.Vector3(sc,sc,sc));reeds.setMatrixAt(r,matrix);
+      }
+      reeds.instanceMatrix.needsUpdate=true;reeds.name=`v306-village-water-reeds-${index}`;holder.add(reeds);
+      chunk.group.add(holder);
+      const hotspot={id:feature.id,type:'water',x:feature.x,z:feature.z,radius:Math.max(feature.rx,feature.rz)*.72,label:`Wasser aus ${feature.label} schöpfen`,chunkKey:chunk.key};
+      chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);chunk.villageWaterFeatures.push(feature);
+    }
   }
 
   pointNearChunkRoad(chunk, x, z, padding = 0) {
@@ -2311,97 +2386,10 @@ buildChunkGrass(chunk) {
   }
 
   buildChunkVillage(chunk) {
-    const candidate=villageCandidateForChunk(chunk.cx,chunk.cz);if(!candidate)return;
-    const random=seededRandom((Math.imul(chunk.cx+512,1640531513)^Math.imul(chunk.cz+512,2246822519)^(WORLD_SEED+701))>>>0);random();random();
-    const {lx,lz,x,z}=candidate,y=terrainHeightAt(x,z);
-    const syllablesA=['Eichen','Falken','Stein','Wald','Berg','Fluss','Birken','Raben','Sonnen','Nebel','Hirsch','Linden','Fichten','Mühlen','Drachen','Königs'];
-    const syllablesB=['hain','furt','dorf','heim','brück','tal','rode','au','feld','berg','wacht','see','mark','hof'];
-    const name=`${syllablesA[Math.floor(random()*syllablesA.length)]}${syllablesB[Math.floor(random()*syllablesB.length)]}`;
-    const villageType=random()<.26?'Bergdorf':random()<.55?'Bauerndorf':random()<.78?'Handelsdorf':'Jägerdorf';
-    const timberMat=new THREE.MeshStandardMaterial({color:0x513321,roughness:1}),roadMat=this.groundPathMaterial('gravel'),sandMat=this.groundPathMaterial('sand');
-    this.createTerrainCircle(chunk,x,z,19,sandMat,48);this.createTerrainCircle(chunk,x,z,16.5,roadMat,48);
-
-    const houseCount=7+Math.floor(random()*5),housePositions=[],innerCount=Math.ceil(houseCount/2),outerCount=Math.max(1,Math.floor(houseCount/2));
-    for(let i=0;i<houseCount;i+=1){
-      const group=this.createVillageHouseVariant(i,5.35+(i%3)*.46);
-      // Keine alten Ersatzhäuser: fehlt das echte Pack, wird kein falsches Kastenhaus erzeugt.
-      if(!group){if(i===0)console.warn('V303: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
-      group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),halfW=Math.max(1.65,size.x*.50),halfD=Math.max(1.55,size.z*.50);
-      const outer=i%2===1,slot=Math.floor(i/2),count=outer?outerCount:innerCount,baseRadius=outer?39:27,baseAngle=(slot/Math.max(1,count))*Math.PI*2+(outer?Math.PI/Math.max(2,count):0)+(random()-.5)*.10;
-      let placement=null;
-      for(let attempt=0;attempt<24&&!placement;attempt+=1){
-        const ringPush=Math.floor(attempt/8)*4.6,angle=baseAngle+(attempt%8)*.105*(attempt%2?-1:1),radius=baseRadius+ringPush,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:hx,z:hz,halfW,halfD,foundationHalfW:halfW+.30,foundationHalfD:halfD+.30,yaw};
-        // V303: Dorfmitte, Brunnen und Markt sind absolute Sperrzonen für Häuser.
-        if(this.villageFootprintHitsCircle(candidateHouse,x,z,18.5))continue;
-        if(this.villageFootprintHitsCircle(candidateHouse,x,z,6.8))continue;
-        if(this.villageFootprintHitsCircle(candidateHouse,x+8,z+5,5.7))continue;
-        if(pointInsideWaterFeature(hx,hz,Math.max(halfW,halfD)+3.5))continue;
-        if(housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.05)))continue;
-        const probe=this.sampleVillageFootprint(hx,hz,halfW+.30,halfD+.30,yaw);
-        if(!Number.isFinite(probe.min)||!Number.isFinite(probe.max)||probe.slope>9.5)continue;
-        placement={hx,hz,yaw,angle,radius,probe};
-      }
-      // Lieber ein Haus weniger als zwei Häuser ineinander.
-      if(!placement){console.warn(`V303: Kein sicherer Fundamentplatz für Dorfhaus ${i+1} in ${name} gefunden.`);continue;}
-      const {hx,hz,yaw,angle,radius}=placement,localX=hx-chunk.originX,localZ=hz-chunk.originZ,samples=placement.probe||this.sampleVillageFootprint(hx,hz,halfW+.30,halfD+.30,yaw),baseY=samples.max+.34;
-      const foundation=this.addVillageFoundation(chunk,hx,hz,halfW,halfD,yaw,baseY,samples.min);
-      if(!foundation){console.warn(`V303: Fundament für Dorfhaus ${i+1} in ${name} konnte nicht erstellt werden – Haus wird nicht gesetzt.`);continue;}
-      group.position.set(localX,foundation.topY+.018,localZ);group.rotation.y=yaw;group.name=`v303-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
-      this.registerVillageRectColliders(chunk,hx,hz,halfW,halfD,yaw,Math.max(5.8,size.y*1.03));
-      const doorX=hx-Math.cos(angle)*(foundation.halfD+.95),doorZ=hz-Math.sin(angle)*(foundation.halfD+.95);
-      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:halfW*2,d:halfD*2,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,yaw,angle,radius,doorX,doorZ});
-    }
-
-    const stoneMat=new THREE.MeshStandardMaterial({color:0x7f817d,roughness:1});
-    const wellGroup=new THREE.Group();const well=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.35,1.25,16),stoneMat);well.position.y=.62;wellGroup.add(well);
-    for(const sx of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.22,3.2,.22),timberMat);post.position.set(sx*1.55,2,0);wellGroup.add(post);}const beam=new THREE.Mesh(new THREE.BoxGeometry(3.5,.22,.22),timberMat);beam.position.y=3.45;wellGroup.add(beam);wellGroup.position.set(lx,y,lz);chunk.group.add(wellGroup);
-    {const collider=this.registerCollider(x,z,2.1,'village',chunk.key);collider.height=1.35;chunk.colliders.push(collider);}
-
-    const market=new THREE.Group();market.position.set(lx+8,y,lz+5);const table=new THREE.Mesh(new THREE.BoxGeometry(5,.32,2.3),timberMat);table.position.y=1;market.add(table);
-    for(const sx of [-1,1])for(const sz of [-1,1]){const post=new THREE.Mesh(new THREE.BoxGeometry(.18,3,.18),timberMat);post.position.set(sx*2.1,1.55,sz*.9);market.add(post);}const canopy=new THREE.Mesh(new THREE.BoxGeometry(5.4,.12,2.8),new THREE.MeshStandardMaterial({color:villageType==='Handelsdorf'?0x9b4237:0x4f7663,roughness:.9}));canopy.position.y=3.05;market.add(canopy);
-    for(let crate=0;crate<4;crate++){const crateMesh=new THREE.Mesh(new THREE.BoxGeometry(.72,.55,.72),new THREE.MeshStandardMaterial({color:0x76502e,roughness:1}));crateMesh.position.set(-1.7+crate*1.1,.3,1.4);market.add(crateMesh);}market.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(market);
-    for(const [ox,oz,radius,height] of [[8,5,2.35,1.25],[5.9,5,0.34,3.2],[10.1,5,0.34,3.2]]){const collider=this.registerCollider(x+ox,z+oz,radius,'village',chunk.key);collider.height=height;chunk.colliders.push(collider);}
-
-    // Kleine Blumen-/Kräuterinseln am Dorfplatz.
-    const flowerColors=[0xf0c84f,0xdd738d,0x798fe0],stemMat=new THREE.MeshStandardMaterial({color:0x47723b,roughness:1});
-    for(let p=0;p<18;p++){const a=p/18*Math.PI*2+(random()-.5)*.12,r=10.5+random()*3.2,fx=x+Math.cos(a)*r,fz=z+Math.sin(a)*r,fy=terrainHeightAt(fx,fz),stem=new THREE.Mesh(new THREE.CylinderGeometry(.025,.03,.35,4),stemMat);stem.position.set(fx-chunk.originX,fy+.17,fz-chunk.originZ);chunk.group.add(stem);const bloom=new THREE.Mesh(new THREE.OctahedronGeometry(.09,0),new THREE.MeshStandardMaterial({color:flowerColors[p%flowerColors.length],roughness:.9}));bloom.position.set(fx-chunk.originX,fy+.39,fz-chunk.originZ);chunk.group.add(bloom);}
-
-    const fieldCount=villageType==='Bauerndorf'?4:2,soilMat=new THREE.MeshStandardMaterial({color:0x5b3b23,roughness:1}),furrowMat=new THREE.MeshStandardMaterial({color:0x79522e,roughness:1}),cropMat=new THREE.MeshStandardMaterial({color:0xa8b64f,roughness:1});
-    for(let f=0;f<fieldCount;f+=1){const fieldAngle=2.25+(f%2)*.42,fieldDistance=48+Math.floor(f/2)*15,worldFx=x+Math.cos(fieldAngle)*fieldDistance,worldFz=z+Math.sin(fieldAngle)*fieldDistance;if(housePositions.some(hp=>Math.hypot(worldFx-hp.x,worldFz-hp.z)<15)||pointInsideWaterFeature(worldFx,worldFz,8))continue;const dirX=Math.cos(fieldAngle+.35),dirZ=Math.sin(fieldAngle+.35),perpX=-dirZ,perpZ=dirX;for(let row=-4;row<=4;row+=1.45){const cx=worldFx+perpX*row,cz=worldFz+perpZ*row;this.createTerrainStrip(chunk,cx-dirX*6,cz-dirZ*6,cx+dirX*6,cz+dirZ*6,1.08,row===-4||row>3.5?soilMat:furrowMat,6);for(let c=-5.2;c<=5.2;c+=1.25){const px=cx+dirX*c,pz=cz+dirZ*c,crop=new THREE.Mesh(new THREE.ConeGeometry(.09,.5,5),cropMat);crop.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.25,pz-chunk.originZ);crop.castShadow=!!this.state.world?.shadows;chunk.group.add(crop);}}for(const side of [-1,1])for(let c=-6;c<=6;c+=1.5){const px=worldFx+dirX*c+perpX*side*5.2,pz=worldFz+dirZ*c+perpZ*side*5.2,post=new THREE.Mesh(new THREE.BoxGeometry(.12,1.05,.12),timberMat);post.position.set(px-chunk.originX,terrainHeightAt(px,pz)+.52,pz-chunk.originZ);post.castShadow=!!this.state.world?.shadows;chunk.group.add(post);}}
-
-    // Gemeinschaftshaus ebenfalls ausschließlich auf Beton und nur an einer freien Stelle.
-    let community=null,communityPlaced=false;community=this.createVillageHouseVariant(houseCount+2,6.35);
-    if(community){
-      community.updateMatrixWorld(true);const cbox=new THREE.Box3().setFromObject(community),csize=cbox.getSize(new THREE.Vector3()),halfW=Math.max(1.8,csize.x*.50),halfD=Math.max(1.7,csize.z*.50);let spot=null;
-      for(let attempt=0;attempt<24&&!spot;attempt+=1){
-        const angle=3.78+(attempt%8)*.14*(attempt%2?-1:1),radius=45+Math.floor(attempt/8)*5,cx=x+Math.cos(angle)*radius,cz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:cx,z:cz,halfW,halfD,foundationHalfW:halfW+.30,foundationHalfD:halfD+.30,yaw};
-        if(this.villageFootprintHitsCircle(candidateHouse,x,z,19.5)||this.villageFootprintHitsCircle(candidateHouse,x+8,z+5,6.0)||pointInsideWaterFeature(cx,cz,Math.max(halfW,halfD)+3.5)||housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.1)))continue;
-        const probe=this.sampleVillageFootprint(cx,cz,halfW+.30,halfD+.30,yaw);if(probe.slope>9.5)continue;
-        spot={x:cx,z:cz,yaw,angle,radius,probe};
-      }
-      if(spot){
-        const samples=spot.probe||this.sampleVillageFootprint(spot.x,spot.z,halfW+.30,halfD+.30,spot.yaw),baseY=samples.max+.34,foundation=this.addVillageFoundation(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,baseY,samples.min);
-        if(foundation){
-          community.position.set(spot.x-chunk.originX,foundation.topY+.018,spot.z-chunk.originZ);community.rotation.y=spot.yaw;community.name=`v303-${name}-gemeinschaftshaus`;chunk.group.add(community);
-          this.registerVillageRectColliders(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,Math.max(6,csize.y*1.04));
-          const doorX=spot.x-Math.cos(spot.angle)*(foundation.halfD+.98),doorZ=spot.z-Math.sin(spot.angle)*(foundation.halfD+.98);
-          housePositions.push({x:spot.x,z:spot.z,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,w:halfW*2,d:halfD*2,yaw:spot.yaw,angle:spot.angle,radius:spot.radius,doorX,doorZ,community:true});communityPlaced=true;
-        }
-      }
-      if(!communityPlaced){community.removeFromParent?.();community=null;console.warn(`V303: Gemeinschaftshaus in ${name} ausgelassen, damit kein Gebäude schwebt, den Brunnen blockiert oder überlappt.`);}
-    }
-
-    // V303: Keine sternförmigen Wege mehr vom Mittelpunkt zu jedem Haus. Stattdessen
-    // verbindet ein unregelmäßiger Kies-/Sandweg die Betonfundamente an deren Zugangsseite.
-    const roadStops=housePositions.filter((entry)=>Number.isFinite(entry.doorX)&&Number.isFinite(entry.doorZ)).sort((a,b)=>Math.atan2(a.z-z,a.x-x)-Math.atan2(b.z-z,b.x-x));
-    if(roadStops.length>1){
-      for(let r=0;r<roadStops.length;r+=1){const a=roadStops[r],b=roadStops[(r+1)%roadStops.length],distance=Math.hypot(b.doorX-a.doorX,b.doorZ-a.doorZ),segments=Math.max(7,Math.ceil(distance/2.7));this.createTerrainStrip(chunk,a.doorX,a.doorZ,b.doorX,b.doorZ,4.1,sandMat,segments);this.createTerrainStrip(chunk,a.doorX,a.doorZ,b.doorX,b.doorZ,2.85,roadMat,segments);}
-      const nearest=roadStops.reduce((best,entry)=>Math.hypot(entry.doorX-x,entry.doorZ-z)<Math.hypot(best.doorX-x,best.doorZ-z)?entry:best,roadStops[0]);this.createTerrainStrip(chunk,x+4,z+2,nearest.doorX,nearest.doorZ,4.2,sandMat,10);this.createTerrainStrip(chunk,x+4,z+2,nearest.doorX,nearest.doorZ,2.95,roadMat,10);
-    }
-
-    const peopleCount=6+Math.floor(random()*4),firstNames=['Mara','Freya','Liv','Runa','Hilda','Edda','Alrik','Konrad','Sven','Borin','Tamme','Jorin','Lene','Falk','Rika'],people=Array.from({length:peopleCount},(_,i)=>firstNames[(i+Math.floor(random()*firstNames.length))%firstNames.length]),village={name,x,z,people,buildings:housePositions.length+1,npcs:[],chunkKey:chunk.key,type:villageType};chunk.villages.push(village);this.villages.push(village);
-    for(let i=0;i<peopleCount;i+=1){const angle=random()*Math.PI*2,radius=5+random()*12,worldPx=x+Math.cos(angle)*radius,worldPz=z+Math.sin(angle)*radius,px=worldPx-chunk.originX,pz=worldPz-chunk.originZ,group=this.createVillageNpcPlaceholder(chunk,px,pz,worldPx,worldPz,i),npc={id:`npc-${chunk.key}-${i}`,name:people[i],village:name,group,x:worldPx,z:worldPz,angle:angle+random()*2,nextTurn:0,chunkKey:chunk.key};village.npcs.push(npc);chunk.npcs.push(npc);this.npcs.push(npc);const hotspot={id:npc.id,type:'npc',x:worldPx,z:worldPz,radius:2.4,label:`Mit ${people[i]} sprechen`,data:npc,chunkKey:chunk.key};chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);}
-    const villageHotspot={id:`village-${chunk.key}`,type:'village',x,z,radius:30,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key},marketHotspot={id:`market-${chunk.key}`,type:'market',x:x+8,z:z+5,radius:8,label:`Mit ${name} handeln`,data:{village:name},chunkKey:chunk.key},wellHotspot={id:`well-${chunk.key}`,type:'well',x,z,radius:5,label:'Am Dorfbrunnen Wasser holen',data:{village:name},chunkKey:chunk.key};chunk.hotspots.push(villageHotspot,marketHotspot,wellHotspot);this.hotspots.push(villageHotspot,marketHotspot,wellHotspot);
+    // V304 SCHRITT 1 — CLEAN SLATE.
+    // Das komplette alte Dorf-System wurde stillgelegt. Hier wird absichtlich NICHTS erzeugt.
+    // Schritt 2 beginnt anschließend mit einem neuen, geplanten Pfad-/Straßennetz.
+    return;
   }
 
   buildChunkLandmarks(chunk) {
