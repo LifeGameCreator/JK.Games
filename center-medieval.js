@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v322-great-sword-hand-grip-higher-galaxy-sword-damage';
+const CENTER_VERSION = '2026-08-09-jkgames-v324-great-sword-grip-size-vertical-alternating-slashes';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -792,6 +792,7 @@ class CenterDynastyGame {
     this.greatSwordThrowState = null;
     this.greatSwordAimToastAt = 0;
     this.greatSwordDrawToken = 0;
+    this.greatSwordSlashDirection = 0;
     this.staffLightningEffects = [];
     this.staffShotSeq = 0;
     this.staffShotAtMs = 0;
@@ -1049,7 +1050,22 @@ class CenterDynastyGame {
   grantAnimalKillXp(animal){const level=Math.max(1,Number(animal?.level)||this.mainAccountLevel()),factor=ANIMAL_COMBAT_FACTORS[animal?.type]??1,mainXp=Math.max(4,Math.round((7+level*2.6)*Math.max(.55,factor*.62))),centerXp=Math.max(2,Math.round(mainXp*.45));this.state.xp+=centerXp;while(this.state.xp>=100+this.state.skillPoints*35){this.state.xp-=100+this.state.skillPoints*35;this.state.skillPoints+=1;this.toast('Neuer Fähigkeitspunkt erhalten.');}window.JKGamesCenterBridge?.addMainXp?.(mainXp,`Tier besiegt: ${animal?.profile?.label||animal?.type||'Tier'}`);return mainXp;}
   defeatAnimalCombat(animal,source='Kampf'){if(!animal?.active)return false;animal.active=false;if(animal.group)animal.group.visible=false;animal.respawnAt=Date.now()+150000;this.state.stats.animals+=1;const hunting=this.state.skills.hunting||0;if(['fox','cow','wolf1','wolf2'].includes(animal.type)){const base={fox:[2,1],cow:[6,3],wolf1:[2,1],wolf2:[2,1]}[animal.type];this.state.inventory.meat+=base[0]+Math.floor(hunting/2);this.state.inventory.leather+=base[1]+Math.floor(hunting/3);}if(animal.type==='spider'){if(Math.random()<.75)this.state.inventory.medicine=(this.state.inventory.medicine||0)+1;else this.state.inventory.herbs=(this.state.inventory.herbs||0)+3;}const xp=this.grantAnimalKillXp(animal);this.toast(`${animal.profile?.label||'Tier'} · Level ${animal.level} besiegt · +${xp} Haupt-XP`);this.renderHud(true);this.saveState(true);return true;}
   currentCombatDamage(){const appearance=this.state.ownerAppearance||{},staffHeld=this.isStaffActive&&!this.isPublicPlayerMode()?appearance.heldItem:'none';if(this.ownerGreatSwordEquipped())return Math.floor(clamp(Number(this.state.ownerAppearance?.ownerGreatSwordDamage)||5000,1,100000));if(staffHeld==='sword'){const role=normalizeStaffTheme(this.appearanceTheme('heldItem'));return {owner:2500,admin:2000,moderator:1500,supporter:1000,member:260}[role]||260;}const swordTier=Math.floor(Number(this.state.swordSystem?.equippedTier)||0);if(swordTier>0)return this.swordDamage(swordTier);const level=this.mainAccountLevel(),hunt=this.state.skills.hunting||0;if(this.state.equippedTool==='bow')return Math.round(35+level*2+hunt*8);if(this.state.equippedTool==='spear')return Math.round(30+level*1.8+hunt*8);if(['axe','ironAxe','pickaxe','hammer'].includes(this.state.equippedTool))return Math.round(18+level*1.25+hunt*4);return Math.round(8+Math.min(32,(level-1)*.33));}
-  attackAnimalCombat(animal){if(!animal?.active)return false;this.syncAnimalCombatLevel(animal);const damage=Math.max(1,this.currentCombatDamage());animal.hp=Math.max(0,Number(animal.hp||animal.maxHp)-damage);animal.hitFlashUntil=performance.now()+180;if(animal.hp<=0)return this.defeatAnimalCombat(animal,'Kampf');this.toast(`${animal.profile?.label||'Tier'} · Lv ${animal.level} · ${Math.ceil(animal.hp)}/${animal.maxHp} HP · -${damage}`);if(['wolf1','wolf2','spider','shark','orca'].includes(animal.type)&&!(this.isStaffActive&&this.ownerFlags.god)){const counter=Math.max(2,Math.round(4+animal.level*.34*(ANIMAL_COMBAT_FACTORS[animal.type]||1)));this.state.needs.health=Math.max(0,this.state.needs.health-counter);}return true;}
+  attackAnimalCombat(animal){
+    if(!animal?.active)return false;this.syncAnimalCombatLevel(animal);const damage=Math.max(1,this.currentCombatDamage());animal.hp=Math.max(0,Number(animal.hp||animal.maxHp)-damage);animal.hitFlashUntil=performance.now()+180;
+    if(animal.hp<=0)return this.defeatAnimalCombat(animal,'Kampf');
+    let counter=0;
+    if(!(this.isStaffActive&&this.ownerFlags.god)){
+      if(animal.type==='wolf1'||animal.type==='wolf2'){
+        const basePct=animal.type==='wolf2'?.030:.024,levelPct=clamp((Number(animal.level)||1)/100,0,1)*.018,pct=basePct+levelPct;
+        counter=Math.max(3,Math.round(this.effectiveMaxHealth()*pct));this.state.needs.health=Math.max(0,this.state.needs.health-counter);
+      }else if(['spider','shark','orca'].includes(animal.type)){
+        counter=Math.max(2,Math.round(4+animal.level*.34*(ANIMAL_COMBAT_FACTORS[animal.type]||1)));this.state.needs.health=Math.max(0,this.state.needs.health-counter);
+      }
+    }
+    this.toast(`${animal.profile?.label||'Tier'} · Lv ${animal.level} · ${Math.ceil(animal.hp)}/${animal.maxHp} HP · -${damage}${counter?` · Gegenangriff -${counter} Leben`:''}`);
+    if(counter)this.renderHud(true);
+    return true;
+  }
   craftPlayerSword(tier){const def=this.swordTierDefinition(tier),level=this.mainAccountLevel();if(this.state.swordSystem.owned[def.tier])return this.toast(`${def.name} besitzt du bereits.`);if(level<def.requiredLevel)return this.toast(`${def.name} benötigt Hauptlevel ${def.requiredLevel}.`);if(def.tier>1&&!this.state.swordSystem.owned[def.tier-1])return this.toast(`Du musst zuerst Schwert ${def.tier-1} herstellen.`);if(!this.hasCost(def.cost))return this.toast('Nicht genügend Rohstoffe für dieses Schwert.');this.payCost(def.cost);this.state.swordSystem.owned[def.tier]=true;this.state.swordSystem.stages[def.tier]=1;this.state.swordSystem.equippedTier=def.tier;this.state.equippedTool='';this.applyHeldItemVisual();this.saveState(true);this.openManagement('crafting');this.toast(`${def.name} hergestellt · ${def.baseDamage} Schaden.`);}
   upgradePlayerSword(tier){const def=this.swordTierDefinition(tier);if(!this.state.swordSystem.owned[def.tier])return;const stage=this.swordStage(def.tier);if(stage>=def.maxStage)return this.toast('Dieses Schwert ist maximal aufgewertet.');const cost=this.swordUpgradeCost(def.tier,stage);if(!this.hasCost(cost))return this.toast('Nicht genügend Rohstoffe für die Schwert-Aufwertung.');this.payCost(cost);this.state.swordSystem.stages[def.tier]=stage+1;this.applyHeldItemVisual();this.saveState(true);this.openManagement('crafting');this.toast(`${def.name} · Stufe ${stage+1}/${def.maxStage} · ${this.swordDamage(def.tier)} Schaden.`);}
   equipPlayerSword(tier){tier=Math.floor(Number(tier)||0);if(tier>0&&!this.state.swordSystem.owned[tier])return;this.state.swordSystem.equippedTier=this.state.swordSystem.equippedTier===tier?0:tier;this.state.equippedTool='';this.applyHeldItemVisual();this.saveState(true);this.openManagement('inventory');}
@@ -1743,8 +1759,8 @@ class CenterDynastyGame {
     const samples=this.sampleVillageFootprint(plot.x,plot.z,plot.halfW,plot.halfD,plot.yaw),topY=samples.max+.10,bottomY=samples.min-.24,slabThickness=.30,bodyDepth=Math.max(.52,topY-slabThickness-bottomY);
     const bodyMat=new THREE.MeshStandardMaterial({color:0x666b6d,roughness:.98,metalness:0,flatShading:true});
     const topMat=new THREE.MeshStandardMaterial({color:plot.free?0x858b8d:0x7c8284,roughness:.94,metalness:0,flatShading:true});
-    const body=new THREE.Mesh(new THREE.BoxGeometry(plot.halfW*2,bodyDepth,plot.halfD*2,2,1,2),bodyMat);body.position.set(plot.x-chunk.originX,bottomY+bodyDepth*.5,plot.z-chunk.originZ);body.rotation.y=plot.yaw;body.name=plot.free?'v310-free-plot-foundation':'v310-house-reserved-foundation';body.castShadow=!!this.state.world?.shadows;body.receiveShadow=true;chunk.group.add(body);
-    const slab=new THREE.Mesh(new THREE.BoxGeometry(plot.halfW*2+.08,slabThickness,plot.halfD*2+.08),topMat);slab.position.set(plot.x-chunk.originX,topY-slabThickness*.5,plot.z-chunk.originZ);slab.rotation.y=plot.yaw;slab.name=plot.free?'v310-free-plot-slab':'v310-house-reserved-slab';slab.receiveShadow=true;chunk.group.add(slab);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(plot.halfW*2,bodyDepth,plot.halfD*2,2,1,2),bodyMat);body.position.set(plot.x-chunk.originX,bottomY+bodyDepth*.5,plot.z-chunk.originZ);body.rotation.y=plot.yaw;body.name=plot.free?'v310-free-plot-foundation':'v310-house-reserved-foundation';body.userData.villagePlotId=plot.id;body.castShadow=!!this.state.world?.shadows;body.receiveShadow=true;chunk.group.add(body);
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(plot.halfW*2+.08,slabThickness,plot.halfD*2+.08),topMat);slab.position.set(plot.x-chunk.originX,topY-slabThickness*.5,plot.z-chunk.originZ);slab.rotation.y=plot.yaw;slab.name=plot.free?'v310-free-plot-slab':'v310-house-reserved-slab';slab.userData.villagePlotId=plot.id;slab.receiveShadow=true;chunk.group.add(slab);
     plot.topY=topY;plot.bottomY=bottomY;plot.slope=samples.slope;
     return plot;
   }
@@ -1806,6 +1822,79 @@ class CenterDynastyGame {
     const plan=this.createVillageStep4Plan(chunk);chunk.villageStep4Plan=plan;chunk.villagePlots=[];if(!plan)return;
     this.buildVillageStep4Well(chunk,plan);
     for(const plot of plan.plots){this.addVillageStep4Foundation(chunk,plot);chunk.villagePlots.push(plot);}
+  }
+
+  villageStep5Name(chunk){
+    const first=['Falken','Eichen','Tannen','Raben','Birken','Stein','Wolfs','Linden','Sonnen','Nebel','Ahorn','Fichten','Hirsch','Mühlen','Buchen','Adler'];
+    const last=['heim','hof','hain','tal','furt','dorf','brück','wald','grund','fels','au','ried','born','berg','feld','ruh'];
+    const a=Math.floor(hash2(chunk.cx,chunk.cz,WORLD_SEED+32301)*first.length)%first.length,b=Math.floor(hash2(chunk.cz,chunk.cx,WORLD_SEED+32307)*last.length)%last.length;
+    let name=`${first[a]}${last[b]}`;
+    if(this.villages.some((v)=>v.name===name))name=`${name} ${Math.abs(chunk.cx*37+chunk.cz*61)%97+1}`;
+    return name;
+  }
+
+  villageStep5BuildingConflict(plot){
+    const radius=Math.hypot(plot.halfW,plot.halfD)+.65;
+    for(const building of this.state.buildings||[]){
+      const bx=Number(building?.x),bz=Number(building?.z);if(!Number.isFinite(bx)||!Number.isFinite(bz))continue;
+      const size=Math.max(2,Number(BUILDINGS[building.type]?.size)||4);
+      if(Math.hypot(plot.x-bx,plot.z-bz)<radius+size*.62)return true;
+    }
+    return false;
+  }
+
+  registerVillageStep5HouseColliders(chunk,plot,footprint,house){
+    // Hitbox folgt der tatsächlichen Haus-Bounding-Box. Die Vorderseite (+lokales Z)
+    // besitzt eine echte Türöffnung, damit man bis zum Eingang laufen kann.
+    const halfW=Math.max(1.2,footprint.width*.5*.96),halfD=Math.max(1.2,footprint.depth*.5*.96),yaw=plot.yaw,height=Math.max(3.8,footprint.height*1.04),doorGap=clamp(footprint.width*.28,1.35,2.45),wallRadius=.10,c=Math.cos(yaw),s=Math.sin(yaw);
+    const add=(lx,lz,length,localYaw)=>{
+      const wx=plot.x+lx*c+lz*s,wz=plot.z-lx*s+lz*c,collider=this.registerCollider(wx,wz,.18,'village',chunk.key,house);
+      collider.shape='segment';collider.length=Math.max(.28,length);collider.yaw=yaw+localYaw;collider.radius=wallRadius;collider.height=height;collider.villagePlotId=plot.id;chunk.colliders.push(collider);return collider;
+    };
+    add(-halfW,0,halfD*2,0);add(halfW,0,halfD*2,0);add(0,-halfD,halfW*2,Math.PI/2);
+    const frontPart=Math.max(.30,(halfW*2-doorGap)*.5),frontCenter=doorGap*.5+frontPart*.5;
+    add(-frontCenter,halfD,frontPart,Math.PI/2);add(frontCenter,halfD,frontPart,Math.PI/2);
+    plot.doorGap=doorGap;plot.houseHalfW=halfW;plot.houseHalfD=halfD;
+  }
+
+  validateVillageStep5Plot(chunk,plot,spawned){
+    if(!plot||plot.free||!Number.isInteger(plot.variant)||plot.variant<0||plot.variant>4)return {ok:false,reason:'Kein reserviertes Dorfhaus-Grundstück'};
+    if(!Number.isFinite(plot.topY)||!Number.isFinite(plot.halfW)||!Number.isFinite(plot.halfD))return {ok:false,reason:'Betonplatte fehlt'};
+    const slab=chunk.group.children.find((object)=>object?.userData?.villagePlotId===plot.id&&object.name==='v310-house-reserved-slab');
+    if(!slab)return {ok:false,reason:'Reservierte Betonplatte nicht gefunden'};
+    const footprint=this.villageHouseFootprint(plot.variant);if(!footprint)return {ok:false,reason:'Hausmodell konnte nicht vermessen werden'};
+    if(Math.abs(footprint.width-Number(plot.houseWidth||0))>.45||Math.abs(footprint.depth-Number(plot.houseDepth||0))>.45)return {ok:false,reason:'Haus-/Fundamentmaße stimmen nicht überein'};
+    if(footprint.width>plot.halfW*2-.20||footprint.depth>plot.halfD*2-.20)return {ok:false,reason:'Haus ist größer als die Betonplatte'};
+    const diag=Math.hypot(plot.halfW,plot.halfD);
+    if(pointInsideWaterFeature(plot.x,plot.z,diag+.35))return {ok:false,reason:'Wasser überschneidet Grundstück'};
+    const plan=chunk.villageStep4Plan;if(!plan||this.villageFootprintHitsCircle(plot,plan.well.x,plan.well.z,plan.well.radius+.45))return {ok:false,reason:'Brunnen überschneidet Grundstück'};
+    if((plan.plots||[]).some((other)=>other!==plot&&this.villageHouseFootprintsOverlap(plot,other,.08)))return {ok:false,reason:'Reservierte Betonplatten überschneiden sich'};
+    if(spawned.some((other)=>this.villageHouseFootprintsOverlap(plot,other,.12)))return {ok:false,reason:'Anderes Dorfhaus überschneidet Grundstück'};
+    if(this.villageStep5BuildingConflict(plot))return {ok:false,reason:'Spielergebäude belegt Grundstück'};
+    return {ok:true,footprint,slab};
+  }
+
+  buildChunkVillageStep5(chunk){
+    // SCHRITT 5: Erst jetzt werden sichtbare Häuser erzeugt.
+    // Hausposition, Drehung und Höhe kommen ausschließlich von der reservierten Betonplatte.
+    const plan=chunk.villageStep4Plan;if(!plan)return;
+    chunk.villageHouses=[];const spawned=[];
+    for(const plot of plan.plots||[]){
+      if(plot.free){plot.emptyBuildingPlot=true;plot.occupiedByVillageHouse=false;continue;}
+      const check=this.validateVillageStep5Plot(chunk,plot,spawned);
+      if(!check.ok){plot.step5Skipped=true;plot.step5Reason=check.reason;console.warn(`[DORF SCHRITT 5] Haus ${plot.variant+1} ausgelassen · ${chunk.key} · ${check.reason}`);continue;}
+      const house=this.createVillageHouseVariant(plot.variant,5.7);if(!house){plot.step5Skipped=true;plot.step5Reason='Hausmodell fehlt';continue;}
+      house.position.set(plot.x-chunk.originX,plot.topY+.012,plot.z-chunk.originZ);house.rotation.y=plot.yaw;house.name=`v323-village-house-${plot.variant+1}-${plot.id}`;
+      house.userData.villagePlotId=plot.id;house.userData.houseNumber=plot.variant+1;house.userData.foundationTopY=plot.topY;
+      chunk.group.add(house);this.registerVillageStep5HouseColliders(chunk,plot,check.footprint,house);
+      plot.houseObject=house;plot.occupiedByVillageHouse=true;plot.step5Skipped=false;spawned.push(plot);chunk.villageHouses.push(house);
+    }
+
+    // Dorf-Metadaten erst anlegen, nachdem der komplette Bauplan geprüft und Häuser gesetzt wurden.
+    const name=this.villageStep5Name(chunk),village={id:`v323-village-${chunk.key}`,name,x:plan.center.x,z:plan.center.z,type:'Dorf',people:[],buildings:chunk.villageHouses.length,chunkKey:chunk.key,plots:plan.plots};
+    chunk.villages.push(village);this.villages.push(village);
+    const hotspot={id:`v323-village-hotspot-${chunk.key}`,type:'village',x:village.x,z:village.z,radius:34,label:`${name} besuchen`,data:{village:name},chunkKey:chunk.key};
+    chunk.hotspots.push(hotspot);this.hotspots.push(hotspot);
   }
 
   sampleVillageFootprint(x,z,halfW,halfD,yaw=0){
@@ -2273,12 +2362,13 @@ async updateChunkStreaming(force = false) {
     const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     const terrain = new THREE.Mesh(makeTerrainGeometry(CHUNK_SIZE, segments, originX, originZ), terrainMaterial);
     group.add(terrain);
-    const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [], npcs: [], doors: [], villageFish: [], villagePlots: [], villageStep4Plan: null };
-    // V310: Wege -> tiefes Wasser -> Schritt 4 (Brunnen + Beton-Grundstücke) -> Vegetation.
-    // Dorfhäuser selbst bleiben bis Schritt 5 deaktiviert.
+    const chunk = { key, cx, cz, group, originX, originZ, resources: [], hotspots: [], villages: [], colliders: [], npcs: [], doors: [], villageFish: [], villagePlots: [], villageHouses: [], villageStep4Plan: null };
+    // V323: Wege -> Wasser/Landschaft -> Schritt 4 (Brunnen + Beton) -> Schritt 5 (Häuser).
+    // Erst danach folgen Landmarken, Vegetation und Ressourcen.
     this.buildChunkPaths(chunk);
     this.buildChunkVillageWater(chunk);
     this.buildChunkVillageStep4(chunk);
+    this.buildChunkVillageStep5(chunk);
     this.buildChunkLandmarks(chunk);
     this.buildChunkForest(chunk);
     this.decorateChunkWithAssetTrees(chunk);
@@ -3595,12 +3685,13 @@ buildChunkGrass(chunk) {
       };
       // V320: deutlicher Knie-Sprung, aber weiterhin ausschließlich um die lokale X-Achse.
       // Dadurch winkeln die Knie sichtbar an, ohne dass sich die Beine seitlich verdrehen/kreuzen.
-      jumpLeg(this.playerBones.upperLegRight,-.34);
-      jumpLeg(this.playerBones.lowerLegRight,.70);
-      jumpLeg(this.playerBones.upperLegLeft,-.34);
-      jumpLeg(this.playerBones.lowerLegLeft,.70);
-      jumpLeg(this.playerBones.footRight,-.075);
-      jumpLeg(this.playerBones.footLeft,-.075);
+      // V323: etwas stärker angewinkelte Knie, weiterhin ausschließlich lokale X-Achse.
+      jumpLeg(this.playerBones.upperLegRight,-.44);
+      jumpLeg(this.playerBones.lowerLegRight,.92);
+      jumpLeg(this.playerBones.upperLegLeft,-.44);
+      jumpLeg(this.playerBones.lowerLegLeft,.92);
+      jumpLeg(this.playerBones.footRight,-.10);
+      jumpLeg(this.playerBones.footLeft,-.10);
       if(chest)chest.rotateX(.012*swing);
     }else if(action.kind==='punch-right'||action.kind==='punch-left'){
       const left=action.kind==='punch-left',upper=left?leftUpper:rightUpper,lower=left?leftLower:rightLower;
@@ -3614,6 +3705,23 @@ buildChunkGrass(chunk) {
       if(rightLower){rightLower.rotateX(-1.02*phase);rightLower.rotateY(.20*phase);}
       if(chest)chest.rotateY(-.15*phase);
       this.curlFingers('right',Math.max(.25,phase));
+    }else if(action.kind==='great-sword-slash-down'||action.kind==='great-sword-slash-up'){
+      // V324: Zwei echte diagonale Great-Sword-Schläge, die sich bei jedem Klick abwechseln.
+      // Erst kurz in die Ausgangsposition gehen, dann schnell diagonal durchziehen, danach weich zurück.
+      const smooth=(x)=>{x=clamp(x,0,1);return x*x*(3-2*x);};
+      let startW=0,endW=0;
+      if(t<.20)startW=smooth(t/.20);
+      else if(t<.72){const cut=smooth((t-.20)/.52);startW=1-cut;endW=cut;}
+      else endW=1-smooth((t-.72)/.28);
+      const down=action.kind==='great-sword-slash-down';
+      const startPose=down?{ux:-1.02,uy:-.28,uz:-.92,lx:-.72,cy:-.24}:{ux:-.34,uy:.34,uz:.82,lx:-.18,cy:.28};
+      const endPose=down?{ux:-.34,uy:.34,uz:.82,lx:-.18,cy:.28}:{ux:-1.02,uy:-.28,uz:-.92,lx:-.72,cy:-.24};
+      const mix=(a,b)=>a*startW+b*endW;
+      if(rightUpper){rightUpper.rotateX(mix(startPose.ux,endPose.ux));rightUpper.rotateY(mix(startPose.uy,endPose.uy));rightUpper.rotateZ(mix(startPose.uz,endPose.uz));}
+      if(rightLower){rightLower.rotateX(mix(startPose.lx,endPose.lx));rightLower.rotateY(mix(-.10,.20));}
+      if(chest){chest.rotateY(mix(startPose.cy,endPose.cy));chest.rotateX(-.05*(startW+endW));}
+      if(leftUpper){leftUpper.rotateZ((down?.10:-.10)*(startW+endW));leftUpper.rotateX(-.08*(startW+endW));}
+      this.curlFingers('right',Math.min(1,.35+startW+endW));
     }else if(action.kind==='weapon-attack'||action.kind==='attack'){
       if(rightUpper){rightUpper.rotateX(-1.35*swing);rightUpper.rotateZ(-.28*swing);}
       if(rightLower)rightLower.rotateX(-.72*swing);
@@ -3697,9 +3805,9 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(handGrip){
       // Originalmodell: Längsachse liegt vor der Rotation auf X, der Griff befindet sich
       // nahe am positiven X-Ende. Nur Querachsen zentrieren und den tatsächlichen Griff
-      // auf den lokalen Ursprung legen. Anschließend zeigt die Klinge wie beim Galaxy-Schwert nach oben.
+      // auf den lokalen Ursprung legen. V324 dreht die Klinge senkrecht nach unten, während der Griff in der rechten Hand bleibt.
       asset.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(asset),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),gripX=box.max.x-size.x*.12;
-      asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;asset.rotation.set(0,0,-Math.PI/2);
+      asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;asset.rotation.set(0,0,Math.PI/2);
     }else asset.rotation.set(0,0,Math.PI/2);
     asset.name='center-owner-great-sword';asset.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.35,Number(mat.metalness)||0);mat.roughness=Math.min(.48,Number(mat.roughness)||.5);}}});return asset;
   }
@@ -3707,8 +3815,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
   createOwnerGreatSwordCarryVisual(){
     const root=new THREE.Group(),asset=this.createOwnerGreatSwordVisual();if(!asset)return null;
     root.name='owner-great-sword-carry-back';root.userData.carryPosition='back';root.userData.ownerGreatSwordCarry=true;root.add(asset);
-    // V319: nur Rücken-Trageweise. Das Schwert bleibt diagonal über dem Rücken.
-    asset.rotation.z+=-.08;
+    // V324: Rücken-Version bewusst kleiner als zuvor, damit sie proportional zum Charakter passt.
+    asset.scale.multiplyScalar(.72);asset.rotation.z+=-.08;
     return root;
   }
 
@@ -3720,8 +3828,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(allowed&&!this.ownerGreatSwordCarryObject){
       const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
       const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
-      // V322: nochmals höher gesetzt, damit das Great Sword wirklich am oberen Rücken/Wings-Bereich sitzt.
-      const pos=new THREE.Vector3(0,2.58,-.28);
+      // V323: obere Rücken-/Wings-Höhe bleibt erhalten; das Schwert sitzt jetzt deutlich näher am Rücken.
+      const pos=new THREE.Vector3(0,2.58,-.16);
       const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
@@ -3752,7 +3860,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(kind==='none')return null;theme=normalizeStaffTheme(theme);const group=new THREE.Group();group.userData.kind=kind;const cfg=staffThemeConfig(theme),bright=new THREE.Color(cfg.accent).lerp(new THREE.Color(0xffffff),.34).getHex(),deep=new THREE.Color(cfg.dark).lerp(new THREE.Color(cfg.primary),.16).getHex();
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
-    if(kind==='greatSword'){const asset=this.createOwnerGreatSwordVisual({handGrip:true});if(!asset)return null;group.add(asset);group.userData.assetBased=true;group.rotation.set(.06,0,-.24);}
+    if(kind==='greatSword'){const asset=this.createOwnerGreatSwordVisual({handGrip:true});if(!asset)return null;group.add(asset);group.userData.assetBased=true;group.rotation.set(0,0,0);}
     else if(kind==='kitSword'){const tier=Math.floor(Number(this.state.swordSystem?.equippedTier)||1),asset=this.createPlayerSwordVisual(tier);if(!asset)return null;group.add(asset);group.userData.assetBased=true;group.userData.swordTier=tier;group.rotation.set(.04,0,-.12);}
     else if(['shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
       // V264: Basic-Tools werden über ihre echte Gesamtlänge skaliert. Die Modelle
@@ -3974,7 +4082,7 @@ applyHeldItemVisual() {
     const kind=anchor.userData.kind||this.ownerHeldObject?.userData?.kind||'sword';
     const transforms={
       sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
-      greatSword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
+      greatSword:{p:[.012,-.072,.048],r:[.70,.02,-.08]},
       kitSword:{p:[.02,-.088,.056],r:[.70,.02,-.09]},
       staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
       eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},
@@ -4888,7 +4996,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       case 'rock':return this.harvestRock(hotspot.data);
       case 'bush':return this.harvestBush(hotspot.data);
       case 'water':case 'well':case 'own-well':return this.collectWater();
-      case 'animal':return hotspot.data?.type==='horse'?this.interactHorse(hotspot.data):['fox','cow','wolf1','wolf2','spider','shark','orca'].includes(hotspot.data?.type)?this.attackAnimalCombat(hotspot.data):this.observeAnimal(hotspot.data);
+      case 'animal':return hotspot.data?.type==='horse'?this.interactHorse(hotspot.data):this.observeAnimal(hotspot.data);
       case 'firewood':return this.collectFirewoodPickup(hotspot.data);
       case 'npc':return this.talkToNpc(hotspot.data);
       case 'market':return this.openTrade(hotspot.data?.village||'Markt');
@@ -5011,7 +5119,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
   performOwnerGreatSwordAttack(){
     if(!this.ownerGreatSwordEquipped())return false;
     if(this.greatSwordAimActive&&this.ownerGreatSwordSpecialEnabled('throw'))return this.throwOwnerGreatSword();
-    const target=this.greatSwordTarget(48),damage=this.ownerGreatSwordDamage();this.triggerActionAnimation('weapon-attack',520);this.applyGreatSwordTargetDamage(target,damage);
+    const target=this.greatSwordTarget(48),damage=this.ownerGreatSwordDamage(),slash=this.greatSwordSlashDirection%2===0?'great-sword-slash-down':'great-sword-slash-up';this.greatSwordSlashDirection=(this.greatSwordSlashDirection+1)%2;this.triggerActionAnimation(slash,560);this.applyGreatSwordTargetDamage(target,damage);
     if(this.ownerGreatSwordSpecialEnabled('lightning'))this.castOwnerGreatSwordLightning(target,damage);
     if(this.ownerGreatSwordSpecialEnabled('teleport'))this.teleportOwner(target.end.x-target.direction.x*1.05,target.end.z-target.direction.z*1.05,null,'Great-Sword-Schlag');
     return true;
@@ -6089,7 +6197,7 @@ applyRemoteOwnerAura(remote) {
   syncRemoteHeldAnchorPose(remote){
     const anchor=remote?.heldAnchor;if(!anchor||!remote?.pivot)return;const hand=remote.bones?.handRight,kind=anchor.userData.kind||remote.heldItem||'none';
     if(hand){remote.pivot.updateWorldMatrix?.(true,false);hand.updateWorldMatrix?.(true,false);hand.getWorldPosition(this.tmpVector);remote.pivot.worldToLocal(this.tmpVector);anchor.position.copy(this.tmpVector);}else anchor.position.set(.42,1.13,.02);
-    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
+    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.012,-.072,.048],r:[.70,.02,-.08]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
 
 applyRemoteHeldItem(remote){
@@ -6139,7 +6247,10 @@ applyRemoteHeldItem(remote){
   ownerToggleButton(action,label,enabled,description=''){return `<button class="mdc-owner-toggle ${enabled?'active':''}" data-owner-action="${action}"><span>${enabled?'✓':'○'}</span><b>${label}</b><small>${description}</small></button>`;}
 
 renderOwnerMenu(){
-    if(!this.staffOnly())return;const f=this.ownerFlags,caps=this.staffCapabilities,detailRole=this.activeStaffDetailRole||this.activeStaffRole,roleLabel=STAFF_ROLE_LABELS[detailRole]||STAFF_ROLE_LABELS[this.activeStaffRole]||'Team',appearance=this.state.ownerAppearance||{},disguised=this.isPublicPlayerMode(),speedMultiplier=clamp(Number(f.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER),onlinePlayers=[...this.onlineRoster.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de')),villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5),landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
+    if(!this.staffOnly())return;
+    const oldCategoryStrip=this.ownerPanelBody?.querySelector?.('[data-owner-category-strip]'),savedCategoryScroll=oldCategoryStrip?oldCategoryStrip.scrollLeft:Number(this.ownerCategoryScrollLeft)||0,savedPanelScroll=Number(this.ownerPanelBody?.scrollTop)||0;
+    this.ownerCategoryScrollLeft=savedCategoryScroll;
+    const f=this.ownerFlags,caps=this.staffCapabilities,detailRole=this.activeStaffDetailRole||this.activeStaffRole,roleLabel=STAFF_ROLE_LABELS[detailRole]||STAFF_ROLE_LABELS[this.activeStaffRole]||'Team',appearance=this.state.ownerAppearance||{},disguised=this.isPublicPlayerMode(),speedMultiplier=clamp(Number(f.speedMultiplier)||1,1,OWNER_MAX_SPEED_MULTIPLIER),onlinePlayers=[...this.onlineRoster.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de')),villages=[...this.villages].sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5),landmarks=this.hotspots.filter((h)=>['cave','mine','landmark','encounter'].includes(h.type)).sort((a,b)=>distance2D(a,this.player.position)-distance2D(b,this.player.position)).slice(0,5);
     const movement=[caps.vanish&&this.ownerToggleButton('toggle-vanish','Vanish',f.vanish,'Spieler/NPCs sehen dich nicht · Owner sieht Team · Admin sieht Owner/Admin'),caps.god&&this.ownerToggleButton('toggle-god','Unbesiegbar',f.god,'Alle Überlebenswerte bleiben voll'),caps.noclip&&this.ownerToggleButton('toggle-noclip','Noclip',f.noclip,'Durch Objekte laufen'),caps.fly&&this.ownerToggleButton('toggle-fly','Fly',f.fly,'Fliegen · Leertaste hoch · Strg runter'),caps.freezeTime&&this.ownerToggleButton('toggle-time','Zeit anhalten',f.freezeTime,'Nur deine lokale Weltzeit einfrieren')].filter(Boolean).join(''),utility=[caps.heal&&'<button data-owner-action="heal">❤ Alles heilen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="ground">↓ Sicher landen</button>',(caps.fly||caps.noclip)&&'<button data-owner-action="unstuck">↺ Befreien</button>',caps.world&&'<button data-owner-action="reveal">⌖ Orte aufdecken</button>'].filter(Boolean).join(''),formLabels={normal:'Normal',ball:'Rollender Ball',crystal:'Kristall',bush:'Busch',tree:'Baum',rock:'Stein',grass:'Grasbüschel',fox:'Fuchs',shark:'Hai',cow:'Kuh',orca:'Orka',horse:'Reitpferd',owl:'Uhu',wolf1:'Wolf Baby I',wolf2:'Wolf Baby II',spider:'Zauberspinne',clownfish:'Clownfisch Nemo',bird:'Vogel'},forms=(caps.forms||['normal']).map((id)=>[id,id==='tree'?`Baum ${Math.max(0,Math.floor(Number(appearance.treeVariant)||0))+1}/${Math.max(1,this.natureTreeNames.length)}`:(formLabels[id]||id)]),itemLabels={none:'Leer',shovel:'Schaufel · Basic Tools',pickaxe:'Spitzhacke · Basic Tools',hoe:'Hacke · Basic Tools',axe:'Axt · Basic Tools',hammer:'Hammer · Basic Tools',sword:'Spezial-Schwert',greatSword:'Owner Great Sword',staff:'Spezial-Stab',eternalFlame:'Ewige Flamme'},teamToolIds=['none',...(caps.items||[]).filter((id)=>['shovel','pickaxe','hoe','axe','hammer'].includes(id))].filter((id,index,list)=>list.indexOf(id)===index),sections=[];
     const themeSection=(theme,title)=>{const cls=`mdc-${theme}-action`,heading=`mdc-${theme}-heading`,skinOn=appearance.staffSkinTheme===theme,item=(kind)=>appearance.heldItem===kind&&appearance.heldItemTheme===theme,toggle=(key)=>!!appearance[key]&&appearance[`${key}Theme`]===theme;return `<h3 class="${heading}" data-owner-nav="gear">${title}</h3><div class="mdc-owner-actions three"><button class="${cls} ${skinOn?'active':''}" data-owner-action="toggle-staff-skin" data-owner-theme="${theme}">${skinOn?'✓':'○'} ${staffThemeConfig(theme).label} Skin</button><button class="${cls} ${item('sword')?'active':''}" data-owner-action="admin-item" data-owner-item="sword" data-owner-theme="${theme}">${title} Schwert</button><button class="${cls} ${item('staff')?'active':''}" data-owner-action="admin-item" data-owner-item="staff" data-owner-theme="${theme}">${title} Stab</button><button class="${cls} ${item('eternalFlame')?'active':''}" data-owner-action="admin-item" data-owner-item="eternalFlame" data-owner-theme="${theme}">${title} Ewige Flamme</button><button class="${cls} ${toggle('aura')?'active':''}" data-owner-action="toggle-aura" data-owner-theme="${theme}">${toggle('aura')?'✓':'○'} ${title} Aura</button><button class="${cls} ${toggle('cape')?'active':''}" data-owner-action="toggle-cape" data-owner-theme="${theme}">${toggle('cape')?'✓':'○'} ${title} Wings</button><button class="${cls} ${toggle('cloak')?'active':''}" data-owner-action="toggle-cloak" data-owner-theme="${theme}">${toggle('cloak')?'✓':'○'} ${title} Umhang</button><button class="${cls} ${toggle('hat')?'active':''}" data-owner-action="toggle-hat" data-owner-theme="${theme}">${toggle('hat')?'✓':'○'} ${title} Krone</button></div>`;};
     sections.push(`<div class="mdc-owner-status"><span>◆</span><div><small>${roleLabel.toUpperCase()} AKTIV</small><b>${escapeHtml(bridgeSnapshot().firstName)} · Center-Kontrolle</b><p>Öffnen und schließen mit der Punkt-Taste.</p></div></div>`);
@@ -6174,8 +6285,16 @@ renderOwnerMenu(){
       caps.online&&['online','Online-Spieler'],
       caps.teleport&&['teleport','Teleportieren']
     ].filter(Boolean);
-    const topNav=`<div style="position:sticky;top:0;z-index:50;margin:-4px 0 12px;padding:9px;border:1px solid rgba(255,215,120,.22);border-radius:12px;background:rgba(8,15,11,.96);box-shadow:0 8px 24px rgba(0,0,0,.35)"><small style="display:block;margin:0 0 7px;opacity:.72">KATEGORIEN · ${escapeHtml(roleLabel)}</small><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:3px">${navItems.map(([id,label])=>`<button data-owner-action="jump-owner-section" data-owner-target="${id}" style="white-space:nowrap">${escapeHtml(label)}</button>`).join('')}</div></div>`;
-    this.ownerPanelBody.innerHTML=topNav+sections.join('');this.ownerTeleportPlayers=onlinePlayers;this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
+    const topNav=`<div style="position:sticky;top:0;z-index:50;margin:-4px 0 12px;padding:9px;border:1px solid rgba(255,215,120,.22);border-radius:12px;background:rgba(8,15,11,.96);box-shadow:0 8px 24px rgba(0,0,0,.35)"><small style="display:block;margin:0 0 7px;opacity:.72">KATEGORIEN · ${escapeHtml(roleLabel)}</small><div data-owner-category-strip style="display:flex;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x;padding-bottom:3px">${navItems.map(([id,label])=>`<button data-owner-action="jump-owner-section" data-owner-target="${id}" style="white-space:nowrap;flex:0 0 auto">${escapeHtml(label)}</button>`).join('')}</div></div>`;
+    this.ownerPanelBody.innerHTML=topNav+sections.join('');
+    const newCategoryStrip=this.ownerPanelBody.querySelector('[data-owner-category-strip]');
+    if(newCategoryStrip){
+      newCategoryStrip.scrollLeft=savedCategoryScroll;
+      newCategoryStrip.addEventListener('scroll',()=>{this.ownerCategoryScrollLeft=newCategoryStrip.scrollLeft;},{passive:true});
+      requestAnimationFrame(()=>{if(newCategoryStrip.isConnected)newCategoryStrip.scrollLeft=this.ownerCategoryScrollLeft||savedCategoryScroll;});
+    }
+    this.ownerPanelBody.scrollTop=savedPanelScroll;
+    this.ownerTeleportPlayers=onlinePlayers;this.ownerTeleportVillages=villages;this.ownerTeleportLandmarks=landmarks;
   }
 
   teleportOwner(x,z,y=null,label='Ort'){if(!this.canStaff('teleport')&&!this.canStaff('fly')&&!this.canStaff('noclip'))return;const tx=clamp(Number(x)||0,this.worldBounds.minX,this.worldBounds.maxX),tz=clamp(Number(z)||0,this.worldBounds.minZ,this.worldBounds.maxZ);this.player.position.set(tx,y===null?terrainHeightAt(tx,tz):Number(y),tz);this.velocityY=0;this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();this.toast(`Teleportiert: ${label}`);this.publishPresence(true).catch(()=>{});}
