@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v325-male-female-native-idle-smooth-stand';
+const CENTER_VERSION = '2026-08-09-jkgames-v326-great-sword-back-center-hand-vertical-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -3824,9 +3824,9 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(handGrip){
       // Originalmodell: Längsachse liegt vor der Rotation auf X, der Griff befindet sich
       // nahe am positiven X-Ende. Nur Querachsen zentrieren und den tatsächlichen Griff
-      // auf den lokalen Ursprung legen. V324 dreht die Klinge senkrecht nach unten, während der Griff in der rechten Hand bleibt.
+      // auf den lokalen Ursprung legen. V326 dreht die sichtbare Schwertseite um 180° nach vorne und hält die Klinge senkrecht nach unten.
       asset.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(asset),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3()),gripX=box.max.x-size.x*.12;
-      asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;asset.rotation.set(0,0,Math.PI/2);
+      asset.position.x-=gripX;asset.position.y-=center.y;asset.position.z-=center.z;asset.rotation.set(0,Math.PI,Math.PI/2);
     }else asset.rotation.set(0,0,Math.PI/2);
     asset.name='center-owner-great-sword';asset.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=false;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.metalness=Math.max(.35,Number(mat.metalness)||0);mat.roughness=Math.min(.48,Number(mat.roughness)||.5);}}});return asset;
   }
@@ -3847,8 +3847,8 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(allowed&&!this.ownerGreatSwordCarryObject){
       const carry=this.createOwnerGreatSwordCarryVisual();if(!carry)return;this.modelPivot.add(carry);this.ownerGreatSwordCarryObject=carry;
       const bone=this.resolveBackAttachmentBone(this.playerModel,this.playerBones)||this.playerBones?.chest||this.playerBones?.neck;
-      // V323: obere Rücken-/Wings-Höhe bleibt erhalten; das Schwert sitzt jetzt deutlich näher am Rücken.
-      const pos=new THREE.Vector3(0,2.58,-.16);
+      // V326: kleinere Rücken-Version bleibt erhalten. Leicht nach rechts korrigiert, damit die sichtbare Klinge mittig am Rücken sitzt, und auf Wings-Abstand vom Körper gesetzt.
+      const pos=new THREE.Vector3(.14,2.58,-.22);
       const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(.05,.02,-.62));
       if(!this.configureWearableFollower(carry,this.modelPivot,bone,pos,q)){carry.position.copy(pos);carry.quaternion.copy(q);}
       this.updateWearableFollower(carry);
@@ -3879,7 +3879,7 @@ updateOwnerAura(delta=.016,now=performance.now()) {
     if(kind==='none')return null;theme=normalizeStaffTheme(theme);const group=new THREE.Group();group.userData.kind=kind;const cfg=staffThemeConfig(theme),bright=new THREE.Color(cfg.accent).lerp(new THREE.Color(0xffffff),.34).getHex(),deep=new THREE.Color(cfg.dark).lerp(new THREE.Color(cfg.primary),.16).getHex();
     const steel=new THREE.MeshStandardMaterial({color:0xcfd7df,roughness:.24,metalness:.84}),wood=new THREE.MeshStandardMaterial({color:0x5b351f,roughness:.9});
     const addCylinder=(r1,r2,h,mat,y=0,segments=14)=>{const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat);mesh.position.y=y;group.add(mesh);return mesh;};
-    if(kind==='greatSword'){const asset=this.createOwnerGreatSwordVisual({handGrip:true});if(!asset)return null;group.add(asset);group.userData.assetBased=true;group.rotation.set(0,0,0);}
+    if(kind==='greatSword'){const asset=this.createOwnerGreatSwordVisual({handGrip:true});if(!asset)return null;group.add(asset);group.userData.assetBased=true;/* V326: Ausrichtung vollständig am Original-Griff/Anchor, kein zusätzlicher Querwinkel. */group.rotation.set(0,0,0);}
     else if(kind==='kitSword'){const tier=Math.floor(Number(this.state.swordSystem?.equippedTier)||1),asset=this.createPlayerSwordVisual(tier);if(!asset)return null;group.add(asset);group.userData.assetBased=true;group.userData.swordTier=tier;group.rotation.set(.04,0,-.12);}
     else if(['shovel','pickaxe','hoe','axe','hammer'].includes(kind)){
       // V264: Basic-Tools werden über ihre echte Gesamtlänge skaliert. Die Modelle
@@ -4083,7 +4083,7 @@ applyStaffVehicle(){
 createFirstPersonHeldItem(kind){
     this.disposeHeldVisual(this.firstPersonHeldObject);this.firstPersonHeldObject=null;if(!this.camera||kind==='none')return;const theme=this.appearanceTheme('heldItem'),item=this.createHeldItemMesh(kind,theme);if(!item)return;
     item.name='center-first-person-held-item';item.userData.theme=theme;item.scale.multiplyScalar(kind==='staff'?.42:kind==='greatSword'?.48:kind==='kitSword'?.54:['shovel','pickaxe','hoe','axe','hammer'].includes(kind)?.46:.58);item.traverse((object)=>{object.renderOrder=999;if(object.material){const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(mat){mat.depthTest=false;mat.depthWrite=false;}}}});
-    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},greatSword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},kitSword:{p:[.34,-.36,-.76],r:[-.10,-.14,-.46]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
+    const fpTransforms={sword:{p:[.34,-.34,-.72],r:[-.12,-.18,-.48]},greatSword:{p:[.38,-.36,-.74],r:[-.04,Math.PI,0]},kitSword:{p:[.34,-.36,-.76],r:[-.10,-.14,-.46]},shovel:{p:[.33,-.43,-.78],r:[-.18,-.08,-.34]},pickaxe:{p:[.34,-.38,-.73],r:[-.14,-.08,-.42]},hoe:{p:[.33,-.42,-.77],r:[-.18,-.08,-.36]},axe:{p:[.34,-.37,-.72],r:[-.14,-.08,-.42]},hammer:{p:[.34,-.38,-.72],r:[-.12,-.06,-.4]},staff:{p:[.42,-.47,-.86],r:[.08,.04,-.2]},eternalFlame:{p:[.38,-.42,-.76],r:[-.05,.02,-.24]},torch:{p:[.35,-.38,-.72],r:[-.08,0,-.3]},spear:{p:[.39,-.42,-.82],r:[.02,.03,-.18]},bow:{p:[.37,-.34,-.72],r:[-.1,0,-.3]}};const tr=fpTransforms[kind]||fpTransforms.sword;item.position.set(...tr.p);item.rotation.set(...tr.r);this.camera.add(item);this.firstPersonHeldObject=item;
   }
 
 applyHeldItemVisual() {
@@ -4101,7 +4101,7 @@ applyHeldItemVisual() {
     const kind=anchor.userData.kind||this.ownerHeldObject?.userData?.kind||'sword';
     const transforms={
       sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},
-      greatSword:{p:[.012,-.072,.048],r:[.70,.02,-.08]},
+      greatSword:{p:[.055,-.035,.035],r:[.04,0,-.01]},
       kitSword:{p:[.02,-.088,.056],r:[.70,.02,-.09]},
       staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},
       eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},
@@ -6236,7 +6236,7 @@ applyRemoteOwnerAura(remote) {
   syncRemoteHeldAnchorPose(remote){
     const anchor=remote?.heldAnchor;if(!anchor||!remote?.pivot)return;const hand=remote.bones?.handRight,kind=anchor.userData.kind||remote.heldItem||'none';
     if(hand){remote.pivot.updateWorldMatrix?.(true,false);hand.updateWorldMatrix?.(true,false);hand.getWorldPosition(this.tmpVector);remote.pivot.worldToLocal(this.tmpVector);anchor.position.copy(this.tmpVector);}else anchor.position.set(.42,1.13,.02);
-    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.012,-.072,.048],r:[.70,.02,-.08]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
+    const transforms={sword:{p:[.02,-.085,.055],r:[.70,.02,-.08]},greatSword:{p:[.055,-.035,.035],r:[.04,0,-.01]},staff:{p:[.015,-.035,.07],r:[.53,.01,-.055]},eternalFlame:{p:[.018,-.03,.06],r:[.48,.01,-.06]},shovel:{p:[.018,-.045,.055],r:[.52,.015,-.075]},pickaxe:{p:[.018,-.04,.052],r:[.50,.015,-.08]},hoe:{p:[.018,-.043,.054],r:[.51,.015,-.075]},axe:{p:[.02,-.04,.052],r:[.50,.015,-.08]},hammer:{p:[.02,-.038,.05],r:[.49,.015,-.075]}};const tr=transforms[kind]||transforms.sword;anchor.position.x+=tr.p[0];anchor.position.y+=tr.p[1];anchor.position.z+=tr.p[2];anchor.rotation.set(...tr.r);
   }
 
 applyRemoteHeldItem(remote){
