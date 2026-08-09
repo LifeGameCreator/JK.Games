@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v289-cape-further-back-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v290-clouds-no-sky-trees-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1470,9 +1470,9 @@ class CenterDynastyGame {
     // Die Wolken werden vollständig prozedural und damit sauber kontrollierbar gebaut.
     const rnd=seededRandom(WORLD_SEED+7401);
     const cloudGeo=new THREE.IcosahedronGeometry(1,2);
-    for(let i=0;i<13;i+=1){
+    for(let i=0;i<18;i+=1){
       const cloud=new THREE.Group();cloud.name='center-procedural-cloud';cloud.userData.baseOpacity=.28+rnd()*.16;
-      const puffCount=4+Math.floor(rnd()*4);
+      const puffCount=5+Math.floor(rnd()*4);
       for(let p=0;p<puffCount;p+=1){
         const mat=new THREE.MeshStandardMaterial({color:0xf0f3f5,roughness:1,metalness:0,transparent:true,opacity:cloud.userData.baseOpacity,depthWrite:false,fog:true});
         const puff=new THREE.Mesh(cloudGeo,mat);
@@ -2116,7 +2116,10 @@ buildChunkGrass(chunk) {
   }
 
   spawnAmbientBirds(){
-    for(const bird of this.ambientBirds)bird.group?.removeFromParent?.();this.ambientBirds=[];if(!this.centerAssetTemplates.has('birds')||!this.player)return;const count=this.isMobile?2:4;
+    for(const bird of this.ambientBirds)bird.group?.removeFromParent?.();this.ambientBirds=[];
+    // V290: Die bisherigen Luft-Assets wurden vom Nutzer als schwebende Bäume/Stöcker wahrgenommen.
+    // Deshalb werden oberhalb der Welt aktuell nur noch die prozeduralen Wolken angezeigt.
+    if(!this.player)return;const count=0;
     for(let i=0;i<count;i+=1){const visual=this.createAnimalVisual('bird');if(!visual)continue;const group=new THREE.Group();group.add(visual);this.scene.add(group);const bird={group,visual,angle:i/count*Math.PI*2,radius:28+i*11,height:12+i*2,speed:.28+i*.04,phase:i*1.7};this.ambientBirds.push(bird);}
   }
 
