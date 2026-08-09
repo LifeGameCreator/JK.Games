@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-09-jkcoin-v347-bigcards-trails";
+  const VERSION = "2026-08-10-jkcoin-v352-bigcards-equipment";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -197,9 +197,39 @@
     { game:"bigcards", id:"bigcards-exclusive", name:"EXCLUSIVE PACK", cost:500, text:"5 Ziehungen aus dem exklusiven Vampir-/Blutkarten-Pool.", grant:{kind:"exclusivePack",amount:1} },
     { game:"bigcards", id:"bigcards-auto-opener", name:"Auto-Opener · 1 Stunde", cost:750, text:"Komfort: öffnet gewählte Point-Packs automatisch, ohne Drop-Bonus.", grant:{kind:"autoOpenerHour",amount:1} },
     { game:"bigcards", id:"bigcards-auto-collector", name:"Auto-Collector · 1 Stunde", cost:500, text:"Sammelt produzierte BigCards-Points eine Stunde automatisch ein.", grant:{kind:"autoCollectorHour",amount:1} },
-    { game:"bigcards", id:"bigcards-aura-galaxy", name:"Galaxy Aura", cost:1500, text:"Eine Galaxy Aura x6 Points für genau eine Karteninstanz.", grant:{kind:"aura:galaxy",amount:1} },
-    { game:"bigcards", id:"bigcards-aura-cosmic", name:"Cosmic Aura", cost:2600, text:"Eine Cosmic Aura x8 Points für genau eine Karteninstanz.", grant:{kind:"aura:cosmic",amount:1} },
-    { game:"bigcards", id:"bigcards-bind-wizard", name:"Magierbindung", cost:900, text:"Eine Magierbindung x3 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:wizard",amount:1} },
+    // V352: Vollständige BigCards-Ausrüstung im JK/Coin-Shop.
+    // Normale Auras · Points-Produktion
+    { game:"bigcards", id:"bigcards-aura-basic", name:"Basic Aura", cost:25, text:"Eine Basic Aura x1,10 Points für genau eine Karteninstanz.", grant:{kind:"aura:basic",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-rare", name:"Rare Aura", cost:60, text:"Eine Rare Aura x1,25 Points für genau eine Karteninstanz.", grant:{kind:"aura:rare",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-epic", name:"Epic Aura", cost:120, text:"Eine Epic Aura x1,50 Points für genau eine Karteninstanz.", grant:{kind:"aura:epic",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-legendary", name:"Legendary Aura", cost:220, text:"Eine Legendary Aura x1,80 Points für genau eine Karteninstanz.", grant:{kind:"aura:legendary",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-mythic", name:"Mythic Aura", cost:400, text:"Eine Mythic Aura x2,20 Points für genau eine Karteninstanz.", grant:{kind:"aura:mythic",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-exotic", name:"Exotic Aura", cost:650, text:"Eine Exotic Aura x3,00 Points für genau eine Karteninstanz.", grant:{kind:"aura:exotic",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-universe", name:"Universe Aura", cost:950, text:"Eine Universe Aura x4,00 Points für genau eine Karteninstanz.", grant:{kind:"aura:universe",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-blackhole", name:"Black Hole Aura", cost:1250, text:"Eine Black Hole Aura x5,00 Points für genau eine Karteninstanz.", grant:{kind:"aura:blackhole",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-galaxy", name:"Galaxy Aura", cost:1500, text:"Eine Galaxy Aura x6,00 Points für genau eine Karteninstanz.", grant:{kind:"aura:galaxy",amount:1} },
+    { game:"bigcards", id:"bigcards-aura-cosmic", name:"Cosmic Aura", cost:2600, text:"Eine Cosmic Aura x8,00 Points für genau eine Karteninstanz.", grant:{kind:"aura:cosmic",amount:1} },
+
+    // Kampf-Auras · Kartenkampf
+    { game:"bigcards", id:"bigcards-combat-aura-basic", name:"Basic Kampf Aura", cost:40, text:"Eine Basic Kampf Aura x1,08 für Schaden und Kampfwert.", grant:{kind:"combatAura:basic",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-rare", name:"Rare Kampf Aura", cost:90, text:"Eine Rare Kampf Aura x1,16 für Schaden und Kampfwert.", grant:{kind:"combatAura:rare",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-epic", name:"Epic Kampf Aura", cost:180, text:"Eine Epic Kampf Aura x1,28 für Schaden und Kampfwert.", grant:{kind:"combatAura:epic",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-legendary", name:"Legendary Kampf Aura", cost:320, text:"Eine Legendary Kampf Aura x1,42 für Schaden und Kampfwert.", grant:{kind:"combatAura:legendary",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-mythic", name:"Mythic Kampf Aura", cost:550, text:"Eine Mythic Kampf Aura x1,60 für Schaden und Kampfwert.", grant:{kind:"combatAura:mythic",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-exotic", name:"Exotic Kampf Aura", cost:850, text:"Eine Exotic Kampf Aura x1,85 für Schaden und Kampfwert.", grant:{kind:"combatAura:exotic",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-universe", name:"Universe Kampf Aura", cost:1200, text:"Eine Universe Kampf Aura x2,15 für Schaden und Kampfwert.", grant:{kind:"combatAura:universe",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-blackhole", name:"Black Hole Kampf Aura", cost:1600, text:"Eine Black Hole Kampf Aura x2,50 für Schaden und Kampfwert.", grant:{kind:"combatAura:blackhole",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-galaxy", name:"Galaxy Kampf Aura", cost:2200, text:"Eine Galaxy Kampf Aura x2,90 für Schaden und Kampfwert.", grant:{kind:"combatAura:galaxy",amount:1} },
+    { game:"bigcards", id:"bigcards-combat-aura-cosmic", name:"Cosmic Kampf Aura", cost:3200, text:"Eine Cosmic Kampf Aura x3,50 für Schaden und Kampfwert.", grant:{kind:"combatAura:cosmic",amount:1} },
+
+    // Bindungen · internes BigCards-XP
+    { game:"bigcards", id:"bigcards-bind-fire", name:"Feuerbindung", cost:50, text:"Eine Feuerbindung x1,50 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:fire",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-poison", name:"Giftbindung", cost:100, text:"Eine Giftbindung x1,80 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:poison",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-ice", name:"Eisbindung", cost:180, text:"Eine Eisbindung x2,00 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:ice",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-water", name:"Wasserbindung", cost:280, text:"Eine Wasserbindung x2,20 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:water",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-hell", name:"Höllenbindung", cost:450, text:"Eine Höllenbindung x2,50 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:hell",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-angel", name:"Engelsbindung", cost:650, text:"Eine Engelsbindung x2,80 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:angel",amount:1} },
+    { game:"bigcards", id:"bigcards-bind-wizard", name:"Magierbindung", cost:900, text:"Eine Magierbindung x3,00 internes BigCards-XP für genau eine Karteninstanz.", grant:{kind:"bind:wizard",amount:1} },
     { game:"bigcards", id:"bigcards-trail-common", name:"Gewöhnliche Spur", cost:25, text:"Eine Gewöhnliche Spur für deine persönliche BigCards-Karte. Ausrüsten erst nach normaler Spuren-Freischaltung.", grant:{kind:"trail:common",amount:1} },
     { game:"bigcards", id:"bigcards-trail-uncommon", name:"Ungewöhnliche Spur", cost:50, text:"Eine Ungewöhnliche Spur für deine persönliche Karte.", grant:{kind:"trail:uncommon",amount:1} },
     { game:"bigcards", id:"bigcards-trail-rare", name:"Seltene Spur", cost:90, text:"Eine Seltene Spur mit stärkeren Karten-Slot- und Kampfboni.", grant:{kind:"trail:rare",amount:1} },
