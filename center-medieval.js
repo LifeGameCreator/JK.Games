@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v296-code-clouds-no-legacy-cloud-pack';
+const CENTER_VERSION = '2026-08-09-jkgames-v298-house-door-hitbox-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -200,11 +200,11 @@ const BUILDINGS = Object.freeze({
   mediumChest: { name: 'Mittlere Truhe', icon: '▣', wood: 0, logs: 0, stone: 0, size: 1.55, category: 'Lager', craftedItem: 'mediumChest', note: 'Größere Lagertruhe' }
 });
 const HOUSE_UPGRADE_LEVELS = Object.freeze([
-  Object.freeze({level:1,label:'Low Poly House 3',asset:'playerHouseLevel1',height:4.65,capacity:2,upgradeCost:{wood:0,logs:0,stone:0}}),
-  Object.freeze({level:2,label:'Low Poly House 5',asset:'playerHouseLevel2',height:5.05,capacity:3,upgradeCost:{wood:14,logs:30,stone:24}}),
-  Object.freeze({level:3,label:'Low Poly House 2',asset:'playerHouseLevel3',height:5.45,capacity:4,upgradeCost:{wood:20,logs:42,stone:34}}),
-  Object.freeze({level:4,label:'Low Poly House 1',asset:'playerHouseLevel4',height:5.75,capacity:5,upgradeCost:{wood:28,logs:58,stone:48}}),
-  Object.freeze({level:5,label:'Low Poly House 4',asset:'playerHouseLevel5',height:6.15,capacity:6,upgradeCost:{wood:40,logs:80,stone:68}})
+  Object.freeze({level:1,label:'Haus 1',asset:'playerHouseLevel1',height:4.65,capacity:2,upgradeCost:{wood:0,logs:0,stone:0}}),
+  Object.freeze({level:2,label:'Haus 2',asset:'playerHouseLevel2',height:5.05,capacity:3,upgradeCost:{wood:14,logs:30,stone:24}}),
+  Object.freeze({level:3,label:'Haus 3',asset:'playerHouseLevel3',height:5.45,capacity:4,upgradeCost:{wood:20,logs:42,stone:34}}),
+  Object.freeze({level:4,label:'Haus 4',asset:'playerHouseLevel4',height:5.75,capacity:5,upgradeCost:{wood:28,logs:58,stone:48}}),
+  Object.freeze({level:5,label:'Haus 5',asset:'playerHouseLevel5',height:6.15,capacity:6,upgradeCost:{wood:40,logs:80,stone:68}})
 ]);
 const CHEST_DEFS = Object.freeze({
   smallChest:Object.freeze({name:'Kleine Truhe',asset:'chestSmall',capacity:40,targetSize:1.35,cost:{wood:6,logs:2}}),
@@ -1438,9 +1438,54 @@ class CenterDynastyGame {
 
   houseLevelDefinition(level=1){return HOUSE_UPGRADE_LEVELS[Math.floor(clamp(Number(level)||1,1,HOUSE_UPGRADE_LEVELS.length))-1]||HOUSE_UPGRADE_LEVELS[0];}
 
+  houseCollisionProfile(level=1){
+    // V298: Die Wohnhäuser bekommen keine riesige Kreis-Hitbox mehr. Stattdessen
+    // folgen schmale Wand-/Zaunsegmente dem sichtbaren Hausrand und lassen vorne
+    // eine echte Öffnung frei, durch die man bis an die Tür laufen kann.
+    const profiles=[
+      {halfW:3.02,halfD:4.08,doorGap:2.75},
+      {halfW:2.55,halfD:2.55,doorGap:2.55},
+      {halfW:2.16,halfD:3.26,doorGap:2.45},
+      {halfW:2.82,halfD:4.16,doorGap:2.65},
+      {halfW:2.42,halfD:4.16,doorGap:2.55}
+    ];
+    return profiles[Math.floor(clamp(Number(level)||1,1,profiles.length))-1]||profiles[0];
+  }
+
+  houseLocalToWorld(saved,lx=0,lz=0){
+    const yaw=Number(saved?.rotation)||0,c=Math.cos(yaw),si=Math.sin(yaw),x=Number(saved?.x)||0,z=Number(saved?.z)||0;
+    return {x:x+lx*c+lz*si,z:z-lx*si+lz*c};
+  }
+
+  houseDoorWorld(saved,extra=.45){
+    const profile=this.houseCollisionProfile(saved?.houseLevel||1);
+    return this.houseLocalToWorld(saved,0,profile.halfD+Math.max(0,Number(extra)||0));
+  }
+
+  clearOwnedBuildingColliders(buildId=''){
+    if(!buildId)return;for(const collider of [...this.colliders])if(collider.buildId===buildId)this.unregisterCollider(collider);
+  }
+
+  registerPlayerHouseColliders(saved){
+    if(!saved?.id)return;this.clearOwnedBuildingColliders(saved.id);
+    const profile=this.houseCollisionProfile(saved.houseLevel||1),yaw=Number(saved.rotation)||0,wallRadius=.08,height=this.houseLevelDefinition(saved.houseLevel||1).height*1.18;
+    const addSegment=(lx,lz,length,localYaw)=>{const p=this.houseLocalToWorld(saved,lx,lz),collider=this.registerCollider(p.x,p.z,.18,'owned-house','',saved);collider.shape='segment';collider.length=Math.max(.25,Number(length)||.25);collider.yaw=yaw+localYaw;collider.radius=wallRadius;collider.height=height;collider.buildId=saved.id;return collider;};
+    // Seiten und Rückwand.
+    addSegment(-profile.halfW,0,profile.halfD*2,0);
+    addSegment(profile.halfW,0,profile.halfD*2,0);
+    addSegment(0,-profile.halfD,profile.halfW*2,Math.PI/2);
+    // Vorderseite in zwei Teile teilen: In der Mitte bleibt die Tür-/Zaunöffnung frei.
+    const frontPart=Math.max(.25,(profile.halfW*2-profile.doorGap)*.5),frontCenter=profile.doorGap*.5+frontPart*.5;
+    addSegment(-frontCenter,profile.halfD,frontPart,Math.PI/2);
+    addSegment(frontCenter,profile.halfD,frontPart,Math.PI/2);
+  }
+
   createPlayerHouseAsset(level=1,ghost=false){
     const def=this.houseLevelDefinition(level),root=this.cloneCenterAsset(def.asset,{targetHeight:def.height,bottomAlign:true,center:true});if(!root)return null;root.name=ghost?`center-player-house-l${def.level}-ghost`:`center-player-house-l${def.level}`;root.userData.houseLevel=def.level;
-    if(ghost){const tint=new THREE.Color(0x69c981);root.traverse((object)=>{if(!object.isMesh)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=.48;mat.color?.lerp?.(tint,.68);mat.depthWrite=false;}});}
+    // Die exportierten Collider-Meshes sind nur Hilfsgeometrie aus den GLBs. Die
+    // eigentliche Kollision übernimmt V298 mit den präziseren Segment-Hitboxen.
+    root.traverse((object)=>{if((object.isMesh||object.isSkinnedMesh)&&/collider/i.test(String(object.name||'')))object.visible=false;});
+    if(ghost){const tint=new THREE.Color(0x69c981);root.traverse((object)=>{if(!object.isMesh||!object.visible)return;const mats=Array.isArray(object.material)?object.material:[object.material];for(const mat of mats){if(!mat)continue;mat.transparent=true;mat.opacity=.48;mat.color?.lerp?.(tint,.68);mat.depthWrite=false;}});}
     return root;
   }
 
@@ -1472,7 +1517,7 @@ class CenterDynastyGame {
   }
 
   exitPlayerHouse(silent=false){
-    if(!this.inHouseInterior||!this.player)return;const back=this.houseExteriorReturn||{};this.player.removeFromParent();this.scene.add(this.player);const b=back.building;if(b){const yaw=Number(b.rotation)||0,dist=5.1;this.player.position.set(Number(b.x||0)+Math.sin(yaw)*dist,terrainHeightAt(Number(b.x||0)+Math.sin(yaw)*dist,Number(b.z||0)+Math.cos(yaw)*dist),Number(b.z||0)+Math.cos(yaw)*dist);}else this.player.position.set(Number(back.x)||0,Number(back.y)||terrainHeightAt(Number(back.x)||0,Number(back.z)||0),Number(back.z)||0);this.yaw=Number(back.yaw)||Math.PI;this.velocityY=0;this.onGround=true;this.inHouseInterior=false;this.houseExteriorReturn=null;this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();if(!silent)this.toast('Wohnhaus verlassen.');
+    if(!this.inHouseInterior||!this.player)return;const back=this.houseExteriorReturn||{};this.player.removeFromParent();this.scene.add(this.player);const b=back.building;if(b){const door=this.houseDoorWorld(b,1.25);this.player.position.set(door.x,terrainHeightAt(door.x,door.z),door.z);}else this.player.position.set(Number(back.x)||0,Number(back.y)||terrainHeightAt(Number(back.x)||0,Number(back.z)||0),Number(back.z)||0);this.yaw=Number(back.yaw)||Math.PI;this.velocityY=0;this.onGround=true;this.inHouseInterior=false;this.houseExteriorReturn=null;this.lastChunkCenter='';this.updateChunkStreaming(true);this.snapCamera();if(!silent)this.toast('Wohnhaus verlassen.');
   }
 
   makeAnimalClipInPlace(clip){
@@ -2699,12 +2744,16 @@ buildChunkGrass(chunk) {
       const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*.73,3.2,4),roofMat); roof.position.y=h+1.4; roof.rotation.y=Math.PI/4; roof.scale.z=d/w; group.add(roof);
     }
     group.position.set(x,terrainHeightAt(x,z),z); group.rotation.y=rotation; group.userData={type,owned,ghost}; this.scene.add(group);
-    if(owned&&!ghost&&type!=='campfire'&&type!=='field'&&type!=='well') this.addColliderFromCenter(x,z,BUILDINGS[type]?.size||5,BUILDINGS[type]?.size||5,rotation,'owned');
+    if(owned&&!ghost&&type!=='campfire'&&type!=='field'&&type!=='well'){
+      if(type==='house'&&savedData?.id)this.registerPlayerHouseColliders(savedData);
+      else this.addColliderFromCenter(x,z,BUILDINGS[type]?.size||5,BUILDINGS[type]?.size||5,rotation,'owned');
+    }
     return group;
   }
 
   addBuildingHotspots(saved) {
-    const labels={house:`Eigenes Wohnhaus Stufe ${Math.floor(clamp(Number(saved.houseLevel)||1,1,HOUSE_UPGRADE_LEVELS.length))} betreten`,campfire:'Am Lagerfeuer kochen',well:'Wasser aus dem Brunnen holen',storage:'Lagerhaus verwalten',workshop:'Werkstatt benutzen',woodshed:'Holzfällerlager verwalten',field:'Acker bewirtschaften',barn:'Scheunenproduktion abholen',huntingLodge:'Jagdhüttenproduktion abholen',mine:'Bergwerksproduktion abholen',tavern:'Taverne und Beziehungen verwalten',smallChest:'Kleine Truhe öffnen',mediumChest:'Mittlere Truhe öffnen'};
+    const labels={house:`Haus ${Math.floor(clamp(Number(saved.houseLevel)||1,1,HOUSE_UPGRADE_LEVELS.length))} betreten`,campfire:'Am Lagerfeuer kochen',well:'Wasser aus dem Brunnen holen',storage:'Lagerhaus verwalten',workshop:'Werkstatt benutzen',woodshed:'Holzfällerlager verwalten',field:'Acker bewirtschaften',barn:'Scheunenproduktion abholen',huntingLodge:'Jagdhüttenproduktion abholen',mine:'Bergwerksproduktion abholen',tavern:'Taverne und Beziehungen verwalten',smallChest:'Kleine Truhe öffnen',mediumChest:'Mittlere Truhe öffnen'};
+    if(saved.type==='house'){const door=this.houseDoorWorld(saved,.38);this.hotspots.push({id:`build-${saved.id}`,type:'own-house',x:door.x,z:door.z,radius:2.15,label:labels.house,data:saved});return;}
     this.hotspots.push({id:`build-${saved.id}`,type:`own-${saved.type}`,x:saved.x,z:saved.z,radius:BUILDINGS[saved.type].size*.72,label:labels[saved.type]||'Gebäude verwalten',data:saved});
   }
 
@@ -3615,7 +3664,7 @@ updateRoleHud() {
       for (const object of this.ownBuildingObjects.values()) object.removeFromParent();
       this.ownBuildingObjects.clear();
       this.hotspots = this.hotspots.filter((hotspot) => !String(hotspot.id || '').startsWith('build-'));
-      for (const collider of [...this.colliders]) if (collider.source === 'owned') this.unregisterCollider(collider);
+      for (const collider of [...this.colliders]) if (String(collider.source||'').startsWith('owned')) this.unregisterCollider(collider);
       this.buildSavedSettlement();
       this.restoreHarvestedNodes();
       if (changedSlot) { this.rebuildStreamedWorld(); this.toast(`Spielstand ${latest.slot + 1} geladen · neuer Weltbereich.`); }
@@ -4498,8 +4547,8 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
     if(this.inHouseInterior){this.toast('Verlasse zuerst dein Wohnhaus, bevor du es ausbaust.');return;}const saved=this.state.buildings.find((b)=>b.type==='house'&&(!buildId||b.id===buildId));if(!saved){this.toast('Du musst zuerst dein Wohnhaus bauen.');return;}
     const current=Math.floor(clamp(Number(saved.houseLevel)||1,1,HOUSE_UPGRADE_LEVELS.length));if(current>=HOUSE_UPGRADE_LEVELS.length){this.toast('Dein Wohnhaus ist bereits auf der höchsten Stufe.');return;}const next=this.houseLevelDefinition(current+1),cost=next.upgradeCost;
     if(!this.hasCost(cost,true)){this.toast(`Für Stufe ${next.level} fehlen Baumaterialien.`);return;}this.payCost(cost,true);this.useTool('hammer',Math.min(18,6+current*2));saved.houseLevel=next.level;saved.condition=100;saved.upgradedAt=Date.now();
-    const old=this.ownBuildingObjects.get(saved.id);old?.removeFromParent?.();const replacement=this.createBuildObject('house',Number(saved.x),Number(saved.z),Number(saved.rotation)||0,false,false,saved);replacement.userData.buildId=saved.id;this.ownBuildingObjects.set(saved.id,replacement);
-    const hotspot=this.hotspots.find((h)=>h.id===`build-${saved.id}`);if(hotspot)hotspot.label=`Eigenes Wohnhaus Stufe ${next.level} betreten`;this.gainXp(28+next.level*6,`Wohnhaus auf Stufe ${next.level} ausgebaut`);this.toast(`Wohnhaus ausgebaut: ${next.label} · Stufe ${next.level}/5.`);this.saveState(true);this.openManagement('building');
+    const old=this.ownBuildingObjects.get(saved.id);old?.removeFromParent?.();this.clearOwnedBuildingColliders(saved.id);const replacement=this.createBuildObject('house',Number(saved.x),Number(saved.z),Number(saved.rotation)||0,true,false,saved);replacement.userData.buildId=saved.id;this.ownBuildingObjects.set(saved.id,replacement);
+    const hotspot=this.hotspots.find((h)=>h.id===`build-${saved.id}`);if(hotspot){const door=this.houseDoorWorld(saved,.38);hotspot.x=door.x;hotspot.z=door.z;hotspot.radius=2.15;hotspot.label=`Haus ${next.level} betreten`;}this.gainXp(28+next.level*6,`Wohnhaus auf Stufe ${next.level} ausgebaut`);this.toast(`Wohnhaus ausgebaut: ${next.label} · Stufe ${next.level}/5.`);this.saveState(true);this.openManagement('building');
   }
 
   buildingCost(def){const cost={wood:Number(def?.wood||0),logs:Number(def?.logs||0),stone:Number(def?.stone||0)};if(Number(def?.firewood||0)>0)cost.firewood=Number(def.firewood);return cost;}
@@ -4601,7 +4650,7 @@ applyPerspectiveVisibility(){this.overlay.classList.toggle('is-first-person',thi
       if(b.craftedItem){const count=this.state.placeables[b.craftedItem]||0;return `<article><span>${b.icon}</span><div><small>${b.category}</small><h3>${b.name}</h3><p>${b.note} · Bereit: ${count}</p></div><button ${count>0?'':'disabled'} data-mdc-action="build" data-building="${id}">Platzieren</button></article>`;}
       const cost=this.buildingCost(b);return `<article><span>${b.icon}</span><div><small>${b.category}</small><h3>${b.name}</h3><p>${b.note?escapeHtml(b.note)+' · ':''}${this.costText(cost,true)}</p></div><button ${this.hasCost(cost,true)?'':'disabled'} data-mdc-action="build" data-building="${id}">Platzieren</button></article>`;
     }).join('');
-    return `<p class="mdc-note">Dein Wohnhaus startet als Low Poly House 3 und wird in dieser Reihenfolge ausgebaut: House 3 → 5 → 2 → 1 → 4. Jede Stufe wird größer und der Innenraum wächst mit. Truhen musst du vorher herstellen.</p><div class="mdc-building-grid">${cards}</div>`;
+    return `<div class="mdc-building-grid">${cards}</div>`;
   }
 
   renderSkillsPanel() {
