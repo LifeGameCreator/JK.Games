@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v301-owner-masked-concrete-village-layout-fix';
+const CENTER_VERSION = '2026-08-09-jkgames-v302-village-foundation-placement-hard-fix';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1527,27 +1527,66 @@ class CenterDynastyGame {
   }
 
   sampleVillageFootprint(x,z,halfW,halfD,yaw=0){
-    const heights=[],c=Math.cos(yaw),s=Math.sin(yaw);
-    for(const sx of [-1,0,1])for(const sz of [-1,0,1]){const lx=sx*halfW,lz=sz*halfD,wx=x+lx*c+lz*s,wz=z-lx*s+lz*c;heights.push(terrainHeightAt(wx,wz));}
-    return {min:Math.min(...heights),max:Math.max(...heights),average:heights.reduce((sum,v)=>sum+v,0)/Math.max(1,heights.length)};
+    // V302: dichteres Raster statt nur 9 Messpunkten. Dadurch wird auch eine Kante/Hangseite
+    // unter einem großen Haus zuverlässig erkannt und der Betonsockel reicht wirklich bis Boden.
+    const heights=[],c=Math.cos(yaw),s=Math.sin(yaw),steps=[-1,-.5,0,.5,1];
+    for(const sx of steps)for(const sz of steps){
+      const lx=sx*halfW,lz=sz*halfD,wx=x+lx*c+lz*s,wz=z-lx*s+lz*c;
+      heights.push(terrainHeightAt(wx,wz));
+    }
+    return {
+      min:Math.min(...heights),
+      max:Math.max(...heights),
+      average:heights.reduce((sum,v)=>sum+v,0)/Math.max(1,heights.length),
+      slope:Math.max(...heights)-Math.min(...heights)
+    };
   }
 
   addVillageFoundation(chunk,x,z,halfW,halfD,yaw,baseY,groundMin){
-    // V301: JEDES Dorfhaus steht auf einem klar sichtbaren Betonfundament. Der Sockel
-    // beginnt unter dem tiefsten Punkt des lokalen Geländes und endet über dem höchsten
-    // Punkt. Dadurch kann kein Haus mehr optisch schweben oder halb im Hang verschwinden.
-    const depth=Math.max(.72,baseY-groundMin+.22),material=new THREE.MeshStandardMaterial({color:0x6f7374,roughness:.96,metalness:0,flatShading:true}),foundation=new THREE.Mesh(new THREE.BoxGeometry(halfW*2.18,depth,halfD*2.18,2,1,2),material);
-    foundation.position.set(x-chunk.originX,baseY-depth*.5-.015,z-chunk.originZ);foundation.rotation.y=yaw;foundation.name='v301-village-concrete-foundation';foundation.castShadow=!!this.state.world?.shadows;foundation.receiveShadow=true;chunk.group.add(foundation);
-    const lip=new THREE.Mesh(new THREE.BoxGeometry(halfW*2.30,.24,halfD*2.30),new THREE.MeshStandardMaterial({color:0x8c9090,roughness:.94,metalness:0,flatShading:true}));lip.position.set(x-chunk.originX,baseY-.105,z-chunk.originZ);lip.rotation.y=yaw;lip.name='v301-village-concrete-foundation-lip';lip.castShadow=!!this.state.world?.shadows;lip.receiveShadow=true;chunk.group.add(lip);
-    return baseY;
+    // V302: Fundament ist nur wenig größer als das echte Haus. Keine riesigen Betonplatten mehr.
+    // Der massive Sockel reicht bis UNTER den niedrigsten gemessenen Bodenpunkt; oben liegt eine
+    // durchgehende Betonplatte, auf der das Haus exakt aufsitzt.
+    const margin=.38,width=Math.max(3.4,halfW*2+margin*2),depthSize=Math.max(3.2,halfD*2+margin*2);
+    const bottomY=groundMin-.18,slabThickness=.24,bodyTop=baseY-slabThickness*.82,bodyDepth=Math.max(.46,bodyTop-bottomY);
+    const concreteMat=new THREE.MeshStandardMaterial({color:0x696d6e,roughness:.97,metalness:0,flatShading:true});
+    const slabMat=new THREE.MeshStandardMaterial({color:0x85898a,roughness:.95,metalness:0,flatShading:true});
+    const foundation=new THREE.Mesh(new THREE.BoxGeometry(width,bodyDepth,depthSize,2,1,2),concreteMat);
+    foundation.position.set(x-chunk.originX,bottomY+bodyDepth*.5,z-chunk.originZ);
+    foundation.rotation.y=yaw;
+    foundation.name='v302-village-concrete-foundation';
+    foundation.castShadow=!!this.state.world?.shadows;
+    foundation.receiveShadow=true;
+    chunk.group.add(foundation);
+
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(width+.10,slabThickness,depthSize+.10),slabMat);
+    slab.position.set(x-chunk.originX,baseY-slabThickness*.5,z-chunk.originZ);
+    slab.rotation.y=yaw;
+    slab.name='v302-village-concrete-slab';
+    slab.castShadow=!!this.state.world?.shadows;
+    slab.receiveShadow=true;
+    chunk.group.add(slab);
+
+    return {topY:baseY,bottomY,width,depth:depthSize,halfW:width*.5,halfD:depthSize*.5};
   }
 
-  villageHouseFootprintsOverlap(a,b,padding=1.35){
+  villageHouseFootprintsOverlap(a,b,padding=.55){
     if(!a||!b)return false;
-    // Bewusst konservative Außenkreise inklusive Fundament. So darf niemals ein zweites
-    // Haus in ein bereits gesetztes Haus oder dessen Betonsockel hineinragen.
-    const ar=Math.hypot((a.halfW||a.w*.5||2)*1.16,(a.halfD||a.d*.5||2)*1.16)+padding,br=Math.hypot((b.halfW||b.w*.5||2)*1.16,(b.halfD||b.d*.5||2)*1.16)+padding;
-    return Math.hypot(Number(a.x||0)-Number(b.x||0),Number(a.z||0)-Number(b.z||0))<ar+br;
+    // V302: echte OBB/SAT-Prüfung mit Fundament-Rand. Dadurch können selbst gedrehte Häuser
+    // niemals in ein anderes Haus oder dessen Betonplatte hineinragen.
+    const makeRect=(r)=>{
+      const yaw=Number(r.yaw)||0,c=Math.cos(yaw),s=Math.sin(yaw);
+      const hw=Math.max(.5,Number(r.foundationHalfW||r.halfW||r.w*.5||2))+padding;
+      const hd=Math.max(.5,Number(r.foundationHalfD||r.halfD||r.d*.5||2))+padding;
+      return {x:Number(r.x)||0,z:Number(r.z)||0,hw,hd,ux:{x:c,z:-s},uz:{x:s,z:c}};
+    };
+    const A=makeRect(a),B=makeRect(b),dx=B.x-A.x,dz=B.z-A.z,axes=[A.ux,A.uz,B.ux,B.uz];
+    for(const axis of axes){
+      const center=Math.abs(dx*axis.x+dz*axis.z);
+      const ra=A.hw*Math.abs(A.ux.x*axis.x+A.ux.z*axis.z)+A.hd*Math.abs(A.uz.x*axis.x+A.uz.z*axis.z);
+      const rb=B.hw*Math.abs(B.ux.x*axis.x+B.ux.z*axis.z)+B.hd*Math.abs(B.uz.x*axis.x+B.uz.z*axis.z);
+      if(center>ra+rb)return false;
+    }
+    return true;
   }
 
   registerVillageRectColliders(chunk,x,z,halfW,halfD,yaw,height=6.8){
@@ -2249,24 +2288,28 @@ buildChunkGrass(chunk) {
     for(let i=0;i<houseCount;i+=1){
       const group=this.createVillageHouseVariant(i,5.35+(i%3)*.46);
       // Keine alten Ersatzhäuser: fehlt das echte Pack, wird kein falsches Kastenhaus erzeugt.
-      if(!group){if(i===0)console.warn('V301: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
-      group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),halfW=Math.max(1.65,size.x*.43),halfD=Math.max(1.55,size.z*.43);
+      if(!group){if(i===0)console.warn('V302: Dorfhaus-Pack nicht verfügbar – alte Ersatzhäuser bleiben deaktiviert.');continue;}
+      group.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),halfW=Math.max(1.65,size.x*.50),halfD=Math.max(1.55,size.z*.50);
       const outer=i%2===1,slot=Math.floor(i/2),count=outer?outerCount:innerCount,baseRadius=outer?39:27,baseAngle=(slot/Math.max(1,count))*Math.PI*2+(outer?Math.PI/Math.max(2,count):0)+(random()-.5)*.10;
       let placement=null;
       for(let attempt=0;attempt<24&&!placement;attempt+=1){
-        const ringPush=Math.floor(attempt/8)*4.2,angle=baseAngle+(attempt%8)*.11*(attempt%2?-1:1),radius=baseRadius+ringPush,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:hx,z:hz,halfW,halfD,yaw};
-        if(pointInsideWaterFeature(hx,hz,Math.max(halfW,halfD)+3))continue;
-        if(housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.7)))continue;
-        placement={hx,hz,yaw,angle,radius};
+        const ringPush=Math.floor(attempt/8)*4.6,angle=baseAngle+(attempt%8)*.105*(attempt%2?-1:1),radius=baseRadius+ringPush,hx=x+Math.cos(angle)*radius,hz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:hx,z:hz,halfW,halfD,foundationHalfW:halfW+.38,foundationHalfD:halfD+.38,yaw};
+        if(Math.hypot(hx-x,hz-z)<20+Math.hypot(halfW,halfD))continue;
+        if(pointInsideWaterFeature(hx,hz,Math.max(halfW,halfD)+3.5))continue;
+        if(housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,.7)))continue;
+        const probe=this.sampleVillageFootprint(hx,hz,halfW+.38,halfD+.38,yaw);
+        if(!Number.isFinite(probe.min)||!Number.isFinite(probe.max)||probe.slope>9.5)continue;
+        placement={hx,hz,yaw,angle,radius,probe};
       }
       // Lieber ein Haus weniger als zwei Häuser ineinander.
-      if(!placement){console.warn(`V301: Kein überschneidungsfreier Platz für Dorfhaus ${i+1} in ${name} gefunden.`);continue;}
-      const {hx,hz,yaw,angle,radius}=placement,localX=hx-chunk.originX,localZ=hz-chunk.originZ,samples=this.sampleVillageFootprint(hx,hz,halfW,halfD,yaw),baseY=samples.max+.54;
-      this.addVillageFoundation(chunk,hx,hz,halfW,halfD,yaw,baseY,samples.min);
-      group.position.set(localX,baseY+.025,localZ);group.rotation.y=yaw;group.name=`v301-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
+      if(!placement){console.warn(`V302: Kein sicherer Fundamentplatz für Dorfhaus ${i+1} in ${name} gefunden.`);continue;}
+      const {hx,hz,yaw,angle,radius}=placement,localX=hx-chunk.originX,localZ=hz-chunk.originZ,samples=placement.probe||this.sampleVillageFootprint(hx,hz,halfW+.38,halfD+.38,yaw),baseY=samples.max+.16;
+      const foundation=this.addVillageFoundation(chunk,hx,hz,halfW,halfD,yaw,baseY,samples.min);
+      if(!foundation){console.warn(`V302: Fundament für Dorfhaus ${i+1} in ${name} konnte nicht erstellt werden – Haus wird nicht gesetzt.`);continue;}
+      group.position.set(localX,foundation.topY+.018,localZ);group.rotation.y=yaw;group.name=`v302-${name}-haus-${i+1}`;group.traverse((object)=>{if(object.isMesh){object.castShadow=!!this.state.world?.shadows;object.receiveShadow=!!this.state.world?.shadows;}});chunk.group.add(group);
       this.registerVillageRectColliders(chunk,hx,hz,halfW,halfD,yaw,Math.max(5.8,size.y*1.03));
-      const doorX=hx-Math.cos(angle)*(halfD*1.08+1.15),doorZ=hz-Math.sin(angle)*(halfD*1.08+1.15);
-      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:halfW*2,d:halfD*2,halfW,halfD,yaw,angle,radius,doorX,doorZ});
+      const doorX=hx-Math.cos(angle)*(foundation.halfD+.95),doorZ=hz-Math.sin(angle)*(foundation.halfD+.95);
+      housePositions.push({x:hx,z:hz,lx:localX,lz:localZ,w:halfW*2,d:halfD*2,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,yaw,angle,radius,doorX,doorZ});
     }
 
     const stoneMat=new THREE.MeshStandardMaterial({color:0x7f817d,roughness:1});
@@ -2289,9 +2332,23 @@ buildChunkGrass(chunk) {
     // Gemeinschaftshaus ebenfalls ausschließlich auf Beton und nur an einer freien Stelle.
     let community=null,communityPlaced=false;community=this.createVillageHouseVariant(houseCount+2,6.35);
     if(community){
-      community.updateMatrixWorld(true);const cbox=new THREE.Box3().setFromObject(community),csize=cbox.getSize(new THREE.Vector3()),halfW=Math.max(1.8,csize.x*.43),halfD=Math.max(1.7,csize.z*.43);let spot=null;
-      for(let attempt=0;attempt<18&&!spot;attempt+=1){const angle=3.78+(attempt%6)*.18*(attempt%2?-1:1),radius=44+Math.floor(attempt/6)*4.5,cx=x+Math.cos(angle)*radius,cz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:cx,z:cz,halfW,halfD,yaw};if(pointInsideWaterFeature(cx,cz,Math.max(halfW,halfD)+3)||housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,1.9)))continue;spot={x:cx,z:cz,yaw,angle,radius};}
-      if(spot){const samples=this.sampleVillageFootprint(spot.x,spot.z,halfW,halfD,spot.yaw),baseY=samples.max+.56;this.addVillageFoundation(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,baseY,samples.min);community.position.set(spot.x-chunk.originX,baseY+.025,spot.z-chunk.originZ);community.rotation.y=spot.yaw;community.name=`v301-${name}-gemeinschaftshaus`;chunk.group.add(community);this.registerVillageRectColliders(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,Math.max(6,csize.y*1.04));const doorX=spot.x-Math.cos(spot.angle)*(halfD*1.08+1.2),doorZ=spot.z-Math.sin(spot.angle)*(halfD*1.08+1.2);housePositions.push({x:spot.x,z:spot.z,halfW,halfD,w:halfW*2,d:halfD*2,yaw:spot.yaw,angle:spot.angle,radius:spot.radius,doorX,doorZ,community:true});communityPlaced=true;}else{community.removeFromParent?.();community=null;console.warn(`V301: Gemeinschaftshaus in ${name} ausgelassen, damit keine Gebäude überlappen.`);}
+      community.updateMatrixWorld(true);const cbox=new THREE.Box3().setFromObject(community),csize=cbox.getSize(new THREE.Vector3()),halfW=Math.max(1.8,csize.x*.50),halfD=Math.max(1.7,csize.z*.50);let spot=null;
+      for(let attempt=0;attempt<24&&!spot;attempt+=1){
+        const angle=3.78+(attempt%8)*.14*(attempt%2?-1:1),radius=45+Math.floor(attempt/8)*5,cx=x+Math.cos(angle)*radius,cz=z+Math.sin(angle)*radius,yaw=-angle+Math.PI/2,candidateHouse={x:cx,z:cz,halfW,halfD,foundationHalfW:halfW+.38,foundationHalfD:halfD+.38,yaw};
+        if(pointInsideWaterFeature(cx,cz,Math.max(halfW,halfD)+3.5)||housePositions.some((existing)=>this.villageHouseFootprintsOverlap(candidateHouse,existing,.8)))continue;
+        const probe=this.sampleVillageFootprint(cx,cz,halfW+.38,halfD+.38,yaw);if(probe.slope>9.5)continue;
+        spot={x:cx,z:cz,yaw,angle,radius,probe};
+      }
+      if(spot){
+        const samples=spot.probe||this.sampleVillageFootprint(spot.x,spot.z,halfW+.38,halfD+.38,spot.yaw),baseY=samples.max+.16,foundation=this.addVillageFoundation(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,baseY,samples.min);
+        if(foundation){
+          community.position.set(spot.x-chunk.originX,foundation.topY+.018,spot.z-chunk.originZ);community.rotation.y=spot.yaw;community.name=`v302-${name}-gemeinschaftshaus`;chunk.group.add(community);
+          this.registerVillageRectColliders(chunk,spot.x,spot.z,halfW,halfD,spot.yaw,Math.max(6,csize.y*1.04));
+          const doorX=spot.x-Math.cos(spot.angle)*(foundation.halfD+.98),doorZ=spot.z-Math.sin(spot.angle)*(foundation.halfD+.98);
+          housePositions.push({x:spot.x,z:spot.z,halfW,halfD,foundationHalfW:foundation.halfW,foundationHalfD:foundation.halfD,w:halfW*2,d:halfD*2,yaw:spot.yaw,angle:spot.angle,radius:spot.radius,doorX,doorZ,community:true});communityPlaced=true;
+        }
+      }
+      if(!communityPlaced){community.removeFromParent?.();community=null;console.warn(`V302: Gemeinschaftshaus in ${name} ausgelassen, damit kein Gebäude schwebt oder überlappt.`);}
     }
 
     // V301: Keine sternförmigen Wege mehr vom Mittelpunkt zu jedem Haus. Stattdessen
