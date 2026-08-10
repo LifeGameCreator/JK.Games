@@ -1117,3 +1117,9 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-collection-score-row .bc-total-collection-score strong{font-size:18px}
   .bc-collection-score-row .bc-total-collection-score em{font-size:6.5px}
 }
+
+
+/* BigCards.kl V385 – Kartendetail: kein horizontaler Scrollbalken durch Shiny-Overlays. */
+.bc-modal-card{overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box}
+.bc-card-detail,.bc-detail-card,.bc-detail-actions{min-width:0}
+.bc-detail-card{position:relative;overflow:hidden}
