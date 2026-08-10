@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-jkcoin-v373-bigcards-bulk-24h";
+  const VERSION = "2026-08-10-jkcoin-v376-bigcards-vip";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -181,6 +181,7 @@
     { game:"speedcar", id:"speedcar-tune-3", name:"3 Tuning-Chips", cost:300, text:"Drei kostenlose Tuning-Stufen in der Speed Car.KL-Werkstatt.", grant:{kind:"tuneToken",amount:3} },
     { game:"speedcar", id:"speedcar-coins-50000", name:"50.000 Speed Coins", cost:250, text:"Guthaben für Fahrzeugkäufe und Tuning in Speed Car.KL.", grant:{kind:"speedCoins",amount:1} },
 
+    { game:"bigcards", id:"bigcards-vip", name:"BigCards VIP · Dauerhaft", cost:500, text:"Permanenter VIP-Zugang für BigCards.kl: tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten, Boss-System, Klicker-Upgrades und Boss-Special-Attacken.", grant:{kind:"vipUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-bulk-level-unlock", name:"Alle Karten leveln · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten leveln“ für exakt 24 Stunden frei. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkLevelUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-2", name:"2× Points · 15 Min.", cost:200, text:"Verdoppelt 15 Minuten lang die Points-Produktion im Spielfeld UND im persönlichen Kartenslot.", grant:{kind:"pointsBoost:2",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-4", name:"4× Points · 15 Min.", cost:400, text:"Vierfache Points-Produktion für Spielfeld und persönliche Karte. Ersetzt die vorherige Stufe; Zeit wird nicht addiert.", grant:{kind:"pointsBoost:4",amount:1} },
@@ -393,7 +394,7 @@
   function boxCard(b){const probs=b.type==="collect"?collectChancesForBox(b):null,payment=b.currency==="euro"?euro(b.cost):`${b.cost.toLocaleString("de-DE")} JK/Coin`,kindLabel=b.type==="collect"?"SAMMLER-KISTE":"LUCKY BOX",currencyLabel=b.currency==="euro"?"EURO":"JK/COIN";return `<article class="jkc-card jkc-box" style="--box-color:${b.tier==="galaxy"?"#ff72d7":["elite","master","universe"].includes(b.tier)?"#a46cff":"#64e6ff"}"><div class="jkc-box-icon">${b.type==="collect"?"◈":"🎁"}</div><small>${currencyLabel} · ${kindLabel}</small><h5>${esc(b.name)}</h5><p>${b.type==="reward"?`${euro(b.money[0])} bis ${euro(b.money[1])}, ${b.xp[0]}–${b.xp[1]} Haupt-EP, Kleidung, Hauptskins, Special-App-Items und Jetons.`:`${Number(b.items)||1} Sammlerstücke pro Kiste.`}</p>${b.type==="reward"?`<div class="jkc-box-hype">🔥 +${hypeForBox(b).toLocaleString("de-DE")} % Hype</div>`:""}${probs?`<div class="jkc-prob-list">${["epic","legendary","special","universe","blackhole","galaxy"].map(id=>`<span>${RARITIES.find(r=>r.id===id).name}<br><b>${formatChance(probs[id])}%</b></span>`).join("")}</div>`:""}<div class="jkc-actions"><button class="jkc-button gold" data-jkc-open-box="${b.id}">${payment}</button></div></article>`;}
   function formatChance(value){const n=Math.max(0,Number(value)||0);return n>=1?String(Number(n.toFixed(3))).replace(".",","):String(Number(n.toFixed(6))).replace(".",",");}
   function bigCardsStorageTarget(entry){if(entry?.game!=="bigcards")return 0;const kind=String(entry?.grant?.kind||"");if(!kind.startsWith("featuredStorage:"))return 0;return Math.max(0,Math.floor(Number(kind.split(":")[1])||0));}
-  function bigCardsPermanentOwned(entry){if(entry?.game!=="bigcards")return false;const kind=String(entry?.grant?.kind||"");try{if(kind==="bulkLevelUnlock")return false;const target=bigCardsStorageTarget(entry);return target?Math.floor(Number(window.BigCardsKL?.getFeaturedStorageTier?.())||0)>=target:false;}catch{return false;}}
+  function bigCardsPermanentOwned(entry){if(entry?.game!=="bigcards")return false;const kind=String(entry?.grant?.kind||"");try{if(kind==="bulkLevelUnlock")return false;if(kind==="vipUnlock")return !!window.BigCardsKL?.hasVip?.()||Number(coinState()?.gamePurchases?.[entry.id]||0)>0;const target=bigCardsStorageTarget(entry);return target?Math.floor(Number(window.BigCardsKL?.getFeaturedStorageTier?.())||0)>=target:false;}catch{return false;}}
   function bigCardsBulkAccessMeta(entry){if(entry?.game!=="bigcards"||String(entry?.grant?.kind||"")!=="bulkLevelUnlock")return null;try{const st=window.BigCardsKL?.getBulkLevelAccessState?.()||{};const until=Math.max(0,Number(st.until)||0),active=!!st.active&&until>Date.now(),ms=Math.max(0,until-Date.now()),sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),ss=sec%60;return {active,until,remaining:`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`};}catch{return {active:false,until:0,remaining:"00:00:00"};}}
   const GAME_SHOP_CATEGORIES = Object.freeze({
     packs:{label:"Packs & Kisten",icon:"🎴",desc:"Packs, Kisten und Ziehungen."},
@@ -404,6 +405,7 @@
     storage:{label:"Speicher & Slots",icon:"🗄",desc:"Dauerhafte Limits, Slots und Freischaltungen."},
     currency:{label:"Währung",icon:"💰",desc:"Spielwährungen und direkte Guthaben."},
     boosts:{label:"Booster",icon:"⚡",desc:"Tempo, Produktion, XP, Kampf- und Glücksboni."},
+    vip:{label:"VIP",icon:"👑",desc:"Permanente VIP-Programme, tägliche Boni und exklusive VIP-Inhalte."},
     makers:{label:"Produktions-Maker",icon:"🏭",desc:"Permanente Money.KL-Maker. Keine Zeit-Booster."},
     equipment:{label:"Items & Versorgung",icon:"🎒",desc:"Ausrüstung, Verbrauchsitems, Reparatur und Versorgung."},
     cosmetics:{label:"Design & Exklusiv",icon:"✨",desc:"Skins, Figuren, Designs und optische Extras."},
@@ -412,6 +414,7 @@
   });
   function gameShopCategory(entry){
     const kind=String(entry?.grant?.kind||"").toLowerCase(),id=String(entry?.id||"").toLowerCase(),name=String(entry?.name||"").toLowerCase(),hay=`${kind} ${id} ${name}`;
+    if(kind==="vipunlock"||(entry?.game==="bigcards"&&/\bvip\b/.test(hay)))return"vip";
     if(kind.startsWith("pack:")||kind==="exclusivepack"||/\bpack\b|crate|kiste|box/.test(hay))return"packs";
     if(kind.startsWith("combataura:"))return"combatAuras";
     if(kind.startsWith("aura:"))return"auras";
@@ -428,6 +431,7 @@
   }
   function gameShopIcon(entry){
     const category=gameShopCategory(entry),kind=String(entry?.grant?.kind||"").toLowerCase(),name=String(entry?.name||"").toLowerCase();
+    if(kind==="vipunlock")return"👑";
     if(kind.startsWith("combataura:"))return"⚔";
     if(kind.startsWith("aura:"))return"✦";
     if(kind.startsWith("bind:"))return"🔗";
@@ -456,6 +460,7 @@
     if(kind.startsWith("bind:"))return "Wird deinem Bindungs-Inventar gutgeschrieben und kann auf eine konkrete Karte ausgerüstet werden.";
     if(kind.startsWith("trail:"))return "Gibt eine Spur für deine persönliche BigCards-Karte; die normale Rank-Freischaltung zum Ausrüsten bleibt bestehen.";
     if(kind.startsWith("featuredStorage:"))return "Dauerhafte Speicherfreischaltung für den persönlichen BigCards-Kartenslot.";
+    if(kind==="vipUnlock")return "Permanente BigCards-VIP-Freischaltung: tägliches VIP-Glücksrad, VIP-Klicker, 100 VIP-Karten, Bosse, Klicker-Upgrades und kaufbare Boss-Special-Attacken. Einmal gekauft bleibt VIP dauerhaft aktiv.";
     if(kind==="bulkLevelUnlock")return "24-Stunden-Komfortzugang: Eine komplette aktuell gewählte BigCards-Rarität kann automatisch gelevelt werden. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
     if(kind.startsWith("pointsBoost:"))return "15-Minuten-Points-Booster für BigCards: wirkt gleichzeitig auf Stockwerk und persönliche Karte. Beim Upgrade wird die Zeit auf exakt 15 Minuten gesetzt, niemals addiert.";
     if(kind.startsWith("xpBoost:"))return "15-Minuten-XP-Booster für BigCards: wirkt auf Stockwerk und persönliche Karte. Die nächste Stufe ersetzt die vorige; keine Zeitstapelung.";
