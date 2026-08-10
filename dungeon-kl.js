@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260807-dungeon-kl-v237-free-jk-fragments";
+  const VERSION = "20260810-dungeon-kl-v366-mobile-safe-header";
   const MAX_LEVEL = 100;
   const XP_REWARD_MULTIPLIER = 1.10;
   const MAX_CHARACTERS = 3;
@@ -736,9 +736,30 @@
     if (returnPhone) returnToTopGames();
   }
   function returnToTopGames() { const phone = UI.phoneItem; close(false); setTimeout(() => window.JKGamesOpenTopGames?.(phone), 80); }
+  function mobileHeadCompactNumber(value) {
+    const number = Number(value) || 0;
+    const mobile = window.matchMedia?.("(max-width: 760px) and (pointer: coarse)")?.matches;
+    if (!mobile || Math.abs(number) < 1000) return NUMBER.format(number);
+    const steps = [
+      [1e18, "T"],
+      [1e15, "BI"],
+      [1e12, "B"],
+      [1e9, "MI"],
+      [1e6, "M"],
+      [1e3, "K"]
+    ];
+    const entry = steps.find(([limit]) => Math.abs(number) >= limit) || [1, ""];
+    const scaled = number / entry[0];
+    const digits = Math.abs(scaled) >= 100 ? 0 : Math.abs(scaled) >= 10 ? 1 : 2;
+    return `${scaled.toFixed(digits).replace(/\.0+$|(?<=\.[0-9])0+$/g, "").replace(".", ",")}${entry[1]}`;
+  }
   function updateHead() {
     if (!UI.head) return; const d = ensureState(), s = playerStats();
-    UI.head.innerHTML = `<div><small>LEVEL</small><b>${d.level}/${MAX_LEVEL}</b></div><div><small>POWER</small><b>${NUMBER.format(s.power)}</b></div><div><small>KLASSE</small><b>${esc(CLASSES[d.classId].name)}</b></div><div><small>DUNGEON-GOLD</small><b>${GOLD.format(d.gold)}</b></div><div><small>XP</small><b>${NUMBER.format(d.xp)}/${NUMBER.format(levelNeed(d.level))}</b></div>`;
+    const mobile = window.matchMedia?.("(max-width: 760px) and (pointer: coarse)")?.matches;
+    const power = mobile ? mobileHeadCompactNumber(s.power) : NUMBER.format(s.power);
+    const gold = mobile ? mobileHeadCompactNumber(d.gold) : GOLD.format(d.gold);
+    const xp = mobile ? `${mobileHeadCompactNumber(d.xp)}/${mobileHeadCompactNumber(levelNeed(d.level))}` : `${NUMBER.format(d.xp)}/${NUMBER.format(levelNeed(d.level))}`;
+    UI.head.innerHTML = `<div><small>LEVEL</small><b>${d.level}/${MAX_LEVEL}</b></div><div><small>POWER</small><b>${power}</b></div><div><small>KLASSE</small><b>${esc(CLASSES[d.classId].name)}</b></div><div><small>DUNGEON-GOLD</small><b>${gold}</b></div><div><small>XP</small><b>${xp}</b></div>`;
   }
   function toast(title, text = "") { const n = UI.overlay?.querySelector("[data-dkl-toast]"); if (!n) return; n.innerHTML = `<b>${esc(title)}</b>${text ? `<small>${esc(text)}</small>` : ""}`; n.classList.add("show"); clearTimeout(UI.toastTimer); UI.toastTimer = setTimeout(() => n.classList.remove("show"), 3200); }
 

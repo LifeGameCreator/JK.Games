@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 
-const CENTER_VERSION = '2026-08-09-jkgames-v331-wizard-male-locomotion-staff-hand-great-sword-position-orientation';
+const CENTER_VERSION = '2026-08-10-jkgames-v366-mobile-jump-flight';
 const ONLINE_MAP_ID = 'center-dynasty-open-world-v3';
 const WORLD_HALF = 6000;
 const CHUNK_SIZE = 180;
@@ -1259,7 +1259,29 @@ class CenterDynastyGame {
     overlay.querySelector('[data-mdc-mobile-menu]').addEventListener('click', () => this.toggleManagement('overview'));
     overlay.querySelector('[data-mdc-mobile-build]').addEventListener('click', () => this.toggleManagement('building'));
     overlay.querySelector('[data-c3d-perspective]').addEventListener('click', () => this.togglePerspective());
-    overlay.querySelector('[data-c3d-jump]').addEventListener('pointerdown', (event) => { event.preventDefault(); this.requestJump(); });
+    // V366 mobile only: Die Sprungtaste übernimmt im aktiven Fly-Modus exakt die
+    // Space-Funktion vom PC. Gedrückt halten = steigen, loslassen = schweben.
+    // Außerhalb des Fly-Modus bleibt sie die normale Sprungtaste.
+    const mobileJumpButton = overlay.querySelector('[data-c3d-jump]');
+    const stopMobileFlyRise = (event) => {
+      this.keys.delete('Space');
+      try {
+        if (event?.pointerId != null && mobileJumpButton?.hasPointerCapture?.(event.pointerId)) mobileJumpButton.releasePointerCapture(event.pointerId);
+      } catch {}
+    };
+    mobileJumpButton?.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      const mobileTouch = !!window.matchMedia?.('(pointer: coarse)')?.matches;
+      if (mobileTouch && this.isStaffActive && this.ownerFlags.fly) {
+        this.keys.add('Space');
+        try { mobileJumpButton.setPointerCapture?.(event.pointerId); } catch {}
+        return;
+      }
+      this.requestJump();
+    });
+    mobileJumpButton?.addEventListener('pointerup', stopMobileFlyRise);
+    mobileJumpButton?.addEventListener('pointercancel', stopMobileFlyRise);
+    mobileJumpButton?.addEventListener('lostpointercapture', () => this.keys.delete('Space'));
     this.attackButton = overlay.querySelector('[data-c3d-attack]');
     this.attackButton.addEventListener('pointerdown', (event) => {
       event.preventDefault();
