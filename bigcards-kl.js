@@ -1,23 +1,27 @@
-/* BigCards.kl – JK.Games Top Game V367 */
+/* BigCards.kl – JK.Games Top Game V368 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-bigcards-v367-field-cap-online-xp";
+  const VERSION = "2026-08-10-bigcards-v368-exclusive-cloud-buckets";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
-  const CLOUD_SCHEMA_VERSION = 364;
+  const CLOUD_SCHEMA_VERSION = 368;
   const CLOUD_MIN_SCHEMA_VERSION = 354;
   const CLOUD_CHUNK_CHARS = 180000;
   const CLOUD_CHUNK_MAX_BYTES = 180000;
+  const CLOUD_BUCKET_FORMAT = "bucket-v368";
+  const CLOUD_INSTANCE_BUCKETS = 48;
+  const CLOUD_COLLECTION_BUCKETS = 12;
+  const CLOUD_BUCKET_CHUNKS = 1 + CLOUD_INSTANCE_BUCKETS + CLOUD_COLLECTION_BUCKETS;
   const LOCAL_DB_NAME = "jk-games-bigcards-kl-cache";
   const LOCAL_DB_VERSION = 1;
   const LOCAL_DB_STORE = "saves";
   const LOCAL_SAVE_DELAY_MS = 900;
   const CLOUD_MAX_CHUNKS = 160;
-  const CLOUD_SAVE_DELAY_MS = 15000;
-  const CLOUD_PASSIVE_SAVE_DELAY_MS = 90000;
-  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 120000;
-  const CLOUD_RESOURCE_BACKOFF_MS = 120000;
+  const CLOUD_SAVE_DELAY_MS = 30000;
+  const CLOUD_PASSIVE_SAVE_DELAY_MS = 300000;
+  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 600000;
+  const CLOUD_RESOURCE_BACKOFF_MS = 300000;
   const CLOUD_POLL_MS = 15000;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
@@ -206,16 +210,18 @@
   });
 
   const EXCLUSIVES = Object.freeze([
-    {id:"blood-initiate",name:"BLOOD INITIATE",rarityValue:100,chance:35,strength:.80},
+    {id:"blood-initiate",name:"BLOOD INITIATE",rarityValue:100,chance:32.49,strength:.80},
     {id:"crimson-familiar",name:"CRIMSON FAMILIAR",rarityValue:80,chance:25,strength:.90},
     {id:"nightfang-stalker",name:"NIGHTFANG STALKER",rarityValue:60,chance:17,strength:1.00},
     {id:"bloodmoon-countess",name:"BLOODMOON COUNTESS",rarityValue:40,chance:10,strength:1.10},
     {id:"sanguine-reaper",name:"SANGUINE REAPER",rarityValue:20,chance:6,strength:1.25},
     {id:"nosferatu-warden",name:"NOSFERATU WARDEN",rarityValue:10,chance:3.5,strength:1.40},
+    {id:"vampyr-blood-prince",name:"VAMPYR BLOOD PRINCE",rarityValue:8,chance:2.5,strength:1.50},
     {id:"crimson-archduke",name:"CRIMSON ARCHDUKE",rarityValue:5,chance:2,strength:1.60},
     {id:"blood-eclipse",name:"BLOOD ECLIPSE",rarityValue:1,chance:.9,strength:1.90},
     {id:"throne-of-night",name:"THRONE OF NIGHT",rarityValue:.5,chance:.5,strength:2.20},
-    {id:"blood-sovereign",name:"THE BLOOD SOVEREIGN",rarityValue:.1,chance:.1,strength:2.75}
+    {id:"blood-sovereign",name:"THE BLOOD SOVEREIGN",rarityValue:.1,chance:.1,strength:2.75},
+    {id:"eternal-blood-emperor",name:"THE ETERNAL BLOOD EMPEROR",rarityValue:.01,chance:.01,strength:3.75}
   ]);
 
   const PREFIXES = Object.freeze(["","Iron","Shadow","Storm","Frost","Flame","Void","Crystal","Cyber","Ancient","Royal","Phantom","Solar","Lunar","Toxic","Arcane","Titan","Neon","Infernal","Celestial"]);
@@ -240,7 +246,7 @@
   ]);
 
   const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,onlineStatus:"idle",onlineMode:null,onlineMatchId:null,onlineMatch:null,onlinePollTimer:0,onlineBusy:false,onlineQueueHeartbeat:0,onlineMatchHeartbeat:0,onlineResult:null,lastHeader:0,toastTimer:0,rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0};
-  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false;
+  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false;
 
   const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
   const esc=(v)=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -298,7 +304,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:367,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,featuredLastAt:now(),jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
+  function defaultState(){return {version:368,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,featuredLastAt:now(),jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -331,7 +337,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=367;const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||repaired||potionInventoryMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=368;const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||repaired||potionInventoryMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -429,7 +435,7 @@
   function fieldStorageSecondsLimit(){const rate=Math.max(0,productionPerSecond());return rate>0?fieldPointCapacity()/rate:0;}
   function fieldStorageRemainingSeconds(){const rate=Math.max(0,productionPerSecond());return rate>0?fieldStorageRemainingPoints()/rate:0;}
   function fieldStoragePercent(){return Math.min(100,Math.max(0,Number(S?.pendingPoints)||0)/Math.max(1,fieldPointCapacity())*100);}
-  function fieldStorageLabel(){const r=fieldReferenceRarity(),full=fieldStorageRemainingPoints()<=.01;return `${full?"VOLL · ":""}Limit ${fmt(fieldPointCapacity())} Points · mind. 4× ${r.name}-Pack`; }
+  function fieldStorageLabel(){const full=fieldStorageRemainingPoints()<=.01;return `${full?"VOLL · ":""}Limit ${fmt(fieldPointCapacity())} Points`; }
   function trailBonusText(t){if(!t)return"";return `+${Math.round(t.points*100)} % Karten-Slot-Points · +${Math.round(t.xp*100)} % Karten-Slot-XP · +${Math.round(t.damage*100)} % Kampfschaden · +${Math.round(t.hp*100)} % Kampf-Leben`;}
   function trailClass(inst){const t=inst?trailBy(inst.trail):null;return t?`trail-${t.id}`:"";}
   function exclusiveCombatTier(){
@@ -972,7 +978,7 @@
   function tick(){if(!S)return;const t=performance.now(),dt=Math.min(2,(t-lastTick)/1000);lastTick=t;if(!UI.overlay)return;updateFeaturedEarnings(now());const stepReset=syncCollectorPointStep(),act=activeInstances(),autoCollect=(S.autoCollectorUntil||0)>now();let pending=0,direct=0,xp=0,room=fieldStorageRemainingPoints();for(const inst of act){const fullPointGain=Math.max(0,effectivePoints(inst)*dt);if(autoCollect||inst.shiny>=3)direct+=fullPointGain;else if(room>0){const accepted=Math.min(room,fullPointGain);pending+=accepted;room-=accepted;}
       // BigCards-XP ist bewusst NICHT an das Point-Speicherlimit gekoppelt. Solange
       // BigCards geöffnet ist, geben aktive Karten ihre volle XP/s weiter.
-      xp+=effectiveXp(inst)*dt;}if(direct){S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>700){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(Math.random()<.06)persistPassive();}
+      xp+=effectiveXp(inst)*dt;}if(direct){S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>700){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(now()-lastPassivePersistAt>=30000){lastPassivePersistAt=now();persistPassive();}}
   function autoTick(){if(!UI.overlay||!S.autoEnabled||(S.autoOpenerUntil||0)<=now())return;const ri=RARITY_INDEX[S.autoPack]??0,r=RARITIES[ri];if(ri<=rarityUnlockedIndex()&&S.points>=r.price&&!UI.packReveal)openNormalPack(ri,"points");}
   function applyOffline(){updateFeaturedEarnings(now(),false);const tNow=now(),delta=Math.min(MAX_OFFLINE_MS,Math.max(0,tNow-(S.lastSeen||tNow)));if(delta<30000)return;const rate=Math.max(0,productionPerSecond()),totalSec=delta/1000,start=tNow-delta,autoSec=Math.max(0,Math.min(totalSec,((Number(S.autoCollectorUntil)||0)-start)/1000)),normalSec=Math.max(0,totalSec-autoSec),directGain=rate*autoSec*OFFLINE_RATE,pendingPotential=rate*normalSec*OFFLINE_RATE,pendingGain=Math.min(fieldStorageRemainingPoints(),pendingPotential),gain=directGain+pendingGain;if(directGain>0){S.points+=directGain;S.lifetimePointsEarned+=directGain}if(pendingGain>0)S.pendingPoints+=pendingGain;S.fieldStoredSeconds=0;
     // Wichtig: Offline werden ausschließlich Points nach der bestehenden Offline-Rate
@@ -1252,7 +1258,7 @@
   function restoreViewScroll(preserve=true){requestAnimationFrame(()=>{if(!UI.overlay)return;const main=UI.main||UI.overlay.querySelector("[data-bc-main]");if(main)main.scrollTop=preserve?Math.min(Math.max(0,Number(UI.mainScroll[UI.tab])||0),Math.max(0,main.scrollHeight-main.clientHeight)):0;const rarity=UI.overlay.querySelector("[data-bc-rarity-tabs]");if(rarity){const max=Math.max(0,rarity.scrollWidth-rarity.clientWidth);rarity.scrollLeft=Math.min(Math.max(0,Number(UI.rarityScroll)||0),max);}});}
   function refresh(preserve=true){if(!UI.overlay)return;if(preserve)rememberViewScroll();refreshHeader();renderNav();renderMain();restoreViewScroll(preserve);}
   function renderMain(){const el=UI.main||UI.overlay?.querySelector("[data-bc-main]");if(!el)return;UI.main=el;if(UI.tab==="mod"&&UI.role!=="owner")UI.tab="field";if(UI.tab==="field")el.innerHTML=fieldHtml();else if(UI.tab==="packs")el.innerHTML=packsHtml();else if(UI.tab==="collection")el.innerHTML=collectionHtml();else if(UI.tab==="shop")el.innerHTML=shopHtml();else if(UI.tab==="market")el.innerHTML=marketHtml();else if(UI.tab==="score")el.innerHTML=scoreHtml();else if(UI.tab==="battle")el.innerHTML=battleHtml();else if(UI.tab==="card")el.innerHTML=featureCardHtml();else if(UI.tab==="mod"&&UI.role==="owner")el.innerHTML=modHtml();else el.innerHTML=fieldHtml();}
-  function fieldHtml(){const floor=UI.floor,max=floorMaxTier(floor),phase=FLOOR_PHASES[floor];const slots=S.floors[floor]||[];return `<section class="bc-atlas"><div class="bc-atlas-toolbar"><div><small>AKTIVES STOCKWERK</small><div class="bc-floor-tabs">${Array.from({length:4},(_,i)=>`<button data-bc-floor="${i}" class="${floor===i?"active":""}" ${i>=S.unlockedFloors?"disabled":""}>${i+1}</button>`).join("")}</div></div><div><small>FREIGESCHALTET BIS</small><b>${RARITIES[max]?.symbol||"🔒"} ${RARITIES[max]?.name||"Gesperrt"}</b></div><div class="bc-field-actions"><button data-bc-smart>⚡ Bestes Setup</button><small>💡 Karte gedrückt halten und auf einen anderen Platz ziehen</small></div></div><div class="bc-map-stage"><div class="bc-map-deco bc-citadel"><span>🏰</span><b>${phase?.name||"Stockwerk"}</b><small>Stockwerk ${floor+1}</small></div><div class="bc-map-path"></div><div class="bc-slot-column left">${slots.slice(0,5).map((id,i)=>slotHtml(id,i)).join("")}</div><div class="bc-slot-column right">${slots.slice(5,10).map((id,i)=>slotHtml(id,i+5)).join("")}</div><button class="bc-collector" data-bc-collect><small>GESAMMELT</small><b>${fmt(S.pendingPoints)}</b><span>Einsammeln</span><em data-bc-field-cap>${fieldStorageLabel()}</em></button></div><div class="bc-field-bottom"><div class="bc-level-panel"><small>BIGCARDS LEVEL</small><b>Level ${S.level}</b><div><i style="width:${Math.min(100,S.xp/xpNeed(S.level)*100)}%"></i></div><span>${fmt(S.xp)} / ${fmt(xpNeed(S.level))} XP</span><em class="bc-field-storage-note">Spielfeld-Limit: ${fmt(fieldPointCapacity())} Points · wächst mit deiner freigeschalteten Pack-Stufe · XP läuft online auch bei vollem Speicher weiter</em></div><button class="bc-rebirth ${S.level>=100?"ready":"locked"}" data-bc-rebirth><small>${S.level>=100?"BEREIT":"🔒 GESPERRT BIS LEVEL 100"}</small><b>REBIRTH</b><span>Level ${S.level} / 100 · x${fmt(rebirthMultiplier())}</span></button><div class="bc-auto"><small>AUTO-COLLECTOR</small><b>${timeLeft(S.autoCollectorUntil)}</b><button data-bc-buy-collector ${collectorRemainingMinutes()>=15?"disabled":""}>${collectorRemainingMinutes()>=15?"Point-Verlängerung bei < 15 Min Restzeit":`${fmt(collectorPointPrice())} Points = +1 Min`}</button><em>Startet nach vollständigem Ablauf wieder günstig. Jede zusätzlich vorgemerkte Point-Minute wird deutlich teurer.</em></div></div><section class="bc-daily"><h3>Daily Card Quests</h3>${dailyQuestHtml()}</section></section>`}
+  function fieldHtml(){const floor=UI.floor,max=floorMaxTier(floor),phase=FLOOR_PHASES[floor];const slots=S.floors[floor]||[];return `<section class="bc-atlas"><div class="bc-atlas-toolbar"><div><small>AKTIVES STOCKWERK</small><div class="bc-floor-tabs">${Array.from({length:4},(_,i)=>`<button data-bc-floor="${i}" class="${floor===i?"active":""}" ${i>=S.unlockedFloors?"disabled":""}>${i+1}</button>`).join("")}</div></div><div><small>FREIGESCHALTET BIS</small><b>${RARITIES[max]?.symbol||"🔒"} ${RARITIES[max]?.name||"Gesperrt"}</b></div><div class="bc-field-actions"><button data-bc-smart>⚡ Bestes Setup</button><small>💡 Karte gedrückt halten und auf einen anderen Platz ziehen</small></div></div><div class="bc-map-stage"><div class="bc-map-deco bc-citadel"><span>🏰</span><b>${phase?.name||"Stockwerk"}</b><small>Stockwerk ${floor+1}</small></div><div class="bc-map-path"></div><div class="bc-slot-column left">${slots.slice(0,5).map((id,i)=>slotHtml(id,i)).join("")}</div><div class="bc-slot-column right">${slots.slice(5,10).map((id,i)=>slotHtml(id,i+5)).join("")}</div><button class="bc-collector" data-bc-collect><small>GESAMMELT</small><b>${fmt(S.pendingPoints)}</b><span>Einsammeln</span><em data-bc-field-cap>${fieldStorageLabel()}</em></button></div><div class="bc-field-bottom"><div class="bc-level-panel"><small>BIGCARDS LEVEL</small><b>Level ${S.level}</b><div><i style="width:${Math.min(100,S.xp/xpNeed(S.level)*100)}%"></i></div><span>${fmt(S.xp)} / ${fmt(xpNeed(S.level))} XP</span><em class="bc-field-storage-note">Spielfeld-Limit: ${fmt(fieldPointCapacity())} Points · XP läuft online auch bei vollem Speicher weiter</em></div><button class="bc-rebirth ${S.level>=100?"ready":"locked"}" data-bc-rebirth><small>${S.level>=100?"BEREIT":"🔒 GESPERRT BIS LEVEL 100"}</small><b>REBIRTH</b><span>Level ${S.level} / 100 · x${fmt(rebirthMultiplier())}</span></button><div class="bc-auto"><small>AUTO-COLLECTOR</small><b>${timeLeft(S.autoCollectorUntil)}</b><button data-bc-buy-collector ${collectorRemainingMinutes()>=15?"disabled":""}>${collectorRemainingMinutes()>=15?"Point-Verlängerung bei < 15 Min Restzeit":`${fmt(collectorPointPrice())} Points = +1 Min`}</button><em>Startet nach vollständigem Ablauf wieder günstig. Jede zusätzlich vorgemerkte Point-Minute wird deutlich teurer.</em></div></div><section class="bc-daily"><h3>Daily Card Quests</h3>${dailyQuestHtml()}</section></section>`}
   function slotHtml(id,slot){const inst=instance(id);if(!inst)return `<button class="bc-slot empty" data-bc-slot="${slot}"><span>+</span><b>Kartenplatz ${slot+1}</b><small>Karte einsetzen</small></button>`;const m=cardMeta(inst);return `<button class="bc-slot filled ${m.className} shiny-${inst.shiny} ${inst.broken?"broken":""}" data-bc-card="${id}" data-bc-slot="${slot}"><div class="bc-slot-art">${m.icon}${cardEffectBadges(inst)}${inst.broken?'<span class="bc-card-crack" aria-hidden="true"></span>':""}</div><small>${inst.exclusive?"EXCLUSIVE":m.rarity.name} · ${pct(m.rarityValue)}</small><b>${esc(m.name)}</b><span>★${inst.level} · ${fmt(m.points)}/s · ⚔ ${fmt(m.combat.power)}</span><em>${inst.broken?"💥":""}${inst.aura?"✦":""}${inst.combatAura?"⚔":""}${inst.bind?"🔗":""}${inst.shiny?"⚡"+inst.shiny:""}</em></button>`}
   function packsHtml(){const unlocked=rarityUnlockedIndex();return `<section class="bc-section"><div class="bc-section-title"><div><small>PACK DISTRICT</small><h2>Kartenpacks</h2><p>Jede normale Box enthält 10 getrennte Ziehungen. Duplikate sind möglich.</p></div><div class="bc-auto-opener"><small>AUTO-OPENER</small><b>${timeLeft(S.autoOpenerUntil)}</b><select data-bc-auto-pack>${RARITIES.map(r=>`<option value="${r.id}" ${S.autoPack===r.id?"selected":""}>${r.name}</option>`).join("")}</select><button data-bc-toggle-auto class="${S.autoEnabled?"active":""}">${S.autoEnabled?"Stoppen":"Starten"}</button></div></div><div class="bc-pack-grid">${RARITIES.map((r,i)=>`<article class="bc-pack-card rar-${r.id} ${i>unlocked?"locked":""}"><div class="bc-pack-badge">${r.symbol}</div><small>${i>unlocked?`🔒 REGULÄR NOCH GESPERRT`:"POINT PACK"}</small><h3>${r.name}</h3><p>10 Karten · breiter Drop-Pool</p><b>${fmt(r.price)} Points</b><div><button data-bc-open-pack="${i}" data-currency="points" ${i>unlocked?"disabled":""}>Mit Points</button><button data-bc-open-pack="${i}" data-currency="jk">${r.jk} JK/Coin</button>${(S.jkPackCredits[r.id]||0)>0?`<button data-bc-open-pack="${i}" data-currency="credit">Credit ×${S.jkPackCredits[r.id]}</button>`:""}</div></article>`).join("")}<article class="bc-pack-card exclusive"><div class="bc-pack-badge">🩸</div><small>5 KARTEN · NUR JK/COIN</small><h3>EXCLUSIVE PACK</h3><p>10 Vampir-/Blutkarten im eigenen Pool. The Blood Sovereign: 0,1 %.</p><b>500 JK/Coin</b><div><button data-bc-exclusive="jk">Öffnen</button>${S.exclusiveCredits?`<button data-bc-exclusive="credit">Credit ×${S.exclusiveCredits}</button>`:""}</div></article></div></section>`}
   function collectionHtml(){
@@ -1359,14 +1365,37 @@
     }
     return out.length?out:[""];
   }
+  function cloudBucketIndex(key,count){
+    let h=2166136261>>>0;for(const ch of String(key||"")){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)>>>0;}return h%Math.max(1,count);
+  }
+  function buildCloudBucketPayloads(state){
+    const meta={...state};delete meta.instances;delete meta.collection;
+    const out=[JSON.stringify({kind:"meta",value:meta})];
+    const instBuckets=Array.from({length:CLOUD_INSTANCE_BUCKETS},()=>({}));
+    for(const [key,value] of Object.entries(state.instances||{}))instBuckets[cloudBucketIndex(key,CLOUD_INSTANCE_BUCKETS)][key]=value;
+    for(let i=0;i<CLOUD_INSTANCE_BUCKETS;i++)out.push(JSON.stringify({kind:"instances",bucket:i,value:instBuckets[i]}));
+    const colBuckets=Array.from({length:CLOUD_COLLECTION_BUCKETS},()=>({}));
+    for(const [key,value] of Object.entries(state.collection||{}))colBuckets[cloudBucketIndex(key,CLOUD_COLLECTION_BUCKETS)][key]=value;
+    for(let i=0;i<CLOUD_COLLECTION_BUCKETS;i++)out.push(JSON.stringify({kind:"collection",bucket:i,value:colBuckets[i]}));
+    if(out.length!==CLOUD_BUCKET_CHUNKS)throw new Error("Cloud-Bucket-Anzahl stimmt nicht");
+    for(let i=0;i<out.length;i++)if(utf8Size(out[i])>CLOUD_CHUNK_MAX_BYTES)throw new Error(`Cloud-Bucket ${i+1} ist zu groß. Bitte Support melden.`);
+    return out;
+  }
   function cloudHasFullSave(root){return Number(root?.schemaVersion)>=CLOUD_MIN_SCHEMA_VERSION&&typeof root?.saveId==="string"&&Number(root?.chunkCount)>0;}
   function meaningfulLocalProgress(raw){if(!raw||typeof raw!=="object")return false;return Object.keys(raw.instances||{}).length>0||Object.keys(raw.collection||{}).length>0||Object.keys(raw.exclusiveCollection||{}).length>0||Number(raw.points)>1000||Number(raw.level)>1||Number(raw.totalRebirths)>0||Number(raw.lifetimeScore)>0;}
   function mergeLegacyCheckpoint(raw,root){const out=Object.assign(defaultState(),raw||{});if(root){out.points=Math.max(0,Number(root.points)||out.points||1000);out.level=Math.max(1,Number(root.level)||out.level||1);out.totalRebirths=Math.max(0,Number(root.totalRebirths)||out.totalRebirths||0);out.lifetimeScore=Math.max(Number(out.lifetimeScore)||0,Number(root.lifetimeScore)||0);out.updatedAt=Math.max(Number(out.updatedAt)||0,Number(root.updatedAtMs)||0);}return out;}
   async function readFullCloudState(fb,userId,root){
     if(!cloudHasFullSave(root))return null;const count=Math.floor(Number(root.chunkCount)||0);if(count<1||count>CLOUD_MAX_CHUNKS)throw new Error("Ungültige Cloud-Chunk-Anzahl");
     const expectedHashes=Array.isArray(root.chunkHashes)&&root.chunkHashes.length===count?root.chunkHashes:null;
-    const chunks=new Array(count);for(let start=0;start<count;start+=8){const jobs=[];for(let i=start;i<Math.min(count,start+8);i++){const id=`chunk-${String(i).padStart(3,"0")}`;jobs.push(fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id)).then(snap=>({i,snap})));}const rows=await Promise.all(jobs);for(const {i,snap} of rows){if(!snap.exists())throw new Error(`Cloud-Chunk ${i+1}/${count} fehlt`);const d=snap.data()||{};if(Number(d.index)!==i||typeof d.data!=="string")throw new Error(`Cloud-Chunk ${i+1} ist ungültig`);if(expectedHashes){if(cloudHash(d.data)!==expectedHashes[i])throw new Error(`Cloud-Chunk ${i+1} Prüfsumme stimmt nicht`);}else if(d.saveId!==root.saveId)throw new Error(`Cloud-Chunk ${i+1} gehört nicht zum aktuellen Spielstand`);chunks[i]=d.data;}}
-    const payload=chunks.join("");if(Number(root.payloadChars)&&payload.length!==Number(root.payloadChars))throw new Error("Cloud-Spielstand ist unvollständig");if(root.payloadHash&&cloudHash(payload)!==root.payloadHash)throw new Error("Cloud-Spielstand-Prüfsumme stimmt nicht");const raw=JSON.parse(payload);if(!raw||typeof raw!=="object")throw new Error("Cloud-Spielstand ist ungültig");
+    const chunkPrefix=root.cloudFormat===CLOUD_BUCKET_FORMAT?"bucket":"chunk";const chunks=new Array(count);for(let start=0;start<count;start+=8){const jobs=[];for(let i=start;i<Math.min(count,start+8);i++){const id=`${chunkPrefix}-${String(i).padStart(3,"0")}`;jobs.push(fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id)).then(snap=>({i,snap})));}const rows=await Promise.all(jobs);for(const {i,snap} of rows){if(!snap.exists())throw new Error(`Cloud-Chunk ${i+1}/${count} fehlt`);const d=snap.data()||{};if(Number(d.index)!==i||typeof d.data!=="string")throw new Error(`Cloud-Chunk ${i+1} ist ungültig`);if(expectedHashes&&cloudHash(d.data)!==expectedHashes[i])throw new Error(`Cloud-Chunk ${i+1} Prüfsumme stimmt nicht`);chunks[i]=d.data;}}
+    let raw;
+    if(root.cloudFormat===CLOUD_BUCKET_FORMAT){
+      raw={instances:{},collection:{}};
+      for(const text of chunks){const part=JSON.parse(text);if(!part||typeof part!=="object")throw new Error("Cloud-Bucket ist ungültig");if(part.kind==="meta")Object.assign(raw,part.value||{});else if(part.kind==="instances")Object.assign(raw.instances,part.value||{});else if(part.kind==="collection")Object.assign(raw.collection,part.value||{});}
+    }else{
+      const payload=chunks.join("");if(Number(root.payloadChars)&&payload.length!==Number(root.payloadChars))throw new Error("Cloud-Spielstand ist unvollständig");if(root.payloadHash&&cloudHash(payload)!==root.payloadHash)throw new Error("Cloud-Spielstand-Prüfsumme stimmt nicht");raw=JSON.parse(payload);
+    }
+    if(!raw||typeof raw!=="object")throw new Error("Cloud-Spielstand ist ungültig");
     if(Number.isFinite(Number(root.points)))raw.points=Math.max(0,Number(root.points));raw.updatedAt=Math.max(Number(raw.updatedAt)||0,Number(root.updatedAtMs)||0);return raw;
   }
   function scheduleCloudSave(delay=CLOUD_SAVE_DELAY_MS){
@@ -1388,18 +1417,27 @@
     if(cloudBackoffUntil>now()){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,cloudBackoffUntil-now()));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=364;const payload=JSON.stringify(S),chunks=splitCloudPayload(payload),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);const saveId=`v364-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Chunks";
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=368;
+      const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
+      const saveId=`v368-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const changed=[];for(let i=0;i<chunks.length;i++)if(cloudLastChunkHashes[i]!==chunkHashes[i])changed.push(i);
-      // V364: Nur geänderte Chunks schreiben und bewusst seriell senden. Dadurch kann
-      // Firestore auch bei sehr großen Kartensammlungen keinen Write-Stream mehr fluten.
-      for(let n=0;n<changed.length;n++){const i=changed[n],id=`chunk-${String(i).padStart(3,"0")}`;await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,data:chunks[i],updatedAtMs:savedAt});if(n%4===3)await new Promise(r=>setTimeout(r,60));}
-      cloudStage="Root";const root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,saveId,chunkCount:chunks.length,chunkHashes,payloadChars:payload.length,payloadHash:cloudHash(payload),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
+      for(let n=0;n<changed.length;n++){
+        const i=changed[n],id=`bucket-${String(i).padStart(3,"0")}`;
+        await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,data:chunks[i],updatedAtMs:savedAt});
+        if(n<changed.length-1)await new Promise(r=>setTimeout(r,220));
+      }
+      if(changed.length)await new Promise(r=>setTimeout(r,180));
+      cloudStage="Root";const payloadChars=chunks.reduce((sum,x)=>sum+x.length,0),root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,cloudFormat:CLOUD_BUCKET_FORMAT,bucketVersion:1,saveId,chunkCount:chunks.length,chunkHashes,payloadChars,payloadHash:cloudHash(chunks.join("")),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
       await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),root,{merge:true});
       if(force||savedAt-cloudLastProfileWriteAt>=CLOUD_PROFILE_SAVE_INTERVAL_MS){try{cloudStage="Profil";await writeProfile(fb,u);cloudLastProfileWriteAt=savedAt}catch(profileError){console.warn("BigCards leaderboard profile save",profileError)}}
       cloudLastSaveId=saveId;cloudLastRemoteUpdatedAt=savedAt;cloudLastChunkHashes=chunkHashes.slice();cloudBackoffUntil=0;writeCloudMeta(u.uid,{saveId,remoteUpdatedAtMs:savedAt,syncedLocalUpdatedAt:savedAt});writeLocalState(u.uid,true);if(cloudMutationCounter===mutationAtStart)cloudDirty=false;return true;
     }catch(e){
       console.warn(`BigCards full cloud save (${cloudStage})`,e);cloudDirty=true;
-      if(e?.code==="resource-exhausted"||/resource-exhausted|queued writes|maximum allowed queued writes/i.test(String(e?.message||e))){cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+CLOUD_RESOURCE_BACKOFF_MS);console.warn("BigCards Cloud-Schreibpause aktiviert, damit Firestore die Warteschlange abbauen kann.");}
+      if(e?.code==="resource-exhausted"||/resource-exhausted|queued writes|maximum allowed queued writes/i.test(String(e?.message||e))){
+        cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+CLOUD_RESOURCE_BACKOFF_MS);
+        if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
+        console.warn("BigCards Cloud-Schreibpause für 5 Minuten aktiviert. Keine weiteren BigCards-Writes werden in die Firestore-Queue gelegt.");
+      }
       return false;
     }finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave(cloudFastDirty?CLOUD_SAVE_DELAY_MS:CLOUD_PASSIVE_SAVE_DELAY_MS);}
   }
@@ -1410,7 +1448,7 @@
   function onCloudFocus(){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}
   function onCloudVisibility(){if(document.visibilityState==="visible"){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}else if(cloudReady&&cloudDirty)syncProfile(true)}
   function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),CLOUD_POLL_MS);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
-  function startRuntimeTimers(){lastTick=performance.now();clearInterval(tickTimer);tickTimer=setInterval(tick,250);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
+  function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,250);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
   async function initializeCloudSession(){
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;const fb=await firebase(),u=await currentUser();
     if(!fb||!u){const localOnly=await readIndexedState("");if(localOnly)adoptState(localOnly,{saveLocal:false});cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft lokal über sicheren Gerätespeicher. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}

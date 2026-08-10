@@ -238,3 +238,81 @@ dialog.jkc-reveal-modal::backdrop{background:#02050af2!important;backdrop-filter
 .jkc-fragment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.jkc-info-dot{width:32px;height:32px;flex:0 0 32px;border:1px solid #72e8ff70;border-radius:50%;background:#0d2531;color:#8cefff;font-weight:1000;cursor:pointer}.jkc-fragment-balance{margin-top:10px;border:1px solid #7de7ff33;border-radius:15px;background:radial-gradient(circle at 90% 0,#9e62ff22,transparent 38%),#0b1c28;padding:13px}.jkc-fragment-balance strong,.jkc-fragment-balance span{display:block}.jkc-fragment-balance strong{font-size:22px;color:#8cefff}.jkc-fragment-balance span{margin:3px 0 9px;color:#9fb0bd;font-size:11px}.jkc-fragment-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.jkc-fragment-stats article{border:1px solid #ffffff14;border-radius:12px;background:#0a131d;padding:10px}.jkc-fragment-stats b{display:block;margin-top:4px;color:#ffe58c}.jkc-fragments>p{color:#9eb1bf;font-size:11px;line-height:1.45}
 dialog.jkc-fragment-modal{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;border:0;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:#02050ae8;color:#edf7ff;box-sizing:border-box;overflow:auto;z-index:2147483647}dialog.jkc-fragment-modal::backdrop{background:#02050ae8;backdrop-filter:blur(9px)}.jkc-fragment-modal[open]{display:grid;place-items:center}.jkc-fragment-info-card{width:min(620px,100%);max-height:min(92dvh,840px);overflow:auto;border:1px solid #9b6eff65;border-radius:22px;background:radial-gradient(circle at 88% 0,#a76bff2d,transparent 38%),linear-gradient(150deg,#12182a,#07141e);padding:18px;box-shadow:0 28px 95px #000d}.jkc-fragment-info-card>header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.jkc-fragment-info-card>header small{color:#7feaff;font-weight:900;letter-spacing:.11em}.jkc-fragment-info-card>header h2{margin:3px 0 0;font-size:22px}.jkc-fragment-info-card>header button{width:40px;height:40px;border:1px solid #ffffff20;border-radius:12px;background:#121d2a;color:#fff;font-size:23px}.jkc-fragment-info-list{display:grid;gap:8px;margin-top:13px}.jkc-fragment-info-list article{border:1px solid #ffffff13;border-radius:13px;background:#ffffff07;padding:11px}.jkc-fragment-info-list b{color:#ffe38b}.jkc-fragment-info-list p{margin:5px 0 0;color:#aebec9;font-size:12px;line-height:1.45}.jkc-fragment-convert{display:flex;flex-direction:column;gap:3px;margin-top:11px;border:1px solid #71e8ff42;border-radius:13px;background:#0c2532;padding:11px}.jkc-fragment-convert b{color:#8cefff}.jkc-fragment-convert small{color:#9fb3c0}
 @media(max-width:560px){.jkc-hype-milestones article{grid-template-columns:1fr auto}.jkc-hype-milestones article em{grid-column:1/-1;text-align:left}.jkc-fragment-stats{grid-template-columns:1fr}.jkc-fragment-info-card{padding:14px;border-radius:17px}}
+
+
+/* V368 · JK/Coin Spiele-Shop: Kategorien, 3/2-Spalten-Raster + Info pro Angebot */
+.jkc-store-shell{overflow:hidden}
+.jkc-store-title{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
+.jkc-store-title h4{margin-bottom:4px}
+.jkc-store-title p{margin:0;max-width:760px;color:#9fb0bd;font-size:.78rem;line-height:1.45}
+.jkc-store-count{flex:0 0 auto;padding:7px 10px;border:1px solid rgba(255,214,105,.25);border-radius:999px;background:rgba(255,198,63,.08);color:#ffe286;font-size:.72rem;font-weight:950;white-space:nowrap}
+.jkc-store-category-bar{display:flex;flex-wrap:wrap;gap:7px;margin:13px 0 15px}
+.jkc-store-category-pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:8px 11px;border:1px solid rgba(122,217,255,.17);border-radius:12px;background:#0b1720;color:#b7c6d0;font:900 .74rem/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.jkc-store-category-pill span{font-size:1rem}
+.jkc-store-category-pill.active{border-color:rgba(255,217,92,.48);background:linear-gradient(150deg,rgba(255,198,63,.18),rgba(255,126,59,.09));color:#ffe48c;box-shadow:inset 0 0 0 1px rgba(255,230,144,.05)}
+.jkc-store-category-section{margin:0 0 18px;padding:12px;border:1px solid rgba(255,255,255,.07);border-radius:17px;background:linear-gradient(155deg,rgba(255,255,255,.035),rgba(6,14,21,.45))}
+.jkc-store-category-section>header{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:9px;margin-bottom:10px}
+.jkc-store-category-section>header>span{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;border:1px solid rgba(108,226,255,.18);background:#0d202b;font-size:1.15rem}
+.jkc-store-category-section>header b,.jkc-store-category-section>header small{display:block}
+.jkc-store-category-section>header b{font-size:.96rem;color:#edf7fb}
+.jkc-store-category-section>header small{margin-top:2px;color:#8fa3af;font-size:.67rem}
+.jkc-store-category-section>header em{display:grid;place-items:center;min-width:28px;height:28px;padding:0 7px;border-radius:999px;background:rgba(255,255,255,.06);color:#c5d2da;font-size:.7rem;font-style:normal;font-weight:900}
+.jkc-store-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.jkc-game-store-card{position:relative;display:flex;flex-direction:column;min-width:0;min-height:205px;padding:12px!important;overflow:hidden}
+.jkc-game-store-card.owned{border-color:rgba(84,240,166,.35);background:linear-gradient(150deg,rgba(52,220,145,.08),rgba(255,255,255,.025))}
+.jkc-store-card-top{display:grid;grid-template-columns:38px minmax(0,1fr) 30px;align-items:center;gap:8px}
+.jkc-store-item-icon{display:grid;place-items:center;width:36px;height:36px;border:1px solid rgba(111,228,255,.22);border-radius:11px;background:radial-gradient(circle at 35% 20%,rgba(113,232,255,.18),transparent 55%),#0b1b25;font-size:1.08rem}
+.jkc-store-card-labels{min-width:0}
+.jkc-store-card-labels small,.jkc-store-card-labels em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jkc-store-card-labels small{color:#82e7ff;font-size:.59rem;letter-spacing:.08em}
+.jkc-store-card-labels em{margin-top:2px;color:#8496a2;font-size:.58rem;font-style:normal;font-weight:800}
+.jkc-store-info{display:grid;place-items:center;width:29px;height:29px;padding:0;border:1px solid rgba(119,229,255,.32);border-radius:50%;background:#0c2632;color:#8cedff;font:1000 .78rem/1 system-ui;cursor:pointer}
+.jkc-store-info:hover,.jkc-store-info:focus-visible{border-color:#86edff;background:#123847;outline:none}
+.jkc-game-store-card h5{margin:10px 0 4px;font-size:.92rem;line-height:1.15;overflow-wrap:anywhere}
+.jkc-game-store-card>p{display:-webkit-box;min-height:42px;margin:0 0 8px;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;color:#9cabb5;font-size:.69rem;line-height:1.35}
+.jkc-game-store-card .jkc-fight-level-note{font-size:.61rem;line-height:1.3}
+.jkc-game-store-card .jkc-actions{margin-top:auto}
+.jkc-game-store-card .jkc-actions .jkc-button{width:100%;min-height:38px;padding:8px 7px;font-size:.68rem}
+.jkc-store-empty{padding:18px;border:1px dashed rgba(255,255,255,.14);border-radius:14px;color:#98aab5;text-align:center}
+dialog.jkc-game-info-modal{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));border:0;background:rgba(1,5,9,.82);color:#edf8ff;box-sizing:border-box;overflow:auto;z-index:2147483647}
+dialog.jkc-game-info-modal::backdrop{background:rgba(1,5,9,.82);backdrop-filter:blur(9px)}
+dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
+.jkc-game-info-card{width:min(610px,100%);max-height:min(88dvh,760px);overflow:auto;border:1px solid rgba(112,228,255,.32);border-radius:22px;background:radial-gradient(circle at 90% 0,rgba(147,80,255,.18),transparent 40%),linear-gradient(150deg,#10212b,#071119);padding:17px;box-shadow:0 26px 90px #000d}
+.jkc-game-info-card>header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.jkc-game-info-card>header>div{display:flex;align-items:center;gap:11px;min-width:0}
+.jkc-game-info-icon{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border-radius:14px;border:1px solid rgba(255,220,107,.25);background:#14202a;font-size:1.4rem}
+.jkc-game-info-card header small{color:#83e9ff;font-size:.65rem;font-weight:900;letter-spacing:.08em}
+.jkc-game-info-card header h2{margin:3px 0 0;font-size:1.25rem;line-height:1.16;overflow-wrap:anywhere}
+.jkc-game-info-card [data-jkc-game-info-close]{flex:0 0 auto}
+.jkc-game-info-card>header>button{width:38px;height:38px;border:1px solid rgba(255,255,255,.14);border-radius:12px;background:#14212b;color:#fff;font-size:1.25rem;cursor:pointer}
+.jkc-game-info-body{display:grid;gap:9px;margin-top:15px}
+.jkc-game-info-body article{padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:rgba(255,255,255,.035)}
+.jkc-game-info-body article small{color:#ffe28a;font-size:.63rem;font-weight:950;letter-spacing:.09em}
+.jkc-game-info-body article p{margin:5px 0 0;color:#b3c1ca;font-size:.78rem;line-height:1.5}
+.jkc-game-info-price{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid rgba(255,211,92,.24);border-radius:13px;background:rgba(255,186,45,.07)}
+.jkc-game-info-price span{color:#9eabb4;font-size:.64rem;font-weight:900}
+.jkc-game-info-price b{color:#ffe280;font-size:1rem}
+.jkc-game-info-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:13px}
+.jkc-game-info-actions .jkc-button{width:100%}
+@media(max-width:980px){.jkc-store-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){
+  .jkc-store-title{display:block}.jkc-store-count{display:inline-flex;margin-top:8px}
+  .jkc-store-category-bar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .jkc-store-category-pill{min-width:0;padding:8px 6px;font-size:.64rem;line-height:1.15}
+  .jkc-store-category-section{padding:8px;border-radius:14px}
+  .jkc-store-category-section>header{grid-template-columns:34px minmax(0,1fr) auto;gap:7px}
+  .jkc-store-category-section>header>span{width:32px;height:32px}
+  .jkc-store-category-section>header small{font-size:.58rem}
+  .jkc-store-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .jkc-game-store-card{min-height:196px;padding:9px!important;border-radius:12px!important}
+  .jkc-store-card-top{grid-template-columns:32px minmax(0,1fr) 27px;gap:5px}
+  .jkc-store-item-icon{width:31px;height:31px;border-radius:9px;font-size:.95rem}
+  .jkc-store-info{width:26px;height:26px}
+  .jkc-game-store-card h5{font-size:.76rem;line-height:1.18}
+  .jkc-game-store-card>p{min-height:39px;font-size:.61rem;-webkit-line-clamp:3}
+  .jkc-game-store-card .jkc-actions .jkc-button{min-height:36px;padding:7px 4px;font-size:.59rem}
+  .jkc-game-info-card{padding:13px;border-radius:17px}
+  .jkc-game-info-card header h2{font-size:1.05rem}
+  .jkc-game-info-icon{width:42px;height:42px;flex-basis:42px}
+  .jkc-game-info-actions{grid-template-columns:1fr}
+}

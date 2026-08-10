@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-jkcoin-v363-bigcards-bulk-leveler";
+  const VERSION = "2026-08-10-jkcoin-v368-category-shop-info";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -275,7 +275,7 @@
   const NAV_STORAGE = "jk-games-jkcoin-nav-v215";
   function loadNavMemory(){try{return JSON.parse(sessionStorage.getItem(NAV_STORAGE)||"{}")||{};}catch{return {};}}
   const navMemory=loadNavMemory();
-  const ui = { tab:"home", game:"all", collectionRarity:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), collectionScroll:Math.max(0,Number(navMemory.collectionScroll)||0), grantsListening:false, grantSyncBusy:false, profileSyncBusy:false, profileSyncSignature:"", toastTimer:0, lastGrantSync:0, grantCollectionDenied:false, gameOverlay:"" };
+  const ui = { tab:"home", game:"all", gameCategory:"all", collectionRarity:"all", tabScroll:Math.max(0,Number(navMemory.tabScroll)||0), gameScroll:Math.max(0,Number(navMemory.gameScroll)||0), collectionScroll:Math.max(0,Number(navMemory.collectionScroll)||0), grantsListening:false, grantSyncBusy:false, profileSyncBusy:false, profileSyncSignature:"", toastTimer:0, lastGrantSync:0, grantCollectionDenied:false, gameOverlay:"" };
   const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const randInt = (min,max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (n,min,max) => Math.min(max,Math.max(min,Number(n)||0));
@@ -379,7 +379,86 @@
   function formatChance(value){const n=Math.max(0,Number(value)||0);return n>=1?String(Number(n.toFixed(3))).replace(".",","):String(Number(n.toFixed(6))).replace(".",",");}
   function bigCardsStorageTarget(entry){if(entry?.game!=="bigcards")return 0;const kind=String(entry?.grant?.kind||"");if(!kind.startsWith("featuredStorage:"))return 0;return Math.max(0,Math.floor(Number(kind.split(":")[1])||0));}
   function bigCardsPermanentOwned(entry){if(entry?.game!=="bigcards")return false;const kind=String(entry?.grant?.kind||"");try{if(kind==="bulkLevelUnlock")return !!window.BigCardsKL?.hasBulkLevelUnlock?.();const target=bigCardsStorageTarget(entry);return target?Math.floor(Number(window.BigCardsKL?.getFeaturedStorageTier?.())||0)>=target:false;}catch{return false;}}
-  function gamesHtml(){const games=["all","runner","city","match","fight","dungeon","money","speedcar","bigcards","egoshoot","weed","casino"],labels={all:"Alle",runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",speedcar:"Speed Car.KL",bigcards:"BigCards.kl",egoshoot:"Egoshoot.KL",weed:"Weed Business",casino:"Casino"};const list=GAME_STORE.filter(item=>item&&typeof item==="object"&&(ui.game==="all"||String(item.game||"")===ui.game)),filters=games.map(g=>`<button class="jkc-button ${ui.game===g?"gold":"secondary"}" data-jkc-game-filter="${g}">${esc(labels[g]||g)}</button>`).join("");return `<section class="jkc-section"><small>SPIELE-SHOP</small><h4>JK/Coin-Inhalte</h4>${scrollNavHtml("games",filters)}<div class="jkc-grid jkc-game-grid">${list.map(item=>{const gameKey=String(item?.game||""),gameLabel=safeText(labels[gameKey]||GAME_LABELS?.[gameKey],"Spiel"),name=safeText(item?.name,"Spiel-Inhalt"),description=safeText(item?.text,"JK/Coin-Inhalt"),permanentOwned=bigCardsPermanentOwned(item);return `<article class="jkc-card ${permanentOwned?"owned":""}"><small>${esc(safeUpper(gameLabel))}</small><h5>${esc(name)}</h5><p>${esc(description)}</p>${gameKey==="fight"&&item?.requiredFightLevel?`<div class="jkc-fight-level-note">🔒 Kauf sofort möglich · Benutzung erst ab Fight-Level ${Number(item.requiredFightLevel)||1}</div>`:""}<div class="jkc-actions"><button class="jkc-button" data-jkc-buy-game="${esc(item?.id||"")}" ${permanentOwned?"disabled":""}>${permanentOwned?"Freigeschaltet ✓":item?.variable?"Betrag wählen":`${Math.max(0,Number(item?.cost)||0)} JK/Coin`}</button></div></article>`}).join("")}</div></section>`;}
+  const GAME_SHOP_CATEGORIES = Object.freeze({
+    packs:{label:"Packs & Kisten",icon:"🎴",desc:"Packs, Kisten und Ziehungen."},
+    auras:{label:"Auras",icon:"✦",desc:"Produktions-Auras und passive Kartenboni."},
+    combatAuras:{label:"Kampf-Auras",icon:"⚔",desc:"Auras speziell für Kartenkämpfe."},
+    bindings:{label:"Bindungen",icon:"🔗",desc:"Bindungen und dauerhafte XP-Verstärker."},
+    trails:{label:"Spuren",icon:"☄",desc:"Spuren und persönliche Karten-Effekte."},
+    storage:{label:"Speicher & Slots",icon:"🗄",desc:"Dauerhafte Limits, Slots und Freischaltungen."},
+    currency:{label:"Währung",icon:"💰",desc:"Spielwährungen und direkte Guthaben."},
+    boosts:{label:"Booster",icon:"⚡",desc:"Tempo, Produktion, XP, Kampf- und Glücksboni."},
+    equipment:{label:"Items & Versorgung",icon:"🎒",desc:"Ausrüstung, Verbrauchsitems, Reparatur und Versorgung."},
+    cosmetics:{label:"Design & Exklusiv",icon:"✨",desc:"Skins, Figuren, Designs und optische Extras."},
+    comfort:{label:"Komfort & Auto",icon:"🤖",desc:"Automatik und Komfort-Funktionen."},
+    extras:{label:"Weitere Extras",icon:"◆",desc:"Weitere spielbezogene JK/Coin-Inhalte."}
+  });
+  function gameShopCategory(entry){
+    const kind=String(entry?.grant?.kind||"").toLowerCase(),id=String(entry?.id||"").toLowerCase(),name=String(entry?.name||"").toLowerCase(),hay=`${kind} ${id} ${name}`;
+    if(kind.startsWith("pack:")||kind==="exclusivepack"||/\bpack\b|crate|kiste|box/.test(hay))return"packs";
+    if(kind.startsWith("combataura:"))return"combatAuras";
+    if(kind.startsWith("aura:"))return"auras";
+    if(kind.startsWith("bind:"))return"bindings";
+    if(kind.startsWith("trail:"))return"trails";
+    if(kind.startsWith("featuredstorage:")||/storage|speicher|slot/.test(hay))return"storage";
+    if(/skin|design|figure|figur|cosmetic|kleidung|outfit|theme|lack|farbe/.test(hay))return"cosmetics";
+    if(/auto|bulklevel|unlock|komfort|collector|opener/.test(hay))return"comfort";
+    if(/coin|coins|gold|geld|cash|jeton|währung|currency|punkte|points/.test(hay))return"currency";
+    if(/boost|mult|multiplier|magnet|speed|tempo|xp|ep|luck|glück|damage|schaden|def|shield|leben|health|godmode|produktion|production|nitro/.test(hay))return"boosts";
+    if(/weapon|waffe|armor|rüstung|item|kit|repair|repar|revive|fuel|kanister|key|schlüssel|munition|ammo|trank|potion|chip|mine|booster/.test(hay))return"equipment";
+    return"extras";
+  }
+  function gameShopIcon(entry){
+    const category=gameShopCategory(entry),kind=String(entry?.grant?.kind||"").toLowerCase(),name=String(entry?.name||"").toLowerCase();
+    if(kind.startsWith("combataura:"))return"⚔";
+    if(kind.startsWith("aura:"))return"✦";
+    if(kind.startsWith("bind:"))return"🔗";
+    if(kind.startsWith("trail:"))return"☄";
+    if(kind.startsWith("pack:")||kind==="exclusivepack")return"🎴";
+    if(/skin|design|figure|figur|outfit/.test(name))return"✨";
+    return GAME_SHOP_CATEGORIES[category]?.icon||"◆";
+  }
+  function gameShopEffect(entry){
+    const kind=String(entry?.grant?.kind||""),amount=Math.max(1,Number(entry?.grant?.amount)||1);
+    if(kind.startsWith("pack:"))return `Gibt ${amount} Pack-Credit für ${safeText(entry.name,"dieses Pack")}.`;
+    if(kind==="exclusivePack")return `Gibt ${amount} Exclusive-Pack-Credit für den exklusiven BigCards-Pool.`;
+    if(kind.startsWith("aura:"))return "Wird deinem BigCards-Aura-Inventar gutgeschrieben und kann auf eine passende Karteninstanz gelegt werden.";
+    if(kind.startsWith("combatAura:"))return "Wird deinem Kampf-Aura-Inventar gutgeschrieben und verstärkt eine ausgerüstete Karte im Kartenkampf.";
+    if(kind.startsWith("bind:"))return "Wird deinem Bindungs-Inventar gutgeschrieben und kann auf eine konkrete Karte ausgerüstet werden.";
+    if(kind.startsWith("trail:"))return "Gibt eine Spur für deine persönliche BigCards-Karte; die normale Rank-Freischaltung zum Ausrüsten bleibt bestehen.";
+    if(kind.startsWith("featuredStorage:"))return "Dauerhafte Speicherfreischaltung für den persönlichen BigCards-Kartenslot.";
+    if(kind==="bulkLevelUnlock")return "Einmalige Dauerfreischaltung: Danach kann im BigCards-Sammlungsalbum eine komplette Rarität automatisch gelevelt werden.";
+    if(entry?.variable)return "Du wählst beim Kauf selbst die Menge; der JK/Coin-Preis entspricht der gewählten Menge.";
+    return safeText(entry?.text,"Der Inhalt wird nach dem Kauf direkt dem angegebenen Spiel gutgeschrieben.");
+  }
+  function gameShopCard(entry,labels){
+    const gameKey=String(entry?.game||""),gameLabel=safeText(labels[gameKey]||GAME_LABELS?.[gameKey],"Spiel"),name=safeText(entry?.name,"Spiel-Inhalt"),description=safeText(entry?.text,"JK/Coin-Inhalt"),permanentOwned=bigCardsPermanentOwned(entry),category=gameShopCategory(entry),meta=GAME_SHOP_CATEGORIES[category]||GAME_SHOP_CATEGORIES.extras,icon=gameShopIcon(entry);
+    return `<article class="jkc-card jkc-game-store-card ${permanentOwned?"owned":""}" data-jkc-store-category="${category}"><div class="jkc-store-card-top"><span class="jkc-store-item-icon" aria-hidden="true">${icon}</span><div class="jkc-store-card-labels"><small>${esc(safeUpper(gameLabel))}</small><em>${esc(meta.label)}</em></div><button type="button" class="jkc-store-info" data-jkc-game-info="${esc(entry?.id||"")}" aria-label="Info zu ${esc(name)}">i</button></div><h5>${esc(name)}</h5><p>${esc(description)}</p>${gameKey==="fight"&&entry?.requiredFightLevel?`<div class="jkc-fight-level-note">🔒 Kauf sofort möglich · Benutzung erst ab Fight-Level ${Number(entry.requiredFightLevel)||1}</div>`:""}<div class="jkc-actions"><button class="jkc-button" data-jkc-buy-game="${esc(entry?.id||"")}" ${permanentOwned?"disabled":""}>${permanentOwned?"Freigeschaltet ✓":entry?.variable?"Betrag wählen":`${Math.max(0,Number(entry?.cost)||0).toLocaleString("de-DE")} JK/Coin`}</button></div></article>`;
+  }
+  function gamesHtml(){
+    const games=["all","runner","city","match","fight","dungeon","money","speedcar","bigcards","egoshoot","weed","casino"],labels={all:"Alle Spiele",runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",speedcar:"Speed Car.KL",bigcards:"BigCards.kl",egoshoot:"Egoshoot.KL",weed:"Weed Business",casino:"Casino"};
+    const gameList=GAME_STORE.filter(item=>item&&typeof item==="object"&&(ui.game==="all"||String(item.game||"")===ui.game));
+    const present=[...new Set(gameList.map(gameShopCategory))];
+    if(ui.gameCategory!=="all"&&!present.includes(ui.gameCategory))ui.gameCategory="all";
+    const list=gameList.filter(item=>ui.gameCategory==="all"||gameShopCategory(item)===ui.gameCategory);
+    const filters=games.map(g=>`<button class="jkc-button ${ui.game===g?"gold":"secondary"}" data-jkc-game-filter="${g}">${esc(labels[g]||g)}</button>`).join("");
+    const categoryButtons=[`<button type="button" class="jkc-store-category-pill ${ui.gameCategory==="all"?"active":""}" data-jkc-game-category="all"><span>▦</span>Alle Kategorien</button>`,...present.map(id=>{const m=GAME_SHOP_CATEGORIES[id]||GAME_SHOP_CATEGORIES.extras;return `<button type="button" class="jkc-store-category-pill ${ui.gameCategory===id?"active":""}" data-jkc-game-category="${id}"><span>${m.icon}</span>${esc(m.label)}</button>`})].join("");
+    const grouped=ui.gameCategory==="all"?present.map(id=>({id,items:list.filter(x=>gameShopCategory(x)===id)})).filter(g=>g.items.length):[{id:ui.gameCategory,items:list}];
+    return `<section class="jkc-section jkc-store-shell"><div class="jkc-store-title"><div><small>SPIELE-SHOP · NEUE ÜBERSICHT</small><h4>JK/Coin-Inhalte</h4><p>Wähle zuerst ein Spiel und danach eine Kategorie. Mit <b>i</b> siehst du bei jedem Angebot genau, was es macht.</p></div><span class="jkc-store-count">${list.length.toLocaleString("de-DE")} Angebote</span></div>${scrollNavHtml("games",filters)}<div class="jkc-store-category-bar">${categoryButtons}</div>${grouped.map(group=>{const meta=GAME_SHOP_CATEGORIES[group.id]||GAME_SHOP_CATEGORIES.extras;return `<section class="jkc-store-category-section"><header><span>${meta.icon}</span><div><b>${esc(meta.label)}</b><small>${esc(meta.desc)}</small></div><em>${group.items.length}</em></header><div class="jkc-store-grid">${group.items.map(item=>gameShopCard(item,labels)).join("")}</div></section>`}).join("")||`<div class="jkc-store-empty">In dieser Auswahl gibt es aktuell keine Angebote.</div>`}</section>`;
+  }
+  function openGameItemInfo(id){
+    const entry=GAME_STORE.find(x=>String(x?.id||"")===String(id||""));if(!entry)return;
+    document.querySelector("[data-jkc-game-info-modal]")?.remove();
+    const category=gameShopCategory(entry),meta=GAME_SHOP_CATEGORIES[category]||GAME_SHOP_CATEGORIES.extras,gameLabel=GAME_LABELS?.[entry.game]||entry.game||"JK.Games",permanentOwned=bigCardsPermanentOwned(entry),price=permanentOwned?"Bereits freigeschaltet":entry.variable?"Menge wählbar":`${Math.max(0,Number(entry.cost)||0).toLocaleString("de-DE")} JK/Coin`;
+    const dialog=document.createElement("dialog");dialog.className="jkc-game-info-modal";dialog.dataset.jkcGameInfoModal="1";
+    dialog.innerHTML=`<div class="jkc-game-info-card"><header><div><span class="jkc-game-info-icon">${gameShopIcon(entry)}</span><div><small>${esc(safeUpper(gameLabel))} · ${esc(safeUpper(meta.label))}</small><h2>${esc(safeText(entry.name,"JK/Coin-Inhalt"))}</h2></div></div><button type="button" data-jkc-game-info-close aria-label="Info schließen">×</button></header><div class="jkc-game-info-body"><article><small>WAS IST DAS?</small><p>${esc(safeText(entry.text,"Spielinhalt aus dem JK/Coin-Shop."))}</p></article><article><small>WIRKUNG</small><p>${esc(gameShopEffect(entry))}</p></article>${entry.game==="fight"&&entry.requiredFightLevel?`<article><small>LEVEL-VORAUSSETZUNG</small><p>Kauf ist sofort möglich. Benutzbar ab Fight-Level ${Number(entry.requiredFightLevel)||1}.</p></article>`:""}<div class="jkc-game-info-price"><span>KOSTEN</span><b>${esc(price)}</b></div></div><div class="jkc-game-info-actions"><button type="button" class="jkc-button secondary" data-jkc-game-info-close>Schließen</button><button type="button" class="jkc-button gold" data-jkc-game-info-buy="${esc(entry.id)}" ${permanentOwned?"disabled":""}>${permanentOwned?"Freigeschaltet ✓":esc(price)}</button></div></div>`;
+    (document.fullscreenElement||document.body||document.documentElement).append(dialog);
+    const close=()=>{try{dialog.close();}catch{}dialog.remove();};
+    dialog.querySelectorAll("[data-jkc-game-info-close]").forEach(b=>b.addEventListener("click",close));
+    dialog.querySelector("[data-jkc-game-info-buy]")?.addEventListener("click",()=>{const sku=dialog.querySelector("[data-jkc-game-info-buy]")?.dataset.jkcGameInfoBuy;close();buyGameItem(sku,window.JKGamesOwnedPhoneItem?.()||"");});
+    dialog.addEventListener("click",event=>{if(event.target===dialog)close();});
+    try{dialog.showModal();}catch{dialog.setAttribute("open","");}
+  }
   function collectionHtml(){const c=coinState(),unique=Object.keys(c.collectionUnique).length,pct=(unique/TOTAL_COLLECTIBLES*100);const filterIds=["all",...RARITIES.map(r=>r.id)],filterLabel=id=>id==="all"?"Alle":RARITIES.find(r=>r.id===id)?.name||id;const filters=filterIds.map(id=>`<button type="button" class="jkc-button ${ui.collectionRarity===id?"gold":"secondary"}" data-jkc-collection-filter="${id}">${esc(filterLabel(id))}</button>`).join("");const filtered=c.collectibles.filter(item=>ui.collectionRarity==="all"||item.rarity===ui.collectionRarity);const items=filtered.slice(0,200),sellLabel=ui.collectionRarity==="all"?"Alle verkaufen":`${filterLabel(ui.collectionRarity)} verkaufen`,sellTotal=filtered.reduce((sum,x)=>sum+Math.max(0,Number(x?.value)||0),0);return `<section class="jkc-section"><div class="jkc-collection-head"><div><small>JK-SAMMLUNG</small><h4>${unique.toLocaleString("de-DE")} / ${TOTAL_COLLECTIBLES.toLocaleString("de-DE")} entdeckt</h4></div><b>${pct.toFixed(3).replace(".",",")}%</b></div><div class="jkc-progress"><i style="width:${Math.min(100,pct)}%"></i></div><div class="jkc-collection-filter" data-jkc-collection-filter-track aria-label="Sammlung nach Seltenheit filtern">${filters}</div></section><section class="jkc-section"><div class="jkc-collection-result-head"><div><small>${esc(safeUpper(filterLabel(ui.collectionRarity)))}</small><b>${filtered.length.toLocaleString("de-DE")} im Besitz</b></div>${filtered.length?`<button type="button" class="jkc-button danger" data-jkc-sell-collection="${esc(ui.collectionRarity)}">${esc(sellLabel)} · ${euro(sellTotal)}</button>`:""}</div><div class="jkc-grid">${items.length?items.map(item=>`<article class="jkc-card jkc-collectible jkc-rarity-${item.rarity}"><small>${esc(item.rarityName)}</small><h5>${esc(item.name)}</h5><p>${esc(item.description)}</p><strong>${euro(item.value)}</strong><div class="jkc-actions"><button class="jkc-button danger" data-jkc-sell-collectible="${item.uid}">Verkaufen</button></div></article>`).join(""):`<p>In dieser Kategorie befinden sich aktuell keine Sammlerstücke in deinem Besitz.</p>`}</div>${filtered.length>items.length?`<small class="jkc-collection-limit">Es werden die neuesten ${items.length} von ${filtered.length.toLocaleString("de-DE")} Items angezeigt.</small>`:""}</section>`;}
   function fragmentsHtml(){const c=coinState(),f=c?.fragments||{balance:0,lifetime:0,converted:0,ledger:[]},pct=Math.min(100,(Number(f.balance||0)/FRAGMENTS_PER_COIN)*100);return `<section class="jkc-section jkc-fragments"><div class="jkc-fragment-head"><div><small>FREE-TO-PLAY</small><h4>JK-Fragmente</h4></div><button type="button" class="jkc-info-dot" data-jkc-fragment-info aria-label="Informationen zu JK-Fragmenten">i</button></div><div class="jkc-fragment-balance"><strong>${Number(f.balance||0).toLocaleString("de-DE")} / ${FRAGMENTS_PER_COIN}</strong><span>Fragmente bis zum nächsten JK/Coin</span><div class="jkc-progress"><i style="width:${pct}%"></i></div></div><div class="jkc-fragment-stats"><article><small>GESAMT GESAMMELT</small><b>${Number(f.lifetime||0).toLocaleString("de-DE")}</b></article><article><small>UMGEWANDELT</small><b>${Number(f.converted||0).toLocaleString("de-DE")} JK/Coin</b></article></div><p>Je ${FRAGMENTS_PER_COIN} Fragmente werden automatisch in 1 JK/Coin umgewandelt.</p></section><section class="jkc-section"><small>LETZTE FRAGMENTE</small><h4>Verlauf</h4><div class="jkc-ledger">${f.ledger?.length?f.ledger.slice(0,30).map(row=>`<article><div><b>${esc(row.source||"JK.Games")}</b><small>${new Date(Number(row.at)||Date.now()).toLocaleString("de-DE")}</small></div><strong class="plus">+${Number(row.amount||0)}</strong></article>`).join(""):`<p>Noch keine Fragmente gesammelt.</p>`}</div></section>`;}
   function openFragmentInfo(){const old=document.querySelector("[data-jkc-fragment-modal]");old?.remove();const dialog=document.createElement("dialog");dialog.className="jkc-fragment-modal";dialog.dataset.jkcFragmentModal="1";dialog.innerHTML=`<div class="jkc-fragment-info-card"><header><div><small>JK.GAMES · FREE TO PLAY</small><h2>So bekommst du Fragmente</h2></div><button type="button" data-jkc-fragment-close>×</button></header><div class="jkc-fragment-info-list"><article><b>🎁 Täglicher Login</b><p>Kleine Mengen bei den täglichen Geschenken. Serien-Tage geben etwas mehr.</p></article><article><b>✓ Tägliche Quests</b><p>Je nach Schwierigkeitsstufe 5, 8, 12 oder 20 Fragmente pro abgeschlossener Quest.</p></article><article><b>⚔ Fight.KL-Bosse</b><p>Jeder Hauptboss auf Welle 10, 20, 30 … gibt 10 Fragmente.</p></article><article><b>🗝 Dungeon.KL-Bosse</b><p>Besiegte Dungeon-Bosse geben 10 Fragmente.</p></article><article><b>🏆 Events</b><p>Event-Gewinner erhalten größere Fragment-Boni. Der aktuelle Gewinnerbonus wird in der Event-App angezeigt.</p></article></div><div class="jkc-fragment-convert"><b>${FRAGMENTS_PER_COIN} Fragmente = 1 JK/Coin</b><small>Die Umwandlung passiert automatisch.</small></div></div>`;document.body.append(dialog);const close=()=>{try{dialog.close();}catch{}dialog.remove();};dialog.querySelector("[data-jkc-fragment-close]")?.addEventListener("click",close);dialog.addEventListener("click",e=>{if(e.target===dialog)close();});try{dialog.showModal();}catch{dialog.setAttribute("open","");}}
@@ -394,7 +473,9 @@
     shell.querySelectorAll("[data-jkc-request-pack]").forEach(b=>b.addEventListener("click",()=>{rememberNav(shell);requestPack(b.dataset.jkcRequestPack).then(()=>refreshPhone(item));}));
     shell.querySelector("[data-jkc-exchange]")?.addEventListener("click",()=>exchangePrompt(item));
     shell.querySelectorAll("[data-jkc-open-box]").forEach(b=>b.addEventListener("click",()=>openBox(b.dataset.jkcOpenBox,item)));
-    shell.querySelectorAll("[data-jkc-game-filter]").forEach(b=>b.addEventListener("click",()=>{rememberNav(shell);ui.game=b.dataset.jkcGameFilter;refreshPhone(item);}));
+    shell.querySelectorAll("[data-jkc-game-filter]").forEach(b=>b.addEventListener("click",()=>{rememberNav(shell);ui.game=b.dataset.jkcGameFilter;ui.gameCategory="all";refreshPhone(item);}));
+    shell.querySelectorAll("[data-jkc-game-category]").forEach(b=>b.addEventListener("click",()=>{ui.gameCategory=b.dataset.jkcGameCategory||"all";refreshPhone(item);}));
+    shell.querySelectorAll("[data-jkc-game-info]").forEach(b=>b.addEventListener("click",()=>openGameItemInfo(b.dataset.jkcGameInfo)));
     shell.querySelectorAll("[data-jkc-collection-filter]").forEach(b=>b.addEventListener("click",()=>{const track=b.closest("[data-jkc-collection-filter-track]");if(track)ui.collectionScroll=Math.max(0,track.scrollLeft||0);saveNavMemory();ui.collectionRarity=b.dataset.jkcCollectionFilter||"all";refreshPhone(item);}));
     shell.querySelectorAll("[data-jkc-buy-game]").forEach(b=>b.addEventListener("click",()=>buyGameItem(b.dataset.jkcBuyGame,item)));
     shell.querySelectorAll("[data-jkc-sell-collectible]").forEach(b=>b.addEventListener("click",()=>sellCollectible(b.dataset.jkcSellCollectible,item)));
