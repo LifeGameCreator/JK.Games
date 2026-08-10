@@ -28,8 +28,8 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 240;
-  const FIRESTORE_RESOURCE_BACKOFF_MS = 90000;
+  const FIRESTORE_WRITE_GAP_MS = 1000;
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 600000;
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
@@ -83,7 +83,9 @@
   }
 
   function setFirestoreWriteBackoff(ms = FIRESTORE_RESOURCE_BACKOFF_MS, reason = "resource-exhausted") {
-    const until = Date.now() + Math.max(1000, Number(ms) || FIRESTORE_RESOURCE_BACKOFF_MS);
+    const resourceReason = /resource|exhaust|queued|write-stream/i.test(String(reason || ""));
+    const requested = Math.max(1000, Number(ms) || FIRESTORE_RESOURCE_BACKOFF_MS);
+    const until = Date.now() + (resourceReason ? Math.max(FIRESTORE_RESOURCE_BACKOFF_MS, requested) : requested);
     firestoreWriteBackoffUntil = Math.max(firestoreWriteBackoffUntil, until);
     const now = Date.now();
     if (now - firestoreWriteBackoffNoticeAt > 30000) {
@@ -340,7 +342,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-10-v377-firestore-global-write-gate",
+    version: "2026-08-10-v383-firestore-global-write-gate-hard-throttle",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,

@@ -329,3 +329,10 @@ dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
     grid-column:1 / -1;
   }
 }
+
+/* ===== V383 · BigCards 24h-Komfort auf Handy immer untereinander ===== */
+@media(max-width:900px){
+  .jkc-store-grid>.jkc-game-store-card.timed-bulk{
+    grid-column:1 / -1;
+  }
+}

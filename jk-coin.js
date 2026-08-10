@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-jkcoin-v381-bigcards-bulk-rebirth";
+  const VERSION = "2026-08-10-jkcoin-v383-bigcards-comfort-24h-visible";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -182,8 +182,8 @@
     { game:"speedcar", id:"speedcar-coins-50000", name:"50.000 Speed Coins", cost:250, text:"Guthaben für Fahrzeugkäufe und Tuning in Speed Car.KL.", grant:{kind:"speedCoins",amount:1} },
 
     { game:"bigcards", id:"bigcards-vip", name:"BigCards VIP · Dauerhaft", cost:500, text:"Permanenter VIP-Zugang für BigCards.kl: tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten, Boss-System, Klicker-Upgrades und Boss-Special-Attacken.", grant:{kind:"vipUnlock",amount:1} },
-    { game:"bigcards", id:"bigcards-bulk-level-unlock", name:"Alle Karten leveln · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten leveln“ für exakt 24 Stunden frei. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkLevelUnlock",amount:1} },
-    { game:"bigcards", id:"bigcards-bulk-rebirth-unlock", name:"Alle Karten rebirthen · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten rebirthen“ für exakt 24 Stunden frei. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkRebirthUnlock",amount:1} },
+    { game:"bigcards", id:"bigcards-bulk-level-unlock", name:"Alle Karten leveln · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten leveln“ für exakt 24 Stunden frei – auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkLevelUnlock",amount:1} },
+    { game:"bigcards", id:"bigcards-bulk-rebirth-unlock", name:"Alle Karten rebirthen · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten rebirthen“ für exakt 24 Stunden frei – auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkRebirthUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-2", name:"2× Points · 15 Min.", cost:200, text:"Verdoppelt 15 Minuten lang die Points-Produktion im Spielfeld UND im persönlichen Kartenslot.", grant:{kind:"pointsBoost:2",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-4", name:"4× Points · 15 Min.", cost:400, text:"Vierfache Points-Produktion für Spielfeld und persönliche Karte. Ersetzt die vorherige Stufe; Zeit wird nicht addiert.", grant:{kind:"pointsBoost:4",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-6", name:"6× Points · 15 Min.", cost:700, text:"Sechsfache Points-Produktion für Spielfeld und persönliche Karte für exakt 15 Minuten.", grant:{kind:"pointsBoost:6",amount:1} },
@@ -287,6 +287,28 @@
     { game:"casino", id:"casino-cosmic-wheel", name:"Kosmisches Roulette-Rad", cost:320, text:"Exklusives animiertes Roulette-Design.", grant:{kind:"cosmicWheel",amount:1} },
     { game:"casino", id:"casino-galaxy-slots", name:"Galaxy-Slotmaschine", cost:260, text:"Exklusives Galaxy-Design für die Slotmaschine.", grant:{kind:"galaxySlots",amount:1} }
   ];
+
+  // V383: Diese beiden BigCards-Komfortangebote sind Pflichtangebote. Sie werden
+  // beim Rendern zusätzlich defensiv geprüft, damit sie weder durch eine ältere
+  // GAME_STORE-Version noch durch Filter-/Dynamiklogik verschwinden können.
+  const BIGCARDS_REQUIRED_COMFORT = Object.freeze([
+    Object.freeze({ game:"bigcards", id:"bigcards-bulk-level-unlock", name:"Alle Karten leveln · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten leveln“ für exakt 24 Stunden frei. Gilt auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist.", grant:{kind:"bulkLevelUnlock",amount:1} }),
+    Object.freeze({ game:"bigcards", id:"bigcards-bulk-rebirth-unlock", name:"Alle Karten rebirthen · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten rebirthen“ für exakt 24 Stunden frei. Gilt auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist.", grant:{kind:"bulkRebirthUnlock",amount:1} })
+  ]);
+  function ensureRequiredBigCardsComfort(items){
+    const out=Array.isArray(items)?items.slice():[];
+    if(ui?.game!=="all"&&ui?.game!=="bigcards")return out;
+    for(const required of BIGCARDS_REQUIRED_COMFORT){
+      if(!out.some(x=>String(x?.id||"")===required.id))out.push(required);
+    }
+    return out;
+  }
+  function bigCardsComfortPriority(entry){
+    const id=String(entry?.id||"");
+    if(id==="bigcards-bulk-level-unlock")return 0;
+    if(id==="bigcards-bulk-rebirth-unlock")return 1;
+    return 10;
+  }
   const ADJECTIVES = ["Verlorenes","Neon","Antikes","Kosmisches","Goldenes","Schatten","Königliches","Mechanisches","Kristall","Verfluchtes","Legendäres","Digitales","Galaktisches","Obsidian","Sternen","Zeitloses","Rubin","Smaragd","Silbernes","Schwarzes"];
   const NOUNS = ["Abzeichen","Artefakt","Amulett","Poster","Modul","Relikt","Ticket","Siegel","Sammlerstück","Emblem","Helm","Ring","Kern","Würfel","Chip","Medaillon","Schlüssel","Totem","Fragment","Trophäe"];
   const NAV_STORAGE = "jk-games-jkcoin-nav-v215";
@@ -462,8 +484,8 @@
     if(kind.startsWith("trail:"))return "Gibt eine Spur für deine persönliche BigCards-Karte; die normale Rank-Freischaltung zum Ausrüsten bleibt bestehen.";
     if(kind.startsWith("featuredStorage:"))return "Dauerhafte Speicherfreischaltung für den persönlichen BigCards-Kartenslot.";
     if(kind==="vipUnlock")return "Permanente BigCards-VIP-Freischaltung: tägliches VIP-Glücksrad, VIP-Klicker, 100 VIP-Karten, Bosse, Klicker-Upgrades und kaufbare Boss-Special-Attacken. Einmal gekauft bleibt VIP dauerhaft aktiv.";
-    if(kind==="bulkLevelUnlock")return "24-Stunden-Komfortzugang: Eine komplette aktuell gewählte BigCards-Rarität kann automatisch gelevelt werden. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
-    if(kind==="bulkRebirthUnlock")return "24-Stunden-Komfortzugang: Alle aktuell möglichen Level-5-Karten der gewählten BigCards-Rarität können gesammelt um genau eine Rebirth-Stufe erhöht werden. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
+    if(kind==="bulkLevelUnlock")return "24-Stunden-Komfortzugang: Die aktuell gewählte BigCards-Sammlung kann automatisch gelevelt werden – normale Raritäten, Exclusive oder VIP. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
+    if(kind==="bulkRebirthUnlock")return "24-Stunden-Komfortzugang: Alle aktuell möglichen Level-5-Karten der gewählten BigCards-Sammlung – einschließlich Exclusive oder VIP – können gesammelt um genau eine Rebirth-Stufe erhöht werden. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
     if(kind.startsWith("pointsBoost:"))return "15-Minuten-Points-Booster für BigCards: wirkt gleichzeitig auf Stockwerk und persönliche Karte. Beim Upgrade wird die Zeit auf exakt 15 Minuten gesetzt, niemals addiert.";
     if(kind.startsWith("xpBoost:"))return "15-Minuten-XP-Booster für BigCards: wirkt auf Stockwerk und persönliche Karte. Die nächste Stufe ersetzt die vorige; keine Zeitstapelung.";
     if(kind.startsWith("damageBoost:"))return "15-Minuten-Kampfbooster für BigCards. +20/+40/+60/+80/+100 % entsprechen ×1,20 bis ×2,00 Gesamtschaden. Keine Zeitstapelung.";
@@ -479,13 +501,13 @@
   function gamesHtml(){
     ui.dynamicSignature=dynamicStoreSignature();
     const games=["all","runner","city","match","fight","dungeon","money","speedcar","bigcards","egoshoot","weed","casino"],labels={all:"Alle Spiele",runner:"Runner.KL",city:"City.KL",match:"Match.KL",fight:"Fight.KL",dungeon:"Dungeon.KL",money:"Money.KL",speedcar:"Speed Car.KL",bigcards:"BigCards.kl",egoshoot:"Egoshoot.KL",weed:"Weed Business",casino:"Casino"};
-    const gameList=collapseDynamicBoosters(GAME_STORE.filter(item=>item&&typeof item==="object"&&(ui.game==="all"||String(item.game||"")===ui.game)));
+    const gameList=ensureRequiredBigCardsComfort(collapseDynamicBoosters(GAME_STORE.filter(item=>item&&typeof item==="object"&&(ui.game==="all"||String(item.game||"")===ui.game))));
     const present=[...new Set(gameList.map(gameShopCategory))];
     if(ui.gameCategory!=="all"&&!present.includes(ui.gameCategory))ui.gameCategory="all";
     const list=gameList.filter(item=>ui.gameCategory==="all"||gameShopCategory(item)===ui.gameCategory);
     const filters=games.map(g=>`<button class="jkc-button ${ui.game===g?"gold":"secondary"}" data-jkc-game-filter="${g}">${esc(labels[g]||g)}</button>`).join("");
     const categoryButtons=[`<button type="button" class="jkc-store-category-pill ${ui.gameCategory==="all"?"active":""}" data-jkc-game-category="all"><span>▦</span>Alle Kategorien</button>`,...present.map(id=>{const m=GAME_SHOP_CATEGORIES[id]||GAME_SHOP_CATEGORIES.extras;return `<button type="button" class="jkc-store-category-pill ${ui.gameCategory===id?"active":""}" data-jkc-game-category="${id}"><span>${m.icon}</span>${esc(m.label)}</button>`})].join("");
-    const grouped=ui.gameCategory==="all"?present.map(id=>({id,items:list.filter(x=>gameShopCategory(x)===id)})).filter(g=>g.items.length):[{id:ui.gameCategory,items:list}];
+    const grouped=(ui.gameCategory==="all"?present.map(id=>({id,items:list.filter(x=>gameShopCategory(x)===id)})).filter(g=>g.items.length):[{id:ui.gameCategory,items:list}]).map(group=>group.id==="comfort"?{...group,items:group.items.slice().sort((a,b)=>bigCardsComfortPriority(a)-bigCardsComfortPriority(b))}:group);
     return `<section class="jkc-section jkc-store-shell"><div class="jkc-store-title"><div><small>SPIELE-SHOP · NEUE ÜBERSICHT</small><h4>JK/Coin-Inhalte</h4><p>Wähle zuerst ein Spiel und danach eine Kategorie. Mit <b>i</b> siehst du bei jedem Angebot genau, was es macht.</p></div><span class="jkc-store-count">${list.length.toLocaleString("de-DE")} Angebote</span></div>${scrollNavHtml("games",filters)}<div class="jkc-store-category-bar">${categoryButtons}</div>${grouped.map(group=>{const meta=GAME_SHOP_CATEGORIES[group.id]||GAME_SHOP_CATEGORIES.extras;return `<section class="jkc-store-category-section"><header><span>${meta.icon}</span><div><b>${esc(meta.label)}</b><small>${esc(meta.desc)}</small></div><em>${group.items.length}</em></header><div class="jkc-store-grid">${group.items.map(item=>gameShopCard(item,labels)).join("")}</div></section>`}).join("")||`<div class="jkc-store-empty">In dieser Auswahl gibt es aktuell keine Angebote.</div>`}</section>`;
   }
   function openGameItemInfo(id){
