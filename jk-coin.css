@@ -322,3 +322,10 @@ dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
 .jkc-dynamic-boost{display:grid;gap:3px;margin-top:9px;padding:8px 9px;border:1px solid rgba(110,229,255,.24);border-radius:11px;background:rgba(7,31,42,.72)}
 .jkc-dynamic-boost b{color:#8af0ff;font-size:10px}.jkc-dynamic-boost small{color:#9baebb!important;letter-spacing:0!important;font-size:9px!important;line-height:1.35}
 .jkc-game-store-card.dynamic-booster .jkc-store-item-icon{background:linear-gradient(145deg,#714cff,#24b6d4);box-shadow:0 0 18px rgba(91,188,255,.26)}
+
+/* ===== V381 · 24h-Komfortkarten auf kleinen Displays untereinander ===== */
+@media(max-width:560px){
+  .jkc-store-grid>.jkc-game-store-card.timed-bulk{
+    grid-column:1 / -1;
+  }
+}
