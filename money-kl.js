@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-money-kl-v242-duplicate-character-fix";
+  const VERSION = "2026-08-10-money-kl-v371-dynamic-jk-production-booster";
   const LEADERBOARD_COLLECTION = "playerProfiles";
   const MAX_OFFLINE_MS = 8 * 60 * 60 * 1000;
   const LEADERBOARD_ACTIVE_MS = 45 * 1000;
@@ -671,10 +671,14 @@
     if (kind === "auto30") {
       data.boosts.autoCollectUntil = Math.max(now, Number(data.boosts.autoCollectUntil || 0)) + count * 30 * 60 * 1000;
     } else if (/^production(?:2|4|6|8|10|12|14|16|18|20)$/.test(String(kind))) {
+      // Erst die bisherige Produktion mit dem ALTEN Booster abrechnen. So kann eine
+      // neue Stufe niemals rückwirkend auf bereits vergangene Zeit angewendet werden.
+      updateAccrual(data);
       const multiplier = Math.max(2, Math.min(20, Number(String(kind).replace("production", "")) || 2));
-      const sameActive = Number(data.boosts.productionUntil || 0) > now && Number(data.boosts.productionMultiplier || 1) === multiplier;
+      // V371: Jede gekaufte Stufe ersetzt die vorherige Stufe und startet exakt
+      // 15 Minuten. Zeit wird niemals addiert/gestapelt – auch nicht bei derselben Stufe.
       data.boosts.productionMultiplier = multiplier;
-      data.boosts.productionUntil = (sameActive ? Number(data.boosts.productionUntil) : now) + count * 15 * 60 * 1000;
+      data.boosts.productionUntil = now + 15 * 60 * 1000;
     } else if (kind === "instant10") {
       const earned = Math.floor(totalPerSecond(data) * 600 * count * 100) / 100;
       data.dollars += earned;
@@ -1177,5 +1181,6 @@
     if (returnPhone) window.setTimeout(() => window.JKGamesOpenTopGames?.(UI.sourceDevice),80);
   }
 
-  window.MoneyKL = Object.freeze({ version:VERSION, open, close, definitions:NORMAL_MAKERS, jkDefinitions:JK_MAKERS, getState:ensureState, leaderboard:loadLeaderboard, grantJkCoinPurchase });
+  function getJkProductionBoostState(){const data=ensureState(),t=Date.now(),active=Number(data?.boosts?.productionUntil||0)>t;return {active,value:active?productionMultiplier(data):1,until:active?Number(data.boosts.productionUntil):0,max:20};}
+  window.MoneyKL = Object.freeze({ version:VERSION, open, close, definitions:NORMAL_MAKERS, jkDefinitions:JK_MAKERS, getState:ensureState, getJkProductionBoostState, leaderboard:loadLeaderboard, grantJkCoinPurchase });
 })();

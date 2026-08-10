@@ -316,3 +316,9 @@ dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
   .jkc-game-info-icon{width:42px;height:42px;flex-basis:42px}
   .jkc-game-info-actions{grid-template-columns:1fr}
 }
+
+/* ===== V371 dynamische Booster-Slots ===== */
+.jkc-game-store-card.dynamic-booster{border-color:rgba(106,232,255,.34);background:radial-gradient(circle at 92% 4%,rgba(112,77,255,.2),transparent 40%),linear-gradient(145deg,#112331,#0b141e)}
+.jkc-dynamic-boost{display:grid;gap:3px;margin-top:9px;padding:8px 9px;border:1px solid rgba(110,229,255,.24);border-radius:11px;background:rgba(7,31,42,.72)}
+.jkc-dynamic-boost b{color:#8af0ff;font-size:10px}.jkc-dynamic-boost small{color:#9baebb!important;letter-spacing:0!important;font-size:9px!important;line-height:1.35}
+.jkc-game-store-card.dynamic-booster .jkc-store-item-icon{background:linear-gradient(145deg,#714cff,#24b6d4);box-shadow:0 0 18px rgba(91,188,255,.26)}
