@@ -2,6 +2,19 @@ const STORAGE_KEY = "lifebuilder-2026-save";
 const SAVE_SLOTS_KEY = "lifebuilder-2026-slots";
 const ACTIVE_SLOT_KEY = "lifebuilder-2026-active-slot";
 const SETTINGS_KEY = "lifebuilder-2026-settings";
+// V377: große Charakter-Slots gehören nicht mehr in localStorage. IndexedDB hat
+// ein deutlich höheres, für strukturierte Spielstände geeignetes Speicherbudget.
+const MAIN_SAVE_DB_NAME_V377 = "jk-games-main-save-v377";
+const MAIN_SAVE_DB_VERSION_V377 = 1;
+const MAIN_SAVE_STORE_V377 = "records";
+const MAIN_SAVE_CURRENT_KEY_V377 = "slots:current";
+const MAIN_SAVE_ACCOUNT_PREFIX_V377 = "slots:account:";
+const MAIN_SAVE_META_KEY_V377 = "lifebuilder-2026-slots-meta-v377";
+const MAIN_SAVE_LEGACY_ACCOUNT_PREFIX_V377 = "lifebuilder-2026-account-slots:";
+const MAIN_SAVE_LEGACY_CONFLICT_PREFIX_V377 = "lifebuilder-2026-cloud-conflict:";
+const MAIN_SAVE_LEGACY_DELETED_PREFIX_V377 = "lifebuilder-deleted-slot-backup:";
+const MAIN_SAVE_DELETED_PREFIX_V377 = "deleted-slot:";
+const MAIN_SAVE_CONFLICT_PREFIX_V377 = "cloud-conflict:";
 const INSTALLED_PHONE_APPS_STORAGE_PREFIX = "lifebuilder-2026-installed-phone-apps-v2";
 const JK_RESET_V180 = Object.freeze({
   version: 180,
@@ -1768,11 +1781,24 @@ const riskLadderTop = [
   { label: "300 €", cents: 30000 }
 ];
 
+let mainLocalStoreReadyResolveV377 = null;
+window.__lifeBuilderLocalStoreHydrating = true;
+window.__lifeBuilderLocalStoreReady = new Promise((resolve) => { mainLocalStoreReadyResolveV377 = resolve; });
+
 let saveSlots = loadSlots();
 let activeSlot = Number(localStorage.getItem(ACTIVE_SLOT_KEY) || 0);
 if (!Number.isInteger(activeSlot) || activeSlot < 0 || activeSlot > 3) activeSlot = 0;
 let state = saveSlots[activeSlot] || null;
 let selectedSlot = activeSlot;
+
+// Der eigentliche IndexedDB-Start läuft asynchron. Beim ersten V377-Start wird
+// der bisherige localStorage-Spielstand verlustfrei migriert und erst DANACH
+// aus dem knappen localStorage entfernt.
+queueMicrotask(() => initializeMainLocalStoreV377().catch((error) => {
+  console.warn("JK.Games IndexedDB-Start fehlgeschlagen", error);
+  window.__lifeBuilderLocalStoreHydrating = false;
+  mainLocalStoreReadyResolveV377?.(false);
+}));
 const SHARED_SYSTEM_ACCOUNTS_PATH = ["global", "systemAccounts"];
 const systemAccountKeys = ["publicTreasury", "taxAccount", "casinoAccount"];
 let systemAccountsUnsubscribe = null;
@@ -2195,6 +2221,232 @@ function loadSave() {
   }
 }
 
+let mainSaveDbPromiseV377 = null;
+let mainSaveWriteBusyV377 = false;
+let mainSaveWritePendingV377 = false;
+let mainSaveWritePromiseV377 = Promise.resolve(true);
+let mainSaveLastErrorAtV377 = 0;
+const mainSaveAccountCacheV377 = new Map();
+
+function openMainSaveDbV377() {
+  if (mainSaveDbPromiseV377) return mainSaveDbPromiseV377;
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  mainSaveDbPromiseV377 = new Promise((resolve, reject) => {
+    const request = indexedDB.open(MAIN_SAVE_DB_NAME_V377, MAIN_SAVE_DB_VERSION_V377);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(MAIN_SAVE_STORE_V377)) db.createObjectStore(MAIN_SAVE_STORE_V377, { keyPath: "key" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB konnte nicht geöffnet werden."));
+  }).catch((error) => {
+    mainSaveDbPromiseV377 = null;
+    throw error;
+  });
+  return mainSaveDbPromiseV377;
+}
+
+async function mainSaveGetV377(key) {
+  const db = await openMainSaveDbV377();
+  if (!db) return null;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAIN_SAVE_STORE_V377, "readonly");
+    const req = tx.objectStore(MAIN_SAVE_STORE_V377).get(String(key));
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error || new Error("IndexedDB-Lesen fehlgeschlagen."));
+  });
+}
+
+async function mainSavePutV377(key, value) {
+  const db = await openMainSaveDbV377();
+  if (!db) throw new Error("IndexedDB ist in diesem Browser nicht verfügbar.");
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAIN_SAVE_STORE_V377, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error || new Error("IndexedDB-Speichern fehlgeschlagen."));
+    tx.onabort = () => reject(tx.error || new Error("IndexedDB-Speichern wurde abgebrochen."));
+    tx.objectStore(MAIN_SAVE_STORE_V377).put({ key: String(key), value, updatedAt: Date.now() });
+  });
+}
+
+async function mainSaveDeleteV377(key) {
+  const db = await openMainSaveDbV377();
+  if (!db) return false;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(MAIN_SAVE_STORE_V377, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error || new Error("IndexedDB-Löschen fehlgeschlagen."));
+    tx.objectStore(MAIN_SAVE_STORE_V377).delete(String(key));
+  });
+}
+
+function normalizeSlotArrayV377(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return Array.from({ length: 4 }, (_, index) => migrateState(list[index] || null));
+}
+
+function mainSaveSmallMetaV377() {
+  return {
+    version: 377,
+    activeSlot: Math.max(0, Math.min(3, Number(activeSlot) || 0)),
+    selectedSlot: Math.max(0, Math.min(3, Number(selectedSlot) || 0)),
+    updatedAt: Date.now(),
+    slots: (saveSlots || []).map((slot) => slot ? {
+      occupied: true,
+      firstName: String(slot.firstName || "").slice(0, 40),
+      lastName: String(slot.lastName || "").slice(0, 40),
+      level: Math.max(0, Number(slot.level || 0)),
+      day: Math.max(0, Number(slot.day || 0))
+    } : { occupied: false })
+  };
+}
+
+async function writeCurrentSlotsIndexedV377() {
+  await mainSavePutV377(MAIN_SAVE_CURRENT_KEY_V377, {
+    slots: saveSlots,
+    activeSlot: Math.max(0, Math.min(3, Number(activeSlot) || 0)),
+    selectedSlot: Math.max(0, Math.min(3, Number(selectedSlot) || 0)),
+    version: 377
+  });
+  // Erst nach bestätigtem IndexedDB-Write werden die alten großen Kopien entfernt.
+  // Wichtig: REMOVE kommt vor jedem neuen localStorage-Write. Ist der Browser bereits
+  // exakt am Quota-Limit, könnte selbst die kleine Metadaten-Zeile sonst werfen und
+  // die große Altdatei würde fälschlich liegen bleiben.
+  try {
+    localStorage.removeItem(SAVE_SLOTS_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+  try {
+    localStorage.setItem(ACTIVE_SLOT_KEY, String(activeSlot));
+    localStorage.setItem(MAIN_SAVE_META_KEY_V377, JSON.stringify(mainSaveSmallMetaV377()));
+  } catch {}
+  return true;
+}
+
+function queueMainSlotsIndexedSaveV377() {
+  mainSaveWritePendingV377 = true;
+  if (mainSaveWriteBusyV377) return mainSaveWritePromiseV377;
+  mainSaveWriteBusyV377 = true;
+  mainSaveWritePromiseV377 = (async () => {
+    let wrote = false;
+    while (mainSaveWritePendingV377) {
+      mainSaveWritePendingV377 = false;
+      try {
+        await writeCurrentSlotsIndexedV377();
+        wrote = true;
+      } catch (error) {
+        mainSaveWritePendingV377 = true;
+        const now = Date.now();
+        if (now - mainSaveLastErrorAtV377 > 30000) {
+          mainSaveLastErrorAtV377 = now;
+          console.warn("JK.Games IndexedDB-Spielstand konnte noch nicht gespeichert werden", error);
+        }
+        break;
+      }
+    }
+    return wrote;
+  })().finally(() => { mainSaveWriteBusyV377 = false; });
+  return mainSaveWritePromiseV377;
+}
+
+async function migrateLegacyAccountSlotsV377() {
+  const keys = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) keys.push(key);
+    }
+  } catch {}
+
+  // Frühere Account-Kopien enthielten den kompletten Vier-Slot-Spielstand und
+  // konnten zusammen mit der Hauptkopie localStorage vollständig füllen.
+  for (const key of keys.filter((entry) => entry.startsWith(MAIN_SAVE_LEGACY_ACCOUNT_PREFIX_V377))) {
+    const suffix = key.slice(MAIN_SAVE_LEGACY_ACCOUNT_PREFIX_V377.length);
+    if (!suffix) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "null");
+      if (!Array.isArray(parsed)) continue;
+      if (suffix.startsWith("orphan:")) {
+        await mainSavePutV377(`legacy-account-${suffix}`, { slots: normalizeSlotArrayV377(parsed), activeSlot: 0, version: 377, migratedAt: Date.now() });
+      } else {
+        const record = { slots: normalizeSlotArrayV377(parsed), activeSlot: Number(localStorage.getItem(`lifebuilder-2026-account-active-slot:${suffix}`) || 0), version: 377 };
+        await mainSavePutV377(`${MAIN_SAVE_ACCOUNT_PREFIX_V377}${suffix}`, record);
+        mainSaveAccountCacheV377.set(suffix, record);
+      }
+      // Erst nach erfolgreicher IndexedDB-Kopie wird die große Alt-Kopie entfernt.
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn("Alter Account-Spielstand konnte noch nicht migriert werden", suffix, error);
+    }
+  }
+
+  // Auch alte Cloud-Konflikt- und Gelöscht-Sicherungen waren komplette JSON-Saves.
+  // Sie bleiben erhalten, liegen ab V377 aber ebenfalls in IndexedDB.
+  for (const key of keys) {
+    try {
+      if (key.startsWith(MAIN_SAVE_LEGACY_CONFLICT_PREFIX_V377) && !key.endsWith(":latest")) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const suffix = key.slice(MAIN_SAVE_LEGACY_CONFLICT_PREFIX_V377.length);
+        await mainSavePutV377(`${MAIN_SAVE_CONFLICT_PREFIX_V377}${suffix}`, parsed);
+        localStorage.removeItem(key);
+      } else if (key.startsWith(MAIN_SAVE_LEGACY_DELETED_PREFIX_V377)) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const suffix = key.slice(MAIN_SAVE_LEGACY_DELETED_PREFIX_V377.length);
+        await mainSavePutV377(`${MAIN_SAVE_DELETED_PREFIX_V377}${suffix}`, parsed);
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.warn("Große lokale Alt-Sicherung konnte noch nicht migriert werden", key, error);
+    }
+  }
+
+  // Veraltete Pointer sind klein, aber nach der Migration nicht mehr nötig.
+  try {
+    const pointerKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(MAIN_SAVE_LEGACY_CONFLICT_PREFIX_V377) && key.endsWith(":latest")) pointerKeys.push(key);
+    }
+    pointerKeys.forEach((key) => localStorage.removeItem(key));
+  } catch {}
+}
+
+async function initializeMainLocalStoreV377() {
+  try { navigator.storage?.persist?.().catch?.(() => {}); } catch {}
+  const rawLegacySlots = (() => { try { return localStorage.getItem(SAVE_SLOTS_KEY); } catch { return null; } })();
+  const rawLegacySingle = (() => { try { return localStorage.getItem(STORAGE_KEY); } catch { return null; } })();
+  const existing = await mainSaveGetV377(MAIN_SAVE_CURRENT_KEY_V377).catch(() => null);
+
+  if (rawLegacySlots || rawLegacySingle) {
+    // saveSlots wurde synchron aus dem alten Format geladen. Diese Version ist beim
+    // ersten V377-Start die jüngste Quelle und wird zuerst sicher in IDB geschrieben.
+    await writeCurrentSlotsIndexedV377();
+  } else if (existing?.value?.slots) {
+    saveSlots = normalizeSlotArrayV377(existing.value.slots);
+    let nextActive = Number(localStorage.getItem(ACTIVE_SLOT_KEY));
+    if (!Number.isInteger(nextActive) || nextActive < 0 || nextActive > 3) nextActive = Number(existing.value.activeSlot || 0);
+    if (!Number.isInteger(nextActive) || nextActive < 0 || nextActive > 3) nextActive = 0;
+    activeSlot = nextActive;
+    selectedSlot = nextActive;
+    state = saveSlots[nextActive] || null;
+    try { localStorage.setItem(ACTIVE_SLOT_KEY, String(activeSlot)); } catch {}
+  } else {
+    await writeCurrentSlotsIndexedV377();
+  }
+
+  await migrateLegacyAccountSlotsV377();
+  window.__lifeBuilderLocalStoreHydrating = false;
+  mainLocalStoreReadyResolveV377?.(true);
+  try { renderSaveSlots?.(); } catch {}
+  try { if (state && !els?.dialog?.open) render?.(); } catch {}
+  window.dispatchEvent(new CustomEvent("lifebuilder-local-store-ready", { detail: { version: 377 } }));
+  return true;
+}
+
 function loadSlots() {
   try {
     const parsed = JSON.parse(localStorage.getItem(SAVE_SLOTS_KEY));
@@ -2207,6 +2459,39 @@ function loadSlots() {
   const legacy = migrateState(loadSave());
   return [legacy, null, null, null];
 }
+
+window.LifeBuilderLocalStore = Object.freeze({
+  version: 377,
+  ready: window.__lifeBuilderLocalStoreReady,
+  saveCurrent: () => queueMainSlotsIndexedSaveV377(),
+  async saveAccount(uid, slots = saveSlots, slot = activeSlot) {
+    uid = String(uid || "");
+    if (!uid) return false;
+    const record = { slots: normalizeSlotArrayV377(slots), activeSlot: Math.max(0, Math.min(3, Number(slot) || 0)), version: 377 };
+    await mainSavePutV377(`${MAIN_SAVE_ACCOUNT_PREFIX_V377}${uid}`, record);
+    mainSaveAccountCacheV377.set(uid, record);
+    return true;
+  },
+  async loadAccount(uid) {
+    uid = String(uid || "");
+    if (!uid) return null;
+    if (mainSaveAccountCacheV377.has(uid)) return mainSaveAccountCacheV377.get(uid);
+    const row = await mainSaveGetV377(`${MAIN_SAVE_ACCOUNT_PREFIX_V377}${uid}`);
+    const record = row?.value || null;
+    if (record) mainSaveAccountCacheV377.set(uid, record);
+    return record;
+  },
+  async deleteAccount(uid) {
+    uid = String(uid || "");
+    if (!uid) return false;
+    mainSaveAccountCacheV377.delete(uid);
+    return mainSaveDeleteV377(`${MAIN_SAVE_ACCOUNT_PREFIX_V377}${uid}`);
+  },
+  putRecord: (key, value) => mainSavePutV377(String(key), value),
+  getRecord: (key) => mainSaveGetV377(String(key)).then((row) => row?.value || null),
+  deleteRecord: (key) => mainSaveDeleteV377(String(key)),
+  status: () => ({ hydrating: window.__lifeBuilderLocalStoreHydrating === true, writeBusy: mainSaveWriteBusyV377, writePending: mainSaveWritePendingV377 })
+});
 
 function loadSettings() {
   try {
@@ -2663,7 +2948,7 @@ let localSaveIdleHandle = null;
 let localSaveQueued = false;
 
 function flushLocalSaveNow() {
-  if (!localSaveQueued && !state) return;
+  if (!localSaveQueued && !state) return mainSaveWritePromiseV377;
   localSaveQueued = false;
   if (localSaveTimer) clearTimeout(localSaveTimer);
   localSaveTimer = null;
@@ -2671,22 +2956,16 @@ function flushLocalSaveNow() {
     try { cancelIdleCallback(localSaveIdleHandle); } catch {}
   }
   localSaveIdleHandle = null;
-  try {
-    const slotsJson = JSON.stringify(saveSlots);
-    localStorage.setItem(SAVE_SLOTS_KEY, slotsJson);
-    localStorage.setItem(ACTIVE_SLOT_KEY, String(activeSlot));
-    // SAVE_SLOTS_KEY enthält den aktiven Spielstand bereits. Der alte Einzel-
-    // Spielstand wurde zuvor zusätzlich gespeichert und konnte den knappen
-    // iPhone-Webspeicher beinahe verdoppeln. Nach erfolgreicher Slot-Sicherung
-    // wird die Legacy-Kopie daher entfernt.
-    localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new CustomEvent("lifebuilder-local-save-flushed", { detail: { at: Date.now(), slot: selectedSlot, slotsJson } }));
-  } catch (error) {
-    console.error("JK.Games-Spielstand konnte lokal nicht gespeichert werden", error);
-  }
+  try { localStorage.setItem(ACTIVE_SLOT_KEY, String(activeSlot)); } catch {}
+  const writePromise = queueMainSlotsIndexedSaveV377();
+  writePromise.then((ok) => {
+    if (!ok) return;
+    window.dispatchEvent(new CustomEvent("lifebuilder-local-save-flushed", { detail: { at: Date.now(), slot: selectedSlot, storage: "indexeddb-v377" } }));
+  }).catch(() => {});
+  return writePromise;
 }
 
-function scheduleLocalSave(delay = 90) {
+function scheduleLocalSave(delay = 650) {
   localSaveQueued = true;
   if (localSaveTimer) clearTimeout(localSaveTimer);
   localSaveTimer = setTimeout(() => {
@@ -2695,7 +2974,7 @@ function scheduleLocalSave(delay = 90) {
       localSaveIdleHandle = requestIdleCallback(() => {
         localSaveIdleHandle = null;
         flushLocalSaveNow();
-      }, { timeout: 650 });
+      }, { timeout: 1400 });
     } else {
       flushLocalSaveNow();
     }
@@ -31340,11 +31619,12 @@ document.getElementById("resetBtn").addEventListener("click", () => {
     return;
   }
   try {
-    localStorage.setItem(`lifebuilder-deleted-slot-backup:${selectedSlot}:${Date.now()}`, JSON.stringify(saveSlots[selectedSlot] || null));
+    const deletedSnapshot = saveSlots[selectedSlot] || null;
+    if (deletedSnapshot) window.LifeBuilderLocalStore?.putRecord?.(`${MAIN_SAVE_DELETED_PREFIX_V377}${selectedSlot}:${Date.now()}`, deletedSnapshot)?.catch?.(() => {});
   } catch { /* local backup is best effort */ }
   saveSlots[selectedSlot] = null;
-  localStorage.setItem(SAVE_SLOTS_KEY, JSON.stringify(saveSlots));
-  localStorage.removeItem(STORAGE_KEY);
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SAVE_SLOTS_KEY); } catch {}
+  window.LifeBuilderSaveControl?.schedule?.(0);
   state = null;
   window.LifeBuilderOnline?.deleteSlot?.(selectedSlot)?.catch?.(() => {});
   render();

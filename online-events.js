@@ -1,10 +1,12 @@
 (() => {
-  const ONLINE_VERSION = "2026-08-07-v241-firestore-stream-stability";
+  const ONLINE_VERSION = "2026-08-10-v377-indexeddb-firestore-throttle";
   const FIRESTORE_DATABASE_ID = "gamekl";
   const DATABASE_VERIFY_TIMEOUT_MS = 12000;
   const DATABASE_RETRY_MS = 15000;
   const CLOUD_UPLOAD_TIMEOUT_MS = 12000;
-  const CLOUD_SAVE_MIN_INTERVAL_MS = 20000;
+  const CLOUD_SAVE_MIN_INTERVAL_MS = 60000;
+  const PLAYER_SYNC_MIN_INTERVAL_MS = 60000;
+  const RESOURCE_EXHAUSTED_BACKOFF_MS = 300000;
   const CLOUD_CONFLICT_BACKUP_PREFIX = "lifebuilder-2026-cloud-conflict:";
   const CLOUD_DEVICE_ID_KEY = "lifebuilder-2026-device-id";
   const AUDIT_STORAGE_PREFIX = "lifebuilder-2026-online-audit:";
@@ -43,6 +45,8 @@
   let cloudSaveInFlight = false;
   let cloudSaveDirty = false;
   let cloudSaveLastAt = 0;
+  let onlineWriteBackoffUntil = 0;
+  let onlineWriteBackoffNoticeAt = 0;
   let cloudHydrationPromise = null;
   let cloudHydrationGeneration = 0;
   let cloudHydrationUid = "";
@@ -92,6 +96,33 @@
     return hostedOnlineMode;
   }
 
+  async function waitForLocalStoreV377() {
+    try { await window.__lifeBuilderLocalStoreReady; } catch {}
+    return window.LifeBuilderLocalStore || null;
+  }
+
+  function isResourceExhaustedV377(error) {
+    if (window.LifeBuilderFirebaseCore?.isResourceExhaustedError?.(error)) return true;
+    const text = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+    return text.includes("resource-exhausted") || text.includes("queued writes") || text.includes("write stream exhausted");
+  }
+
+  function activateOnlineWriteBackoffV377(error, reason = "online-events") {
+    const until = Date.now() + RESOURCE_EXHAUSTED_BACKOFF_MS;
+    onlineWriteBackoffUntil = Math.max(onlineWriteBackoffUntil, until);
+    window.LifeBuilderFirebaseCore?.setWriteBackoff?.(90000, reason);
+    const now = Date.now();
+    if (now - onlineWriteBackoffNoticeAt > 60000) {
+      onlineWriteBackoffNoticeAt = now;
+      console.warn("JK.Games Online-Sync pausiert nach Firestore-Überlastung, damit die Schreibwarteschlange vollständig abgebaut werden kann.");
+    }
+    return onlineWriteBackoffUntil;
+  }
+
+  function onlineWriteWaitV377() {
+    return Math.max(0, Number(onlineWriteBackoffUntil || 0) - Date.now());
+  }
+
 
   function accountSlotsKey(uid) {
     return `${ACCOUNT_SLOTS_PREFIX}${String(uid || "")}`;
@@ -101,50 +132,60 @@
     return `${ACCOUNT_ACTIVE_PREFIX}${String(uid || "")}`;
   }
 
-  function backupCurrentSlotsForUid(uid) {
-    if (!uid) return;
+  async function backupCurrentSlotsForUid(uid) {
+    uid = String(uid || "");
+    if (!uid) return false;
     try {
-      window.LifeBuilderSaveControl?.flush?.();
-      // flushLocalSaveNow hat SAVE_SLOTS_KEY bereits erzeugt. Wir kopieren den
-      // Text nur noch in den Account-Speicher, statt den großen Zustand ein
-      // zweites Mal auf dem Hauptthread zu serialisieren.
-      const slotsJson = localStorage.getItem(SAVE_SLOTS_KEY);
-      if (slotsJson) localStorage.setItem(accountSlotsKey(uid), slotsJson);
+      const store = await waitForLocalStoreV377();
+      await window.LifeBuilderSaveControl?.flush?.();
+      if (store?.saveAccount) await store.saveAccount(uid, saveSlots, activeSlot);
+      // Nur die winzige aktive Slotnummer bleibt im localStorage.
       localStorage.setItem(accountActiveKey(uid), String(activeSlot));
+      return true;
     } catch (error) {
-      console.warn("Account-Spielstand konnte lokal nicht gesichert werden", error);
+      console.warn("Account-Spielstand konnte lokal nicht in IndexedDB gesichert werden", error);
+      return false;
     }
   }
 
-  function readAccountSlots(uid) {
+  async function readAccountSlots(uid) {
+    uid = String(uid || "");
     if (!uid) return null;
     try {
+      const store = await waitForLocalStoreV377();
+      if (store?.loadAccount) {
+        const record = await store.loadAccount(uid);
+        if (record?.slots) return record;
+      }
+      // Einmaliger Fallback nur zum Lesen eines noch nicht migrierten Altstands.
       const parsed = JSON.parse(localStorage.getItem(accountSlotsKey(uid)) || "null");
       if (!Array.isArray(parsed)) return null;
-      return Array.from({ length: 4 }, (_, index) => migrateState(parsed[index] || null));
+      return {
+        slots: Array.from({ length: 4 }, (_, index) => migrateState(parsed[index] || null)),
+        activeSlot: Number(localStorage.getItem(accountActiveKey(uid)) || 0)
+      };
     } catch {
       return null;
     }
   }
 
-  function switchLocalAccount(user) {
+  async function switchLocalAccount(user) {
     const uid = String(user?.uid || "");
     if (!uid) return;
+    await waitForLocalStoreV377();
     const previousUid = String(localStorage.getItem(ACCOUNT_UID_KEY) || "");
 
     if (!previousUid) {
-      // Ein bisher generischer Browser-Spielstand wird nicht blind als Cloud-Stand
-      // dieses Accounts markiert. Existiert bereits ein anderer Besitzer im Slot,
-      // wird er isoliert, statt den angemeldeten Account zu überschreiben.
       const foreignOwner = (saveSlots || []).map((slot) => String(slot?.onlineAccountUid || "")).find((owner) => owner && owner !== uid);
       if (foreignOwner) {
         try {
-          localStorage.setItem(`${ACCOUNT_SLOTS_PREFIX}orphan:${Date.now()}`, JSON.stringify(saveSlots));
+          await window.LifeBuilderLocalStore?.putRecord?.(`account-orphan:${Date.now()}`, { slots: saveSlots, activeSlot, owner: foreignOwner, migratedAt: Date.now() });
         } catch {}
         saveSlots = [null, null, null, null];
         activeSlot = 0;
         selectedSlot = 0;
         state = null;
+        window.LifeBuilderSaveControl?.schedule?.(0);
       }
       localStorage.setItem(ACCOUNT_UID_KEY, uid);
       cloudSlotRevisions = [0, 0, 0, 0];
@@ -154,14 +195,15 @@
     }
     if (previousUid === uid) return;
 
-    backupCurrentSlotsForUid(previousUid);
+    await backupCurrentSlotsForUid(previousUid);
     clearTimeout(cloudSaveTimer);
     cloudSaveTimer = null;
     clearTimeout(playerSyncTimer);
     playerSyncTimer = null;
-    const accountSlots = readAccountSlots(uid);
-    saveSlots = accountSlots || [null, null, null, null];
-    let nextActive = Number(localStorage.getItem(accountActiveKey(uid)) || 0);
+    const accountRecord = await readAccountSlots(uid);
+    saveSlots = accountRecord?.slots || [null, null, null, null];
+    let nextActive = Number(accountRecord?.activeSlot);
+    if (!Number.isInteger(nextActive) || nextActive < 0 || nextActive > 3) nextActive = Number(localStorage.getItem(accountActiveKey(uid)) || 0);
     if (!Number.isInteger(nextActive) || nextActive < 0 || nextActive > 3) nextActive = 0;
     activeSlot = nextActive;
     selectedSlot = nextActive;
@@ -176,6 +218,7 @@
     try {
       localStorage.setItem(ACTIVE_SLOT_KEY, String(activeSlot));
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SAVE_SLOTS_KEY);
       window.LifeBuilderSaveControl?.schedule?.(0);
     } catch (error) {
       console.warn("Account-Spielstand konnte nicht aktiviert werden", error);
@@ -682,7 +725,7 @@
     });
     overlay.querySelector("[data-online-auth-logout]").addEventListener("click", async () => {
       const fb = await loadOnlineFirebase();
-      await setPlayerOffline().catch(() => {});
+      setPlayerOffline().catch(() => {});
       await fb.signOut(fb.auth);
       updateAuthOverlayState();
     });
@@ -972,15 +1015,13 @@
 
   function backupConflictSlot(uid, slotIndex, localState, reason = "cloud-newer") {
     if (!uid || !localState) return "";
-    const key = cloudConflictBackupKey(uid, slotIndex);
-    try {
-      localStorage.setItem(key, JSON.stringify({ reason, slotIndex, savedAtMs: Date.now(), state: localState }));
-      localStorage.setItem(`${CLOUD_CONFLICT_BACKUP_PREFIX}${uid}:latest`, key);
-      return key;
-    } catch (error) {
-      console.warn("Lokale Konflikt-Sicherung konnte nicht gespeichert werden", error);
-      return "";
-    }
+    const key = `cloud-conflict:${uid}:${slotIndex}:${Date.now()}`;
+    const record = { reason, slotIndex, savedAtMs: Date.now(), state: localState };
+    // Sicherheitskopie bleibt erhalten, belegt aber nicht mehr localStorage.
+    window.LifeBuilderLocalStore?.putRecord?.(key, record)?.catch?.((error) => {
+      console.warn("Lokale Konflikt-Sicherung konnte nicht in IndexedDB gespeichert werden", error);
+    });
+    return key;
   }
 
   function queueCloudConflict(slotIndex, localState, remoteState, remoteRevision, reason = "cloud-newer") {
@@ -1129,6 +1170,12 @@
   async function runCloudSave() {
     if (cloudSaveInFlight || !cloudSaveDirty) return;
     if (!onlineUser || databaseReadyUid !== onlineUser.uid || cloudSaveReadyUid !== onlineUser.uid || window.__lifeBuilderCloudReady !== true || window.__lifeBuilderCloudHydrating || window.__lifeBuilderRemoteApplying || !state) return;
+    const backoffWait = onlineWriteWaitV377();
+    if (backoffWait > 0) {
+      clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = setTimeout(() => { cloudSaveTimer = null; runCloudSave().catch(() => {}); }, backoffWait + 250);
+      return;
+    }
     const slotIndex = selectedSlot;
     if (!cloudSlotLoaded[slotIndex]) return;
     cloudSaveInFlight = true;
@@ -1142,40 +1189,37 @@
         await resolveCloudRevisionConflict(slotIndex, localState).catch((conflictError) => console.warn("Cloud-Konflikt konnte nicht aufgelöst werden", conflictError));
       } else {
         cloudSaveDirty = true;
-        console.warn("Cloud-Spielstand konnte nicht gespeichert werden", error);
-        const message = String(error?.message || "");
-        if (!/database.*does not exist/i.test(message)) {
-          clearTimeout(cloudSaveTimer);
-          cloudSaveTimer = setTimeout(() => {
-            cloudSaveTimer = null;
-            runCloudSave().catch(() => {});
-          }, 15000);
+        if (isResourceExhaustedV377(error)) {
+          activateOnlineWriteBackoffV377(error, "main-cloud-save");
+        } else {
+          console.warn("Cloud-Spielstand konnte nicht gespeichert werden", error);
         }
       }
     } finally {
       cloudSaveInFlight = false;
       if (cloudSaveDirty && !cloudSaveTimer) {
+        const wait = Math.max(CLOUD_SAVE_MIN_INTERVAL_MS, onlineWriteWaitV377());
         cloudSaveTimer = setTimeout(() => {
           cloudSaveTimer = null;
           runCloudSave().catch(() => {});
-        }, 5000);
+        }, wait + 250);
       }
     }
   }
 
-  function scheduleCloudSave(delay = 3500) {
-    // Entscheidender Schutz: Vor dem vollständigen Cloud-Laden darf ein lokaler,
-    // eventuell älterer Browser-Stand niemals den Online-Stand überschreiben.
+  function scheduleCloudSave(delay = 15000) {
+    // Vor vollständigem Cloud-Laden darf ein lokaler, eventuell älterer Stand
+    // niemals den Online-Stand überschreiben.
     if (!onlineUser || databaseReadyUid !== onlineUser.uid || cloudSaveReadyUid !== onlineUser.uid || window.__lifeBuilderCloudReady !== true || window.__lifeBuilderCloudHydrating || window.__lifeBuilderRemoteApplying || !state) return;
     if (!cloudSlotLoaded[selectedSlot]) return;
     cloudSaveDirty = true;
     if (cloudSaveTimer) return;
     const sinceLast = Date.now() - cloudSaveLastAt;
-    const wait = Math.max(Number(delay) || 0, sinceLast < CLOUD_SAVE_MIN_INTERVAL_MS ? CLOUD_SAVE_MIN_INTERVAL_MS - sinceLast : 0);
+    const wait = Math.max(Number(delay) || 0, sinceLast < CLOUD_SAVE_MIN_INTERVAL_MS ? CLOUD_SAVE_MIN_INTERVAL_MS - sinceLast : 0, onlineWriteWaitV377());
     cloudSaveTimer = setTimeout(() => {
       cloudSaveTimer = null;
       runCloudSave().catch(() => {});
-    }, wait);
+    }, wait + 50);
   }
 
   function mergeMissingPets(remoteState, localState) {
@@ -1327,6 +1371,8 @@
       localStorage.removeItem(`${ACCOUNT_ACTIVE_PREFIX}${user.uid}`);
       localStorage.setItem(LOCAL_RESET_GENERATION_KEY_V180, String(targetGeneration));
     } catch {}
+    await window.LifeBuilderLocalStore?.deleteAccount?.(user.uid)?.catch?.(() => {});
+    window.LifeBuilderSaveControl?.schedule?.(0);
     if (typeof renderSaveSlots === "function") renderSaveSlots();
     if (typeof setSetupView === "function") setSetupView("slots");
     window.dispatchEvent(new CustomEvent("lifebuilder-account-reset-v180-applied", { detail: { uid: user.uid, generation: targetGeneration } }));
@@ -1336,7 +1382,8 @@
 
   async function hydrateCloudSlots(user = onlineUser) {
     if (!user) return;
-    switchLocalAccount(user);
+    await waitForLocalStoreV377();
+    await switchLocalAccount(user);
     if (cloudSaveReadyUid === user.uid && window.__lifeBuilderCloudReady === true) return;
     if (cloudHydrationPromise && cloudHydrationUid === user.uid) return cloudHydrationPromise;
     if (cloudHydrationPromise && cloudHydrationUid !== user.uid) {
@@ -1585,6 +1632,16 @@
 
   async function syncPlayerOnline(force = false) {
     if (!onlineUser || !state) return;
+    if (!force && Date.now() - playerSyncLastAt < PLAYER_SYNC_MIN_INTERVAL_MS) {
+      schedulePlayerSync(PLAYER_SYNC_MIN_INTERVAL_MS - (Date.now() - playerSyncLastAt));
+      return;
+    }
+    const backoffWait = onlineWriteWaitV377();
+    if (backoffWait > 0) {
+      playerSyncDirty = true;
+      schedulePlayerSync(backoffWait);
+      return;
+    }
     if (playerSyncInFlight) {
       playerSyncDirty = true;
       return;
@@ -1594,40 +1651,45 @@
     try {
       const fb = await loadOnlineFirebase();
       const audit = evaluateAudit(onlineUser.uid);
-      // V273: Öffentliche und private Profilsynchronisierung getrennt schreiben.
-      // Ein historisches/inkompatibles Presence-Feld in playerProfiles darf dadurch
-      // nicht mehr gleichzeitig die private Spielersynchronisierung blockieren.
-      const publicRef = fb.doc(fb.db, "playerProfiles", onlineUser.uid);
-      const privateRef = fb.doc(fb.db, "playerPrivate", onlineUser.uid);
-      const results = await Promise.allSettled([
-        fb.setDoc(publicRef, publicProfilePayload(audit, true), { merge: true }),
-        fb.setDoc(privateRef, privateProfilePayload(audit), { merge: true })
-      ]);
-      const rejected = results.filter((entry) => entry.status === "rejected");
-      if (rejected.length) {
+      const writes = [
+        [fb.doc(fb.db, "playerProfiles", onlineUser.uid), publicProfilePayload(audit, true)],
+        [fb.doc(fb.db, "playerPrivate", onlineUser.uid), privateProfilePayload(audit)]
+      ];
+      const rejected = [];
+      // Absichtlich seriell: auch ohne den globalen Runtime-Gate werden hier nie
+      // zwei Profil-Writes gleichzeitig in den Firestore-Stream gestellt.
+      for (const [ref, payload] of writes) {
+        try { await fb.setDoc(ref, payload, { merge: true }); }
+        catch (error) { rejected.push({ reason: error }); if (isResourceExhaustedV377(error)) break; }
+      }
+      if (rejected.some((entry) => isResourceExhaustedV377(entry.reason))) {
+        playerSyncDirty = true;
+        activateOnlineWriteBackoffV377(rejected.find((entry) => isResourceExhaustedV377(entry.reason))?.reason, "player-profile-sync");
+      } else if (rejected.length) {
         const permissionOnly = rejected.every((entry) => String(entry.reason?.code || "").includes("permission-denied") || /missing or insufficient permissions/i.test(String(entry.reason?.message || entry.reason || "")));
         if (!permissionOnly) console.warn("Player sync Teilfehler", rejected.map((entry) => entry.reason));
       }
-      // Auch wenn nur einer der beiden optionalen Profilschreibvorgänge abgelehnt wird,
-      // nicht im 15-Sekunden-Takt eine Konsolen-Fehlerschleife erzeugen.
       playerSyncLastAt = Date.now();
       if (force) updateOnlineStatusBadge();
     } finally {
       playerSyncInFlight = false;
-      if (playerSyncDirty) schedulePlayerSync(1800);
+      if (playerSyncDirty) schedulePlayerSync(Math.max(PLAYER_SYNC_MIN_INTERVAL_MS, onlineWriteWaitV377()));
     }
   }
 
-  function schedulePlayerSync(delay = 1800) {
+  function schedulePlayerSync(delay = 10000) {
     if (!onlineUser || !state || window.__lifeBuilderRemoteApplying) return;
     playerSyncDirty = true;
     if (playerSyncTimer) return;
     const sinceLast = Date.now() - playerSyncLastAt;
-    const wait = Math.max(Number(delay) || 0, sinceLast < 15000 ? 15000 - sinceLast : 0);
+    const wait = Math.max(Number(delay) || 0, sinceLast < PLAYER_SYNC_MIN_INTERVAL_MS ? PLAYER_SYNC_MIN_INTERVAL_MS - sinceLast : 0, onlineWriteWaitV377());
     playerSyncTimer = setTimeout(() => {
       playerSyncTimer = null;
-      syncPlayerOnline().catch((error) => console.warn("Player sync", error));
-    }, wait);
+      syncPlayerOnline().catch((error) => {
+        if (isResourceExhaustedV377(error)) activateOnlineWriteBackoffV377(error, "player-sync-timer");
+        else console.warn("Player sync", error);
+      });
+    }, wait + 50);
   }
 
   async function setPlayerOffline() {
@@ -1710,7 +1772,7 @@
         remoteState.onlineAccountUid = onlineUser.uid;
         remoteState.onlineLastAdminCommandAt = Date.now();
         saveSlots[slotIndex] = remoteState;
-        localStorage.setItem(SAVE_SLOTS_KEY, JSON.stringify(saveSlots));
+        window.LifeBuilderSaveControl?.schedule?.(0);
         const currentSlot = Math.max(0, Number(typeof selectedSlot !== "undefined" ? selectedSlot : activeSlot || 0));
         if (currentSlot === slotIndex) {
           state = remoteState;
@@ -2055,7 +2117,7 @@
   async function initializeAuthState() {
     try {
       const fb = await loadOnlineFirebase();
-      fb.onAuthStateChanged(fb.auth, (user) => {
+      fb.onAuthStateChanged(fb.auth, async (user) => {
         cloudHydrationGeneration += 1;
         if (!user) {
           // Der generische lokale Slot bleibt beim normalen Abmelden erhalten.
@@ -2082,7 +2144,12 @@
           return;
         }
         onlineUser = user;
-        switchLocalAccount(user);
+        try {
+          await waitForLocalStoreV377();
+          await switchLocalAccount(user);
+        } catch (error) {
+          console.warn("Lokaler Account-Wechsel konnte nicht vollständig vorbereitet werden", error);
+        }
         updateOnlineStatusBadge();
         updateAuthOverlayState();
         resolvePendingAuth(user);
@@ -2230,11 +2297,12 @@
   if (hostedOnlineMode && els.openSlotsBtn) els.openSlotsBtn.textContent = "Anmelden & Spiel starten";
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
-      schedulePlayerSync(100);
+      schedulePlayerSync(1000);
       scheduleDatabaseRetry(onlineUser, 250);
     } else {
-      if (cloudSaveDirty) runCloudSave().catch(() => {});
-      setPlayerOffline().catch(() => {});
+      // Tab-Wechsel darf keine zusätzlichen Firestore-Writes erzwingen. Der lokale
+      // IndexedDB-Stand wird sofort gesichert; Cloud-Sync läuft regulär gedrosselt weiter.
+      window.LifeBuilderSaveControl?.flush?.();
     }
   });
   window.addEventListener("online", () => {
@@ -2245,8 +2313,9 @@
     if (onlineUser && (cloudSaveReadyUid !== onlineUser.uid || window.__lifeBuilderCloudReady !== true)) scheduleCloudHydrationRetry(onlineUser, 180);
   });
   window.addEventListener("pagehide", () => {
-    if (cloudSaveDirty) runCloudSave().catch(() => {});
-    setPlayerOffline().catch(() => {});
+    // Beim Verlassen nur den lokalen IndexedDB-Save anstoßen. Firestore-Writes beim
+    // pagehide werden von Browsern oft gleichzeitig abgebrochen und neu gequeued.
+    window.LifeBuilderSaveControl?.flush?.();
   });
 
   window.LifeBuilderOnline = {
@@ -2275,7 +2344,10 @@
       accountUidKey: String(localStorage.getItem(ACCOUNT_UID_KEY) || ""),
       onlineEmail: onlineUser?.email || "",
       hydrationUid: cloudHydrationUid,
-      hydrationGeneration: cloudHydrationGeneration
+      hydrationGeneration: cloudHydrationGeneration,
+      writeBackoffUntil: onlineWriteBackoffUntil,
+      cloudMinIntervalMs: CLOUD_SAVE_MIN_INTERVAL_MS,
+      playerSyncMinIntervalMs: PLAYER_SYNC_MIN_INTERVAL_MS
     }),
     getCurrentEvent: () => currentEvent,
     onlineWindowMs: ONLINE_WINDOW_MS

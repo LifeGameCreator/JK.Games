@@ -25,6 +25,17 @@
   let firestoreRecoveryPromise = null;
   let lastFirestoreRecoveryAt = 0;
 
+  // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
+  // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
+  // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
+  const FIRESTORE_WRITE_GAP_MS = 240;
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 90000;
+  let firestoreWriteChain = Promise.resolve();
+  let firestoreWriteLastAt = 0;
+  let firestoreWriteBackoffUntil = 0;
+  let firestoreWriteQueueDepth = 0;
+  let firestoreWriteBackoffNoticeAt = 0;
+
   function emit(next, error = "") {
     status = next;
     lastError = String(error || "");
@@ -50,6 +61,58 @@
       || text.includes("unavailable")
       || text.includes("database-timeout")
       || isTargetCollisionError(error);
+  }
+
+  function isResourceExhaustedError(error) {
+    const text = errorText(error);
+    return text.includes("resource-exhausted")
+      || text.includes("maximum allowed queued writes")
+      || text.includes("write stream exhausted")
+      || text.includes("queued writes");
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  }
+
+  async function waitForFirestoreWriteWindow() {
+    const now = Date.now();
+    if (firestoreWriteBackoffUntil > now) await sleep(firestoreWriteBackoffUntil - now);
+    const gap = FIRESTORE_WRITE_GAP_MS - (Date.now() - firestoreWriteLastAt);
+    if (gap > 0) await sleep(gap);
+  }
+
+  function setFirestoreWriteBackoff(ms = FIRESTORE_RESOURCE_BACKOFF_MS, reason = "resource-exhausted") {
+    const until = Date.now() + Math.max(1000, Number(ms) || FIRESTORE_RESOURCE_BACKOFF_MS);
+    firestoreWriteBackoffUntil = Math.max(firestoreWriteBackoffUntil, until);
+    const now = Date.now();
+    if (now - firestoreWriteBackoffNoticeAt > 30000) {
+      firestoreWriteBackoffNoticeAt = now;
+      console.warn(`JK.Games Firestore-Schreibpause aktiv (${Math.ceil((firestoreWriteBackoffUntil - now) / 1000)}s) · ${reason}`);
+    }
+    window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-backoff", { detail: { until: firestoreWriteBackoffUntil, reason } }));
+    return firestoreWriteBackoffUntil;
+  }
+
+  function queueFirestoreWrite(label, operation) {
+    firestoreWriteQueueDepth += 1;
+    const execute = async () => {
+      try {
+        await waitForFirestoreWriteWindow();
+        const result = await operation();
+        firestoreWriteLastAt = Date.now();
+        return result;
+      } catch (error) {
+        firestoreWriteLastAt = Date.now();
+        if (isResourceExhaustedError(error)) setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, label || "resource-exhausted");
+        throw error;
+      } finally {
+        firestoreWriteQueueDepth = Math.max(0, firestoreWriteQueueDepth - 1);
+      }
+    };
+    const result = firestoreWriteChain.then(execute, execute);
+    firestoreWriteChain = result.catch(() => {});
+    return result;
   }
 
   function withTimeout(promise, timeoutMs = 15000, label = "Firebase") {
@@ -94,6 +157,29 @@
       db = dbMod.getFirestore(app, DATABASE_ID);
     }
 
+    const gatedSetDoc = (...args) => queueFirestoreWrite("setDoc", () => dbMod.setDoc(...args));
+    const gatedUpdateDoc = (...args) => queueFirestoreWrite("updateDoc", () => dbMod.updateDoc(...args));
+    const gatedDeleteDoc = (...args) => queueFirestoreWrite("deleteDoc", () => dbMod.deleteDoc(...args));
+    const gatedAddDoc = (...args) => queueFirestoreWrite("addDoc", () => dbMod.addDoc(...args));
+    const gatedRunTransaction = (...args) => queueFirestoreWrite("runTransaction", () => dbMod.runTransaction(...args));
+    const gatedWriteBatch = (...args) => {
+      const batch = dbMod.writeBatch(...args);
+      const rawCommit = batch.commit.bind(batch);
+      let proxy = null;
+      proxy = new Proxy(batch, {
+        get(target, prop, receiver) {
+          if (prop === "commit") return () => queueFirestoreWrite("writeBatch", rawCommit);
+          const value = Reflect.get(target, prop, receiver);
+          if (typeof value !== "function") return value;
+          return (...callArgs) => {
+            const result = value.apply(target, callArgs);
+            return result === target ? proxy : result;
+          };
+        }
+      });
+      return proxy;
+    };
+
     runtime = {
       ...authMod,
       ...dbMod,
@@ -102,6 +188,12 @@
       app,
       auth,
       db,
+      setDoc: gatedSetDoc,
+      updateDoc: gatedUpdateDoc,
+      deleteDoc: gatedDeleteDoc,
+      addDoc: gatedAddDoc,
+      runTransaction: gatedRunTransaction,
+      writeBatch: gatedWriteBatch,
       storage: storageMod.getStorage(app),
       functions: functionsMod.getFunctions(app, FUNCTIONS_REGION),
       databaseId: DATABASE_ID,
@@ -248,7 +340,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-08-v245-firestore-sdk12171-transport-recovery",
+    version: "2026-08-10-v377-firestore-global-write-gate",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -259,6 +351,10 @@
     scheduleFirestoreRecovery,
     isRecoverableFirestoreError,
     isTargetCollisionError,
+    isResourceExhaustedError,
+    runWrite: queueFirestoreWrite,
+    setWriteBackoff: setFirestoreWriteBackoff,
+    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
     isFatalFirestoreAssertion,
     scheduleHardFirestoreRecovery,
     withTimeout,

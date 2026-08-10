@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V376 */
+/* BigCards.kl – JK.Games Top Game V377 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-bigcards-v376-vip-program-repair-balance";
+  const VERSION = "2026-08-10-bigcards-v377-firestore-backpressure";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 374;
@@ -19,10 +19,10 @@
   const LOCAL_DB_STORE = "saves";
   const LOCAL_SAVE_DELAY_MS = 900;
   const CLOUD_MAX_CHUNKS = 160;
-  const CLOUD_SAVE_DELAY_MS = 30000;
+  const CLOUD_SAVE_DELAY_MS = 60000;
   const CLOUD_PASSIVE_SAVE_DELAY_MS = 300000;
-  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 600000;
-  const CLOUD_RESOURCE_BACKOFF_MS = 300000;
+  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 900000;
+  const CLOUD_RESOURCE_BACKOFF_MS = 600000;
   const CLOUD_POLL_MS = 15000;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
@@ -32,7 +32,7 @@
   const ONLINE_POLL_MS = 1100;
   const ONLINE_QUEUE_STALE_MS = 30000;
   const ONLINE_DISCONNECT_MS = 45000;
-  const ONLINE_HEARTBEAT_MS = 6000;
+  const ONLINE_HEARTBEAT_MS = 15000;
   const MARKET_FEE = 0.05;
   const MAX_OFFLINE_MS = 4 * 60 * 60 * 1000;
   const OFFLINE_RATE = 0.35;
@@ -1710,8 +1710,9 @@
       console.warn(`BigCards full cloud save (${cloudStage})`,e);cloudDirty=true;
       if(e?.code==="resource-exhausted"||/resource-exhausted|queued writes|maximum allowed queued writes/i.test(String(e?.message||e))){
         cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+CLOUD_RESOURCE_BACKOFF_MS);
+        window.LifeBuilderFirebaseCore?.setWriteBackoff?.(90000,"bigcards-resource-exhausted");
         if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
-        console.warn("BigCards Cloud-Schreibpause für 5 Minuten aktiviert. Keine weiteren BigCards-Writes werden in die Firestore-Queue gelegt.");
+        console.warn("BigCards Cloud-Schreibpause für 10 Minuten aktiviert. Keine weiteren BigCards-Writes werden in die Firestore-Queue gelegt.");
       }
       return false;
     }finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave(cloudFastDirty?CLOUD_SAVE_DELAY_MS:CLOUD_PASSIVE_SAVE_DELAY_MS);}
