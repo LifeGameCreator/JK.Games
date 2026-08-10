@@ -1,11 +1,11 @@
-/* BigCards.kl – JK.Games Top Game V359 */
+/* BigCards.kl – JK.Games Top Game V360 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-bigcards-v359-online-battle-ranked";
+  const VERSION = "2026-08-10-bigcards-v360-online-recovery-permission-fix";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
-  const CLOUD_SCHEMA_VERSION = 359;
+  const CLOUD_SCHEMA_VERSION = 360;
   const CLOUD_MIN_SCHEMA_VERSION = 354;
   const CLOUD_CHUNK_CHARS = 180000;
   const CLOUD_CHUNK_MAX_BYTES = 180000;
@@ -1001,7 +1001,7 @@
     toast(won?`Sieg! +${fmt(rewardPoints)} Points · +${rewardShards} Shards${firstWin?" · Basic Kampf Aura erhalten!":""}${backupToast}${rankToast}`:session.backupUsed?"Niederlage – auch deine Backup-Karte ist gefallen und muss repariert werden.":"Niederlage – deine Kampfkarte ist zerbrochen und muss in der Sammlung repariert werden.",5200);
   }
 
-  // ===== V359 ONLINE-KARTENKAMPF =====
+  // ===== V360 ONLINE-KARTENKAMPF =====
   // Matchmaking und rundenbasierter PvP-Kampf laufen über Firestore. Ranked-Duelle
   // verwenden ausschließlich die persönliche Karte und matchen maximal ±2 Karten-Ranks.
   function onlineRankWindow(rank){const r=clamp(Math.floor(Number(rank)||1),1,FEATURED_RANK_MAX);return {min:Math.max(1,r-2),max:Math.min(FEATURED_RANK_MAX,r+2)};}
@@ -1046,10 +1046,17 @@
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return toast("Für Online-Kämpfe musst du mit Firebase angemeldet sein.");
     UI.onlineMode=mode;UI.onlineStatus="searching";UI.onlineMatchId=null;UI.onlineMatch=null;UI.onlineResult=null;UI.onlineBusy=false;const stamp=now(),snap=onlineCardSnapshot(card,true),backup=onlineBackupSnapshot(card),range=mode==="ranked"?onlineRankWindow(snap.rank):{min:0,max:10};
     const entry={uid:u.uid,displayName:await displayName(),mode,status:"waiting",rank:snap.rank,minRank:range.min,maxRank:range.max,card:snap,backup:backup||null,deviceId:deviceId(),createdAtMs:stamp,updatedAtMs:stamp};
-    try{await fb.setDoc(fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid),entry);UI.onlineQueueHeartbeat=stamp;showOnlineSearchModal();startOnlineBattlePolling();await pollOnlineBattle();}catch(e){console.warn("BigCards online queue",e);resetOnlineUi();toast("Online-Suche konnte nicht gestartet werden. Prüfe die V359-Firebase-Regeln.",4200);}
+    try{await fb.setDoc(fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid),entry);UI.onlineQueueHeartbeat=stamp;showOnlineSearchModal();startOnlineBattlePolling();await pollOnlineBattle();}catch(e){console.warn("BigCards online queue",e);resetOnlineUi();toast("Online-Suche konnte nicht gestartet werden. Prüfe die V360-Firebase-Regeln.",4200);}
+  }
+  async function removeOwnOnlineQueue(fb,u,reason="cleanup"){
+    if(!fb||!u?.uid)return false;
+    try{await fb.deleteDoc(fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid));return true;}catch(e){
+      if(e?.code!=="not-found")console.warn(`BigCards online queue ${reason}`,e);
+      return false;
+    }
   }
   async function cancelOnlineMatchmaking(silent=false){
-    if(UI.onlineStatus!=="searching"){if(!silent)closeModal();return;}const fb=await firebase(),u=await currentUser();try{if(fb&&u)await fb.updateDoc(fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid),{status:"cancelled",updatedAtMs:now()});}catch{}resetOnlineUi();closeModal();if(!silent){refresh(false);toast("Online-Suche abgebrochen.");}
+    if(UI.onlineStatus!=="searching"){if(!silent)closeModal();return;}const fb=await firebase(),u=await currentUser();if(fb&&u)await removeOwnOnlineQueue(fb,u,"cancel");resetOnlineUi();closeModal();if(!silent){refresh(false);toast("Online-Suche abgebrochen.");}
   }
   function onlineInitialBattleRow(roster,stamp){return {activeRole:"primary",hp:Math.max(1,Number(roster.card.hp)||1),maxHp:Math.max(1,Number(roster.card.hp)||1),primaryHp:Math.max(1,Number(roster.card.hp)||1),primaryMaxHp:Math.max(1,Number(roster.card.hp)||1),backupUsed:false,primaryFallen:false,backupFallen:false,specialUsed:0,mustNormal:false,lastSeenMs:stamp};}
   function onlineCreateMatchData(a,b,matchId){
@@ -1114,7 +1121,33 @@
     S.onlineProcessedMatches[id]={at:now(),won,mode:match.mode};const keys=Object.keys(S.onlineProcessedMatches);if(keys.length>80){keys.sort((a,b)=>(S.onlineProcessedMatches[a]?.at||0)-(S.onlineProcessedMatches[b]?.at||0)).slice(0,keys.length-80).forEach(k=>delete S.onlineProcessedMatches[k]);}UI.onlineResult={won,mode:match.mode,reason:match.endReason,rewardPoints,rewardShards,mastery,elite,opponent:opR?.name||"Spieler",brokenNames};persist();if(cloudReady)scheduleCloudSave(1000);if(UI.tab==="battle")refresh(true);toast(won?`🌐 Online-Sieg! +${fmt(rewardPoints)} Points${ranked&&mastery?` · +${mastery} Meisterschaft${elite?" · +1 Elite-Sieg":""}`:""}${brokenNames.length?` · 💥 ${brokenNames.join(", ")} zerbrochen`:""}`:`🌐 Online-Niederlage${brokenNames.length?` · 💥 ${brokenNames.join(", ")} zerbrochen`:""}.`,5200);
   }
   async function recoverOnlineMatchIfAny(){
-    if(!UI.overlay||UI.onlineStatus!=="idle")return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const qSnap=await fb.getDoc(fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid));if(!qSnap.exists())return false;const q=qSnap.data()||{};if(q.status==="matched"&&q.matchId)return activateOnlineMatch(q.matchId);if(q.status==="waiting"){const age=now()-Math.max(0,Number(q.updatedAtMs)||0);if(age<=ONLINE_QUEUE_STALE_MS){UI.onlineStatus="searching";UI.onlineMode=q.mode==="ranked"?"ranked":"normal";UI.onlineQueueHeartbeat=Number(q.updatedAtMs)||now();showOnlineSearchModal();startOnlineBattlePolling();await pollOnlineBattle();return true;}await fb.updateDoc(qSnap.ref||fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid),{status:"cancelled",updatedAtMs:now()});}return false;}catch(e){console.warn("BigCards online recovery",e);return false;}
+    if(!UI.overlay||UI.onlineStatus!=="idle")return false;
+    const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;
+    const qRef=fb.doc(fb.db,ONLINE_QUEUE_COLLECTION,u.uid);
+    let qSnap;
+    try{qSnap=await fb.getDoc(qRef);}catch(e){
+      console.warn("BigCards online recovery queue read",e);
+      return false;
+    }
+    if(!qSnap.exists())return false;
+    const q=qSnap.data()||{};
+    if(q.status==="matched"&&q.matchId){
+      const restored=await activateOnlineMatch(q.matchId);
+      if(restored)return true;
+      await removeOwnOnlineQueue(fb,u,"orphan matched cleanup");
+      return false;
+    }
+    if(q.status==="waiting"){
+      const age=now()-Math.max(0,Number(q.updatedAtMs)||0);
+      if(age<=ONLINE_QUEUE_STALE_MS){
+        UI.onlineStatus="searching";UI.onlineMode=q.mode==="ranked"?"ranked":"normal";UI.onlineQueueHeartbeat=Number(q.updatedAtMs)||now();showOnlineSearchModal();startOnlineBattlePolling();await pollOnlineBattle();return true;
+      }
+      await removeOwnOnlineQueue(fb,u,"stale recovery cleanup");
+      return false;
+    }
+    // cancelled/alte/ungültige Queue-Dokumente gehören nicht dauerhaft in die Recovery.
+    await removeOwnOnlineQueue(fb,u,"legacy recovery cleanup");
+    return false;
   }
   function closeOnlineBattleView(){if(UI.onlineStatus==="active")return toast("Der Online-Kampf läuft noch. Nutze Aufgeben, wenn du ihn beenden möchtest.");resetOnlineUi();refresh(false);}
   function onlineBattleAbilityOrbHtml(ability,card,row,isMyTurn){const levelLocked=!ability.normal&&card.level<(ability.req||1),disabled=!!ability.locked||levelLocked||!isMyTurn||UI.onlineBusy,hint=levelLocked?`ab Stufe ${ability.req}`:(ability.normal?(row.mustNormal?"Pflichtschlag":"Normaler Schlag"):(ability.desc||"Special"));return `<button type="button" data-bc-online-action="${ability.id}" class="bc-battle-orb ${ability.normal?"normal":"special"}" ${disabled?"disabled":""}><span>${ability.icon}</span><b>${esc(ability.name)}</b><small>${esc(hint)}</small></button>`;}
@@ -1124,7 +1157,7 @@
     const controls=ended?`<div class="bc-online-ended"><span>${match.winnerUid===myUid?"🏆":"💥"}</span><h3>${match.winnerUid===myUid?"ONLINE-SIEG":"ONLINE-NIEDERLAGE"}</h3><p>${match.endReason==="disconnect"?"Kampfende durch Verbindungsabbruch.":match.endReason==="forfeit"?"Kampfende durch Aufgabe.":"Kampf durch K.O. entschieden."}</p>${result?`<small>${result.won?`+${fmt(result.rewardPoints||0)} Points · +${result.rewardShards||0} Shards${result.mastery?` · +${result.mastery} Meisterschaft${result.elite?" · +1 Elite-Sieg":""}`:""}${result.brokenNames?.length?` · 💥 Zerbrochen: ${result.brokenNames.map(esc).join(", ")}`:""}`:result.brokenNames?.length?`💥 Zerbrochen: ${result.brokenNames.map(esc).join(", ")}`:"Keine deiner Karten wurde zerbrochen."}</small>`:""}<button data-bc-online-close>Zurück zum Kartenkampf</button></div>`:`<div class="bc-battle-center-controls online"><small class="bc-battle-turn-state ${isMyTurn?"player":"enemy"}">${isMyTurn?(me.mustNormal?"NORMALER SCHLAG PFLICHT":"DU BIST DRAN"):"GEGNER IST DRAN …"}</small><div class="bc-battle-control-row"><div class="bc-battle-action-side normal-side">${onlineBattleAbilityOrbHtml(normal,myCard,me,isMyTurn)}</div><div class="bc-battle-vs compact"><span>VS</span><small>RUNDE ${match.round||1}</small></div><div class="bc-battle-action-side special-side count-${specials.length}">${specials.length?specials.map(a=>onlineBattleAbilityOrbHtml(a,myCard,me,isMyTurn)).join(""):`<div class="bc-battle-no-special"><span>—</span><small>Kein Special</small></div>`}</div></div>${manualBackup}<p>${match.mode==="ranked"?`🏅 Rank-Kampf · ${myR.rank} gegen ${opR.rank}`:"🌐 Normaler Online-Kampf"}</p><button class="bc-online-forfeit" data-bc-online-forfeit>Aufgeben</button></div>`;
     return `<section class="bc-online-live"><div class="bc-online-live-head"><div><small>🌐 ${esc(onlineModeLabel(match.mode))}</small><h3>${esc(myR.name)} vs. ${esc(opR.name)}</h3></div><div><b>${match.mode==="ranked"?`Rank ${myR.rank} ↔ Rank ${opR.rank}`:"ONLINE"}</b><small>Match ${esc(String(UI.onlineMatchId||"").slice(-8))}</small></div></div><div class="bc-battle-arena active-fight online-fight">${fighter(myR,me,myCard,true)}${controls}${fighter(opR,op,opCard,false)}</div><div class="bc-battle-live-panel"><div><small>ONLINE-LOG</small><b>Letzte Aktionen</b></div><div class="bc-battle-live-log">${(match.log||[]).slice(-10).map(x=>`<span>${esc(x)}</span>`).join("")}</div></div></section>`;
   }
-  // ===== V359 ONLINE-KARTENKAMPF END =====
+  // ===== V360 ONLINE-KARTENKAMPF END =====
 
   function repairCard(id){
     const inst=instance(id);if(!inst||!inst.broken)return;
