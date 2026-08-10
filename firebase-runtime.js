@@ -30,6 +30,9 @@
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
   const FIRESTORE_WRITE_GAP_MS = 1000;
   const FIRESTORE_RESOURCE_BACKOFF_MS = 600000;
+  // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
+  // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
+  // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
@@ -77,7 +80,13 @@
 
   async function waitForFirestoreWriteWindow() {
     const now = Date.now();
-    if (firestoreWriteBackoffUntil > now) await sleep(firestoreWriteBackoffUntil - now);
+    if (firestoreWriteBackoffUntil > now) {
+      const error = new Error(`Firestore-Schreibpause aktiv. In ${Math.max(1, Math.ceil((firestoreWriteBackoffUntil - now) / 1000))}s erneut versuchen.`);
+      error.code = "firestore-write-backoff";
+      error.retryAfterMs = firestoreWriteBackoffUntil - now;
+      error.transient = true;
+      throw error;
+    }
     const gap = FIRESTORE_WRITE_GAP_MS - (Date.now() - firestoreWriteLastAt);
     if (gap > 0) await sleep(gap);
   }
