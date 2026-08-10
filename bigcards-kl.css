@@ -551,3 +551,42 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-battle-backup-ready{display:block;margin:7px 0;padding:7px 9px;border-radius:10px;background:rgba(31,96,114,.12);border:1px solid rgba(31,96,114,.22);font-size:9px;font-weight:950;color:#214c5d}.bc-battle-backup-switch{width:min(100%,330px);margin:8px auto 0;border:0;border-radius:999px;padding:9px 13px;background:linear-gradient(180deg,#2b7187,#174f63);color:#fff;font-size:9px;font-weight:1000;cursor:pointer;box-shadow:0 3px 0 #103b4b}.bc-battle-backup-switch:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
 .bc-battle-fighter .bc-battle-backup-ready+ .bc-battle-actions{margin-top:8px}
 @media(max-width:680px){.bc-rank-backup-actions{display:grid;grid-template-columns:1fr}.bc-battle-backup-switch{width:100%}}
+
+/* ===== BigCards V359 · Online-Kampf / Rank-Matchmaking ===== */
+.bc-battle-title-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.bc-battle-record em{display:block;margin-top:4px;font-style:normal;font-size:11px;opacity:.82}
+.bc-online-entry{border:1px solid rgba(78,198,255,.55)!important;background:linear-gradient(135deg,rgba(19,86,143,.96),rgba(73,36,123,.96))!important;color:#fff!important;border-radius:14px!important;padding:11px 15px!important;box-shadow:0 8px 24px rgba(22,94,170,.26)!important;font-weight:900!important;white-space:nowrap}
+.bc-online-entry:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.08)}
+.bc-online-entry:disabled{opacity:.46}
+.bc-online-menu{min-width:min(760px,92vw)}
+.bc-online-menu>small,.bc-online-search>small{font-weight:900;letter-spacing:.12em;color:#7ad7ff}
+.bc-online-menu h2,.bc-online-search h2{margin:5px 0 8px}
+.bc-online-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}
+.bc-online-mode-grid article{position:relative;padding:18px;border-radius:18px;border:1px solid rgba(88,183,255,.32);background:linear-gradient(150deg,rgba(17,36,63,.98),rgba(20,24,40,.98));box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.bc-online-mode-grid article.ranked{border-color:rgba(246,187,67,.46);background:linear-gradient(150deg,rgba(66,44,17,.96),rgba(29,25,37,.98))}
+.bc-online-mode-grid article>span{font-size:34px;display:block;margin-bottom:8px}
+.bc-online-mode-grid h3{margin:0 0 6px;font-size:19px}
+.bc-online-mode-grid p{min-height:58px;margin:0 0 10px;opacity:.84;line-height:1.4}
+.bc-online-mode-grid small{display:block;min-height:34px;margin-bottom:12px;opacity:.75}
+.bc-online-mode-grid button{width:100%;border-radius:12px!important;font-weight:900!important;padding:11px!important}
+.bc-online-rules{display:grid;gap:6px;padding:13px 15px;border-radius:14px;background:rgba(59,133,195,.11);border:1px solid rgba(92,182,247,.2)}
+.bc-online-rules span{font-size:12px;line-height:1.45;opacity:.82}
+.bc-online-search{text-align:center;padding:16px 10px 8px;min-width:min(460px,88vw)}
+.bc-online-search-pulse{width:78px;height:78px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;font-size:34px;background:radial-gradient(circle,rgba(63,191,255,.32),rgba(38,74,138,.08));border:1px solid rgba(93,202,255,.42);animation:bcOnlinePulse 1.2s ease-in-out infinite}
+.bc-online-search-bars{display:flex;justify-content:center;gap:6px;margin:17px 0}
+.bc-online-search-bars i{width:8px;height:26px;border-radius:8px;background:#6bd6ff;animation:bcOnlineBars .9s ease-in-out infinite}
+.bc-online-search-bars i:nth-child(2){animation-delay:.14s}.bc-online-search-bars i:nth-child(3){animation-delay:.28s}
+.bc-online-search button{border-radius:12px!important;padding:10px 16px!important}
+@keyframes bcOnlinePulse{50%{transform:scale(1.08);box-shadow:0 0 30px rgba(83,203,255,.26)}}
+@keyframes bcOnlineBars{0%,100%{transform:scaleY(.38);opacity:.45}50%{transform:scaleY(1);opacity:1}}
+.bc-online-live{display:grid;gap:12px}
+.bc-online-live-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;border:1px solid rgba(75,194,255,.25);background:linear-gradient(90deg,rgba(31,97,145,.16),rgba(89,54,143,.10));border-radius:16px}
+.bc-online-live-head small{display:block;font-size:10px;letter-spacing:.08em;opacity:.72}.bc-online-live-head h3{margin:2px 0 0}.bc-online-live-head>div:last-child{text-align:right}.bc-online-live-head b{display:block;color:#8edcff}
+.bc-battle-arena.online-fight{border-color:rgba(69,190,255,.35);box-shadow:inset 0 0 40px rgba(31,122,180,.06)}
+.bc-battle-center-controls.online{min-width:255px}
+.bc-online-backup-state{display:block;margin-top:7px;font-style:normal;font-size:11px;opacity:.78;color:#b4dcff}
+.bc-online-forfeit{margin-top:8px!important;background:rgba(151,47,58,.24)!important;border:1px solid rgba(244,91,105,.32)!important;color:#ffadb6!important;border-radius:10px!important;padding:7px 10px!important;font-size:11px!important}
+.bc-online-ended{min-width:220px;max-width:290px;text-align:center;padding:15px;border-radius:18px;border:1px solid rgba(255,255,255,.11);background:rgba(15,20,30,.9)}
+.bc-online-ended>span{font-size:42px}.bc-online-ended h3{margin:5px 0}.bc-online-ended p{font-size:12px;opacity:.8}.bc-online-ended small{display:block;margin:8px 0 12px;color:#a5ddff}.bc-online-ended button{border-radius:12px!important;padding:9px 12px!important}
+@media(max-width:840px){.bc-online-mode-grid{grid-template-columns:1fr}.bc-online-mode-grid p{min-height:auto}.bc-online-live-head{align-items:flex-start}.bc-battle-title-actions{width:100%;justify-content:space-between}.bc-online-entry{flex:0 0 auto}.bc-battle-arena.online-fight{grid-template-columns:1fr}.bc-battle-center-controls.online{order:2;min-width:0}.bc-battle-arena.online-fight .bc-battle-fighter.enemy{order:3}.bc-online-ended{max-width:none}}
+/* ===== V359 ONLINE END ===== */
