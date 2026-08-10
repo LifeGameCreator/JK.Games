@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V385 */
+/* BigCards.kl – JK.Games Top Game V386 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-bigcards-v385-rebirth-battle-scroll-fix";
+  const VERSION = "2026-08-10-bigcards-v386-livelevel-premium-power-picker-speed";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 374;
@@ -283,7 +283,7 @@
   ]);
 
   const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,onlineStatus:"idle",onlineMode:null,onlineMatchId:null,onlineMatch:null,onlinePollTimer:0,onlineBusy:false,onlineQueueHeartbeat:0,onlineMatchHeartbeat:0,onlineResult:null,lastHeader:0,toastTimer:0,autoNoticeTimer:0,autoNoticeDrag:null,vipWheelSpinning:false,rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0};
-  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastChunkRefs=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false;
+  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastChunkRefs=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false,leaderboardProfileTimer=0,premiumNormalBaseCacheKey="",premiumNormalBaseCacheValue=1;
 
   const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
   const esc=(v)=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -341,7 +341,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:385,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
+  function defaultState(){return {version:386,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[]};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -370,7 +370,7 @@
   }
   function adoptState(raw,{saveLocal=false,userId=""}={}){
     const rawHadBulkMigrationFlag=!!(raw&&typeof raw==="object"&&Object.prototype.hasOwnProperty.call(raw,"bulkLevelLegacyMigrated"));
-    S=raw&&typeof raw==="object"?Object.assign(defaultState(),raw):defaultState();
+    S=raw&&typeof raw==="object"?Object.assign(defaultState(),raw):defaultState();premiumNormalBaseCacheKey="";premiumNormalBaseCacheValue=1;
     S.instances||={};S.collection||={};S.exclusiveCollection||={};S.vipCollection||={};S.vipClickerSpecialOwned||={};S.auraInventory||={};S.combatAuraInventory||={};S.bindInventory||={};S.repairKits||={};S.potionInventory||={};S.potionMastery||={};S.trailInventory||={};S.equipmentRewards||={};
     const legacyBulkLevelOwned=!!S.bulkLevelUnlocked,legacyBulkPurchase=(()=>{try{return Number(window.JKCoinApp?.coinState?.()?.gamePurchases?.["bigcards-bulk-level-unlock"]||0)>0;}catch{return false;}})();let bulkLevelMigrated=false;
     S.bulkLevelUntil=Math.max(0,Number(S.bulkLevelUntil)||0);
@@ -404,7 +404,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=385;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||repaired||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=386;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const repaired=normalizeFloorUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||repaired||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -456,6 +456,11 @@
   function variantKey(rarityIndex,baseIndex){return `${rarityIndex}:${baseIndex}`;}
   function collectionKey(inst){return inst?.vip?`v:${inst.vipId}`:inst?.exclusive?`x:${inst.exclusiveId}`:variantKey(inst.rarity,inst.base);}
   function rarityUnlockedIndex(){const phase=FLOOR_PHASES[S.phase]||FLOOR_PHASES[0];let max=phase.tiers[0][1];for(const [r,t] of phase.tiers)if(S.phaseRebirths>=r)max=t;return max;}
+  // V386: Premiumkarten orientieren sich für Kampf + Produktion an der stärksten
+  // normalen Stufe, die der Spieler tatsächlich schon regulär erreicht ODER im
+  // Kartenkampf freigeschaltet hat. Dadurch hängen Exclusive/VIP nicht mehr auf
+  // einer alten niedrigen Packstufe fest, wenn Legendär/Special bereits nutzbar ist.
+  function premiumReferenceTier(){return clamp(Math.max(rarityUnlockedIndex(),Math.floor(Number(S?.battleTierUnlocked)||0)),0,RARITIES.length-1);}
   function floorMaxTier(floorIndex){if(floorIndex>S.phase)return -1;const phase=FLOOR_PHASES[floorIndex];let max=phase.tiers[0][1];const rebirths=floorIndex<S.phase?5:S.phaseRebirths;for(const [r,t] of phase.tiers)if(rebirths>=r)max=t;return max;}
   function rebirthMultiplier(){const completed=S.phase,local=[1,2,3,4,5,5][S.phaseRebirths]||1;return Math.min(125,Math.pow(5,completed)*local);}
   function rebirthRequiredLevel(phase=S?.phase){const floor=clamp(Math.floor(Number(phase)||0),0,FLOOR_PHASES.length-1)+1;return floor*100;}
@@ -511,22 +516,22 @@
     return 0;
   }
   function premiumProductionFactor(inst){
-    const n=premiumProductionRarityNorm(inst),progress=clamp(rarityUnlockedIndex(),0,12)/12;
+    const n=premiumProductionRarityNorm(inst),progress=premiumReferenceTier()/12;
     if(inst?.exclusive){
-      const early=1.35+n*1.25,late=.82+n*.58;
+      const early=1.35+n*1.25,late=.90+n*.62;
       return early+(late-early)*progress;
     }
-    const early=1.30+n*1.18,late=.80+n*.55;
+    const early=1.30+n*1.18,late=.88+n*.60;
     return early+(late-early)*progress;
   }
   function premiumProductionBase(inst){
-    const unlocked=clamp(rarityUnlockedIndex(),0,RARITIES.length-1),n=premiumProductionRarityNorm(inst);
-    // Zwei Raritätsstufen vor dem aktuell regulär freigeschalteten Pack bilden
-    // die weiche Unterkante. Bei Ungewöhnlich liegt Premium damit bereits im
-    // Episch-/Legendär-Bereich; beim nächsten Pack wandert der Bereich sauber mit.
-    const anchorTier=Math.min(RARITIES.length-1,unlocked+2),anchor=RARITIES[anchorTier]||RARITIES[0];
-    const progressFloor=Math.max(1,Number(anchor.min)||1)*(.55+n*.15);
-    const normalCore=Math.max(1,strongestUsableNormalBase());
+    const unlocked=premiumReferenceTier(),n=premiumProductionRarityNorm(inst),anchor=RARITIES[unlocked]||RARITIES[0];
+    // V386: Premiumproduktion bleibt in derselben aktuell erreichbaren normalen
+    // Raritätswelt und liegt dort über einer guten normalen Karte. Je kleiner der
+    // eigene Raritäts-Prozentwert, desto größer der Vorsprung. Beim Sprung auf
+    // Special/Mythisch/... wandert diese Basis automatisch mit.
+    const progressFloor=Math.max(1,Number(anchor.min)||1)*(.95+n*.45);
+    const normalCore=Math.max(progressFloor,strongestUsableNormalBase());
     return Math.max(progressFloor,normalCore*premiumProductionFactor(inst));
   }
   function effectivePoints(inst){if(!inst)return 0;let base=(inst.exclusive||inst.vip)?premiumProductionBase(inst):cardBaseProduction(inst.rarity,inst.base);let value=base*(LEVEL_MULT[inst.level]||1)*rebirthMultiplier()*cardRebirthTotalMultiplier(inst)*pointsBoosterMultiplier()*vipWheelMultiplier("production");if(inst.aura)value*=auraBy(inst.aura)?.mult||1;if(inst.shiny>=2)value*=1.15;return Math.max(0,value);}
@@ -586,50 +591,33 @@
   function trailBonusText(t){if(!t)return"";return `+${Math.round(t.points*100)} % Karten-Slot-Points · +${Math.round(t.xp*100)} % Karten-Slot-XP · +${Math.round(t.damage*100)} % Kampfschaden · +${Math.round(t.hp*100)} % Kampf-Leben`;}
   function trailClass(inst){const t=inst?trailBy(inst.trail):null;return t?`trail-${t.id}`:"";}
   function highestNormalCombatTierReached(){
-    // V379: Exclusive-Kampfwerte dürfen niemals durch das reine BigCards-Level
-    // vor den normalen Karten-/Packfortschritt springen. Maßstab ist die höchste
-    // normale Rarität, die im aktuell regulär freigeschalteten Bereich tatsächlich
-    // bereits entdeckt wurde. Dadurch bleiben Exclusive-Karten in derselben Liga
-    // wie die normalen Karten des Spielers und skalieren erst mit echtem Fortschritt.
-    const unlocked=clamp(rarityUnlockedIndex(),0,COMBAT_RANGES.length-1);
-    let highest=-1;
-    for(const key of Object.keys(S?.collection||{})){
-      const tier=Math.floor(Number(String(key).split(":",1)[0]));
-      if(Number.isFinite(tier)&&tier>=0&&tier<=unlocked)highest=Math.max(highest,tier);
-    }
-    if(highest<0){
-      for(const inst of Object.values(S?.instances||{})){
-        if(!inst||inst.exclusive||inst.vip)continue;
-        const tier=clamp(Math.floor(Number(inst.rarity)||0),0,COMBAT_RANGES.length-1);
-        if(tier<=unlocked)highest=Math.max(highest,tier);
-      }
-    }
-    return highest>=0?highest:Math.min(unlocked,0);
+    // V386: Premium folgt direkt der höchsten bereits freigeschalteten normalen
+    // Kampf-/Packstufe. Das ist zugleich wesentlich schneller als für jede
+    // Premiumkarte erneut die komplette Sammlung nach der höchsten Stufe zu scannen.
+    return clamp(premiumReferenceTier(),0,COMBAT_RANGES.length-1);
   }
   function exclusiveCombatTier(){
     return clamp(highestNormalCombatTierReached(),0,COMBAT_RANGES.length-1);
   }
   function combatTier(inst){if(!inst)return 0;return (inst.exclusive||inst.vip)?exclusiveCombatTier():clamp(Math.floor(inst.rarity||0),0,COMBAT_RANGES.length-1);}
-  // V382: Premiumkarten bleiben bewusst lange an der Spitze, springen aber nicht
-  // mehr um ganze Raritätswelten nach vorn. Ihre Kampfbasis liegt zwischen der
-  // aktuell erreichten normalen Stufe und der nächsten. Dieser Vorsprung wird
-  // Richtung Göttlich langsam kleiner, damit F2P-Endgame-Karten Premiumkarten
-  // später teilweise einholen oder überholen können.
-  function premiumCombatLead(tier){return clamp(.38-clamp(tier,0,12)*.015,.20,.38);}
+  // V386: Premiumkarten liegen innerhalb der aktuell erreichten normalen
+  // Kampfrarität (z. B. Legendär), nicht mehr künstlich 1–2 Klassen darunter.
+  // Die eigene Seltenheit entscheidet innerhalb dieses Bereichs: kleinere
+  // Prozentwerte = höherer Kampfwert. Sehr seltene Premiumkarten liegen oben.
   function premiumCombatRange(tier){
-    const t=clamp(Math.floor(Number(tier)||0),0,COMBAT_RANGES.length-1),cur=COMBAT_RANGES[t]||COMBAT_RANGES[0],next=COMBAT_RANGES[Math.min(t+1,COMBAT_RANGES.length-1)]||cur,lead=t>=COMBAT_RANGES.length-1?0:premiumCombatLead(t);
-    return {min:cur.min+(next.min-cur.min)*lead,max:cur.max+(next.max-cur.max)*lead};
+    const t=clamp(Math.floor(Number(tier)||0),0,COMBAT_RANGES.length-1),cur=COMBAT_RANGES[t]||COMBAT_RANGES[0],scale=.78+(t/12)*.08;
+    return {min:cur.min*scale,max:cur.max*scale};
   }
   function premiumCombatRarityFactor(inst,tier){
-    let raw=1.08;
+    let raw=1.02;
     if(inst?.exclusive){
       const idx=Math.max(0,EXCLUSIVES.findIndex(x=>x.id===inst.exclusiveId)),n=idx/Math.max(1,EXCLUSIVES.length-1);
-      raw=1.08+n*.54;
+      raw=1.02+n*.42;
     }else if(inst?.vip){
       const vm=vipCardBy(inst.vipId)||VIP_CARDS[0],rarity=clamp(Number(vm?.rarity)||0,0,12),cardFactor=clamp(Number(vm?.powerFactor)||1,1,1.08);
-      raw=1.06+(rarity/12)*.50+(cardFactor-1)*.90;
+      raw=1.00+(rarity/12)*.34+(cardFactor-1)*.75;
     }
-    const endgameFade=1-clamp(Number(tier)||0,0,12)/12*.25;
+    const endgameFade=1-clamp(Number(tier)||0,0,12)/12*.15;
     return 1+(raw-1)*endgameFade;
   }
   function repairKitId(inst){return inst?.exclusive?"exclusive":(RARITIES[clamp(Math.floor(inst?.rarity||0),0,RARITIES.length-1)]?.id||"common");}
@@ -744,18 +732,20 @@
       const vm=vipCardBy(inst.vipId),slot=Math.max(0,VIP_CARDS.findIndex(x=>x.id===inst.vipId));quality=.95+(slot%8)*.012+(clamp(Number(vm?.rarity)||0,0,12)/12)*.02;
     }
     const levelMult=COMBAT_LEVEL_MULT[clamp(inst.level||1,1,5)]||1;
-    // Shiny hat laut BigCards-Regeln keinen versteckten Kampfbonus: Electric = XP,
-    // Explosive = Points, Void = Auto-Collect. Kampfwerte kommen nur aus echten
-    // Kampf-Systemen wie Kampf-Aura, Spur, Karten-Rebirth, Rank und Zeitboostern.
-    const cardRbMult=cardRebirthTotalMultiplier(inst),jkDamageMult=damageBoosterMultiplier();
+    const premium=!!(inst.exclusive||inst.vip),cardRbMult=cardRebirthTotalMultiplier(inst),jkDamageMult=damageBoosterMultiplier();
     const aura=combatAuraBy(inst.combatAura),auraMult=aura?.mult||1,trail=activeTrail(inst),trailDamage=1+(trail?.damage||0),trailHp=1+(trail?.hp||0),rankMult=rankBonusMultiplier(inst);
-    // V382: Goldene Mitte für Exclusive/VIP. Die eigene Premium-Seltenheit
-    // bestimmt den Vorsprung, während Level, Kampf-Aura, Spur und Karten-Rebirth
-    // weiterhin normal wirken. So ist eine gut ausgebaute Premiumkarte lange eine
-    // Top-Karte, ohne wieder in fünfstellige Kampfwerte davonzulaufen.
-    const premiumFactor=(inst.exclusive||inst.vip)?premiumCombatRarityFactor(inst,tier):1,vipWheelDamage=vipWheelMultiplier("damage");
-    const coreMin=Math.max(1,Math.floor(range.min*quality*levelMult*auraMult*trailDamage*premiumFactor*vipWheelDamage));
-    const coreMax=Math.max(coreMin+1,Math.ceil(range.max*quality*levelMult*auraMult*trailDamage*premiumFactor*vipWheelDamage));
+    // V386: Bei Premiumkarten zählt jetzt auch die bereits investierte persönliche
+    // Ausrüstung leicht mit in den Kampfwert. Kampf-Aura/Spur bleiben die starken
+    // Kampfboni; normale Aura, Bindung und Shiny geben nur einen kleinen Support-
+    // Bonus. Dadurch wird eine stark ausgebaute Rebirth-/Rank-Premiumkarte sichtbar
+    // stärker als eine nackte normale Karte derselben Raritätsstufe.
+    const supportAura=premium&&inst.aura?1+Math.min(.06,Math.max(0,(auraBy(inst.aura)?.mult||1)-1)*.05):1;
+    const supportBind=premium&&inst.bind?1+Math.min(.08,Math.max(0,(bindBy(inst.bind)?.mult||1)-1)*.05):1;
+    const supportShiny=premium?1+clamp(Math.floor(Number(inst.shiny)||0),0,3)*.03:1;
+    const premiumSupport=supportAura*supportBind*supportShiny;
+    const premiumFactor=premium?premiumCombatRarityFactor(inst,tier):1,vipWheelDamage=vipWheelMultiplier("damage");
+    const coreMin=Math.max(1,Math.floor(range.min*quality*levelMult*auraMult*trailDamage*premiumFactor*premiumSupport*vipWheelDamage));
+    const coreMax=Math.max(coreMin+1,Math.ceil(range.max*quality*levelMult*auraMult*trailDamage*premiumFactor*premiumSupport*vipWheelDamage));
     const baseMin=Math.max(1,Math.floor(coreMin*cardRbMult*jkDamageMult)),baseMax=Math.max(baseMin+1,Math.ceil(coreMax*cardRbMult*jkDamageMult));
     const min=Math.max(1,Math.floor(baseMin*rankMult)),max=Math.max(min+1,Math.ceil(baseMax*rankMult)),avg=(min+max)/2,coreAvg=(coreMin+coreMax)/2;
     // Karten-Rebirth verstärkt Kampfwerte einmalig; der JK-Schadensbooster verändert nur Schaden, nicht Leben.
@@ -859,7 +849,7 @@
   function rollWeighted(rows){let total=rows.reduce((s,x)=>s+Number(x[1]||0),0),r=Math.random()*total;for(const row of rows){r-=row[1];if(r<=0)return row[0]}return rows.at(-1)[0];}
   function rollBaseIndex(){let r=Math.random()*INTERNAL_WEIGHT_SUM;for(let i=0;i<500;i++){r-=INTERNAL_VALUES[i];if(r<=0)return i}return 499;}
   function rollNormal(packRarity){const table=DROP_TABLES[RARITIES[packRarity].id],rarity=rollWeighted(table),base=rollBaseIndex(),tierChance=(table.find(x=>x[0]===rarity)?.[1]||0)/100,actual=tierChance*(rarityValue(base)/INTERNAL_WEIGHT_SUM)*100;const added=addInstance({rarity,base});return {...added,actualChance:actual,rarityValue:rarityValue(base)};}
-  function strongestUsableNormalBase(){let best=1;for(const inst of Object.values(S.instances)){if(inst.exclusive||inst.vip||inst.rarity>rarityUnlockedIndex())continue;best=Math.max(best,cardBaseProduction(inst.rarity,inst.base)*(LEVEL_MULT[inst.level]||1));}return best;}
+  function strongestUsableNormalBase(){const maxTier=premiumReferenceTier(),cacheKey=`${Math.floor(Number(S?.updatedAt)||0)}:${maxTier}:${Object.keys(S?.instances||{}).length}`;if(cacheKey===premiumNormalBaseCacheKey)return premiumNormalBaseCacheValue;let best=1;for(const inst of Object.values(S.instances||{})){if(!inst||inst.exclusive||inst.vip||inst.rarity>maxTier)continue;best=Math.max(best,cardBaseProduction(inst.rarity,inst.base)*(LEVEL_MULT[inst.level]||1));}premiumNormalBaseCacheKey=cacheKey;premiumNormalBaseCacheValue=best;return best;}
   function rollExclusive(){const ex=EXCLUSIVES[rollWeighted(EXCLUSIVES.map((x,i)=>[i,x.chance]))],basePower=strongestUsableNormalBase()*ex.strength,added=addInstance({exclusive:true,exclusiveId:ex.id,basePower,rarityValue:ex.rarityValue});return {...added,exclusiveMeta:ex,actualChance:ex.chance,rarityValue:ex.rarityValue};}
   function rollVipCard(forceRarity=null){const rarity=forceRarity===null?vipCardRarityRoll():clamp(Math.floor(Number(forceRarity)||0),0,12),pool=VIP_CARDS.filter(x=>x.rarity===rarity),fallback=VIP_CARDS.filter(x=>x.rarity<=rarity),vm=(pool.length?pool:fallback)[Math.floor(Math.random()*Math.max(1,(pool.length?pool:fallback).length))]||VIP_CARDS[0],added=addInstance({vip:true,vipId:vm.id,rarity:vm.rarity,basePower:vipBasePower(vm),rarityValue:vm.rarityValue});return {...added,vipMeta:vm,actualChance:0,rarityValue:vm.rarityValue};}
 
@@ -867,7 +857,7 @@
   function raiseScore(amount){S.lifetimeScore=Math.max(Number(S.lifetimeScore)||0,(Number(S.lifetimeScore)||0)+Math.max(0,Math.floor(amount||0)));}
   function updateScoreHighWater(){const p=productionPerSecond(),x=xpPerSecond();if(p>S.highestProductionEver){raiseScore(Math.max(1,Math.round(Math.log10(1+p)*160)),"production");S.highestProductionEver=p}if(x>S.highestXpProductionEver){raiseScore(Math.max(1,Math.round(Math.log10(1+x)*100)),"xp");S.highestXpProductionEver=x}S.maxLevelEver=Math.max(S.maxLevelEver||1,S.level||1);}
   function xpNeed(level){const l=Math.max(1,level);return Math.floor(45*Math.pow(l,1.64)*(1+S.phase*.18));}
-  function addXp(xp){xp=Math.max(0,xp)*vipWheelMultiplier("xp");S.xp+=xp;let guard=0;while(S.xp>=xpNeed(S.level)&&guard++<100){S.xp-=xpNeed(S.level);S.level++;S.maxLevelEver=Math.max(S.maxLevelEver,S.level);raiseScore(12+Math.floor(Math.sqrt(S.level)*6));if(S.level%10===0)toast(`BigCards Level ${S.level} erreicht!`)}return S.level;}
+  function addXp(xp){const beforeLevel=S.level;xp=Math.max(0,xp)*vipWheelMultiplier("xp");S.xp+=xp;let guard=0;while(S.xp>=xpNeed(S.level)&&guard++<100){S.xp-=xpNeed(S.level);S.level++;S.maxLevelEver=Math.max(S.maxLevelEver,S.level);raiseScore(12+Math.floor(Math.sqrt(S.level)*6));if(S.level%10===0)toast(`BigCards Level ${S.level} erreicht!`)}if(S.level!==beforeLevel)scheduleLeaderboardProfileSync();return S.level;}
   function activeInstances(){const out=[];for(let f=0;f<S.unlockedFloors;f++)for(const id of S.floors[f]){const inst=instance(id);if(inst)out.push(inst)}return out;}
   function productionPerSecond(){return activeInstances().reduce((sum,x)=>sum+effectivePoints(x),0);}
   function xpPerSecond(){return activeInstances().reduce((sum,x)=>sum+effectiveXp(x),0)*vipWheelMultiplier("xp");}
@@ -1063,13 +1053,18 @@
   function showTrailShop(){
     const unlocked=clamp(Math.floor(Number(S.trailTierUnlocked)||0),0,TRAILS.length-1);showModal(`<button class="bc-trail-modal-info" data-bc-trail-info title="Wie bekomme ich Spuren?" aria-label="Info: Wie bekomme ich Spuren?">i</button><div class="bc-trail-shop"><small>SPURENWERKSTATT</small><h2>Spuren</h2><p>Spuren sind exklusiv für deine persönliche <b>Karte</b>. Sie verbessern den separaten Karten-Slot-Ertrag und den Kartenkampf. Es gibt absichtlich <b>keine Exclusive-Spur</b> – jede normale Spur kann aber auf eine Exclusive-Karte gelegt werden.</p><div class="bc-trail-grid">${TRAILS.map(t=>{const locked=t.index>unlocked;return `<article class="rar-${t.id} ${locked?"locked":""}"><span>${t.icon}</span><div><b>${t.name}</b><small>${trailBonusText(t)}</small><em>Inventar ×${trailCount(t.id)}${locked?` · 🔒 Freischaltung im Tab Karte`:" · freigeschaltet"}</em></div><button data-bc-buy-trail="${t.id}" ${locked?"disabled":""}>${locked?"Gesperrt":`${fmt(t.pointPrice)} Points`}</button></article>`}).join("")}</div><div class="bc-repair-explain"><b>JK/Coin:</b><span>Alle Spuren können zusätzlich direkt im BigCards-Bereich des JK/Coin-Shops gekauft werden. Ein JK/Coin-Kauf legt die Spur ins Inventar, die normale Freischaltung zum Ausrüsten bleibt bestehen.</span></div></div>`);
   }
+  // V386: Picker berechnen Kampfwert/Produktion pro Karte nur noch EINMAL vor
+  // dem Sortieren. Zuvor wurden cardMeta()/combatStats() im Sortiervergleich sehr
+  // oft wiederholt, was bei großen Sammlungen den Klick auf „Karte auswählen“
+  // deutlich verzögert hat.
+  function pickerRows(filterFn){const rows=[];for(const inst of Object.values(S.instances||{})){if(!inst||inst.listed||!filterFn(inst))continue;rows.push({inst,power:combatStats(inst).power});}return rows;}
   function showFeaturedPicker(){
-    const cards=Object.values(S.instances).filter(x=>x&&!x.listed).sort((a,b)=>{const af=a.id===S.featuredCardId,bf=b.id===S.featuredCardId;if(af!==bf)return af?-1:1;return cardMeta(b).combat.power-cardMeta(a).combat.power||effectivePoints(b)-effectivePoints(a)}).slice(0,250);showModal(`<div class="bc-feature-picker"><small>DEINE PERSÖNLICHE KARTE</small><h2>Karte auswählen</h2><p>Die ausgewählte Karte wird sofort aus allen Stockwerken entfernt. Solange sie im persönlichen Karten-Slot liegt, kann sie nicht auf ein Stockwerk gesetzt werden. Du kannst sie trotzdem im Kartenkampf benutzen.</p><div class="bc-feature-picker-grid">${cards.length?cards.map(inst=>{const m=cardMeta(inst),current=inst.id===S.featuredCardId;return `<button data-bc-feature-select="${inst.id}" class="${m.className} ${current?"current":""} ${inst.broken?"broken":""}"><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.vip?`VIP · ${m.rarity.name}`:inst.exclusive?"EXCLUSIVE":m.rarity.name} · Lv ${inst.level}/5 · Rank ${cardRank(inst)}/10 · ⚔ ${fmt(m.combat.power)}${inst.trail?` · ☄ ${trailBy(inst.trail)?.name||"Spur"}`:""}</small></div><em>${current?"AKTIV":"Auswählen"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Noch keine Karte vorhanden</h3></div>`}</div></div>`);
+    const rows=pickerRows(()=>true).sort((a,b)=>{const af=a.inst.id===S.featuredCardId,bf=b.inst.id===S.featuredCardId;if(af!==bf)return af?-1:1;return b.power-a.power||b.inst.level-a.inst.level;}).slice(0,250);showModal(`<div class="bc-feature-picker"><small>DEINE PERSÖNLICHE KARTE</small><h2>Karte auswählen</h2><p>Die ausgewählte Karte wird sofort aus allen Stockwerken entfernt. Solange sie im persönlichen Karten-Slot liegt, kann sie nicht auf ein Stockwerk gesetzt werden. Du kannst sie trotzdem im Kartenkampf benutzen.</p><div class="bc-feature-picker-grid">${rows.length?rows.map(row=>{const inst=row.inst,m=cardMeta(inst),current=inst.id===S.featuredCardId;return `<button data-bc-feature-select="${inst.id}" class="${m.className} ${current?"current":""} ${inst.broken?"broken":""}"><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.vip?`VIP · ${m.rarity.name}`:inst.exclusive?"EXCLUSIVE":m.rarity.name} · Lv ${inst.level}/5 · Rank ${cardRank(inst)}/10 · ⚔ ${fmt(row.power)}${inst.trail?` · ☄ ${trailBy(inst.trail)?.name||"Spur"}`:""}</small></div><em>${current?"AKTIV":"Auswählen"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Noch keine Karte vorhanden</h3></div>`}</div></div>`);
   }
   function showFeaturedBackupPicker(){
     const main=featuredCard();if(!main)return toast("Wähle zuerst eine persönliche Karte aus.");if(cardRank(main)<1)return toast("Die erste Backup-Karte wird mit Rank 1 freigeschaltet.");
-    const maxTier=rankBackupMaxTier(main),cards=Object.values(S.instances).filter(x=>x&&!x.listed&&x.id!==main.id).sort((a,b)=>{const ae=backupCardEligible(main,a),be=backupCardEligible(main,b);if(ae!==be)return ae?-1:1;if(!!a.broken!==!!b.broken)return a.broken?1:-1;return cardMeta(b).combat.power-cardMeta(a).combat.power||b.level-a.level;}).slice(0,250);
-    showModal(`<div class="bc-backup-picker"><small>RANK-BACKUP · ${esc(cardMeta(main).name)}</small><h2>🛡 Backup-Karte wählen</h2><p>Rank ${cardRank(main)} erlaubt normale Backup-Karten bis <b>${esc(rankBackupTierName(main))}</b>. <b>Exclusive-Karten sind ab Rank 1 immer erlaubt</b>, weil sie mit deinem Account skalieren. Die Backup-Karte bleibt auf dem Spielfeld nutzbar und bekommt keine Spur- oder persönlichen Rank-Boni.</p><div class="bc-feature-picker-grid">${cards.length?cards.map(inst=>{const m=cardMeta(inst),eligible=backupCardEligible(main,inst),current=main.backupCardId===inst.id,locked=!eligible||inst.broken;const req=(inst.exclusive||inst.vip)?1:backupRankRequirementForTier(inst.rarity);return `<button data-bc-backup-select="${inst.id}" class="${m.className} ${current?"current":""} ${inst.broken?"broken":""} ${!eligible?"battle-locked":""}" ${locked?"disabled":""}><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.vip?`VIP · ${m.rarity.name} · ab Rank 1`:inst.exclusive?"EXCLUSIVE · immer erlaubt ab Rank 1":`${m.rarity.name} · benötigt Rank ${req}`} · Lv ${inst.level}/5 · ⚔ ${fmt(m.combat.power)}${S.floors.flat().includes(inst.id)?" · 🏢 im Spielfeld":""}${inst.trail?" · ☄ Spur wird entfernt":""}</small></div><em>${current?"AKTIV":inst.broken?"KAPUTT":eligible?"Als Backup":"GESPERRT"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Keine Backup-Karte verfügbar</h3></div>`}</div></div>`);
+    const rows=pickerRows(x=>x.id!==main.id).map(row=>({...row,eligible:backupCardEligible(main,row.inst)})).sort((a,b)=>{if(a.eligible!==b.eligible)return a.eligible?-1:1;if(!!a.inst.broken!==!!b.inst.broken)return a.inst.broken?1:-1;return b.power-a.power||b.inst.level-a.inst.level;}).slice(0,250);
+    showModal(`<div class="bc-backup-picker"><small>RANK-BACKUP · ${esc(cardMeta(main).name)}</small><h2>🛡 Backup-Karte wählen</h2><p>Rank ${cardRank(main)} erlaubt normale Backup-Karten bis <b>${esc(rankBackupTierName(main))}</b>. <b>Exclusive-Karten sind ab Rank 1 immer erlaubt</b>, weil sie mit deinem Account skalieren. Die Backup-Karte bleibt auf dem Spielfeld nutzbar und bekommt keine Spur- oder persönlichen Rank-Boni.</p><div class="bc-feature-picker-grid">${rows.length?rows.map(row=>{const inst=row.inst,m=cardMeta(inst),eligible=row.eligible,current=main.backupCardId===inst.id,locked=!eligible||inst.broken;const req=(inst.exclusive||inst.vip)?1:backupRankRequirementForTier(inst.rarity);return `<button data-bc-backup-select="${inst.id}" class="${m.className} ${current?"current":""} ${inst.broken?"broken":""} ${!eligible?"battle-locked":""}" ${locked?"disabled":""}><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.vip?`VIP · ${m.rarity.name} · ab Rank 1`:inst.exclusive?"EXCLUSIVE · immer erlaubt ab Rank 1":`${m.rarity.name} · benötigt Rank ${req}`} · Lv ${inst.level}/5 · ⚔ ${fmt(row.power)}${S.floors.flat().includes(inst.id)?" · 🏢 im Spielfeld":""}${inst.trail?" · ☄ Spur wird entfernt":""}</small></div><em>${current?"AKTIV":inst.broken?"KAPUTT":eligible?"Als Backup":"GESPERRT"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Keine Backup-Karte verfügbar</h3></div>`}</div></div>`);
   }
   function setFeaturedBackupCard(id){
     const main=featuredCard(),backup=instance(id);if(!main||!backup)return;if(cardRank(main)<1)return toast("Backup-Karten werden ab Rank 1 freigeschaltet.");if(backup.broken)return toast("Eine kaputte Karte kann nicht als Backup gesetzt werden.");if(!backupCardEligible(main,backup)){const req=(backup.exclusive||backup.vip)?1:backupRankRequirementForTier(backup.rarity);return toast(`${cardMeta(backup).name} benötigt für den Backup-Slot Rank ${req}.`);}
@@ -1237,7 +1232,7 @@
 
     S.instances=keepCards.instances;S.collection=keepCards.collection;S.exclusiveCollection=keepCards.exclusiveCollection;S.vipCollection=keepCards.vipCollection;S.floors=keepCards.floors;S.highestUpgrade=keepCards.highestUpgrade;S.shinyMilestones=keepCards.shinyMilestones;
     normalizeFloorUniqueCards();
-    raiseScore(1000+S.totalRebirths*150);awardMainXp(15,"BigCards.kl Rebirth",`bc-rebirth-${S.totalRebirths}`);persist();refresh();toast(`Rebirth ${S.totalRebirths} abgeschlossen · Points: 0 · alle Karten behalten · vorher x${beforeMult}`);
+    raiseScore(1000+S.totalRebirths*150);awardMainXp(15,"BigCards.kl Rebirth",`bc-rebirth-${S.totalRebirths}`);persist();scheduleLeaderboardProfileSync(250);refresh();toast(`Rebirth ${S.totalRebirths} abgeschlossen · Points: 0 · Level 1 · alle Karten behalten · vorher x${beforeMult}`);
   }
 
   const COLLECTOR_POINT_START=10000,COLLECTOR_POINT_MULT=2.5;
@@ -1329,8 +1324,14 @@
     inst.brokenAt=Math.max(Number(inst.brokenAt)||0,now());
     return true;
   }
-  function battleCards(includeBroken=true){return Object.values(S.instances).filter(x=>x&&!x.listed&&(includeBroken||!x.broken)).sort((a,b)=>{const au=battleCardUnlocked(a),bu=battleCardUnlocked(b),as=combatStats(a),bs=combatStats(b);if(au!==bu)return au?-1:1;if(!!a.broken!==!!b.broken)return a.broken?1:-1;if(au)return bs.tier-as.tier||bs.power-as.power||b.level-a.level;return as.tier-bs.tier||bs.power-as.power||b.level-a.level;});}
-  function battlePickerCards(){const all=battleCards(true),out=[],seen=new Set(),add=inst=>{if(inst&&!inst.listed&&!seen.has(inst.id)){seen.add(inst.id);out.push(inst);}};add(instance(UI.battleCard));add(instance(S.featuredCardId));for(const inst of all)if(inst.exclusive||inst.vip)add(inst);let normalShown=0;for(const inst of all){if(inst.exclusive||inst.vip||seen.has(inst.id))continue;if(normalShown>=200)break;add(inst);normalShown++;}return out;}
+  function battleCardRows(includeBroken=true){const rows=[];for(const inst of Object.values(S.instances||{})){if(!inst||inst.listed||(!includeBroken&&inst.broken))continue;const stats=combatStats(inst);rows.push({inst,stats,unlocked:battleCardUnlocked(inst)});}rows.sort((a,b)=>{if(a.unlocked!==b.unlocked)return a.unlocked?-1:1;if(!!a.inst.broken!==!!b.inst.broken)return a.inst.broken?1:-1;if(a.unlocked)return b.stats.tier-a.stats.tier||b.stats.power-a.stats.power||b.inst.level-a.inst.level;return a.stats.tier-b.stats.tier||b.stats.power-a.stats.power||b.inst.level-a.inst.level;});return rows;}
+  function battleCards(includeBroken=true){return battleCardRows(includeBroken).map(x=>x.inst);}
+  function battlePickerCards(){const rows=battleCardRows(true),out=[],seenIds=new Set(),seenVariants=new Set(),add=inst=>{if(inst&&!inst.listed&&!seenIds.has(inst.id)){seenIds.add(inst.id);seenVariants.add(collectionKey(inst));out.push(inst);}};add(instance(UI.battleCard));add(instance(S.featuredCardId));
+    // Von Premiumkarten wird pro Kartenvariante die stärkste vorhandene Kopie gezeigt.
+    // Dadurch bleiben alle 12 Exclusive-/100 VIP-Typen erreichbar, ohne hunderte
+    // schwächere Duplikate in den Picker zu rendern.
+    for(const row of rows){const inst=row.inst;if(!(inst.exclusive||inst.vip)||seenVariants.has(collectionKey(inst)))continue;add(inst);}
+    let normalShown=0;for(const row of rows){const inst=row.inst;if(inst.exclusive||inst.vip||seenIds.has(inst.id)||seenVariants.has(collectionKey(inst)))continue;if(normalShown>=200)break;add(inst);normalShown++;}return out;}
   function ensureBattleCard(){const current=instance(UI.battleCard);if(current&&!current.listed&&!current.broken&&battleCardUnlocked(current))return current;const featured=instance(S.featuredCardId);if(featured&&!featured.listed&&!featured.broken&&battleCardUnlocked(featured)){UI.battleCard=featured.id;return featured;}const first=battleCards(false).find(battleCardUnlocked)||null;UI.battleCard=first?.id||null;return first;}
   function showBattlePicker(){const cards=battlePickerCards(),maxTier=battleUnlockedTier();showModal(`<div class="bc-battle-picker"><small>DEINE KARTEN</small><h2>Kampfkarte wählen</h2><p>Aktuell freigeschaltet bis <b>${RARITIES[maxTier].name}</b>. Höhere normale Karten werden über die Kartenkampf-Stufe freigeschaltet. <b>Exclusive- und VIP-Karten sind unabhängig von dieser normalen Stufe immer sofort nutzbar</b>. Deine persönliche Karte wird zusätzlich immer bevorzugt angezeigt.</p><div class="bc-battle-picker-grid">${cards.length?cards.map(inst=>{const m=cardMeta(inst),profile=combatAbilityProfile(inst),specials=profile.specials.filter(x=>inst.level>=(x.req||1)).length,locked=!battleCardUnlocked(inst),disabled=inst.broken||locked;return `<button data-bc-battle-pick="${inst.id}" class="${m.className} ${inst.broken?"broken":""} ${locked?"battle-locked":""}" ${disabled?"disabled":""}><span>${m.icon}</span><b>${esc(m.name)}</b><small>${inst.vip?`VIP · ${m.rarity.name}`:inst.exclusive?`EXCLUSIVE · Kampfstufe ${battleTierLabel(inst)}`:m.rarity.name} · Lv ${inst.level}/5${cardRebirth(inst)?` · ↻${cardRebirth(inst)}`:""} · Rank ${cardRank(inst)}/10${inst.id===S.featuredCardId?" · ★ Persönliche Karte":""}</small><small>⚔ ${fmt(m.combat.power)} · ${fmt(m.combat.min)}–${fmt(m.combat.max)} Schaden · ${specials} Special${specials===1?"":"s"}${potionQueueCount(inst)?` · 🧪 ${potionQueueCount(inst)}/3 Runden`:""}</small>${locked?`<em>🔒 Kartenkampf erst bis ${RARITIES[maxTier].name} freigeschaltet</em>`:inst.broken?`<em>💥 KAPUTT · in Sammlung reparieren</em>`:""}</button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Noch keine Karte vorhanden</h3></div>`}</div></div>`);}
   function upgradeBattleTier(){
@@ -1594,7 +1595,7 @@
   function shopHtml(){const auraCount=Object.values(S.auraInventory).reduce((a,b)=>a+b,0),combatAuraCount=Object.values(S.combatAuraInventory).reduce((a,b)=>a+b,0),rebirthLevel=rebirthRequiredLevel();return `<section class="bc-section"><div class="bc-section-title"><div><small>MARKTHALLE AM KARTENHAFEN</small><h2>BigCards Shop</h2><p>Upgrades, Spuren, Ausrüstung, Verkauf und Komfort. Packs bleiben im eigenen oberen Tab.</p></div><button class="bc-jk" data-bc-jkshop>JK/Coin-Shop öffnen</button></div><div class="bc-shop-panels"><article class="bc-shop-vip-card"><span>👑</span><h3>BigCards VIP</h3><p>${S.vipUnlocked?`Dauerhaft freigeschaltet · ${vipCount()}/${VIP_CARDS.length} VIP-Karten entdeckt.`:"500 JK/Coin einmalig · tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten und Boss-Specials."}</p><div class="bc-shop-dual-actions"><button data-bc-tab="vipWheel">VIP-Glücksrad</button><button data-bc-tab="vipClicker">VIP-Klicker</button><button class="bc-shop-info" data-bc-vip-info>i</button></div></article><article class="bc-shop-trail-card"><span>☄️</span><h3>Spuren</h3><p>Exklusive Designs und starke Boni für deine persönliche Karte. Freigeschaltet bis: ${TRAILS[S.trailTierUnlocked]?.name||TRAILS[0].name}.</p><button data-bc-trail-shop>Spuren öffnen</button></article><article><span>⚒️</span><h3>Karten verbessern</h3><p>Level 1–5 mit Duplikaten + Points. Zerbrochene Karten brauchen ein passendes Reparatur-Kit.</p><div class="bc-shop-dual-actions"><button data-bc-tab="collection">Smlg. öffnen</button><button class="bc-potion-short" data-bc-potion-shop>Tränke</button><button class="bc-rep-short" data-bc-repair-shop>Rep.</button></div><small class="bc-repair-stock">Reparatur-Kits im Inventar: ${Object.values(S.repairKits||{}).reduce((a,b)=>a+(Number(b)||0),0)}</small></article><article class="bc-shop-info-card"><button class="bc-shop-info" data-bc-equipment-info="aura" title="Info zu Auras" aria-label="Info zu Auras">i</button><span>✦</span><h3>Auras</h3><p>Alle Auras mit Points kaufbar oder kostenlos erspielbar. Points-Auras: ${auraCount} · Kampf-Auras: ${combatAuraCount}</p><button data-bc-equipment="aura">Auras · Kaufen & Freischalten</button></article><article class="bc-shop-info-card"><button class="bc-shop-info" data-bc-equipment-info="bind" title="Info zu Bindungen" aria-label="Info zu Bindungen">i</button><span>🔗</span><h3>Bindungen</h3><p>Alle Bindungen mit Points kaufbar oder kostenlos erspielbar. Inventar: ${Object.values(S.bindInventory).reduce((a,b)=>a+b,0)}</p><button data-bc-equipment="bind">Bindungen · Kaufen & Freischalten</button></article><article class="bc-shop-info-card"><button class="bc-shop-info" data-bc-equipment-info="shiny" title="Info zu Shiny" aria-label="Info zu Shiny">i</button><span>⚡</span><h3>Shiny</h3><p>Electric ab Lv3 · Explosive ab Lv4 · Void ab Lv5.</p><button data-bc-equipment="shiny">Shiny verwalten</button></article><article><span>♻️</span><h3>Card Shards</h3><p>${fmt(S.shards)} Shards. Zerlege nicht benötigte Duplikate im Kartendetail.</p><button data-bc-shards-info>Info</button></article></div><div class="bc-rebirth-shop"><div><small>REBIRTH CENTER</small><h3>${S.level>=rebirthLevel?"Normaler Rebirth bereit":`🔒 Gesperrt bis Level ${rebirthLevel}`}</h3><p>Stockwerk ${S.phase+1}: benötigt Level ${rebirthLevel}. Aktuell Level ${S.level}. Rebirth behält Karten, Sammlung, Upgrades, Auras, Kampf-Auras, Bindungen und Shiny.</p><button data-bc-rebirth ${S.level<rebirthLevel?"disabled":""}>Normaler Rebirth</button></div><div><small>JK/COIN SKIP</small><h3>Rebirth für exakt 300 JK-Coins</h3><p>Überspringt nur die aktuelle Level-${rebirthLevel}-Anforderung von Stockwerk ${S.phase+1} und zählt als vollständiger Rebirth.</p><button data-bc-rebirth-skip>300 JK/Coin</button></div></div></section>`}
   function marketHtml(){return `<section class="bc-section"><div class="bc-section-title"><div><small>FIREBASE PLAYER MARKET</small><h2>Online-Marktplatz</h2><p>Handel ausschließlich mit Points · 5 % Verkäufergebühr.</p></div><button data-bc-market-refresh>Aktualisieren</button></div><div class="bc-market-note">Gelistete Karten werden gesperrt. Kauf/Statuswechsel werden über Firestore geprüft. JK-Coins werden hier nicht zwischen Spielern gehandelt.</div><div class="bc-market-grid">${UI.market.length?UI.market.map(marketListingHtml).join(""):`<div class="bc-empty-state"><span>🏪</span><h3>Keine Angebote geladen</h3><p>Drücke auf Aktualisieren oder stelle eine Karte aus deinem Album ein.</p></div>`}</div><h3>Eigene Karte einstellen</h3><div class="bc-market-own">${Object.values(S.instances).filter(x=>!x.listed&&!x.broken&&!S.floors.flat().includes(x.id)&&!x.locked).sort((a,b)=>sellValue(b)-sellValue(a)).slice(0,12).map(x=>`<button data-bc-list-card="${x.id}">${esc(cardMeta(x).name)}<small>${fmt(sellValue(x))} Richtwert</small></button>`).join("")||"Keine freie Karte verfügbar."}</div></section>`}
   function marketListingHtml(l){const d=l.card||{},r=d.vip?(RARITIES[d.rarity]||RARITIES[0]):d.exclusive?{name:"Exclusive",id:"exclusive"}:RARITIES[d.rarity]||RARITIES[0];return `<article class="bc-market-card rar-${r.id} ${d.vip?"rar-vip":""}"><small>${d.vip?"VIP · ":d.exclusive?"EXCLUSIVE · ":""}${esc(r.name)} · ${pct(d.rarityValue||100)}</small><h3>${esc(d.name||"Karte")}</h3><p>Lv ${d.level||1}${d.cardRebirth?` · ↻ Rebirth ${d.cardRebirth}/5`:""} · ${fmt(d.points||0)}/s · ${fmt(d.xp||0)} XP/s</p><p>⚔ Kampfwert ${d.combatPower?fmt(d.combatPower):"–"}${d.combatMin?` · Schaden ${fmt(d.combatMin)}–${fmt(d.combatMax||d.combatMin)}`:""}</p><span>Verkäufer: ${esc(l.sellerName||"Spieler")}</span><b>${fmt(l.price)} Points</b>${l.sellerUid===currentUidSync()?`<button data-bc-cancel-listing="${esc(l.id)}">Eigenes Angebot zurücknehmen</button>`:`<button data-bc-buy-listing="${esc(l.id)}">Kaufen</button>`}</article>`}
-  function scoreHtml(){return `<section class="bc-section"><div class="bc-section-title"><div><small>LIFETIME SCORE</small><h2>Beste Spieler</h2><p>Der Score kann nur steigen und nutzt Bestwerte sowie Lifetime-Fortschritt.</p></div><button data-bc-score-refresh>Online aktualisieren</button></div><div class="bc-own-score"><div><small>DEIN SCORE</small><b>${fmt(S.lifetimeScore)}</b></div><div><small>MAX LEVEL</small><b>${S.maxLevelEver}</b></div><div><small>REBIRTHS</small><b>${S.totalRebirths}</b></div><div><small>BESTE PRODUKTION</small><b>${fmt(S.highestProductionEver)}/s</b></div><div><small>BESTE XP</small><b>${fmt(S.highestXpProductionEver)}/s</b></div></div><div class="bc-leaderboard">${UI.leaderboard.length?UI.leaderboard.map((p,i)=>`<article><strong>#${i+1}</strong><div><b>${esc(p.displayName||"Spieler")}</b><small>Level ${p.maxLevelEver||1} · ${p.collectionDiscovered||0}/6.500 · ${p.totalRebirths||0} Rebirths</small></div><span>${fmt(p.lifetimeScore)}</span></article>`).join(""):`<div class="bc-empty-state"><span>🏆</span><h3>Online-Rangliste noch nicht geladen</h3><p>Dein lokaler Lifetime-Score läuft bereits.</p></div>`}</div></section>`}
+  function scoreHtml(){return `<section class="bc-section"><div class="bc-section-title"><div><small>LIFETIME SCORE</small><h2>Beste Spieler</h2><p>Der Score kann nur steigen und nutzt Bestwerte sowie Lifetime-Fortschritt. Das angezeigte Level ist dagegen immer dein <b>aktuelles</b> Level nach einem Rebirth.</p></div><button data-bc-score-refresh>Online aktualisieren</button></div><div class="bc-own-score"><div><small>DEIN SCORE</small><b>${fmt(S.lifetimeScore)}</b></div><div><small>AKTUELLES LEVEL</small><b>${S.level}</b></div><div><small>REBIRTHS</small><b>${S.totalRebirths}</b></div><div><small>BESTE PRODUKTION</small><b>${fmt(S.highestProductionEver)}/s</b></div><div><small>BESTE XP</small><b>${fmt(S.highestXpProductionEver)}/s</b></div></div><div class="bc-leaderboard">${UI.leaderboard.length?UI.leaderboard.map((p,i)=>`<article><strong>#${i+1}</strong><div><b>${esc(p.displayName||"Spieler")}</b><small>Level ${Math.max(1,Math.floor(Number(p.currentLevel??p.level??p.maxLevelEver)||1))} · ${p.collectionDiscovered||0}/6.500 · ${p.totalRebirths||0} Rebirths</small></div><span>${fmt(p.lifetimeScore)}</span></article>`).join(""):`<div class="bc-empty-state"><span>🏆</span><h3>Online-Rangliste noch nicht geladen</h3><p>Dein lokaler Lifetime-Score läuft bereits.</p></div>`}</div></section>`}
   function battleAbilityOrbHtml(ability,player,session){
     if(!ability||!player||!session)return "";
     const levelLocked=!ability.normal&&player.level<(ability.req||1);
@@ -1800,18 +1801,21 @@
     cloudSaveDueAt=due;cloudSaveTimer=setTimeout(()=>{cloudSaveTimer=0;cloudSaveDueAt=0;syncProfile(false)},Math.max(500,due-now()));
   }
   async function writeProfile(fb,u){
-    const ref=fb.doc(fb.db,PROFILE_COLLECTION,u.uid),profile={userId:u.uid,displayName:await displayName(),lifetimeScore:Math.floor(S.lifetimeScore||0),lifetimePointsEarned:Math.floor(S.lifetimePointsEarned||0),maxLevelEver:Math.floor(S.maxLevelEver||1),totalRebirths:Math.floor(S.totalRebirths||0),highestProductionEver:Math.floor(S.highestProductionEver||0),highestXpProductionEver:Math.floor(S.highestXpProductionEver||0),collectionDiscovered:collectionCount(),exclusiveDiscovered:exclusiveCount(),unlockedFloors:Math.floor(S.unlockedFloors||1),currentProduction:Math.floor(productionPerSecond()),lastUpdated:fb.serverTimestamp()};
-    // Bestehende High-Water-Werte nie kleiner schreiben, damit ältere Geräte/Profiles
-    // nicht an den Sicherheitsregeln scheitern und der Vollsave trotzdem synchronisiert.
+    const ref=fb.doc(fb.db,PROFILE_COLLECTION,u.uid),profile={userId:u.uid,displayName:await displayName(),lifetimeScore:Math.floor(S.lifetimeScore||0),lifetimePointsEarned:Math.floor(S.lifetimePointsEarned||0),currentLevel:Math.max(1,Math.floor(S.level||1)),maxLevelEver:Math.floor(S.maxLevelEver||1),totalRebirths:Math.floor(S.totalRebirths||0),highestProductionEver:Math.floor(S.highestProductionEver||0),highestXpProductionEver:Math.floor(S.highestXpProductionEver||0),collectionDiscovered:collectionCount(),exclusiveDiscovered:exclusiveCount(),unlockedFloors:Math.floor(S.unlockedFloors||1),currentProduction:Math.floor(productionPerSecond()),lastUpdated:fb.serverTimestamp()};
+    // Lifetime-/Bestwerte bleiben High-Water-Werte. currentLevel wird absichtlich
+    // NICHT mit Math.max() zusammengeführt: Nach einem Rebirth muss es sofort
+    // z. B. von 101 auf 1/82 heruntergehen und danach wieder normal mitsteigen.
     try{const snap=await fb.getDoc(ref);if(snap.exists()){const old=snap.data()||{};for(const k of ["lifetimeScore","lifetimePointsEarned","maxLevelEver","totalRebirths","highestProductionEver","highestXpProductionEver","collectionDiscovered","exclusiveDiscovered","unlockedFloors"])profile[k]=Math.max(Number(profile[k])||0,Number(old[k])||0);}}catch{}
     await fb.setDoc(ref,profile,{merge:true});
   }
+  async function syncLeaderboardProfile(){const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{await writeProfile(fb,u);cloudLastProfileWriteAt=now();return true}catch(e){console.warn("BigCards leaderboard current-level sync",e);return false;}}
+  function scheduleLeaderboardProfileSync(delay=2500){clearTimeout(leaderboardProfileTimer);leaderboardProfileTimer=setTimeout(()=>{leaderboardProfileTimer=0;void syncLeaderboardProfile();},Math.max(100,Number(delay)||2500));}
   async function syncProfile(force=false){
     if((!cloudReady&&!force)||cloudMigrationPending||cloudSaving||!S){if(cloudSaving)cloudDirty=true;return false}
     if(cloudBackoffUntil>now()){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,cloudBackoffUntil-now()));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=374;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=386;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
@@ -1888,7 +1892,7 @@
   async function cancelListing(id){const listing=UI.market.find(x=>x.id===id);if(!listing||listing.sellerUid!==currentUidSync())return;const fb=await firebase();if(!fb)return toast("Firebase nicht verfügbar.");try{await fb.updateDoc(fb.doc(fb.db,MARKET_COLLECTION,id),{status:"cancelled",cancelledAt:fb.serverTimestamp(),cancelledAtMs:now()});const inst=Object.values(S.instances).find(x=>x.listed===id);if(inst)inst.listed=false;persist();toast("Angebot zurückgenommen.");loadMarket()}catch(e){console.warn(e);toast("Angebot konnte nicht zurückgenommen werden.")}}
   async function buyListing(id){const listing=UI.market.find(x=>x.id===id);if(!listing)return;if(S.points<listing.price)return toast("Nicht genügend Points.");if(!confirm(`${listing.card?.name||"Karte"} für ${fmt(listing.price)} Points kaufen?`))return;const fb=await firebase(),u=await currentUser();if(!fb||!u)return toast("Firebase-Anmeldung erforderlich.");try{await syncProfile();const ref=fb.doc(fb.db,MARKET_COLLECTION,id),buyerSave=fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),buyerName=await displayName();await fb.runTransaction(fb.db,async tx=>{const [snap,walletSnap]=await Promise.all([tx.get(ref),tx.get(buyerSave)]);if(!snap.exists()||snap.data().status!=="active")throw new Error("Angebot nicht mehr aktiv");if(snap.data().sellerUid===u.uid)throw new Error("Eigenes Angebot");const price=Math.floor(Number(snap.data().price)||0),serverPoints=Math.floor(Number(walletSnap.data()?.points)||0);if(serverPoints<price)throw new Error("Server-Spielstand hat nicht genügend Points. Kurz speichern und erneut versuchen.");tx.update(buyerSave,{points:serverPoints-price,updatedAtMs:now()});tx.update(ref,{status:"sold",buyerUid:u.uid,buyerName,soldAt:fb.serverTimestamp(),soldAtMs:now()});const payout=Math.floor(price*(1-MARKET_FEE));tx.set(fb.doc(fb.db,PAYOUT_COLLECTION,snap.data().sellerUid,"items",id),{listingId:id,sellerUid:snap.data().sellerUid,buyerUid:u.uid,amount:payout,fee:price-payout,status:"pending",createdAt:fb.serverTimestamp()});});S.points-=listing.price;const c=listing.card||{};const added=addInstance({rarity:c.rarity||0,base:c.base||0,vip:!!c.vip,vipId:c.vipId||null,exclusive:!!c.exclusive,exclusiveId:c.exclusiveId||null,basePower:c.basePower||null,rarityValue:c.rarityValue||100});added.inst.level=clamp(c.level||1,1,5);added.inst.cardRebirth=clamp(Math.floor(Number(c.cardRebirth)||0),0,CARD_REBIRTH_MAX);{const ckey=collectionKey(added.inst),ccol=added.inst.vip?S.vipCollection:(added.inst.exclusive?S.exclusiveCollection:S.collection);ccol[ckey]=ccol[ckey]||{firstAt:now(),highestLevel:1};ccol[ckey].highestLevel=Math.max(Number(ccol[ckey].highestLevel)||1,added.inst.cardRebirth>0?5:added.inst.level);}added.inst.rank=clamp(Math.floor(Number(c.rank)||0),0,FEATURED_RANK_MAX);added.inst.rankMastery=Math.max(0,Math.floor(Number(c.rankMastery)||Math.floor(Number(c.rankWins)||0)*4));added.inst.rankEliteWins=Math.max(0,Math.floor(Number(c.rankEliteWins)||0));added.inst.rankWins=0;added.inst.rankedAt=Math.max(0,Number(c.rankedAt)||0);added.inst.aura=c.aura||null;added.inst.combatAura=c.combatAura||null;added.inst.bind=c.bind||null;added.inst.shiny=clamp(c.shiny||0,0,3);added.inst.battlePotions=(Array.isArray(c.battlePotions)?c.battlePotions:(c.battlePotion?[c.battlePotion]:[])).map(x=>normalizePotionQueueEntry(x,added.inst)).filter(Boolean).slice(0,3);added.inst.battlePotion=null;persist();toast("Karte gekauft.");loadMarket();refresh()}catch(e){console.warn(e);toast(e.message||"Kauf fehlgeschlagen.")}}
   async function claimPayouts(){const fb=await firebase(),u=await currentUser();if(!fb||!u)return;try{const q=fb.query(fb.collection(fb.db,PAYOUT_COLLECTION,u.uid,"items"),fb.where("status","==","pending"),fb.limit(50)),snap=await fb.getDocs(q);let sum=0;for(const d of snap.docs){sum+=Math.max(0,Number(d.data().amount)||0);const sold=Object.values(S.instances).find(x=>x.listed===d.id);if(sold){for(const row of S.floors){const i=row.indexOf(sold.id);if(i>=0)row[i]=null}delete S.instances[sold.id]}await fb.updateDoc(d.ref,{status:"claimed",claimedAt:fb.serverTimestamp()})}if(sum){S.points+=sum;persist();toast(`Marktplatz-Erlös: +${fmt(sum)} Points`)}}catch(e){console.warn("BigCards payout",e)}}
-  async function loadLeaderboard(show=false){const fb=await firebase();if(!fb){if(show)toast("Firebase nicht verfügbar.");return}try{const q=fb.query(fb.collection(fb.db,PROFILE_COLLECTION),fb.orderBy("lifetimeScore","desc"),fb.limit(50)),snap=await fb.getDocs(q);UI.leaderboard=snap.docs.map(d=>d.data());if(UI.tab==="score")refresh();if(show)toast("Bestenliste aktualisiert.")}catch(e){console.warn(e);if(show)toast("Bestenliste konnte nicht geladen werden.")}}
+  async function loadLeaderboard(show=false){const fb=await firebase();if(!fb){if(show)toast("Firebase nicht verfügbar.");return}try{await syncLeaderboardProfile();const q=fb.query(fb.collection(fb.db,PROFILE_COLLECTION),fb.orderBy("lifetimeScore","desc"),fb.limit(50)),snap=await fb.getDocs(q);UI.leaderboard=snap.docs.map(d=>d.data());if(UI.tab==="score")refresh();if(show)toast("Bestenliste aktualisiert.")}catch(e){console.warn(e);if(show)toast("Bestenliste konnte nicht geladen werden.")}}
 
   function modAction(action){
     if(UI.role!=="owner")return toast("Owner-Rechte erforderlich.");
