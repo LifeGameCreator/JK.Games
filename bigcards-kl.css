@@ -734,3 +734,16 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-slot>b{font-size:11.5px!important}
   .bc-slot>span{font-size:8.5px!important}
 }
+
+
+/* V369: Backup-Karte im Tab "Karte" direkt unter der Hauptkarte sichtbar. */
+.bc-feature-primary{display:grid;gap:12px;min-width:0}
+.bc-feature-backup-slot{position:relative;overflow:hidden;border:2px solid rgba(38,72,83,.22);border-radius:18px;padding:13px;background:linear-gradient(135deg,#eef7f5,#fff6dc);box-shadow:0 7px 20px rgba(31,45,45,.11);color:#203b49}
+.bc-feature-backup-slot>*{position:relative;z-index:2}.bc-feature-backup-slot.locked{background:linear-gradient(135deg,#e9e6dc,#f7f1df);filter:saturate(.7)}
+.bc-feature-backup-head{display:grid;grid-template-columns:46px minmax(0,1fr);gap:10px;align-items:start}.bc-feature-backup-head>span{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;background:#173f51;color:#fff;font-size:24px;box-shadow:0 4px 0 rgba(14,43,55,.25)}
+.bc-feature-backup-head small,.bc-feature-backup-label small{display:block;font-size:8px;letter-spacing:.13em;font-weight:950;opacity:.72}.bc-feature-backup-head h3{margin:3px 0 5px;font:900 20px Georgia,serif}.bc-feature-backup-head p{margin:0;font-size:9px;line-height:1.45;color:inherit;opacity:.8}
+.bc-feature-backup-slot>button,.bc-feature-backup-actions button{border:0;border-radius:10px;padding:9px 11px;background:#245d70;color:#fff;font-size:9px;font-weight:950;cursor:pointer}.bc-feature-backup-slot>button{width:100%;margin-top:10px}.bc-feature-backup-slot button.primary{background:linear-gradient(180deg,#eaa74b,#c77a2f);color:#fff}.bc-feature-backup-slot button.secondary{background:#756b59}
+.bc-feature-backup-label{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:8px;align-items:center;margin-bottom:9px}.bc-feature-backup-label>span{font-size:24px}.bc-feature-backup-label b{display:block;font:900 16px Georgia,serif}.bc-feature-backup-label em{font-style:normal;font-size:8px;font-weight:1000;padding:5px 7px;border-radius:999px;background:rgba(20,63,80,.12)}
+.bc-feature-backup-card{display:grid;grid-template-columns:92px minmax(0,1fr);gap:11px;align-items:center;padding:9px;border-radius:13px;background:rgba(255,255,255,.38);border:1px solid rgba(255,255,255,.58)}.bc-feature-backup-art{position:relative;min-height:92px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.33);font-size:45px;overflow:hidden}.bc-feature-backup-copy>small{display:block;font-size:8px;font-weight:950;letter-spacing:.05em}.bc-feature-backup-copy h3{margin:2px 0 6px;font:900 19px Georgia,serif}.bc-feature-backup-copy p{margin:7px 0 0;font-size:9px;line-height:1.4;color:inherit;opacity:.8}.bc-feature-backup-stats{display:flex;gap:5px;flex-wrap:wrap}.bc-feature-backup-stats span{padding:5px 6px;border-radius:7px;background:rgba(16,47,58,.10);font-size:8px;font-weight:950}
+.bc-feature-backup-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:9px}.bc-feature-backup-note{display:block;margin-top:8px;font-size:8px;font-weight:850;line-height:1.4;opacity:.72}
+@media(max-width:680px){.bc-feature-backup-card{grid-template-columns:72px minmax(0,1fr)}.bc-feature-backup-art{min-height:76px;font-size:38px}.bc-feature-backup-actions{grid-template-columns:1fr}.bc-feature-backup-actions button{width:100%}}
