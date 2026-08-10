@@ -1076,3 +1076,44 @@ body.bigcards-kl-open{overflow:hidden!important}
 @media(max-width:390px){
   .bc-vip-drop-info>div{grid-template-columns:1fr}
 }
+
+/* ===== V384 · kompakter Score-Kopf · lesbarer VIP-Tab ===== */
+.bc-collection-score-row{
+  width:100%;
+  margin:6px auto 12px;
+  display:grid;
+  grid-template-columns:minmax(180px,220px) minmax(180px,220px);
+  justify-content:center;
+  align-items:start;
+  column-gap:clamp(34px,10vw,130px);
+  row-gap:8px;
+}
+.bc-collection-score-row .bc-total-collection-score{
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  min-height:0!important;
+  height:auto!important;
+  align-self:start!important;
+  padding:8px 11px;
+  border-radius:13px;
+}
+.bc-collection-score-row .bc-total-collection-score small{font-size:8px;line-height:1.15}
+.bc-collection-score-row .bc-total-collection-score strong{font-size:22px;line-height:1.05;margin:3px 0}
+.bc-collection-score-row .bc-total-collection-score em{font-size:7.5px;line-height:1.25}
+.bc-rarity-score-item.vip-score>button.vip{
+  color:#111!important;
+  text-shadow:none!important;
+  font-weight:950!important;
+}
+@media(max-width:620px){
+  .bc-collection-score-row{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    column-gap:7px;
+    margin-top:4px;
+  }
+  .bc-collection-score-row .bc-total-collection-score{padding:7px 6px}
+  .bc-collection-score-row .bc-total-collection-score small{font-size:6.8px;letter-spacing:.07em}
+  .bc-collection-score-row .bc-total-collection-score strong{font-size:18px}
+  .bc-collection-score-row .bc-total-collection-score em{font-size:6.5px}
+}
