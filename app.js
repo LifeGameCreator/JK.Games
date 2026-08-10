@@ -32,8 +32,6 @@ const JK_RESET_V180 = Object.freeze({
   unifiedTaxAndBank: true,
   phase: "pre-beta"
 });
-const WAR_UNIT_LIMIT = 40;
-const WAR_TANK_LIMIT = 30;
 
 const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const minute = 60 * 1000;
@@ -14706,6 +14704,7 @@ async function startIncomingCallListener() {
       if (allowFallback && String(error?.code || "").includes("failed-precondition")) {
         const fallbackQuery = fb.query(
           fb.collection(fb.db, "phoneCalls"),
+          fb.where("calleeUid", "==", registration.ownerUid),
           fb.where("callee", "==", registration.number),
           fb.limit(20)
         );
@@ -14717,10 +14716,13 @@ async function startIncomingCallListener() {
     });
   };
 
+  // V390 Legacy-Fallback: Falls dieser ältere Listener vor dem V50-Inbox-Listener
+  // aktiv wird, muss seine Abfrage die bestehende Firestore-Regel vollständig
+  // einschränken. Sortiert wird ohnehin direkt im Snapshot-Handler.
   const orderedQuery = fb.query(
     fb.collection(fb.db, "phoneCalls"),
+    fb.where("calleeUid", "==", registration.ownerUid),
     fb.where("callee", "==", registration.number),
-    fb.orderBy("createdAtMs", "desc"),
     fb.limit(20)
   );
   attachListener(orderedQuery, true);
@@ -23734,6 +23736,17 @@ function drawDuelWall(ctx, x, y, s, cell) {
   ctx.stroke();
 }
 
+function shadeDuelColor(color, factor = 1) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(color || ""));
+  if (!match) return String(color || "#777777");
+  const hex = match[1];
+  const scale = Number.isFinite(Number(factor)) ? Math.max(0, Number(factor)) : 1;
+  const r = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(0, 2), 16) * scale)));
+  const g = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(2, 4), 16) * scale)));
+  const b = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(4, 6), 16) * scale)));
+  return `rgb(${r},${g},${b})`;
+}
+
 function drawDuelBuilding(ctx, x, y, s, building) {
   const color = duelOwnerColor(building.owner);
   const px = x * s;
@@ -23748,7 +23761,7 @@ function drawDuelBuilding(ctx, x, y, s, building) {
   ctx.lineTo(px + s * 0.92, py + s * 0.42);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = shadeWarColor(color, building.type === "barracks" ? 1.4 : 1.1);
+  ctx.fillStyle = shadeDuelColor(color, building.type === "barracks" ? 1.4 : 1.1);
   roundRect(ctx, px + s * 0.18, py + s * 0.38, s * 0.64, s * 0.44, s * 0.06);
   ctx.fill();
   ctx.shadowBlur = 0;
@@ -27803,9 +27816,14 @@ render();
   }
 
   // Funktionsdeklarationen liegen im globalen Script-Scope, deshalb direkt neu zuweisen.
+  // V390: Nur noch tatsächlich vorhandene Games wrappen. Direkte Referenzen auf
+  // bereits gelöschte Legacy-Startfunktionen dürfen das restliche app.js beim
+  // Laden nicht mehr abbrechen.
   const dailyGameRoundWrappers = [
-    ["playMiniGame", playMiniGame], ["startIconManRound", startIconManRound], ["startSnakeDifficulty", startSnakeDifficulty],
-    ["startWarColor", startWarColor], ["startKingdomGame", startKingdomGame], ["startRacerColor", startRacerColor]
+    ["playMiniGame", playMiniGame],
+    ["startIconManRound", startIconManRound],
+    ["startSnakeDifficulty", startSnakeDifficulty],
+    ["startKingdomGame", startKingdomGame]
   ];
   dailyGameRoundWrappers.forEach(([name, original]) => {
     if (typeof original !== "function") return;
@@ -27818,9 +27836,7 @@ render();
     if (name === "playMiniGame") playMiniGame = wrapped;
     else if (name === "startIconManRound") startIconManRound = wrapped;
     else if (name === "startSnakeDifficulty") startSnakeDifficulty = wrapped;
-    else if (name === "startWarColor") startWarColor = wrapped;
     else if (name === "startKingdomGame") startKingdomGame = wrapped;
-    else if (name === "startRacerColor") startRacerColor = wrapped;
   });
 
   const dailyBaseSave = save;
