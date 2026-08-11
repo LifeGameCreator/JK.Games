@@ -1367,3 +1367,146 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-ultimate-reqs{grid-template-columns:1fr}
   .bc-feature-backup-trails>div{grid-template-columns:1fr}
 }
+
+/* ===== V398 · VIP Wheel, VIP Clicker & kompakter Mehrkanal-Auto-Opener ===== */
+.bc-vip-page{position:relative}
+.bc-vip-page-actions{
+  position:absolute;
+  z-index:12;
+  top:10px;
+  right:12px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.bc-vip-page-actions .bc-vip-info-btn{
+  width:33px!important;
+  min-width:33px!important;
+  height:33px!important;
+  transform:translate(-2px,2px);
+}
+.bc-vip-close-btn{
+  display:inline-grid;
+  place-items:center;
+  width:33px;
+  min-width:33px;
+  height:33px;
+  padding:0;
+  border:1px solid rgba(122,71,52,.35);
+  border-radius:50%;
+  background:linear-gradient(145deg,#fff8ed,#e7d4bc);
+  color:#6d3a2c;
+  font:1000 20px/1 Arial,sans-serif;
+  cursor:pointer;
+  box-shadow:0 5px 14px rgba(0,0,0,.12);
+  transform:translate(-2px,2px);
+}
+.bc-vip-close-btn:hover,.bc-vip-close-btn:focus-visible{filter:brightness(1.05);outline:2px solid rgba(147,79,55,.23);outline-offset:2px}
+.bc-vip-page>.bc-section-title{padding-right:82px}
+
+/* Das Ziel wird per JS exakt auf den ausgelosten Sektor gedreht. */
+.bc-vip-wheel{transition:transform 2.35s cubic-bezier(.08,.66,.15,1)!important;will-change:transform}
+.bc-vip-wheel.spinning{transform:none}
+
+/* Mehrere Treffer können gleichzeitig an unterschiedlichen Positionen auf der Karte stehen. */
+.bc-vip-damage-pop{
+  position:absolute;
+  z-index:9;
+  left:var(--dmg-x,50%);
+  top:var(--dmg-y,50%);
+  pointer-events:none;
+  transform:translate(-50%,-50%) scale(.72);
+  color:#fff8df;
+  font:1000 clamp(17px,2.3vw,27px)/1 Arial,sans-serif;
+  letter-spacing:-.03em;
+  text-shadow:0 2px 2px rgba(0,0,0,.9),0 0 9px rgba(0,0,0,.48);
+  animation:bcVipDamageFloat .9s cubic-bezier(.18,.7,.2,1) forwards;
+}
+.bc-vip-damage-pop.crit{color:#ffe56f;font-size:clamp(20px,2.8vw,31px);text-shadow:0 2px 2px rgba(0,0,0,.85),0 0 12px rgba(255,199,46,.78)}
+.bc-vip-damage-pop.special{color:#ff9f78;font-size:clamp(21px,3vw,33px);text-shadow:0 2px 2px rgba(0,0,0,.88),0 0 13px rgba(255,91,56,.7)}
+@keyframes bcVipDamageFloat{
+  0%{opacity:0;transform:translate(-50%,-42%) scale(.68)}
+  14%{opacity:1;transform:translate(-50%,-58%) scale(1.12)}
+  72%{opacity:1;transform:translate(-50%,-105%) scale(.98)}
+  100%{opacity:0;transform:translate(-50%,-155%) scale(.88)}
+}
+
+/* Auto-Opener bleibt bewusst klein und zeigt erst nach dem Kauf die Arbeitskanäle. */
+.bc-auto-opener{max-width:min(440px,100%);align-self:flex-start}
+.bc-auto-opener.locked{
+  display:flex;
+  align-items:center;
+  min-height:38px;
+  width:auto;
+  padding:5px 7px 5px 10px;
+  border:1px solid rgba(137,109,70,.22);
+  background:rgba(255,250,235,.72);
+}
+.bc-auto-opener.owned{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:6px;
+  width:min(430px,100%);
+  padding:7px;
+}
+.bc-auto-opener-head{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0}
+.bc-auto-lanes{display:flex;align-items:center;gap:4px;flex-wrap:nowrap}
+.bc-auto-lanes button{
+  width:27px;
+  min-width:27px;
+  height:27px;
+  padding:0!important;
+  border-radius:8px!important;
+  font-size:9px;
+  font-weight:1000;
+}
+.bc-auto-lanes button.active{outline:2px solid rgba(33,88,105,.28);outline-offset:1px}
+.bc-auto-lanes button.running:after{content:"";display:block;width:5px;height:5px;margin:-4px 0 0 18px;border-radius:50%;background:#46c876;box-shadow:0 0 0 2px rgba(255,255,255,.8)}
+.bc-auto-compact{display:grid;grid-template-columns:minmax(105px,.75fr) minmax(125px,1.15fr) auto;gap:5px;align-items:center;min-width:0}
+.bc-auto-compact>span{display:grid;gap:0;min-width:0;padding:5px 6px;border-radius:8px;background:rgba(255,255,255,.55);border:1px solid rgba(138,111,70,.15)}
+.bc-auto-compact>span small{font-size:6px!important;letter-spacing:.08em;color:#8d754c}
+.bc-auto-compact>span b{font-size:10px;color:#253b44;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-auto-compact>span em{font-style:normal;font-size:6px;color:#827257;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-auto-compact select{min-width:0;width:100%;height:31px;padding:4px 7px!important;font-size:8px}
+.bc-auto-compact>button{height:31px;min-width:50px;padding:4px 8px!important;font-size:8px}
+.bc-auto-lane-result{min-height:0;padding:5px 7px;border-radius:8px;background:rgba(29,65,77,.055);font-size:7px;line-height:1.35;color:#52656b}
+.bc-auto-lane-result:empty{display:none}
+.bc-auto-lane-result b{color:#263f48}.bc-auto-lane-result small{font-size:6px!important}.bc-auto-lane-result .bc-auto-result-rarities{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px}
+.bc-auto-final{display:grid;gap:10px;max-width:720px}.bc-auto-final>small{font-size:8px;font-weight:1000;letter-spacing:.12em;color:#a3711c}.bc-auto-final h2{margin:0;color:#2e4851}.bc-auto-final>p{margin:0;color:#6e675a}
+.bc-auto-final-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.bc-auto-final-stats>span{padding:9px;border:1px solid rgba(130,104,65,.16);border-radius:10px;background:#fff9ea}.bc-auto-final-stats small,.bc-auto-final-stats b{display:block}.bc-auto-final-stats small{font-size:6px;color:#98712c}.bc-auto-final-stats b{font-size:13px;color:#2c4851}
+.bc-auto-rarest{padding:10px;border:1px solid rgba(197,148,47,.35);border-radius:11px;background:linear-gradient(145deg,#fff1bd,#fff9e5)}.bc-auto-rarest small,.bc-auto-rarest b,.bc-auto-rarest span{display:block}.bc-auto-rarest b{margin:3px 0;color:#6c4a10}.bc-auto-rarest span{font-size:8px;color:#7a6541}
+.bc-auto-final-rarities{display:flex;gap:5px;flex-wrap:wrap}.bc-auto-final-rarities>span{padding:6px 8px;border-radius:999px;border:1px solid rgba(87,104,109,.17);background:#f7f5ee;font-size:8px;font-weight:950}
+
+@media(max-width:760px){
+  .bc-vip-page-actions{top:8px;right:8px;gap:4px}
+  .bc-vip-page-actions .bc-vip-info-btn,.bc-vip-close-btn{width:30px!important;min-width:30px!important;height:30px!important;transform:translate(-1px,2px)}
+  .bc-vip-close-btn{font-size:18px}
+  .bc-vip-page>.bc-section-title{padding-right:66px}
+  .bc-auto-opener.owned{width:100%;max-width:none}
+  .bc-auto-compact{grid-template-columns:minmax(90px,.8fr) minmax(105px,1fr) 48px}
+  .bc-auto-final-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:460px){
+  .bc-auto-opener.owned{padding:6px}
+  .bc-auto-opener-head{align-items:flex-start}
+  .bc-auto-lanes{gap:3px}
+  .bc-auto-lanes button{width:25px;min-width:25px;height:25px}
+  .bc-auto-compact{grid-template-columns:1fr 48px}
+  .bc-auto-compact>span{grid-column:1/-1}
+  .bc-auto-compact select{grid-column:1}
+  .bc-auto-compact>button{grid-column:2}
+  .bc-auto-lane-result{font-size:6.5px}
+  .bc-vip-damage-pop{font-size:19px}.bc-vip-damage-pop.crit{font-size:23px}.bc-vip-damage-pop.special{font-size:25px}
+}
+
+
+/* ===== V399 · kompakte Kartendetails + lebendiger Markt ===== */
+.bc-card-detail{align-items:start!important}
+.bc-detail-card{align-self:start!important;min-height:0!important;height:auto!important;padding:13px!important}
+.bc-detail-card .bc-card-art{height:190px!important;font-size:80px!important}
+.bc-detail-card h2{margin:6px 0 9px!important;line-height:1.05}
+.bc-detail-card p{margin:7px 0!important;line-height:1.35}
+.bc-market-boss-demand{display:flex;align-items:center;gap:10px;margin:-3px 0 10px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(41,91,103,.12),rgba(215,174,79,.18));border:1px solid rgba(73,94,83,.18)}
+.bc-market-boss-demand>span{font-size:24px}.bc-market-boss-demand>div{display:flex;flex-direction:column;gap:2px}.bc-market-boss-demand b{font-size:12px;color:#244653}.bc-market-boss-demand small{font-size:9px;color:#6f6655;line-height:1.35}
+@media(max-width:900px){.bc-detail-card .bc-card-art{height:170px!important;font-size:70px!important}}
+@media(max-width:520px){.bc-detail-card{padding:11px!important}.bc-detail-card .bc-card-art{height:145px!important;font-size:60px!important}.bc-detail-card h2{font-size:23px!important}.bc-market-boss-demand{padding:9px}.bc-market-boss-demand>span{font-size:20px}}
