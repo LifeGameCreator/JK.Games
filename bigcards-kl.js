@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V400 */
+/* BigCards.kl – JK.Games Top Game V401 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-bigcards-v400-backup-repair-vip-pack-fix";
+  const VERSION = "2026-08-11-bigcards-v401-fast-cloud-load";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -20,6 +20,12 @@
   const LOCAL_DB_STORE = "saves";
   const LOCAL_SAVE_DELAY_MS = 900;
   const CLOUD_MAX_CHUNKS = 220;
+  // V401: Cloud-Lesen darf deutlich aggressiver parallel laufen als Schreiben.
+  // Die Chunks sind unveränderlich/content-addressed; 30 IDs passen in eine
+  // documentId()-IN-Abfrage. Drei solcher Abfragen parallel ersetzen bei großen
+  // Spielständen dutzende serielle getDoc-Runden.
+  const CLOUD_READ_QUERY_SIZE = 30;
+  const CLOUD_READ_QUERY_CONCURRENCY = 3;
   // V387: Große Sammlungen bleiben lokal sofort sicher, während Firestore bewusst
   // ruhiger synchronisiert. Das verhindert eine überfüllte Write-Queue bei Auto-Opener
   // und sehr großen Kartenbeständen.
@@ -518,7 +524,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;invalidateCollectionRenderCache();S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:400,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
+  function defaultState(){return {version:401,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -609,7 +615,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=400;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=401;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -2438,26 +2444,38 @@
     const legacyBuckets=root.cloudFormat===CLOUD_LEGACY_BUCKET_FORMAT;
     const refs=immutable&&Array.isArray(root.chunkRefs)&&root.chunkRefs.length===count?root.chunkRefs:null;
     if(immutable&&!refs)throw cloudIntegrityError("Cloud-Manifest enthält keine gültigen Bucket-Referenzen");
-    const chunks=new Array(count);
-    for(let start=0;start<count;start+=6){
-      const jobs=[];
-      for(let i=start;i<Math.min(count,start+6);i++){
-        const id=immutable?String(refs[i]||""):`${legacyBuckets?"bucket":"chunk"}-${String(i).padStart(3,"0")}`;
-        if(!id)throw cloudIntegrityError(`Cloud-Chunk ${i+1}/${count} hat keine Referenz`);
-        jobs.push(fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id)).then(snap=>({i,id,snap})));
-      }
-      const rows=await Promise.all(jobs);
-      for(const {i,id,snap} of rows){
-        if(!snap.exists())throw cloudIntegrityError(`Cloud-Chunk ${i+1}/${count} fehlt`);
-        const d=snap.data()||{};
-        if(Number(d.index)!==i||typeof d.data!=="string")throw cloudIntegrityError(`Cloud-Chunk ${i+1} ist ungültig`);
-        const actualHash=cloudHash(d.data);
-        if(expectedHashes&&actualHash!==expectedHashes[i])throw cloudIntegrityError(`Cloud-Chunk ${i+1} Prüfsumme stimmt nicht`);
-        if(immutable&&d.hash&&String(d.hash)!==actualHash)throw cloudIntegrityError(`Cloud-Chunk ${i+1} gespeicherte Prüfsumme stimmt nicht`);
-        if(immutable&&id!==cloudChunkRefId(i,actualHash))throw cloudIntegrityError(`Cloud-Chunk ${i+1} Referenz stimmt nicht`);
-        chunks[i]=d.data;
-      }
+    const chunks=new Array(count),specs=[];
+    for(let i=0;i<count;i++){
+      const id=immutable?String(refs[i]||""):`${legacyBuckets?"bucket":"chunk"}-${String(i).padStart(3,"0")}`;
+      if(!id)throw cloudIntegrityError(`Cloud-Chunk ${i+1}/${count} hat keine Referenz`);
+      specs.push({i,id});
     }
+    const validate=(i,id,snap)=>{
+      if(!snap?.exists?.())throw cloudIntegrityError(`Cloud-Chunk ${i+1}/${count} fehlt`);
+      const d=snap.data()||{};
+      if(Number(d.index)!==i||typeof d.data!=="string")throw cloudIntegrityError(`Cloud-Chunk ${i+1} ist ungültig`);
+      const actualHash=cloudHash(d.data);
+      if(expectedHashes&&actualHash!==expectedHashes[i])throw cloudIntegrityError(`Cloud-Chunk ${i+1} Prüfsumme stimmt nicht`);
+      if(immutable&&d.hash&&String(d.hash)!==actualHash)throw cloudIntegrityError(`Cloud-Chunk ${i+1} gespeicherte Prüfsumme stimmt nicht`);
+      if(immutable&&id!==cloudChunkRefId(i,actualHash))throw cloudIntegrityError(`Cloud-Chunk ${i+1} Referenz stimmt nicht`);
+      chunks[i]=d.data;
+    };
+    const groups=[];
+    for(let start=0;start<specs.length;start+=CLOUD_READ_QUERY_SIZE)groups.push(specs.slice(start,start+CLOUD_READ_QUERY_SIZE));
+    const readGroup=async group=>{
+      // Eine documentId-IN-Abfrage holt bis zu 30 Chunks mit einem einzigen
+      // Firestore-Roundtrip. Falls ein Browser/Cache/SDK die Query ablehnt,
+      // fällt V401 sicher auf parallele Einzelreads zurück.
+      try{
+        const col=fb.collection(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks"),ids=group.map(x=>x.id),q=fb.query(col,fb.where(fb.documentId(),"in",ids)),snap=await fb.getDocs(q),byId=new Map(snap.docs.map(d=>[d.id,d]));
+        for(const {i,id} of group)validate(i,id,byId.get(id));
+      }catch(queryError){
+        if(queryError?.cloudIntegrity)throw queryError;
+        const rows=await Promise.all(group.map(({i,id})=>fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id)).then(snap=>({i,id,snap}))));
+        for(const row of rows)validate(row.i,row.id,row.snap);
+      }
+    };
+    for(let start=0;start<groups.length;start+=CLOUD_READ_QUERY_CONCURRENCY)await Promise.all(groups.slice(start,start+CLOUD_READ_QUERY_CONCURRENCY).map(readGroup));
     let raw;
     if(immutable||legacyBuckets){
       raw={instances:{},collection:{}};
@@ -2507,7 +2525,7 @@
     if(!force&&Number(globalGate.queueDepth||0)>=3){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,180000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=400;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=401;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
@@ -2554,19 +2572,59 @@
       return false;
     }finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave(cloudFastDirty?CLOUD_SAVE_DELAY_MS:CLOUD_PASSIVE_SAVE_DELAY_MS);}
   }
+  function cloudCacheMatchesManifest(localRaw,meta,root){
+    return !!(localRaw&&typeof localRaw==="object"&&cloudHasFullSave(root)&&String(meta?.saveId||"")&&String(meta.saveId)===String(root.saveId||""));
+  }
+  function applyRootOnlyChangesToCachedState(localRaw,meta,root){
+    const out=localRaw&&typeof localRaw==="object"?localRaw:null;if(!out||!root)return out;
+    const localUnsynced=Number(out.updatedAt||0)>Number(meta?.syncedLocalUpdatedAt||0)+1000;
+    // Ein Marktkauf kann nur Points/updatedAt direkt im Root ändern, ohne einen
+    // neuen Chunk-saveId zu erzeugen. Solange lokal nichts Ungespeichertes liegt,
+    // übernehmen wir diese kleinen Root-Felder ohne 60+ Chunks neu herunterzuladen.
+    if(!localUnsynced&&Number(root.updatedAtMs||0)>Number(meta?.remoteUpdatedAtMs||0)){
+      if(Number.isFinite(Number(root.points)))out.points=Math.max(0,Number(root.points));
+      if(Number.isFinite(Number(root.level)))out.level=Math.max(1,Math.floor(Number(root.level)));
+      if(Number.isFinite(Number(root.totalRebirths)))out.totalRebirths=Math.max(0,Math.floor(Number(root.totalRebirths)));
+      if(Number.isFinite(Number(root.lifetimeScore)))out.lifetimeScore=Math.max(Number(out.lifetimeScore)||0,Number(root.lifetimeScore)||0);
+      out.updatedAt=Math.max(Number(out.updatedAt)||0,Number(root.updatedAtMs)||0);
+    }
+    return out;
+  }
+  async function preloadLocalCloudPreview(){
+    const userId=currentUidSync();if(!userId)return null;
+    try{const raw=await readLocalStateForUser(userId);if(raw&&UI.overlay&&!cloudReady&&!cloudMigrationPending){cloudUid=userId;adoptState(raw,{saveLocal:false,userId});UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);}return {userId,raw};}
+    catch{return null}
+  }
   async function pullCloudIfNewer(showToast=false){
-    if(!cloudReady||cloudBooting||cloudSaving||cloudMigrationPending||cloudDirty)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{},remoteAt=Number(root.updatedAtMs)||0;if(!cloudHasFullSave(root))return false;if(root.saveId===cloudLastSaveId&&remoteAt<=cloudLastRemoteUpdatedAt)return false;const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=remoteAt;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:remoteAt,syncedLocalUpdatedAt:Number(S.updatedAt)||remoteAt});UI.battleCard=null;UI.battleResult=null;UI.battleSession=null;resetOnlineUi();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand von einem anderen Gerät aktualisiert.",3000);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards cloud pull",e);return false}}
+    if(!cloudReady||cloudBooting||cloudSaving||cloudMigrationPending||cloudDirty)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{},remoteAt=Number(root.updatedAtMs)||0;if(!cloudHasFullSave(root))return false;if(root.saveId===cloudLastSaveId&&remoteAt<=cloudLastRemoteUpdatedAt)return false;
+      // V401 Fast-Path: gleicher immutable saveId = dieselben Chunk-Daten. Wenn
+      // nur der Root (z. B. Markt-Points) neuer ist, werden NICHT alle Chunks erneut geladen.
+      if(root.saveId===cloudLastSaveId&&S){const meta=readCloudMeta(u.uid);applyRootOnlyChangesToCachedState(S,meta,root);cloudLastRemoteUpdatedAt=remoteAt;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:remoteAt,syncedLocalUpdatedAt:Number(S.updatedAt)||remoteAt});writeLocalState(u.uid);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand aktualisiert.",2200);return true;}
+      const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=remoteAt;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:remoteAt,syncedLocalUpdatedAt:Number(S.updatedAt)||remoteAt});UI.battleCard=null;UI.battleResult=null;UI.battleSession=null;resetOnlineUi();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand von einem anderen Gerät aktualisiert.",3000);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards cloud pull",e);return false}}
   async function retryPendingCloudMigration(){if(!cloudMigrationPending||cloudBooting||cloudSaving||!UI.overlay)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{};if(!cloudHasFullSave(root))return false;const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;cloudMigrationPending=false;cloudReady=true;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);startCloudWatchers();toast(`☁ Vollständiger PC-Spielstand geladen · ${Object.keys(S.instances||{}).length} Karten`,4200);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards migration retry",e);return false}}
   function stopCloudWatchers(){clearInterval(cloudPollTimer);cloudPollTimer=0;window.removeEventListener("focus",onCloudFocus);document.removeEventListener("visibilitychange",onCloudVisibility);}
   function onCloudFocus(){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}
   function onCloudVisibility(){if(document.visibilityState==="visible"){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}else{S.lastSeen=now();writeLocalState(cloudUid||currentUidSync(),true)}}
   function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),CLOUD_POLL_MS);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
   function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,250);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
-  async function initializeCloudSession(){
-    if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;const fb=await firebase(),u=await currentUser();
-    if(!fb||!u){const localOnly=await readIndexedState("");if(localOnly)adoptState(localOnly,{saveLocal:false});cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft lokal über sicheren Gerätespeicher. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}
-    cloudUid=u.uid;const localRaw=(await readLocalStateForUser(u.uid))||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null,cloudLoadError=null;
-    try{rootSnap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(rootSnap.exists())root=rootSnap.data()||{};if(cloudHasFullSave(root))remoteRaw=await readFullCloudState(fb,u.uid,root);}catch(e){cloudLoadError=e;if(e?.cloudIntegrity)console.info("BigCards Cloud-Integrität: lokaler Sicherheitsstand/automatische Reparatur wird verwendet.",e.message);else console.warn("BigCards cloud load",e);}
+  async function initializeCloudSession(localPreviewPromise=null){
+    if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;
+    const preview=localPreviewPromise?await localPreviewPromise:null,fb=await firebase(),u=await currentUser();
+    if(!fb||!u){const localOnly=preview?.raw||(await readIndexedState(""));if(localOnly)adoptState(localOnly,{saveLocal:false});cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft lokal über sicheren Gerätespeicher. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}
+    cloudUid=u.uid;const cachedLocalRaw=preview?.userId===u.uid&&preview?.raw?preview.raw:(await readLocalStateForUser(u.uid)),localRaw=cachedLocalRaw||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null,cloudLoadError=null,usedFastCache=false,fastRootChanged=false;
+    // Wenn der Preview wegen noch nicht fertiger Auth nicht lief, zeigen wir den
+    // IndexedDB-Spielstand spätestens jetzt an – noch bevor die Cloud-Chunks kommen.
+    if(localRaw&&UI.overlay){adoptState(localRaw,{saveLocal:false,userId:u.uid});UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);}
+    try{
+      rootSnap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(rootSnap.exists())root=rootSnap.data()||{};
+      if(cloudHasFullSave(root)){
+        // Normaler Start auf demselben Gerät: Manifest/saveId unverändert. Der
+        // vollständige Spielstand liegt bereits in IndexedDB und wird direkt benutzt.
+        // So entfallen typischerweise 61–200 Firestore-Chunk-Reads komplett.
+        if(cloudCacheMatchesManifest(cachedLocalRaw,meta,root)){fastRootChanged=Number(root.updatedAtMs||0)>Number(meta?.remoteUpdatedAtMs||0);applyRootOnlyChangesToCachedState(cachedLocalRaw,meta,root);remoteRaw=cachedLocalRaw;usedFastCache=true;}
+        else remoteRaw=await readFullCloudState(fb,u.uid,root);
+      }
+    }catch(e){cloudLoadError=e;if(e?.cloudIntegrity)console.info("BigCards Cloud-Integrität: lokaler Sicherheitsstand/automatische Reparatur wird verwendet.",e.message);else console.warn("BigCards cloud load",e);}
     if(root&&Array.isArray(root.chunkHashes))cloudLastChunkHashes=root.chunkHashes.slice();else cloudLastChunkHashes=[];
     if(root&&Array.isArray(root.chunkRefs))cloudLastChunkRefs=root.chunkRefs.slice();else cloudLastChunkRefs=[];
     if(remoteRaw){
@@ -2574,11 +2632,11 @@
       if(localUnsynced){adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudDirty=true;}
       else{
         if(meta.saveId&&meta.saveId!==root.saveId&&Number(localRaw?.updatedAt||0)>Number(meta.syncedLocalUpdatedAt||0)+1000)backupLocalConflict(u.uid,localRaw);
-        adoptState(remoteRaw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;
+        adoptState(remoteRaw,{saveLocal:!usedFastCache,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;
         const needsImmutableMigration=root.cloudFormat!==CLOUD_BUCKET_FORMAT||!Array.isArray(root.chunkRefs)||root.chunkRefs.length!==Number(root.chunkCount);
         cloudDirty=needsImmutableMigration;
         if(needsImmutableMigration){cloudLastChunkHashes=[];cloudLastChunkRefs=[];}
-        writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});
+        writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});if(usedFastCache&&fastRootChanged)writeLocalState(u.uid);
       }
     }
     else if(root){
@@ -2591,9 +2649,12 @@
       else{adoptState(mergeLegacyCheckpoint(localRaw,root),{saveLocal:true,userId:u.uid});if(Number(root.collectionDiscovered||0)>0&&!localHasCards){cloudMigrationPending=true;cloudDirty=false;}}
     }
     else{adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudDirty=true;}
-    cloudBooting=false;cloudReady=!cloudMigrationPending;ensureDaily();applyOffline();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);await loadRole();await claimPayouts();startRuntimeTimers();
+    cloudBooting=false;cloudReady=!cloudMigrationPending;ensureDaily();applyOffline();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);
+    // Rolle und Auszahlungen blockieren das sichtbare Laden nicht mehr. Der Spieler
+    // kann BigCards bereits benutzen, während diese kleinen Online-Aufgaben nachlaufen.
+    startRuntimeTimers();void loadRole();void claimPayouts();
     if(cloudMigrationPending){toast("☁ Der Online-Spielstand ist aktuell nicht vollständig lesbar. Öffne BigCards einmal auf dem Gerät mit deinem neuesten vollständigen Kartenbestand; danach wird der Spielstand automatisch repariert.",7000);return;}
-    if(cloudDirty)await syncProfile(true);else toast(`☁ BigCards synchronisiert · ${Object.keys(S.instances||{}).length} Karten geladen`,3000);
+    if(cloudDirty)void syncProfile(true);else toast(`${usedFastCache?"⚡":"☁"} BigCards geladen · ${Object.keys(S.instances||{}).length} Karten${usedFastCache?" · Schnellstart":""}`,2600);
   }
   async function loadRole(showToast=false){const fb=await firebase(),u=await currentUser();if(!fb||!u){UI.role="player";if(UI.tab==="mod")UI.tab="field";if(showToast)toast("Online-Rolle nicht verfügbar.");return refresh()}try{const snap=await fb.getDoc(fb.doc(fb.db,"staffRoles",u.uid));UI.role=String(snap.data()?.role||"player").toLowerCase();}catch{UI.role="player"}let changed=false;if(UI.role==="owner"&&!S.vipUnlocked){S.vipUnlocked=true;changed=true;}if(UI.role!=="owner"&&!S.vipUnlocked){for(const inst of Object.values(S.instances||{})){if(inst?.fieldPermit){inst.fieldPermit=false;changed=true;}}for(let floor=0;floor<(S.floors||[]).length;floor++){const max=floorMaxTier(floor),row=S.floors[floor]||[];for(let slot=0;slot<row.length;slot++){const inst=instance(row[slot]);if(inst&&!inst.exclusive&&!inst.vip&&inst.rarity>max){row[slot]=null;changed=true;}}}}if(changed)persist();if(UI.role!=="owner"&&UI.tab==="mod")UI.tab="field";refresh();}
   async function loadMarket(show=false){const supplied=marketMerchantListings();const fb=await firebase();if(!fb){UI.market=supplied.sort((a,b)=>(a.price||0)-(b.price||0));if(UI.tab==="market")refresh();if(show)toast(`${UI.market.length} Angebote geladen.`);return;}try{const q=fb.query(fb.collection(fb.db,MARKET_COLLECTION),fb.where("status","==","active"),fb.limit(40)),snap=await fb.getDocs(q),playerListings=snap.docs.map(d=>({id:d.id,...d.data()}));UI.market=[...playerListings,...supplied].sort((a,b)=>(a.price||0)-(b.price||0));await loadMarketStats(UI.market.map(x=>x.cardKey||marketCardKeyFromCard(x.card||{})));if(UI.tab==="market")refresh();if(show)toast(`${UI.market.length} Angebote geladen.`)}catch(e){console.warn(e);UI.market=supplied.sort((a,b)=>(a.price||0)-(b.price||0));if(UI.tab==="market")refresh();if(show)toast(`${UI.market.length} Angebote geladen.`)}}
@@ -2647,7 +2708,7 @@
 
   function grantJkCoinPurchase(kind,amount=1){state();const qty=Math.max(1,Math.floor(Number(amount)||1));if(kind==="vipUnlock"){S.vipUnlocked=true;}else if(String(kind).startsWith("pack:")){const id=String(kind).split(":")[1];S.jkPackCredits[id]=(S.jkPackCredits[id]||0)+qty}else if(kind==="exclusivePack")S.exclusiveCredits+=qty;else if(kind==="autoOpenerHour"){S.autoOpenerWorkMs=Math.max(0,Number(S.autoOpenerWorkMs)||0)+qty*AUTO_OPENER_HOUR_MS;S.autoOpenerCapacity=Math.min(AUTO_OPENER_MAX_LANES,Math.max(1,Math.floor(Number(S.autoOpenerCapacity)||0)+qty));S.autoOpenerLastAt=now();}else if(kind==="autoCollectorHour")S.autoCollectorUntil=Math.max(now(),S.autoCollectorUntil||0)+qty*3600000;else if(/^vipClickBoost:(?:2|4|6|8|10)$/.test(String(kind))){S.jkVipClickMultiplier=Number(String(kind).split(":")[1]);S.jkVipClickUntil=now()+JK_VIP_CLICK_DURATION_MS;}else if(kind==="bossDamageBoost:2"){S.jkBossDamageMultiplier=2;S.jkBossDamageUntil=now()+JK_BOSS_DAMAGE_DURATION_MS;}else if(/^finishExpedition:[0-3]$/.test(String(kind))){const slot=Number(String(kind).split(":")[1]);if(!finishExpeditionWithJk(slot))return false;}else if(String(kind).startsWith("aura:")){const id=String(kind).split(":")[1];S.auraInventory[id]=(S.auraInventory[id]||0)+qty}else if(String(kind).startsWith("combatAura:")){const id=String(kind).split(":")[1];S.combatAuraInventory[id]=(S.combatAuraInventory[id]||0)+qty}else if(String(kind).startsWith("bind:")){const id=String(kind).split(":")[1];S.bindInventory[id]=(S.bindInventory[id]||0)+qty}else if(String(kind).startsWith("trail:")){const id=String(kind).split(":")[1];if(!trailBy(id))return false;S.trailInventory[id]=trailCount(id)+qty}else if(String(kind).startsWith("featuredStorage:")){const tier=clamp(Math.floor(Number(String(kind).split(":")[1])||0),0,FEATURED_STORAGE_TIERS.length-1);S.featuredStorageTier=Math.max(Math.floor(Number(S.featuredStorageTier)||0),tier)}else if(kind==="bulkLevelUnlock"){S.bulkLevelUntil=now()+BULK_LEVEL_ACCESS_MS;S.bulkLevelLegacyMigrated=true;S.bulkLevelUnlocked=false;}else if(kind==="bulkRebirthUnlock"){S.bulkRebirthUntil=now()+BULK_LEVEL_ACCESS_MS;}else if(/^pointsBoost:(?:2|4|6|8|10)$/.test(String(kind))){if(UI.overlay){updateFeaturedEarnings(now(),true);S.lastSeen=now();}else settleOfflineBeforePointsBooster();const mult=Number(String(kind).split(":")[1]);S.jkBoostPointsMultiplier=mult;S.jkBoostPointsUntil=now()+JK_BOOST_DURATION_MS;}else if(/^xpBoost:(?:2|4|6|8|10)$/.test(String(kind))){const mult=Number(String(kind).split(":")[1]);S.jkBoostXpMultiplier=mult;S.jkBoostXpUntil=now()+JK_BOOST_DURATION_MS;}else if(/^damageBoost:(?:20|40|60|80|100)$/.test(String(kind))){const pct=Number(String(kind).split(":")[1]);S.jkBoostDamageBonus=pct/100;S.jkBoostDamageUntil=now()+JK_BOOST_DURATION_MS;}else if(String(kind).startsWith("pointsMinutes:")){const mins=Number(String(kind).split(":")[1])||5;S.points+=Math.max(1000,productionPerSecond()*60*mins)*qty}else return false;persist();if(UI.overlay){refresh();toast("JK/Coin-Kauf in BigCards.kl gutgeschrieben.")}return true;}
 
-  function open(phone){if(UI.overlay)return;state();S.autoOpenerLastAt=now();UI.phone=phone||UI.phone;UI.tab="field";UI.battleResult=null;UI.battleSession=null;resetOnlineUi();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);const overlay=document.createElement("div");overlay.className="bc-overlay";overlay.dataset.bigcardsKl="1";overlay.innerHTML=renderShell();document.body.append(overlay);document.body.classList.add("bigcards-kl-open");UI.overlay=overlay;UI.main=overlay.querySelector("[data-bc-main]");bindEvents();refresh(false);toast("☁ BigCards-Spielstand wird online abgeglichen …",2400);initializeCloudSession().then(()=>recoverOnlineMatchIfAny()).catch(()=>recoverOnlineMatchIfAny());}
+  function open(phone){if(UI.overlay)return;state();S.autoOpenerLastAt=now();UI.phone=phone||UI.phone;UI.tab="field";UI.battleResult=null;UI.battleSession=null;resetOnlineUi();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);const overlay=document.createElement("div");overlay.className="bc-overlay";overlay.dataset.bigcardsKl="1";overlay.innerHTML=renderShell();document.body.append(overlay);document.body.classList.add("bigcards-kl-open");UI.overlay=overlay;UI.main=overlay.querySelector("[data-bc-main]");bindEvents();refresh(false);toast("☁ BigCards-Spielstand wird online abgeglichen …",1800);const localPreview=preloadLocalCloudPreview();initializeCloudSession(localPreview).then(()=>recoverOnlineMatchIfAny()).catch(()=>recoverOnlineMatchIfAny());}
   function close(){if(!UI.overlay)return;updateFeaturedEarnings(now());clearTimeout(UI.battleEnemyTimer);UI.battleEnemyTimer=0;UI.battleSession=null;if(UI.onlineStatus==="searching")void cancelOnlineMatchmaking(true);else stopOnlineBattlePolling();clearFieldDragVisuals();UI.drag=null;S.lastSeen=now();persist();writeLocalState(cloudUid||currentUidSync(),true);/* V383: Beim Schließen nur lokal sichern. Der bereits geplante Cloud-Save wird nicht zusätzlich erzwungen. */stopCloudWatchers();window.removeEventListener("keydown",onKey);clearInterval(tickTimer);clearInterval(autoTimer);clearTimeout(UI.autoNoticeTimer);UI.autoNoticeTimer=0;UI.overlay.remove();UI.overlay=null;UI.main=null;UI.packReveal=null;document.body.classList.remove("bigcards-kl-open")}
   function returnToTopGames(){const phone=UI.phone;close();setTimeout(()=>{if(window.JKGamesOpenTopGames)window.JKGamesOpenTopGames(phone);else if(window.openDeviceInterface&&phone)window.openDeviceInterface(phone,"topgames",false)},80)}
 
