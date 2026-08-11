@@ -28,8 +28,8 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 1000;
-  const FIRESTORE_RESOURCE_BACKOFF_MS = 600000;
+  const FIRESTORE_WRITE_GAP_MS = 1400;
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 900000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
   // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
@@ -38,6 +38,8 @@
   let firestoreWriteBackoffUntil = 0;
   let firestoreWriteQueueDepth = 0;
   let firestoreWriteBackoffNoticeAt = 0;
+  let runtimeRawSetDoc = null;
+  const firestoreCoalescedWrites = new Map();
 
   function emit(next, error = "") {
     status = next;
@@ -126,6 +128,61 @@
     return result;
   }
 
+  // V396: Presence/Profile-Writes koennen sehr schnell erneut mit neueren Daten
+  // ankommen. Solange ein Write derselben Dokument-Pfadgruppe noch wartet/laeuft,
+  // behalten wir nur den neuesten Stand statt weitere SDK-Writes aufzustauen.
+  function coalescibleFirestorePath(ref) {
+    const path = String(ref?.path || "");
+    return path.startsWith("centerPresenceV268/")
+      || path.startsWith("centerStaffPresenceV270/")
+      || path.startsWith("playerProfiles/");
+  }
+
+  function queueCoalescedSetDoc(args) {
+    const ref = args?.[0];
+    if (!coalescibleFirestorePath(ref)) return queueFirestoreWrite("setDoc", () => runtimeRawSetDoc(...args));
+    const key = `set:${String(ref.path)}`;
+    let entry = firestoreCoalescedWrites.get(key);
+    if (!entry) {
+      entry = { args, waiting: [], running: false, queued: false, dirty: false };
+      firestoreCoalescedWrites.set(key, entry);
+    } else {
+      const oldArgs = entry.args;
+      const oldMerge = oldArgs?.[2]?.merge === true;
+      const newMerge = args?.[2]?.merge === true;
+      // Bei merge:true koennen unterschiedliche Module am selben Profil arbeiten.
+      // Deshalb Felder zusammenfuehren statt den vorherigen Payload zu verlieren.
+      entry.args = oldMerge && newMerge && oldArgs?.[1] && args?.[1]
+        ? [args[0], { ...oldArgs[1], ...args[1] }, args[2]]
+        : args;
+      if (entry.running) entry.dirty = true;
+    }
+    const promise = new Promise((resolve, reject) => entry.waiting.push({ resolve, reject }));
+    const launch = () => {
+      if (entry.running || entry.queued) return;
+      entry.queued = true;
+      queueMicrotask(async () => {
+        entry.queued = false;
+        entry.running = true;
+        entry.dirty = false;
+        const callArgs = entry.args;
+        const waiters = entry.waiting.splice(0);
+        try {
+          const result = await queueFirestoreWrite(`setDoc:${String(ref.path)}`, () => runtimeRawSetDoc(...callArgs));
+          waiters.forEach((w) => w.resolve(result));
+        } catch (error) {
+          waiters.forEach((w) => w.reject(error));
+        } finally {
+          entry.running = false;
+          if (entry.dirty || entry.waiting.length) launch();
+          else firestoreCoalescedWrites.delete(key);
+        }
+      });
+    };
+    launch();
+    return promise;
+  }
+
   function withTimeout(promise, timeoutMs = 15000, label = "Firebase") {
     let timer = 0;
     return Promise.race([
@@ -157,8 +214,11 @@
     let db;
     try {
       db = dbMod.initializeFirestore(app, {
-        experimentalAutoDetectLongPolling: true,
-        experimentalLongPollingOptions: { timeoutSeconds: 25 }
+        // V396: Der Nutzer hatte wiederholt abgebrochene WebChannel-/Listen-
+        // Verbindungen. Erzwungenes Long-Polling ist langsamer, aber bei solchen
+        // Proxy/Router-Problemen wesentlich robuster und verhindert reconnect-Spikes.
+        experimentalForceLongPolling: true,
+        experimentalLongPollingOptions: { timeoutSeconds: 20 }
       }, DATABASE_ID);
     } catch (error) {
       // Falls ein anderer Bereich die benannte Instanz wider Erwarten bereits
@@ -168,7 +228,8 @@
       db = dbMod.getFirestore(app, DATABASE_ID);
     }
 
-    const gatedSetDoc = (...args) => queueFirestoreWrite("setDoc", () => dbMod.setDoc(...args));
+    runtimeRawSetDoc = dbMod.setDoc;
+    const gatedSetDoc = (...args) => queueCoalescedSetDoc(args);
     const gatedUpdateDoc = (...args) => queueFirestoreWrite("updateDoc", () => dbMod.updateDoc(...args));
     const gatedDeleteDoc = (...args) => queueFirestoreWrite("deleteDoc", () => dbMod.deleteDoc(...args));
     const gatedAddDoc = (...args) => queueFirestoreWrite("addDoc", () => dbMod.addDoc(...args));
@@ -351,7 +412,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-10-v383-firestore-global-write-gate-hard-throttle",
+    version: "2026-08-11-v396-firestore-coalesce-longpoll-backoff",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -365,7 +426,7 @@
     isResourceExhaustedError,
     runWrite: queueFirestoreWrite,
     setWriteBackoff: setFirestoreWriteBackoff,
-    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
+    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
     isFatalFirestoreAssertion,
     scheduleHardFirestoreRecovery,
     withTimeout,

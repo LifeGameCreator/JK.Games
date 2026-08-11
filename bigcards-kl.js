@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V395 */
+/* BigCards.kl – JK.Games Top Game V396 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-bigcards-v395-expedition-unique-20sets-startup-fix";
+  const VERSION = "2026-08-11-bigcards-v396-firestore-pressure-guard";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -30,8 +30,8 @@
   const CLOUD_POLL_MS = 45000;
   // V394: große Cloud-Spielstände werden in kleinen Firestore-Batches geschrieben.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
-  const CLOUD_WRITE_BATCH_SIZE = 8;
-  const CLOUD_WRITE_BATCH_PAUSE_MS = 1600;
+  const CLOUD_WRITE_BATCH_SIZE = 3;
+  const CLOUD_WRITE_BATCH_PAUSE_MS = 3200;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
   const MARKET_STATS_COLLECTION = "bigCardsMarketStats";
@@ -539,7 +539,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=395;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=396;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -2188,6 +2188,13 @@
   function onKey(e){if(!UI.overlay)return;if(e.code==="Escape"){if(UI.onlineStatus==="searching")cancelOnlineMatchmaking();else if(UI.overlay.querySelector("[data-bc-modal]"))closeModal();else if(UI.overlay.querySelector("[data-bc-reveal]")){UI.packReveal=null;UI.overlay.querySelector("[data-bc-reveal]")?.remove()}else returnToTopGames()}}
 
   async function firebase(){try{return await window.LifeBuilderFirebaseCore?.load?.()}catch{return null}}
+  window.addEventListener("lifebuilder-firestore-write-backoff",(event)=>{
+    const until=Math.max(0,Number(event?.detail?.until)||0);
+    if(!until)return;
+    cloudBackoffUntil=Math.max(cloudBackoffUntil,until);
+    if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
+    if(cloudReady&&!cloudMigrationPending)scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,until-now()));
+  });
   async function currentUser(){const fb=await firebase();if(!fb)return null;try{return fb.auth.currentUser||await window.LifeBuilderFirebaseCore.waitForAuth?.(5000)}catch{return fb.auth.currentUser}}
   function currentUidSync(){return window.LifeBuilderFirebaseCore?.getRuntime?.()?.auth?.currentUser?.uid||""}
   async function displayName(){const u=await currentUser();return u?.displayName||u?.email?.split("@")[0]||"Spieler"}
@@ -2313,9 +2320,15 @@
   async function syncProfile(force=false){
     if((!cloudReady&&!force)||cloudMigrationPending||cloudSaving||!S){if(cloudSaving)cloudDirty=true;return false}
     if(cloudBackoffUntil>now()){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,cloudBackoffUntil-now()));return false}
+    const globalGate=window.LifeBuilderFirebaseCore?.getWriteGateStatus?.()||{};
+    if(Number(globalGate.backoffUntil||0)>now()){cloudBackoffUntil=Math.max(cloudBackoffUntil,Number(globalGate.backoffUntil)||0);scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,cloudBackoffUntil-now()));return false}
+    // V396: BigCards startet keinen grossen Chunk-Save, solange andere JK.Games-
+    // Bereiche bereits mehrere Firestore-Writes in der globalen Schlange haben.
+    // Lokal ist der Spielstand zu diesem Zeitpunkt bereits sicher gespeichert.
+    if(!force&&Number(globalGate.queueDepth||0)>=3){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,180000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=395;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=396;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
