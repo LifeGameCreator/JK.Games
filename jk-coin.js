@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-jkcoin-v393-bigcards-vip-field-access";
+  const VERSION = "2026-08-11-jkcoin-v397-bigcards-storage-limits";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -216,9 +216,9 @@
     { game:"bigcards", id:"bigcards-auto-opener", name:"Auto-Opener · 1 Stunde", cost:750, text:"Komfort: öffnet gewählte Point-Packs automatisch, ohne Drop-Bonus.", grant:{kind:"autoOpenerHour",amount:1} },
     { game:"bigcards", id:"bigcards-auto-collector", name:"Auto-Collector · 1 Stunde", cost:500, text:"Sammelt produzierte BigCards-Points eine Stunde automatisch ein.", grant:{kind:"autoCollectorHour",amount:1} },
     // V353: Einmalige Speicherstufen für den persönlichen Karten-Slot.
-    { game:"bigcards", id:"bigcards-feature-storage-20m", name:"Karten-Slot Speicher · 20 Mio.", cost:1000, text:"Dauerhaftes Limit: 20 Mio. Points und 150.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:1",amount:1} },
-    { game:"bigcards", id:"bigcards-feature-storage-100m", name:"Karten-Slot Speicher · 100 Mio.", cost:5000, text:"Dauerhaftes Limit: 100 Mio. Points und 500.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:2",amount:1} },
-    { game:"bigcards", id:"bigcards-feature-storage-1b", name:"Karten-Slot Speicher · 1 Mrd.", cost:10000, text:"Dauerhaftes MAX-Limit: 1 Mrd. Points und 1.000.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:3",amount:1} },
+    { game:"bigcards", id:"bigcards-feature-storage-20m", name:"Karten-Slot Speicher · 5 Mio.", cost:1000, text:"Dauerhaftes Limit: 5 Mio. Points und 150.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:1",amount:1} },
+    { game:"bigcards", id:"bigcards-feature-storage-100m", name:"Karten-Slot Speicher · 25 Mio.", cost:5000, text:"Dauerhaftes Limit: 25 Mio. Points und 500.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:2",amount:1} },
+    { game:"bigcards", id:"bigcards-feature-storage-1b", name:"Karten-Slot Speicher · 250 Mio.", cost:10000, text:"Dauerhaftes MAX-Limit: 250 Mio. Points und 1.000.000 BigCards-XP für deine persönliche Karte.", grant:{kind:"featuredStorage:3",amount:1} },
     // V352: Vollständige BigCards-Ausrüstung im JK/Coin-Shop.
     // Normale Auras · Points-Produktion
     { game:"bigcards", id:"bigcards-aura-basic", name:"Basic Aura", cost:25, text:"Eine Basic Aura x1,10 Points für genau eine Karteninstanz.", grant:{kind:"aura:basic",amount:1} },
