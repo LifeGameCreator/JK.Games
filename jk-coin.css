@@ -338,7 +338,7 @@ dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
 }
 
 /* V387 · hochwertige In-Game-Bestätigungen für JK/Coin-/Euro-Transaktionen */
-.jkc-confirm-overlay{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;padding:18px;background:rgba(5,12,18,.82);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);animation:jkcConfirmIn .16s ease-out}
+.jkc-confirm-overlay{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:18px;background:rgba(5,12,18,.82);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);animation:jkcConfirmIn .16s ease-out}
 .jkc-confirm-card{position:relative;width:min(470px,100%);overflow:hidden;border:1px solid rgba(255,216,113,.62);border-radius:22px;padding:22px;background:radial-gradient(circle at 88% 7%,rgba(255,218,88,.24),transparent 36%),linear-gradient(145deg,#102432,#173f50 58%,#0d2735);color:#fff7e1;box-shadow:0 24px 70px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08)}
 .jkc-confirm-card::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 15%,rgba(255,255,255,.055) 46%,transparent 70%)}
 .jkc-confirm-icon{position:relative;display:grid;place-items:center;width:48px;height:48px;margin-bottom:10px;border-radius:15px;background:linear-gradient(145deg,#9d6614,#edbb3f);box-shadow:0 7px 20px rgba(229,173,50,.24);font-size:23px}
@@ -346,3 +346,11 @@ dialog.jkc-game-info-modal[open]{display:grid;place-items:center}
 .jkc-confirm-input{position:relative;width:100%;box-sizing:border-box;margin-top:11px;padding:12px 13px;border:1px solid rgba(255,221,126,.38);border-radius:12px;outline:none;background:rgba(1,12,18,.42);color:#fff;font:900 16px/1.2 inherit}.jkc-confirm-input:focus{border-color:#f2c54e;box-shadow:0 0 0 3px rgba(242,197,78,.15)}
 .jkc-confirm-actions{position:relative;display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-top:15px}.jkc-confirm-actions button{border:0;border-radius:12px;padding:12px 14px;font-weight:950;cursor:pointer;transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}.jkc-confirm-cancel{background:#dce4e5;color:#29414b;box-shadow:0 4px 0 #9aaeb3}.jkc-confirm-ok{background:linear-gradient(135deg,#d79822,#ffd45d);color:#281b05;box-shadow:0 4px 0 #8a5b13}.jkc-confirm-actions button:hover{filter:brightness(1.07);transform:translateY(-1px)}.jkc-confirm-actions button:active{transform:translateY(2px);box-shadow:none}.jkc-confirm-overlay.tone-danger .jkc-confirm-card{border-color:rgba(255,128,122,.56);background:radial-gradient(circle at 88% 7%,rgba(255,86,79,.2),transparent 36%),linear-gradient(145deg,#31171c,#5f2427 62%,#2c1418)}.jkc-confirm-overlay.tone-danger .jkc-confirm-icon{background:linear-gradient(145deg,#8f2630,#c54a43)}.jkc-confirm-overlay.tone-danger .jkc-confirm-ok{background:linear-gradient(135deg,#a6323a,#d75a4e);color:#fff;box-shadow:0 4px 0 #6e2027}
 @keyframes jkcConfirmIn{from{opacity:0}to{opacity:1}}@media(max-width:620px){.jkc-confirm-card{padding:18px 14px;border-radius:18px}.jkc-confirm-card h2{font-size:22px}.jkc-confirm-actions{grid-template-columns:1fr}}
+
+
+/* V404 · JK/Coin Dialoge immer über dem Smartphone/Tablet in der Browser-Top-Layer */
+dialog.jkc-confirm-overlay{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;box-sizing:border-box!important;color:#fff7e1!important}
+dialog.jkc-confirm-overlay::backdrop{background:rgba(5,12,18,.82)!important;backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)}
+dialog.jkc-confirm-overlay:not([open]){display:none!important}
+dialog.jkc-confirm-overlay[open]{display:grid!important}
+.jkc-confirm-overlay,.jkc-reveal-modal,.jkc-game-info-modal,.jkc-hype-modal{overscroll-behavior:contain}
