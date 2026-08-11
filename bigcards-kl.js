@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V402 */
+/* BigCards.kl – JK.Games Top Game V403 */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-bigcards-v402-safe-fast-cloud-recovery";
+  const VERSION = "2026-08-11-bigcards-v403-emergency-history-recovery";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -521,7 +521,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;invalidateCollectionRenderCache();S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:402,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
+  function defaultState(){return {version:403,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -612,7 +612,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=402;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=403;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -2488,6 +2488,67 @@
     raw.updatedAt=Math.max(Number(raw.updatedAt)||0,Number(root.updatedAtMs)||0);
     return raw;
   }
+
+  // V403 NOTFALL-WIEDERHERSTELLUNG
+  // Seit bucket-v370 sind Chunk-Dokumente unveränderlich benannt (Index + Hash).
+  // Alte Chunks werden beim Speichern absichtlich nicht gelöscht. Falls V401/V402
+  // einen leeren Manifest-Stand an die Root geschrieben hat, können deshalb die
+  // zuletzt vorhandenen Karten-Buckets aus der Chunk-Historie rekonstruiert werden.
+  async function recoverHistoricalCloudState(fb,userId,currentRoot){
+    const cutoff=Math.max(1,Number(currentRoot?.updatedAtMs)||now());
+    try{
+      const col=fb.collection(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks");
+      const q=fb.query(col,fb.where("updatedAtMs","<",cutoff),fb.orderBy("updatedAtMs","desc"),fb.limit(3500));
+      const snap=await fb.getDocs(q);if(!snap?.docs?.length)return null;
+      const rows=[];
+      for(const d of snap.docs){
+        const data=d.data()||{},stamp=Number(data.updatedAtMs)||0;if(!stamp||stamp>=cutoff||typeof data.data!=="string")continue;
+        try{const part=JSON.parse(data.data);if(part&&typeof part==="object"&&["meta","instances","collection"].includes(part.kind))rows.push({id:d.id,stamp,part,text:data.data});}catch{}
+      }
+      if(!rows.length)return null;
+      // Es können seit dem Fehler bereits mehrere leere Saves entstanden sein.
+      // Deshalb nicht nur den unmittelbar vorherigen Meta-Stand testen, sondern
+      // bis zu 30 ältere Save-Zeitpunkte rückwärts durchsuchen und den jüngsten
+      // Kandidaten mit echten Karten verwenden.
+      const metaCandidates=[];const seenMetaTimes=new Set();
+      for(const row of rows){
+        if(row.part.kind!=="meta"||seenMetaTimes.has(row.stamp))continue;
+        seenMetaTimes.add(row.stamp);metaCandidates.push(row);if(metaCandidates.length>=30)break;
+      }
+      const buildCandidate=(metaRow)=>{
+        const restoreAt=metaRow.stamp,latest=new Map();
+        for(const row of rows){
+          if(row.stamp>restoreAt)continue;
+          const part=row.part,key=part.kind==="meta"?"meta":`${part.kind}:${Number(part.bucket)||0}:${Math.max(0,Number(part.part)||0)}`;
+          if(!latest.has(key))latest.set(key,row);
+        }
+        const meta=latest.get("meta")?.part?.value;if(!meta||typeof meta!=="object")return null;
+        const raw={...meta,instances:{},collection:{}};
+        const mergeKind=(kind,bucketCount,target)=>{
+          for(let bucket=0;bucket<bucketCount;bucket++){
+            const base=latest.get(`${kind}:${bucket}:0`);if(!base)continue;
+            Object.assign(target,base.part.value||{});
+            // Overflow-Teile existieren nur, wenn der Primärbucket nahezu voll war.
+            // Dadurch werden sehr alte, längst nicht mehr referenzierte Overflow-Chunks
+            // bei inzwischen kleinen Buckets nicht versehentlich wiederbelebt.
+            if(utf8Size(base.text)<CLOUD_CHUNK_TARGET_BYTES*.72)continue;
+            for(let partNo=1;partNo<32;partNo++){
+              const extra=latest.get(`${kind}:${bucket}:${partNo}`);if(!extra)break;
+              Object.assign(target,extra.part.value||{});
+            }
+          }
+        };
+        mergeKind("instances",CLOUD_INSTANCE_BUCKETS,raw.instances);
+        mergeKind("collection",CLOUD_COLLECTION_BUCKETS,raw.collection);
+        const instanceCount=Object.keys(raw.instances||{}).length,collectionCount=Object.keys(raw.collection||{}).length;
+        if(instanceCount<1&&collectionCount<1)return null;
+        raw.updatedAt=Math.max(Number(raw.updatedAt)||0,restoreAt);
+        return {raw,restoreAt,instanceCount,collectionCount,scanned:snap.docs.length};
+      };
+      for(const metaRow of metaCandidates){const candidate=buildCandidate(metaRow);if(candidate)return candidate;}
+      return null;
+    }catch(e){console.warn("BigCards historische Wiederherstellung",e);return null;}
+  }
   function scheduleCloudSave(delay=CLOUD_SAVE_DELAY_MS){
     if(!cloudReady||cloudBooting||cloudMigrationPending)return;
     const t=now(),due=Math.max(t+Math.max(500,Number(delay)||CLOUD_SAVE_DELAY_MS),cloudBackoffUntil||0);
@@ -2516,7 +2577,7 @@
     if(!force&&Number(globalGate.queueDepth||0)>=3){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,180000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=402;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=403;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
@@ -2614,7 +2675,7 @@
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;
     const preview=localPreviewPromise?await localPreviewPromise:null,fb=await firebase(),u=await currentUser();
     if(!fb||!u){const localOnly=preview?.raw||(await readIndexedState(""));if(localOnly)adoptState(localOnly,{saveLocal:false});cloudBooting=false;ensureDaily();applyOffline();refresh(false);loadRole();startRuntimeTimers();toast("☁ Nicht angemeldet – BigCards läuft lokal über sicheren Gerätespeicher. Für Handy/PC-Sync mit demselben JK.Games-Konto anmelden.",4200);return;}
-    cloudUid=u.uid;const cachedLocalRaw=preview?.userId===u.uid&&preview?.raw?preview.raw:(await readLocalStateForUser(u.uid)),localRaw=cachedLocalRaw||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null,cloudLoadError=null,usedFastCache=false,fastRootChanged=false;
+    cloudUid=u.uid;const cachedLocalRaw=preview?.userId===u.uid&&preview?.raw?preview.raw:(await readLocalStateForUser(u.uid)),localRaw=cachedLocalRaw||S||defaultState(),meta=readCloudMeta(u.uid);let root=null,remoteRaw=null,rootSnap=null,cloudLoadError=null,usedFastCache=false,fastRootChanged=false,recoveredFromHistory=false,preservedLocalAgainstEmpty=false;
     // Wenn der Preview wegen noch nicht fertiger Auth nicht lief, zeigen wir den
     // IndexedDB-Spielstand spätestens jetzt an – noch bevor die Cloud-Chunks kommen.
     if(localRaw&&UI.overlay){adoptState(localRaw,{saveLocal:false,userId:u.uid});UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);}
@@ -2628,6 +2689,32 @@
         else remoteRaw=await readFullCloudState(fb,u.uid,root);
       }
     }catch(e){cloudLoadError=e;if(e?.cloudIntegrity)console.info("BigCards Cloud-Integrität: lokaler Sicherheitsstand/automatische Reparatur wird verwendet.",e.message);else console.warn("BigCards cloud load",e);}
+    // V403: Wenn sowohl Cloud als auch lokaler Cache plötzlich 0 Karten enthalten,
+    // NICHT weiter mit diesem leeren Stand arbeiten. Zuerst alte immutable Chunks
+    // durchsuchen. Bis die Wiederherstellung entschieden ist, gibt es keinen Cloud-Write.
+    const remoteLooksEmpty=!!remoteRaw&&Object.keys(remoteRaw.instances||{}).length===0&&Object.keys(remoteRaw.collection||{}).length===0&&Object.keys(remoteRaw.exclusiveCollection||{}).length===0&&Object.keys(remoteRaw.vipCollection||{}).length===0&&Object.keys(remoteRaw.winCollection||{}).length===0;
+    const localLooksEmpty=Object.keys(localRaw?.instances||{}).length===0&&Object.keys(localRaw?.collection||{}).length===0&&Object.keys(localRaw?.exclusiveCollection||{}).length===0&&Object.keys(localRaw?.vipCollection||{}).length===0&&Object.keys(localRaw?.winCollection||{}).length===0;
+    if(root&&remoteLooksEmpty&&!localLooksEmpty){
+      // Falls auf diesem Gerät noch ein vollständiger Cache existiert, hat er Vorrang
+      // vor einem offensichtlich leeren Cloud-Manifest. So kann ein fehlgeschlagener
+      // Recovery-Upload beim nächsten Start nicht wieder alles leer anzeigen.
+      remoteRaw=localRaw;usedFastCache=false;preservedLocalAgainstEmpty=true;cloudDirty=true;
+      toast(`🛟 Lokaler Sicherheitsstand erkannt · ${Object.keys(localRaw.instances||{}).length} Karten werden geschützt`,6000);
+    }else if(root&&remoteLooksEmpty&&localLooksEmpty){
+      toast("🛟 Alter Kartenbestand wird aus der Cloud-Historie gesucht …",7000);
+      const recovered=await recoverHistoricalCloudState(fb,u.uid,root);
+      if(recovered?.raw){
+        remoteRaw=recovered.raw;usedFastCache=false;cloudLoadError=null;recoveredFromHistory=true;
+        cloudLastChunkHashes=[];cloudLastChunkRefs=[];
+        // Der rekonstruierte Stand wird anschließend als neuer vollständiger Save
+        // geschrieben. Dadurch ist er wieder mit einem frischen Manifest abgesichert.
+        cloudDirty=true;
+        toast(`🛟 Wiederherstellung gefunden · ${recovered.instanceCount} Karten · alter Stand wird geladen`,6500);
+      }else{
+        remoteRaw=null;cloudMigrationPending=true;cloudDirty=false;
+        toast("⚠️ Leerer Cloud-Stand erkannt. Automatisches Überschreiben ist gesperrt. Alte Karten konnten in diesem Durchlauf noch nicht rekonstruiert werden.",8000);
+      }
+    }
     if(root&&Array.isArray(root.chunkHashes))cloudLastChunkHashes=root.chunkHashes.slice();else cloudLastChunkHashes=[];
     if(root&&Array.isArray(root.chunkRefs))cloudLastChunkRefs=root.chunkRefs.slice();else cloudLastChunkRefs=[];
     if(remoteRaw){
@@ -2637,14 +2724,17 @@
         if(meta.saveId&&meta.saveId!==root.saveId&&Number(localRaw?.updatedAt||0)>Number(meta.syncedLocalUpdatedAt||0)+1000)backupLocalConflict(u.uid,localRaw);
         adoptState(remoteRaw,{saveLocal:!usedFastCache,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;
         const needsImmutableMigration=root.cloudFormat!==CLOUD_BUCKET_FORMAT||!Array.isArray(root.chunkRefs)||root.chunkRefs.length!==Number(root.chunkCount);
-        cloudDirty=needsImmutableMigration;
+        cloudDirty=recoveredFromHistory||preservedLocalAgainstEmpty||needsImmutableMigration;
         if(needsImmutableMigration){cloudLastChunkHashes=[];cloudLastChunkRefs=[];}
-        if(usedFastCache)writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});else markCloudCacheVerified(u.uid,root.saveId,cloudLastRemoteUpdatedAt,Number(S.updatedAt)||cloudLastRemoteUpdatedAt,S);if(usedFastCache&&fastRootChanged)writeLocalState(u.uid);
+        if(usedFastCache)writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:cloudLastRemoteUpdatedAt,syncedLocalUpdatedAt:Number(S.updatedAt)||cloudLastRemoteUpdatedAt});
+        else if(!recoveredFromHistory&&!preservedLocalAgainstEmpty)markCloudCacheVerified(u.uid,root.saveId,cloudLastRemoteUpdatedAt,Number(S.updatedAt)||cloudLastRemoteUpdatedAt,S);
+        if(usedFastCache&&fastRootChanged)writeLocalState(u.uid);
       }
     }
     else if(root){
       const localHasCards=Object.keys(localRaw?.instances||{}).length>0||Object.keys(localRaw?.collection||{}).length>0||Object.keys(localRaw?.exclusiveCollection||{}).length>0;
-      if(cloudLoadError){
+      if(cloudMigrationPending&&!cloudLoadError){adoptState(mergeLegacyCheckpoint(localRaw,root),{saveLocal:true,userId:u.uid});cloudDirty=false;}
+      else if(cloudLoadError){
         // V402-Sicherheitsregel: Wenn der vollständige Cloud-Read fehlschlägt,
         // darf ein möglicherweise leerer/veralteter lokaler Stand NIEMALS den
         // vorhandenen Cloud-Spielstand überschreiben. Lokal anzeigen, Cloud sperren
@@ -2660,7 +2750,7 @@
     // Rolle und Auszahlungen blockieren das sichtbare Laden nicht mehr. Der Spieler
     // kann BigCards bereits benutzen, während diese kleinen Online-Aufgaben nachlaufen.
     startRuntimeTimers();void loadRole();void claimPayouts();
-    if(cloudMigrationPending){toast("☁ Der Online-Spielstand ist aktuell nicht vollständig lesbar. Öffne BigCards einmal auf dem Gerät mit deinem neuesten vollständigen Kartenbestand; danach wird der Spielstand automatisch repariert.",7000);return;}
+    if(cloudMigrationPending){toast("🛟 SICHERHEITSSPERRE: Der leere Stand wird NICHT in die Cloud geschrieben. Bitte BigCards geöffnet lassen und den Fehlerlog senden, falls keine Karten wiederhergestellt wurden.",9000);return;}
     if(cloudDirty)void syncProfile(true);else toast(`${usedFastCache?"⚡":"☁"} BigCards geladen · ${Object.keys(S.instances||{}).length} Karten${usedFastCache?" · Schnellstart":""}`,2600);
   }
   async function loadRole(showToast=false){const fb=await firebase(),u=await currentUser();if(!fb||!u){UI.role="player";if(UI.tab==="mod")UI.tab="field";if(showToast)toast("Online-Rolle nicht verfügbar.");return refresh()}try{const snap=await fb.getDoc(fb.doc(fb.db,"staffRoles",u.uid));UI.role=String(snap.data()?.role||"player").toLowerCase();}catch{UI.role="player"}let changed=false;if(UI.role==="owner"&&!S.vipUnlocked){S.vipUnlocked=true;changed=true;}if(UI.role!=="owner"&&!S.vipUnlocked){for(const inst of Object.values(S.instances||{})){if(inst?.fieldPermit){inst.fieldPermit=false;changed=true;}}for(let floor=0;floor<(S.floors||[]).length;floor++){const max=floorMaxTier(floor),row=S.floors[floor]||[];for(let slot=0;slot<row.length;slot++){const inst=instance(row[slot]);if(inst&&!inst.exclusive&&!inst.vip&&inst.rarity>max){row[slot]=null;changed=true;}}}}if(changed)persist();if(UI.role!=="owner"&&UI.tab==="mod")UI.tab="field";refresh();}
