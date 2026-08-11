@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V406 · Hyper Economy Fix */
+/* BigCards.kl – JK.Games Top Game V406 · Boss Daily Limit Fix */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-bigcards-v406-hyper-economy-fix";
+  const VERSION = "2026-08-11-bigcards-v406-boss-daily-limit-fix";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -2158,30 +2158,153 @@
 
   function bossDefinition(at=now()){const idx=Math.abs(weekIndex(at))%BOSS_VARIANTS.length,base=BOSS_VARIANTS[idx],maxHp=Math.round(1_000_000_000*(1+(idx*.18)));return {...base,weekKey:weekKey(at),maxHp};}
   function bossPhase(root=UI.boss||bossDefinition()){const max=Math.max(1,Number(root?.maxHp)||bossDefinition().maxHp),damage=Math.max(0,Number(root?.globalDamage)||0),left=clamp(1-damage/max,0,1);if(left>.70)return {id:1,name:"Phase 1 · Normal",icon:"🛡️",damageMult:1,desc:"Normale Verteidigung."};if(left>.40)return {id:2,name:"Phase 2 · Schildbruch",icon:"⚡",damageMult:1.03,desc:"Der Boss öffnet eine neue Schwachstelle: +3 % gewerteter Teamschaden."};if(left>.10)return {id:3,name:"Phase 3 · Raserei",icon:"🔥",damageMult:.97,desc:"Der Boss erhöht seine Verteidigung: -3 % Teamschaden."};return {id:4,name:"Finale Phase · Endspurt",icon:"🌟",damageMult:1.05,desc:"Unter 10 % Leben: +5 % Teamschaden und Community-Endspurt."};}
-  function ensureBossDaily(){const day=dailyKey();if(S.bossDaily?.day!==day)S.bossDaily={day,freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0};S.bossDaily.freeUsed=clamp(Math.floor(Number(S.bossDaily.freeUsed)||0),0,3);S.bossDaily.bonusTickets=clamp(Math.floor(Number(S.bossDaily.bonusTickets)||0),0,2);return S.bossDaily;}
+  const BOSS_FREE_ATTACKS_PER_DAY=3;
+  const BOSS_BONUS_ATTACKS_PER_DAY=2;
+  function bossDailyShadowKey(){return `jk-games-bigcards-boss-daily-v406:${currentUidSync()||cloudUid||"guest"}`;}
+  function readBossDailyShadow(day){
+    try{
+      const raw=JSON.parse(localStorage.getItem(bossDailyShadowKey())||"null");
+      return raw&&raw.day===day?raw:null;
+    }catch{return null;}
+  }
+  function writeBossDailyShadow(d){
+    try{
+      localStorage.setItem(bossDailyShadowKey(),JSON.stringify({
+        day:d.day,
+        freeUsed:d.freeUsed,
+        bonusUsed:d.bonusUsed,
+        packBonusEarned:!!d.packBonusEarned,
+        battleBonusEarned:!!d.battleBonusEarned,
+        packProgress:d.packProgress,
+        battleProgress:d.battleProgress
+      }));
+    }catch{}
+  }
+  function bossBonusEarnedCount(d){return (d.packBonusEarned?1:0)+(d.battleBonusEarned?1:0);}
+  function normalizeBossDailyShape(raw,day){
+    const d=raw&&typeof raw==="object"?raw:{};
+    const freeUsed=clamp(Math.floor(Number(d.freeUsed)||0),0,BOSS_FREE_ATTACKS_PER_DAY);
+    const legacyTickets=clamp(Math.floor(Number(d.bonusTickets)||0),0,BOSS_BONUS_ATTACKS_PER_DAY);
+    let packBonusEarned=!!d.packBonusEarned;
+    let battleBonusEarned=!!d.battleBonusEarned||Math.floor(Number(d.battleProgress)||0)>=1;
+    let bonusUsed=clamp(Math.floor(Number(d.bonusUsed)||0),0,BOSS_BONUS_ATTACKS_PER_DAY);
+    // Migration alter Spielstände: Wenn die 3 Gratis-Angriffe bereits verbraucht
+    // und keine alten Tickets mehr vorhanden sind, behandeln wir die zwei
+    // Bonusplätze konservativ als bereits verbraucht. So kann ein alter/staler
+    // Save nach Reload nicht wieder zwei Angriffe schenken.
+    if(d.bonusUsed==null&&freeUsed>=BOSS_FREE_ATTACKS_PER_DAY&&legacyTickets===0){
+      packBonusEarned=true;
+      battleBonusEarned=true;
+      bonusUsed=BOSS_BONUS_ATTACKS_PER_DAY;
+    }else if(d.bonusUsed==null&&legacyTickets>0){
+      if(!packBonusEarned&&!battleBonusEarned)packBonusEarned=true;
+      if(legacyTickets>1&&!battleBonusEarned)battleBonusEarned=true;
+      bonusUsed=Math.max(0,bossBonusEarnedCount({packBonusEarned,battleBonusEarned})-legacyTickets);
+    }
+    const out={
+      day,
+      freeUsed,
+      bonusUsed,
+      packBonusEarned,
+      battleBonusEarned,
+      packProgress:packBonusEarned?0:clamp(Math.floor(Number(d.packProgress)||0),0,4),
+      battleProgress:battleBonusEarned?1:clamp(Math.floor(Number(d.battleProgress)||0),0,1)
+    };
+    out.bonusTickets=Math.max(0,bossBonusEarnedCount(out)-out.bonusUsed);
+    return out;
+  }
+  function mergeBossDailyHighWater(base,other){
+    if(!other||other.day!==base.day)return base;
+    base.freeUsed=Math.max(base.freeUsed,clamp(Math.floor(Number(other.freeUsed)||0),0,BOSS_FREE_ATTACKS_PER_DAY));
+    base.bonusUsed=Math.max(base.bonusUsed,clamp(Math.floor(Number(other.bonusUsed)||0),0,BOSS_BONUS_ATTACKS_PER_DAY));
+    base.packBonusEarned=base.packBonusEarned||!!other.packBonusEarned;
+    base.battleBonusEarned=base.battleBonusEarned||!!other.battleBonusEarned;
+    if(!base.packBonusEarned)base.packProgress=Math.max(base.packProgress,clamp(Math.floor(Number(other.packProgress)||0),0,4));
+    if(base.battleBonusEarned)base.battleProgress=1;
+    else base.battleProgress=Math.max(base.battleProgress,clamp(Math.floor(Number(other.battleProgress)||0),0,1));
+    base.bonusUsed=Math.min(base.bonusUsed,bossBonusEarnedCount(base));
+    base.bonusTickets=Math.max(0,bossBonusEarnedCount(base)-base.bonusUsed);
+    return base;
+  }
+  function ensureBossDaily(){
+    const day=dailyKey();
+    let d=normalizeBossDailyShape(S.bossDaily?.day===day?S.bossDaily:null,day);
+    d=mergeBossDailyHighWater(d,readBossDailyShadow(day));
+    S.bossDaily=d;
+    writeBossDailyShadow(d);
+    return d;
+  }
+  function reconcileBossDailyRemote(remote){
+    const day=dailyKey();
+    if(!remote||String(remote.dailyDay||"")!==day)return false;
+    const d=ensureBossDaily(),before=JSON.stringify(d);
+    mergeBossDailyHighWater(d,{
+      day,
+      freeUsed:remote.dailyFreeUsed,
+      bonusUsed:remote.dailyBonusUsed,
+      packBonusEarned:remote.dailyPackBonusEarned,
+      battleBonusEarned:remote.dailyBattleBonusEarned,
+      packProgress:remote.dailyPackProgress,
+      battleProgress:remote.dailyBattleProgress
+    });
+    S.bossDaily=d;writeBossDailyShadow(d);
+    return JSON.stringify(d)!==before;
+  }
   function ensureBossWeek(){const key=weekKey();if(S.bossWeek?.key!==key)S.bossWeek={key,contribution:0,attacks:0,goal:0,milestones:{},community:{},goldCounted:false};S.bossWeek.milestones||={};S.bossWeek.community||={};return S.bossWeek;}
-  function recordBossPackOpen(){const d=ensureBossDaily();if(d.bonusTickets>=2)return;d.packProgress=Math.max(0,Math.floor(Number(d.packProgress)||0)+1);if(d.packProgress>=5){d.packProgress=0;d.bonusTickets=Math.min(2,d.bonusTickets+1);toast("🎟 Boss-Ticket erspielt: 5 Packs geöffnet.",2600);}}
-  function recordBossBattleWin(){const d=ensureBossDaily();if(d.bonusTickets>=2||d.battleProgress>=1)return;d.battleProgress=1;d.bonusTickets=Math.min(2,d.bonusTickets+1);toast("🎟 Boss-Ticket erspielt: Kartenkampf gewonnen.",2600);}
+  function recordBossPackOpen(){
+    const d=ensureBossDaily();
+    if(d.packBonusEarned)return;
+    d.packProgress=Math.min(5,Math.max(0,Math.floor(Number(d.packProgress)||0)+1));
+    if(d.packProgress>=5){
+      d.packProgress=0;
+      d.packBonusEarned=true;
+      d.bonusTickets=Math.max(0,bossBonusEarnedCount(d)-d.bonusUsed);
+      toast("🎟 Boss-Bonusangriff erspielt: 5 Packs geöffnet.",2600);
+    }
+    writeBossDailyShadow(d);
+  }
+  function recordBossBattleWin(){
+    const d=ensureBossDaily();
+    if(d.battleBonusEarned)return;
+    d.battleProgress=1;
+    d.battleBonusEarned=true;
+    d.bonusTickets=Math.max(0,bossBonusEarnedCount(d)-d.bonusUsed);
+    writeBossDailyShadow(d);
+    toast("🎟 Boss-Bonusangriff erspielt: Kartenkampf gewonnen.",2600);
+  }
   function bossCardEligible(inst){return !!inst&&!inst.listed&&!inst.broken&&!isCardOnExpedition(inst.id);}
   function bossLoadoutCards(){return (S.bossLoadout||[]).map(id=>instance(id)).map(x=>bossCardEligible(x)?x:null);}
   function bossCardTags(inst){return setMembershipIds(inst);}
   function bossTeamStats(){const def=bossDefinition(),phase=bossPhase(),cards=bossLoadoutCards();let base=0,tagBonus=0,setBonus=0,premiumBonus=0;cards.forEach((inst,i)=>{if(!inst)return;const power=combatStats(inst).power*fusionBossMultiplier(inst)*(i===0?1:.25);base+=power;const ids=bossCardTags(inst);if(ids.some(id=>def.tags.includes(id)))tagBonus+=.05;for(const id of ids){const stage=setProgress(id).stage;if(stage>=10)setBonus+=.04;else if(stage>=5)setBonus+=.02;}if(inst.exclusive||inst.vip)premiumBonus=Math.max(premiumBonus,.06);});tagBonus=Math.min(.15,tagBonus);setBonus=Math.min(.10,setBonus);const jkMult=jkBossDamageMultiplier(),total=Math.max(0,base*(1+tagBonus+setBonus+premiumBonus)*phase.damageMult*jkMult);return {cards,base,tagBonus,setBonus,premiumBonus,jkMult,total,def,phase};}
-  function bossAvailableAttacks(){const d=ensureBossDaily();return Math.max(0,3-d.freeUsed)+d.bonusTickets;}
-  function bossConsumeAttack(){const d=ensureBossDaily();if(d.freeUsed<3)d.freeUsed++;else if(d.bonusTickets>0)d.bonusTickets--;else return false;return true;}
+  function bossAvailableAttacks(){
+    const d=ensureBossDaily();
+    const free=Math.max(0,BOSS_FREE_ATTACKS_PER_DAY-d.freeUsed);
+    const bonus=Math.max(0,Math.min(BOSS_BONUS_ATTACKS_PER_DAY,bossBonusEarnedCount(d))-d.bonusUsed);
+    return free+bonus;
+  }
+  function bossConsumeAttack(){
+    const d=ensureBossDaily();
+    if(d.freeUsed<BOSS_FREE_ATTACKS_PER_DAY)d.freeUsed++;
+    else if(d.bonusUsed<Math.min(BOSS_BONUS_ATTACKS_PER_DAY,bossBonusEarnedCount(d)))d.bonusUsed++;
+    else return false;
+    d.bonusTickets=Math.max(0,bossBonusEarnedCount(d)-d.bonusUsed);
+    writeBossDailyShadow(d);
+    return true;
+  }
   function bossQuickScore(inst){if(!bossCardEligible(inst))return -Infinity;return (inst.exclusive||inst.vip?2200:(inst.rarity+1)*150)+(inst.level||1)*45+cardRebirth(inst)*260+cardRank(inst)*45+(fusionVariant(inst)==="prismatic"?140:fusionVariant(inst)==="holo"?60:0);}
   function showBossCardPicker(slot){slot=clamp(Math.floor(Number(slot)||0),0,2);const rows=[];for(const map of collectionOwnedIndex())for(const arr of map.values()){let best=null,score=-Infinity;for(const inst of arr){if(!bossCardEligible(inst)||S.bossLoadout.some((id,i)=>i!==slot&&id===inst.id))continue;const q=bossQuickScore(inst);if(q>score){best=inst;score=q;}}if(best)rows.push({inst:best,score});}rows.sort((a,b)=>b.score-a.score);const show=rows.slice(0,160);showModal(`<div class="bc-boss-picker"><small>BOSS-LOADOUT · ${slot===0?"HAUPTKARTE":`SUPPORT ${slot}`}</small><h2>👹 Karte wählen</h2><p>Hauptkarte zählt zu 100 %, Supportkarten zu je 25 %. Laufende Expeditionen und kaputte/gelistete Karten werden nicht angeboten.</p><div class="bc-feature-picker-grid">${show.map(row=>{const m=cardMeta(row.inst),stats=combatStats(row.inst);return `<button data-bc-boss-pick="${row.inst.id}" data-bc-boss-slot="${slot}" class="${m.className}"><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${fusionLabel(row.inst)} · ⚔ ${fmt(stats.power)} · ${setMembershipIds(row.inst).map(id=>SET_BY_ID[id]?.name).filter(Boolean).join(" + ")||"kein Set"}</small></div><em>Wählen</em></button>`}).join("")||`<div class="bc-empty-state"><span>👹</span><h3>Keine freie Karte</h3></div>`}</div></div>`);}
   function setBossCard(slot,id){slot=clamp(Math.floor(Number(slot)||0),0,2);const inst=instance(id);if(!bossCardEligible(inst))return toast("Diese Karte ist nicht für den Boss verfügbar.");for(let i=0;i<3;i++)if(i!==slot&&S.bossLoadout[i]===id)S.bossLoadout[i]=null;S.bossLoadout[slot]=id;persist();closeModal();UI.tab="boss";refresh(false);}
-  async function autoBossTeam(){if(UI.bossTeamLoading)return;UI.bossTeamLoading=true;const btn=UI.overlay?.querySelector("[data-bc-boss-auto]");if(btn){btn.disabled=true;btn.textContent="Team wird gesucht …";}try{const best=[];let i=0;for(const inst of Object.values(S.instances||{})){i++;if(!bossCardEligible(inst))continue;const score=bossQuickScore(inst);if(best.length<24){best.push({inst,score});best.sort((a,b)=>b.score-a.score);}else if(score>best.at(-1).score){best[best.length-1]={inst,score};best.sort((a,b)=>b.score-a.score);}if(i%800===0)await new Promise(r=>setTimeout(r,0));}const exact=best.map(x=>({inst:x.inst,score:combatStats(x.inst).power*fusionBossMultiplier(x.inst)})).sort((a,b)=>b.score-a.score).slice(0,3);S.bossLoadout=[exact[0]?.inst.id||null,exact[1]?.inst.id||null,exact[2]?.inst.id||null];persist();refresh(false);toast("👹 Bestes verfügbares Boss-Team gesetzt.",3000);}finally{UI.bossTeamLoading=false;}}
+  async function autoBossTeam(){if(UI.bossTeamLoading)return;UI.bossTeamLoading=true;const btn=UI.overlay?.querySelector("[data-bc-boss-auto]");if(btn){btn.disabled=true;btn.textContent="Team wird gesucht …";}try{const best=[];let i=0;for(const inst of Object.values(S.instances||{})){i++;if(!bossCardEligible(inst))continue;const score=bossQuickScore(inst);if(best.length<24){best.push({inst,score});best.sort((a,b)=>b.score-a.score);}else if(score>best.at(-1).score){best[best.length-1]={inst,score};best.sort((a,b)=>b.score-a.score);}if(i%800===0)await new Promise(r=>setTimeout(r,0));}const exact=best.map(x=>({inst:x.inst,score:combatStats(x.inst).power*fusionBossMultiplier(x.inst)})).sort((a,b)=>b.score-a.score).slice(0,3);S.bossLoadout=[exact[0]?.inst.id||null,exact[1]?.inst.id||null,exact[2]?.inst.id||null];ensureBossDaily();persist();refresh(false);toast("👹 Bestes verfügbares Boss-Team gesetzt.",3000);}finally{UI.bossTeamLoading=false;}}
   async function ensureBossRemote(){const fb=await firebase(),u=await currentUser();if(!fb||!u)return null;const def=bossDefinition(),ref=fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey);try{const snap=await fb.getDoc(ref);if(!snap.exists()){const row={weekKey:def.weekKey,bossId:def.id,name:def.name,icon:def.icon,tags:def.tags,theme:def.theme,maxHp:def.maxHp,globalDamage:0,attackCount:0,lastDamage:0,lastAttackerUid:"",createdAtMs:now(),updatedAtMs:now()};await fb.setDoc(ref,row);return row;}return snap.data();}catch(e){console.warn("BigCards boss init",e);return null;}}
-  async function loadWeeklyBoss(show=false){if(UI.bossLoading)return;UI.bossLoading=true;try{const fb=await firebase(),u=await currentUser();if(!fb||!u){if(show)toast("Online-Verbindung für den Community-Boss nicht verfügbar.");return;}const root=await ensureBossRemote();UI.boss=root;try{const q=fb.query(fb.collection(fb.db,WEEKLY_BOSS_COLLECTION,bossDefinition().weekKey,"players"),fb.orderBy("contribution","desc"),fb.limit(50)),snap=await fb.getDocs(q);UI.bossPlayers=snap.docs.map(d=>d.data());}catch(e){console.warn("Boss leaderboard",e);UI.bossPlayers=[];}if(UI.tab==="boss")refresh(false);if(show)toast("Boss-Daten aktualisiert.");}finally{UI.bossLoading=false;}}
+  async function loadWeeklyBoss(show=false){if(UI.bossLoading)return;UI.bossLoading=true;try{const fb=await firebase(),u=await currentUser();if(!fb||!u){if(show)toast("Online-Verbindung für den Community-Boss nicht verfügbar.");return;}const root=await ensureBossRemote();UI.boss=root;try{const def=bossDefinition(),q=fb.query(fb.collection(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey,"players"),fb.orderBy("contribution","desc"),fb.limit(50)),snap=await fb.getDocs(q);UI.bossPlayers=snap.docs.map(d=>d.data());try{const ownSnap=await fb.getDoc(fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey,"players",u.uid));if(ownSnap.exists()&&reconcileBossDailyRemote(ownSnap.data()))writeLocalState(cloudUid||u.uid);}catch(ownErr){console.warn("Boss daily ledger",ownErr);}}catch(e){console.warn("Boss leaderboard",e);UI.bossPlayers=[];}if(UI.tab==="boss")refresh(false);if(show)toast("Boss-Daten aktualisiert.");}finally{UI.bossLoading=false;}}
   async function syncBossPlayerState(){const fb=await firebase(),u=await currentUser();if(!fb||!u)return;const w=ensureBossWeek(),def=bossDefinition();try{await fb.setDoc(fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey,"players",u.uid),{uid:u.uid,displayName:await displayName(),contribution:Math.floor(w.contribution||0),attacks:Math.floor(w.attacks||0),goal:Math.floor(w.goal||0),updatedAtMs:now()},{merge:true});}catch(e){console.warn("Boss player sync",e);}}
-  async function attackWeeklyBoss(){const team=bossTeamStats(),main=team.cards[0];if(!main)return toast("Wähle zuerst eine Hauptkarte für den Boss.");if(bossAvailableAttacks()<1)return toast("Heute sind alle 3 Gratis-Angriffe und Bonus-Tickets verbraucht.");if(!bossConsumeAttack())return;const w=ensureBossWeek(),raw=Math.max(1,Math.round(team.total*100*(.92+Math.random()*.16)));if(!w.goal)w.goal=Math.max(10000,Math.round(team.total*100*15));w.contribution=Math.max(0,Number(w.contribution)||0)+raw;w.attacks=Math.max(0,Math.floor(Number(w.attacks)||0)+1);setMissionRecord("boss",team.cards.flatMap(x=>x?setMembershipIds(x):[]),raw);for(const inst of team.cards)if(inst)addSetMastery(setMembershipIds(inst),6);const fb=await firebase(),u=await currentUser(),def=team.def;if(fb&&u){try{const ref=fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey);await fb.runTransaction(fb.db,async tx=>{const snap=await tx.get(ref),old=snap.exists()?snap.data():{globalDamage:0,attackCount:0};const globalDamage=Math.max(0,Number(old.globalDamage)||0)+raw,attackCount=Math.max(0,Math.floor(Number(old.attackCount)||0)+1);if(snap.exists())tx.update(ref,{globalDamage,attackCount,lastDamage:raw,lastAttackerUid:u.uid,updatedAtMs:now()});else tx.set(ref,{weekKey:def.weekKey,bossId:def.id,name:def.name,icon:def.icon,tags:def.tags,theme:def.theme,maxHp:def.maxHp,globalDamage,attackCount,lastDamage:raw,lastAttackerUid:u.uid,createdAtMs:now(),updatedAtMs:now()});tx.set(fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey,"players",u.uid),{uid:u.uid,displayName:await displayName(),contribution:Math.floor(w.contribution),attacks:w.attacks,goal:Math.floor(w.goal),updatedAtMs:now()},{merge:true});});}catch(e){console.warn("Boss attack sync",e);toast("Boss-Schaden lokal gespeichert; Community-Sync wird später erneut geladen.",3500);}}persist();await loadWeeklyBoss(false);showModal(`<div class="bc-boss-result"><small>GEWERTETER BOSS-ANGRIFF</small><h2>${def.icon} ${fmt(raw)} Schaden</h2><p>Hauptkarte ${esc(cardMeta(main).name)} · Team-Power ${fmt(team.total)}.</p><div class="bc-boss-bonus-row"><span>Set-/Tag-Bonus <b>+${Math.round(team.tagBonus*100)} %</b></span><span>Set-Fortschritt <b>+${Math.round(team.setBonus*100)} %</b></span><span>Premium-Signature <b>+${Math.round(team.premiumBonus*100)} %</b></span><span>${team.phase.icon} ${team.phase.name} <b>${team.phase.damageMult>=1?"+":""}${Math.round((team.phase.damageMult-1)*100)} %</b></span>${team.jkMult>1?`<span>◆ JK-Teamboost <b>×${team.jkMult}</b></span>`:""}</div><p>Heute verbleiben <b>${bossAvailableAttacks()}</b> gewertete Angriffe.</p><button class="bc-primary" data-bc-modal-close>Weiter</button></div>`);}
+  async function attackWeeklyBoss(){const team=bossTeamStats(),main=team.cards[0];if(!main)return toast("Wähle zuerst eine Hauptkarte für den Boss.");if(bossAvailableAttacks()<1)return toast("Heute sind alle 3 Gratis-Angriffe und maximal 2 Bonus-Angriffe verbraucht.");if(!bossConsumeAttack())return;const w=ensureBossWeek(),raw=Math.max(1,Math.round(team.total*100*(.92+Math.random()*.16)));if(!w.goal)w.goal=Math.max(10000,Math.round(team.total*100*15));w.contribution=Math.max(0,Number(w.contribution)||0)+raw;w.attacks=Math.max(0,Math.floor(Number(w.attacks)||0)+1);setMissionRecord("boss",team.cards.flatMap(x=>x?setMembershipIds(x):[]),raw);for(const inst of team.cards)if(inst)addSetMastery(setMembershipIds(inst),6);const fb=await firebase(),u=await currentUser(),def=team.def;if(fb&&u){try{const ref=fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey);await fb.runTransaction(fb.db,async tx=>{const snap=await tx.get(ref),old=snap.exists()?snap.data():{globalDamage:0,attackCount:0};const globalDamage=Math.max(0,Number(old.globalDamage)||0)+raw,attackCount=Math.max(0,Math.floor(Number(old.attackCount)||0)+1);if(snap.exists())tx.update(ref,{globalDamage,attackCount,lastDamage:raw,lastAttackerUid:u.uid,updatedAtMs:now()});else tx.set(ref,{weekKey:def.weekKey,bossId:def.id,name:def.name,icon:def.icon,tags:def.tags,theme:def.theme,maxHp:def.maxHp,globalDamage,attackCount,lastDamage:raw,lastAttackerUid:u.uid,createdAtMs:now(),updatedAtMs:now()});const daily=ensureBossDaily();tx.set(fb.doc(fb.db,WEEKLY_BOSS_COLLECTION,def.weekKey,"players",u.uid),{uid:u.uid,displayName:await displayName(),contribution:Math.floor(w.contribution),attacks:w.attacks,goal:Math.floor(w.goal),dailyDay:daily.day,dailyFreeUsed:daily.freeUsed,dailyBonusUsed:daily.bonusUsed,dailyPackBonusEarned:!!daily.packBonusEarned,dailyBattleBonusEarned:!!daily.battleBonusEarned,dailyPackProgress:daily.packProgress,dailyBattleProgress:daily.battleProgress,updatedAtMs:now()},{merge:true});});}catch(e){console.warn("Boss attack sync",e);toast("Boss-Schaden lokal gespeichert; Community-Sync wird später erneut geladen.",3500);}}persist();await loadWeeklyBoss(false);showModal(`<div class="bc-boss-result"><small>GEWERTETER BOSS-ANGRIFF</small><h2>${def.icon} ${fmt(raw)} Schaden</h2><p>Hauptkarte ${esc(cardMeta(main).name)} · Team-Power ${fmt(team.total)}.</p><div class="bc-boss-bonus-row"><span>Set-/Tag-Bonus <b>+${Math.round(team.tagBonus*100)} %</b></span><span>Set-Fortschritt <b>+${Math.round(team.setBonus*100)} %</b></span><span>Premium-Signature <b>+${Math.round(team.premiumBonus*100)} %</b></span><span>${team.phase.icon} ${team.phase.name} <b>${team.phase.damageMult>=1?"+":""}${Math.round((team.phase.damageMult-1)*100)} %</b></span>${team.jkMult>1?`<span>◆ JK-Teamboost <b>×${team.jkMult}</b></span>`:""}</div><p>Heute verbleiben <b>${bossAvailableAttacks()}</b> gewertete Angriffe.</p><button class="bc-primary" data-bc-modal-close>Weiter</button></div>`);}
   function bossMilestoneRows(){const w=ensureBossWeek(),goal=Math.max(1,Number(w.goal)||bossTeamStats().total*100*15||1);return [{id:"join",name:"Teilnahme",target:1,type:"attacks",reward:"10 Token + 30 Staub"},{id:"bronze",name:"Bronze",target:.25,reward:"25 Token + Aura-Material"},{id:"silver",name:"Silber",target:.60,reward:"45 Token + 100 Staub"},{id:"gold",name:"Gold",target:1,reward:"75 Token + Katalysator-Chance"},{id:"master",name:"Meister",target:1.5,reward:"110 Token + Kosmetik"}].map(x=>({...x,goal,targetValue:x.type==="attacks"?1:goal*x.target,current:x.type==="attacks"?w.attacks:w.contribution,ready:x.type==="attacks"?w.attacks>=1:w.contribution>=goal*x.target,claimed:!!w.milestones[x.id]}));}
   function claimBossMilestone(id){const row=bossMilestoneRows().find(x=>x.id===id),w=ensureBossWeek();if(!row||!row.ready||row.claimed)return;w.milestones[id]=true;const rewards={join:[10,30,0,0],bronze:[25,40,20,0],silver:[45,100,15,0],gold:[75,140,30,1],master:[110,180,40,0]}[id]||[0,0,0,0];const prestige=ultimateSetMultiplier();S.bossTokens+=rewards[0]*prestige;S.fusionDust+=rewards[1]*prestige;S.auraMaterial+=rewards[2]*prestige;if(rewards[3]&&Math.random()<.35)S.prismaticCatalysts+=1;if(id==="master")S.cosmeticFragments+=8;if(id==="gold"&&!w.goldCounted){w.goldCounted=true;S.bossQualifiedWeeks=Math.max(0,Math.floor(Number(S.bossQualifiedWeeks)||0)+1);S.bossCosmeticPity=Math.max(0,Math.floor(Number(S.bossCosmeticPity)||0)+1);if(S.bossCosmeticPity>=12){S.cosmeticFragments+=25;S.bossCosmeticPity=0;toast("🎨 Boss-Pity: seltenes Kosmetikpaket garantiert!",5000);}}persist();void syncBossPlayerState();refresh(false);toast(`${row.name} abgeholt · +${rewards[0]*prestige} Boss-Token`,3200);}
   function bossCommunityRows(){const boss=UI.boss||bossDefinition(),max=Math.max(1,Number(boss.maxHp)||bossDefinition().maxHp),damage=Math.max(0,Number(boss.globalDamage)||0),pct=clamp(damage/max,0,1);return [{id:"75",name:"Boss auf 75 %",need:.25,reward:"20 Token"},{id:"50",name:"Boss auf 50 %",need:.50,reward:"30 Token + Staub"},{id:"25",name:"Boss auf 25 %",need:.75,reward:"40 Token + Aura"},{id:"dead",name:"Boss besiegt",need:1,reward:"60 Token + Kosmetik"}].map(x=>({...x,pct,ready:pct>=x.need,claimed:!!S.bossWeek?.community?.[x.id]}));}
   function claimBossCommunity(id){const row=bossCommunityRows().find(x=>x.id===id),w=ensureBossWeek();if(!row?.ready||row.claimed||w.attacks<1)return toast("Community-Belohnung benötigt mindestens einen eigenen Angriff und das erreichte Ziel.");w.community[id]=true;const r={"75":[20,0,0,0],"50":[30,60,0,0],"25":[40,0,30,0],dead:[60,80,30,5]}[id];const prestige=ultimateSetMultiplier();S.bossTokens+=r[0]*prestige;S.fusionDust+=r[1]*prestige;S.auraMaterial+=r[2]*prestige;S.cosmeticFragments+=r[3]*prestige;persist();refresh(false);}
   function buyBossShop(id){const items={dust:{cost:25,label:"120 Fusionsstaub"},aura:{cost:20,label:"40 Aura-Material"},cosmetic:{cost:45,label:"5 Kosmetikfragmente"},pack:{cost:35,label:"10 Pack-Fragmente"}};const item=items[id];if(!item)return;if(S.bossTokens<item.cost)return toast("Nicht genügend Boss-Token.");S.bossTokens-=item.cost;if(id==="dust")S.fusionDust+=120;else if(id==="aura")S.auraMaterial+=40;else if(id==="cosmetic")S.cosmeticFragments+=5;else S.packFragments+=10;persist();refresh(false);toast(`${item.label} gekauft.`);}
-  function bossHtml(){ensureBossDaily();ensureBossWeek();const root=UI.boss||bossDefinition(),max=Math.max(1,Number(root.maxHp)||bossDefinition().maxHp),damage=Math.max(0,Number(root.globalDamage)||0),hp=Math.max(0,max-damage),pct=clamp(hp/max*100,0,100),team=bossTeamStats(),cards=team.cards,attacks=bossAvailableAttacks(),daily=ensureBossDaily(),milestones=bossMilestoneRows(),community=bossCommunityRows();return `<section class="bc-section bc-weekly-boss"><div class="bc-section-title"><div><small>WÖCHENTLICHER COMMUNITY-BOSS · ${esc(bossDefinition().weekKey)}</small><h2>${esc(root.icon||bossDefinition().icon)} ${esc(root.name||bossDefinition().name)}</h2><p>Montag–Sonntag. Alle angemeldeten Spieler greifen denselben Firestore-Boss an. Hauptbelohnungen sind persönliche Ziele und Community-Meilensteine.</p></div><button data-bc-boss-refresh>Online aktualisieren</button></div><div class="bc-boss-health"><div><span style="width:${pct}%"></span></div><b>${fmt(hp)} / ${fmt(max)} HP</b><small>${(root.tags||bossDefinition().tags).map(x=>SET_BY_ID[x]?`${SET_BY_ID[x].icon} ${SET_BY_ID[x].name}`:x).join(" · ")} · ${esc(root.theme||bossDefinition().theme)} · ${bossPhase(root).icon} ${bossPhase(root).name}</small></div><div class="bc-boss-layout"><section class="bc-boss-team"><header><div><small>DEIN 3-KARTEN-LOADOUT</small><h3>Team-Power ${fmt(team.total)}</h3></div><button data-bc-boss-auto>⚡ Bestes Boss-Team</button></header><div class="bc-boss-slots">${[0,1,2].map(i=>{const inst=cards[i],m=inst?cardMeta(inst):null;return `<button data-bc-boss-slot="${i}" class="${m?m.className:"empty"}"><span>${m?m.icon:i===0?"⚔️":"🛡️"}</span><b>${m?esc(m.name):i===0?"Hauptkarte wählen":"Supportkarte wählen"}</b><small>${m?`${fusionLabel(inst)} · ⚔ ${fmt(combatStats(inst).power)} · ${i===0?"100 %":"25 %"}`:i===0?"Pflichtslot":"Optional"}</small></button>`}).join("")}</div><div class="bc-boss-bonus-row"><span>Boss-Tags <b>+${Math.round(team.tagBonus*100)}%</b></span><span>Set-Boni <b>+${Math.round(team.setBonus*100)}%</b></span><span>EX/VIP <b>+${Math.round(team.premiumBonus*100)}%</b></span><span>${team.phase.icon} Phase <b>${team.phase.damageMult>=1?"+":""}${Math.round((team.phase.damageMult-1)*100)}%</b></span></div><button class="bc-boss-attack" data-bc-boss-attack ${!cards[0]||attacks<1?"disabled":""}>${root.globalDamage>=max?"Boss besiegt":`⚔ Angriff starten · ${attacks} heute übrig`}</button><p class="bc-boss-ticket-note">3 Gratis-Angriffe/Tag · bis zu 2 Bonus-Tickets: 5 Packs (${daily.packProgress}/5) und 1 Kartenkampf-Sieg (${daily.battleProgress?"✓":"offen"}).</p></section><section class="bc-boss-personal"><small>PERSÖNLICHER WOCHENBEITRAG</small><h3>${fmt(S.bossWeek.contribution)} Schaden</h3><p>Ziel wird beim ersten Angriff aus deiner eigenen Boss-Power eingefroren. So kann auch ein neuer Spieler Gold erreichen.</p>${milestones.map(x=>`<div class="bc-boss-milestone ${x.ready?"ready":""}"><span><b>${x.name}</b><small>${fmt(Math.min(x.current,x.targetValue))} / ${fmt(x.targetValue)} · ${x.reward}</small></span>${x.claimed?"<em>✓</em>":`<button data-bc-boss-milestone="${x.id}" ${x.ready?"":"disabled"}>Holen</button>`}</div>`).join("")}</section></div><div class="bc-boss-community"><h3>Community-Ziele</h3>${community.map(x=>`<article class="${x.ready?"ready":""}"><b>${x.name}</b><small>${x.reward}</small>${x.claimed?"<em>✓ geholt</em>":`<button data-bc-boss-community="${x.id}" ${x.ready&&S.bossWeek.attacks>0?"":"disabled"}>Holen</button>`}</article>`).join("")}</div><div class="bc-boss-bottom"><section><h3>🏆 Wochen-Rangliste</h3><div class="bc-boss-leaderboard">${UI.bossPlayers.length?UI.bossPlayers.slice(0,10).map((p,i)=>`<div><b>#${i+1} ${esc(p.displayName||"Spieler")}</b><span>${fmt(p.contribution||0)}</span></div>`).join(""):`<p>Noch keine Online-Beiträge geladen.</p>`}</div></section><section><h3>🪙 Boss-Shop · ${fmt(S.bossTokens)} Token</h3><div class="bc-boss-shop"><button data-bc-boss-shop="dust">🧪 120 Staub <b>25</b></button><button data-bc-boss-shop="aura">✦ 40 Aura <b>20</b></button><button data-bc-boss-shop="cosmetic">🎨 5 Fragmente <b>45</b></button><button data-bc-boss-shop="pack">🎴 10 Pack-Fragmente <b>35</b></button></div><small>Boss-Pity Kosmetik: ${S.bossCosmeticPity}/12 qualifizierte Gold-Wochen.</small></section></div></section>`;}
+  function bossHtml(){ensureBossDaily();ensureBossWeek();const root=UI.boss||bossDefinition(),max=Math.max(1,Number(root.maxHp)||bossDefinition().maxHp),damage=Math.max(0,Number(root.globalDamage)||0),hp=Math.max(0,max-damage),pct=clamp(hp/max*100,0,100),team=bossTeamStats(),cards=team.cards,attacks=bossAvailableAttacks(),daily=ensureBossDaily(),milestones=bossMilestoneRows(),community=bossCommunityRows();return `<section class="bc-section bc-weekly-boss"><div class="bc-section-title"><div><small>WÖCHENTLICHER COMMUNITY-BOSS · ${esc(bossDefinition().weekKey)}</small><h2>${esc(root.icon||bossDefinition().icon)} ${esc(root.name||bossDefinition().name)}</h2><p>Montag–Sonntag. Alle angemeldeten Spieler greifen denselben Firestore-Boss an. Hauptbelohnungen sind persönliche Ziele und Community-Meilensteine.</p></div><button data-bc-boss-refresh>Online aktualisieren</button></div><div class="bc-boss-health"><div><span style="width:${pct}%"></span></div><b>${fmt(hp)} / ${fmt(max)} HP</b><small>${(root.tags||bossDefinition().tags).map(x=>SET_BY_ID[x]?`${SET_BY_ID[x].icon} ${SET_BY_ID[x].name}`:x).join(" · ")} · ${esc(root.theme||bossDefinition().theme)} · ${bossPhase(root).icon} ${bossPhase(root).name}</small></div><div class="bc-boss-layout"><section class="bc-boss-team"><header><div><small>DEIN 3-KARTEN-LOADOUT</small><h3>Team-Power ${fmt(team.total)}</h3></div><button data-bc-boss-auto>⚡ Bestes Boss-Team</button></header><div class="bc-boss-slots">${[0,1,2].map(i=>{const inst=cards[i],m=inst?cardMeta(inst):null;return `<button data-bc-boss-slot="${i}" class="${m?m.className:"empty"}"><span>${m?m.icon:i===0?"⚔️":"🛡️"}</span><b>${m?esc(m.name):i===0?"Hauptkarte wählen":"Supportkarte wählen"}</b><small>${m?`${fusionLabel(inst)} · ⚔ ${fmt(combatStats(inst).power)} · ${i===0?"100 %":"25 %"}`:i===0?"Pflichtslot":"Optional"}</small></button>`}).join("")}</div><div class="bc-boss-bonus-row"><span>Boss-Tags <b>+${Math.round(team.tagBonus*100)}%</b></span><span>Set-Boni <b>+${Math.round(team.setBonus*100)}%</b></span><span>EX/VIP <b>+${Math.round(team.premiumBonus*100)}%</b></span><span>${team.phase.icon} Phase <b>${team.phase.damageMult>=1?"+":""}${Math.round((team.phase.damageMult-1)*100)}%</b></span></div><button class="bc-boss-attack" data-bc-boss-attack ${!cards[0]||attacks<1?"disabled":""}>${root.globalDamage>=max?"Boss besiegt":`⚔ Angriff starten · ${attacks} heute übrig`}</button><p class="bc-boss-ticket-note">3 Gratis-Angriffe/Tag · maximal 2 Bonus-Angriffe/Tag: 1× durch 5 Packs (${daily.packBonusEarned?"✓":`${daily.packProgress}/5`}) + 1× durch einen Kartenkampf-Sieg (${daily.battleBonusEarned?"✓":"offen"}). Bereits verbrauchte Bonus-Angriffe kommen heute nicht erneut zurück.</p></section><section class="bc-boss-personal"><small>PERSÖNLICHER WOCHENBEITRAG</small><h3>${fmt(S.bossWeek.contribution)} Schaden</h3><p>Ziel wird beim ersten Angriff aus deiner eigenen Boss-Power eingefroren. So kann auch ein neuer Spieler Gold erreichen.</p>${milestones.map(x=>`<div class="bc-boss-milestone ${x.ready?"ready":""}"><span><b>${x.name}</b><small>${fmt(Math.min(x.current,x.targetValue))} / ${fmt(x.targetValue)} · ${x.reward}</small></span>${x.claimed?"<em>✓</em>":`<button data-bc-boss-milestone="${x.id}" ${x.ready?"":"disabled"}>Holen</button>`}</div>`).join("")}</section></div><div class="bc-boss-community"><h3>Community-Ziele</h3>${community.map(x=>`<article class="${x.ready?"ready":""}"><b>${x.name}</b><small>${x.reward}</small>${x.claimed?"<em>✓ geholt</em>":`<button data-bc-boss-community="${x.id}" ${x.ready&&S.bossWeek.attacks>0?"":"disabled"}>Holen</button>`}</article>`).join("")}</div><div class="bc-boss-bottom"><section><h3>🏆 Wochen-Rangliste</h3><div class="bc-boss-leaderboard">${UI.bossPlayers.length?UI.bossPlayers.slice(0,10).map((p,i)=>`<div><b>#${i+1} ${esc(p.displayName||"Spieler")}</b><span>${fmt(p.contribution||0)}</span></div>`).join(""):`<p>Noch keine Online-Beiträge geladen.</p>`}</div></section><section><h3>🪙 Boss-Shop · ${fmt(S.bossTokens)} Token</h3><div class="bc-boss-shop"><button data-bc-boss-shop="dust">🧪 120 Staub <b>25</b></button><button data-bc-boss-shop="aura">✦ 40 Aura <b>20</b></button><button data-bc-boss-shop="cosmetic">🎨 5 Fragmente <b>45</b></button><button data-bc-boss-shop="pack">🎴 10 Pack-Fragmente <b>35</b></button></div><small>Boss-Pity Kosmetik: ${S.bossCosmeticPity}/12 qualifizierte Gold-Wochen.</small></section></div></section>`;}
 
   function setRequirementRowHtml(req){const meta=setRequirementMeta(req),rare=meta.rarityValue<=.1||req.kind==="hyper"||req.kind==="exclusive"||req.kind==="win"||req.kind==="vip";return `<article class="${req.owned?"owned":"missing"} ${meta.className}"><span>${req.owned?"✓":"?"}</span><div><b>${esc(meta.name)}</b><small>${esc(meta.label)}${rare?" · 💎 Sammler-Rarität":""}</small></div><em>${req.owned?"BESITZT":"FEHLT"}</em></article>`;}
   function setDetailHtml(selected,weekly){
