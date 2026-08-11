@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-10-jkcoin-v387-finance-confirm-exclusive-100";
+  const VERSION = "2026-08-11-jkcoin-v393-bigcards-vip-field-access";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -181,7 +181,7 @@
     { game:"speedcar", id:"speedcar-tune-3", name:"3 Tuning-Chips", cost:300, text:"Drei kostenlose Tuning-Stufen in der Speed Car.KL-Werkstatt.", grant:{kind:"tuneToken",amount:3} },
     { game:"speedcar", id:"speedcar-coins-50000", name:"50.000 Speed Coins", cost:250, text:"Guthaben für Fahrzeugkäufe und Tuning in Speed Car.KL.", grant:{kind:"speedCoins",amount:1} },
 
-    { game:"bigcards", id:"bigcards-vip", name:"BigCards VIP · Dauerhaft", cost:500, text:"Permanenter VIP-Zugang für BigCards.kl: tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten, Boss-System, Klicker-Upgrades und Boss-Special-Attacken.", grant:{kind:"vipUnlock",amount:1} },
+    { game:"bigcards", id:"bigcards-vip", name:"BigCards VIP · Dauerhaft", cost:500, text:"Permanenter VIP-Zugang für BigCards.kl: tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten, Boss-System, Klicker-Upgrades, Boss-Special-Attacken und die Möglichkeit, noch nicht regulär freigeschaltete Karten gegen hohe Point-Kosten vorzeitig fürs Spielfeld freizuschalten. Ohne VIP werden solche alten Vorzeit-Freigaben entfernt.", grant:{kind:"vipUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-bulk-level-unlock", name:"Alle Karten leveln · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten leveln“ für exakt 24 Stunden frei – auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkLevelUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-bulk-rebirth-unlock", name:"Alle Karten rebirthen · 24 Stunden", cost:500, text:"Schaltet im BigCards-Sammlungsalbum „Alle Karten rebirthen“ für exakt 24 Stunden frei – auch für Exclusive/VIP, wenn diese Sammlung ausgewählt ist. Nach Ablauf muss der Zugang erneut gekauft werden.", grant:{kind:"bulkRebirthUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-points-boost-2", name:"2× Points · 15 Min.", cost:200, text:"Verdoppelt 15 Minuten lang die Points-Produktion im Spielfeld UND im persönlichen Kartenslot.", grant:{kind:"pointsBoost:2",amount:1} },
@@ -512,7 +512,7 @@
     if(kind.startsWith("bind:"))return "Wird deinem Bindungs-Inventar gutgeschrieben und kann auf eine konkrete Karte ausgerüstet werden.";
     if(kind.startsWith("trail:"))return "Gibt eine Spur für deine persönliche BigCards-Karte; die normale Rank-Freischaltung zum Ausrüsten bleibt bestehen.";
     if(kind.startsWith("featuredStorage:"))return "Dauerhafte Speicherfreischaltung für den persönlichen BigCards-Kartenslot.";
-    if(kind==="vipUnlock")return "Permanente BigCards-VIP-Freischaltung: tägliches VIP-Glücksrad, VIP-Klicker, 100 VIP-Karten, Bosse, Klicker-Upgrades und kaufbare Boss-Special-Attacken. Einmal gekauft bleibt VIP dauerhaft aktiv.";
+    if(kind==="vipUnlock")return "Permanente BigCards-VIP-Freischaltung: tägliches VIP-Glücksrad, VIP-Klicker, 100 VIP-Karten, Bosse, Klicker-Upgrades, Boss-Special-Attacken und vorzeitige Spielfeld-Freigaben für höhere Karten gegen sehr hohe Point-Kosten. Ohne VIP dürfen nur regulär freigeschaltete normale/Wins-Karten aufs Spielfeld; alte Vorzeit-Freigaben werden entfernt. Einmal gekauft bleibt VIP dauerhaft aktiv.";
     if(kind==="bulkLevelUnlock")return "24-Stunden-Komfortzugang: Die aktuell gewählte BigCards-Sammlung kann automatisch gelevelt werden – normale Raritäten, Exclusive oder VIP. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
     if(kind==="bulkRebirthUnlock")return "24-Stunden-Komfortzugang: Alle aktuell möglichen Level-5-Karten der gewählten BigCards-Sammlung – einschließlich Exclusive oder VIP – können gesammelt um genau eine Rebirth-Stufe erhöht werden. Der Zugang läuft nach exakt 24 Stunden ab und muss dann erneut für 500 JK/Coin gekauft werden.";
     if(kind.startsWith("pointsBoost:"))return "15-Minuten-Points-Booster für BigCards: wirkt gleichzeitig auf Stockwerk und persönliche Karte. Beim Upgrade wird die Zeit auf exakt 15 Minuten gesetzt, niemals addiert.";
