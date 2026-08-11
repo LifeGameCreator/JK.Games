@@ -1,15 +1,15 @@
-/* BigCards.kl – JK.Games Top Game V406 · Boss Daily Limit Fix */
+/* BigCards.kl – JK.Games Top Game V407 · Compact Cloud Save */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-11-bigcards-v406-boss-daily-limit-fix";
+  const VERSION = "2026-08-11-bigcards-v407-compact-cloud-save";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
   const CLOUD_MIN_SCHEMA_VERSION = 354;
   const CLOUD_CHUNK_CHARS = 180000;
-  const CLOUD_CHUNK_MAX_BYTES = 180000;
-  const CLOUD_CHUNK_TARGET_BYTES = 150000;
+  const CLOUD_CHUNK_MAX_BYTES = 700000;
+  const CLOUD_CHUNK_TARGET_BYTES = 480000;
   const CLOUD_BUCKET_FORMAT = "bucket-v370";
   const CLOUD_LEGACY_BUCKET_FORMAT = "bucket-v368";
   const CLOUD_INSTANCE_BUCKETS = 48;
@@ -19,7 +19,7 @@
   const LOCAL_DB_VERSION = 1;
   const LOCAL_DB_STORE = "saves";
   const LOCAL_SAVE_DELAY_MS = 900;
-  const CLOUD_MAX_CHUNKS = 220;
+  const CLOUD_MAX_CHUNKS = 512;
   // V402: Cloud-Chunks werden in stabilen 12er-Gruppen parallel gelesen.
   // Das ist schneller als der alte 6er-Weg, ohne den riskanten V401-IN-Query-Pfad.
   const CLOUD_SAFE_READ_BATCH = 12;
@@ -31,10 +31,10 @@
   const CLOUD_PROFILE_SAVE_INTERVAL_MS = 1800000;
   const CLOUD_RESOURCE_BACKOFF_MS = 1800000;
   const CLOUD_POLL_MS = 45000;
-  // V394: große Cloud-Spielstände werden in kleinen Firestore-Batches geschrieben.
+  // V407: kompakte Karten-Buckets + gebündelte Firestore-Batches reduzieren die Anzahl der Writes massiv.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
-  const CLOUD_WRITE_BATCH_SIZE = 3;
-  const CLOUD_WRITE_BATCH_PAUSE_MS = 3200;
+  const CLOUD_WRITE_BATCH_SIZE = 6;
+  const CLOUD_WRITE_BATCH_PAUSE_MS = 5500;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
   const MARKET_STATS_COLLECTION = "bigCardsMarketStats";
@@ -583,7 +583,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;invalidateCollectionRenderCache();S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:406,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},hyperCollection:{},hyperCores:0,vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
+  function defaultState(){return {version:407,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},hyperCollection:{},hyperCores:0,vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,auraInventory:{},combatAuraInventory:{},bindInventory:{},repairKits:{},potionInventory:{},potionMastery:{},trailInventory:{},trailTierUnlocked:0,equipmentRewards:{},featuredCardId:null,featuredPendingPoints:0,featuredPendingXp:0,featuredStorageTier:0,bulkLevelUnlocked:false,bulkLevelUntil:0,bulkLevelLegacyMigrated:true,bulkRebirthUntil:0,featuredLastAt:now(),jkBoostPointsMultiplier:1,jkBoostPointsUntil:0,jkBoostXpMultiplier:1,jkBoostXpUntil:0,jkBoostDamageBonus:0,jkBoostDamageUntil:0,jkVipClickMultiplier:1,jkVipClickUntil:0,jkBossDamageMultiplier:1,jkBossDamageUntil:0,jkPackCredits:{},exclusiveCredits:0,autoCollectorUntil:0,autoCollectorPointStep:0,autoOpenerUntil:0,autoPack:"common",autoEnabled:false,autoOpenerWorkMs:0,autoOpenerCapacity:0,autoOpenerLanes:Array.from({length:4},()=>({pack:"common",enabled:false})),autoOpenerLastAt:0,autoOpenerSummary:null,winsCurrency:0,battleWins:0,battleLosses:0,battleStreak:0,battleBestStreak:0,battleCooldownUntil:0,battleTierUnlocked:0,battleTierWins:0,battleUpgradeSpent:0,onlineBattleWins:0,onlineBattleLosses:0,onlineRankedWins:0,onlineRankedLosses:0,onlineProcessedMatches:{},onlinePotionConsumedMatches:{},lifetimePointsEarned:0,lifetimeScore:0,maxLevelEver:1,highestProductionEver:0,highestXpProductionEver:0,highestUpgrade:{},shinyMilestones:{},floorScore:{1:true},daily:{day:"",opened:0,upgraded:0,newCards:0,claimed:{}},lastSeen:now(),createdAt:now(),updatedAt:now(),packHistory:[],marketMerchantBought:{}};}
   function normalizeFloorUniqueCards(){
     if(!S?.floors||!S?.instances)return false;let changed=false;
     for(let floor=0;floor<S.floors.length;floor++){
@@ -674,7 +674,7 @@
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=406;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=407;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -2703,12 +2703,28 @@
     for(const text of [primary,...overflow])if(utf8Size(text)>CLOUD_CHUNK_MAX_BYTES)throw new Error(`Cloud-Bucket ${bucket+1} konnte nicht sicher geteilt werden.`);
     return {primary,overflow};
   }
+  function compactCloudInstance(inst){
+    const row={...(inst||{})};
+    const defaults={
+      level:1,cardRebirth:0,rank:0,rankMastery:0,rankEliteWins:0,rankWins:0,rankedAt:0,
+      backupCardId:null,aura:null,combatAura:null,bind:null,shiny:0,battlePotion:null,
+      broken:false,brokenAt:0,favorite:false,locked:false,listed:false,
+      vip:false,vipId:null,exclusive:false,exclusiveId:null,basePower:null,
+      trail:null,fusion:"normal",win:false,winId:null,winPack:null,
+      hyper:false,hyperId:null,hyperGeneration:1
+    };
+    for(const [key,value] of Object.entries(defaults)){
+      if(Object.prototype.hasOwnProperty.call(row,key)&&row[key]===value)delete row[key];
+    }
+    if(Array.isArray(row.battlePotions)&&row.battlePotions.length===0)delete row.battlePotions;
+    return row;
+  }
   function buildCloudBucketPayloads(state){
     const meta={...state};delete meta.instances;delete meta.collection;
     const metaText=JSON.stringify({kind:"meta",value:meta});if(utf8Size(metaText)>CLOUD_CHUNK_MAX_BYTES)throw new Error("Cloud-Metadaten sind zu groß. Bitte Support melden.");
     const base=[metaText],overflow=[];
     const instBuckets=Array.from({length:CLOUD_INSTANCE_BUCKETS},()=>({}));
-    for(const [key,value] of Object.entries(state.instances||{}))instBuckets[cloudBucketIndex(key,CLOUD_INSTANCE_BUCKETS)][key]=value;
+    for(const [key,value] of Object.entries(state.instances||{}))instBuckets[cloudBucketIndex(key,CLOUD_INSTANCE_BUCKETS)][key]=compactCloudInstance(value);
     for(let i=0;i<CLOUD_INSTANCE_BUCKETS;i++){const split=splitCloudBucket("instances",i,instBuckets[i]);base.push(split.primary);overflow.push(...split.overflow);}
     const colBuckets=Array.from({length:CLOUD_COLLECTION_BUCKETS},()=>({}));
     for(const [key,value] of Object.entries(state.collection||{}))colBuckets[cloudBucketIndex(key,CLOUD_COLLECTION_BUCKETS)][key]=value;
@@ -2868,7 +2884,7 @@
     if(!force&&Number(globalGate.queueDepth||0)>=3){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,180000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=405;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=407;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
@@ -2904,7 +2920,7 @@
       const gateBackoff=e?.code==="firestore-write-backoff";
       if(localSizeError||resourceError||gateBackoff){
         const gateUntil=Number(window.LifeBuilderFirebaseCore?.getWriteGateStatus?.()?.backoffUntil)||0;
-        const retryMs=gateBackoff?Math.max(CLOUD_SAVE_DELAY_MS,Number(e?.retryAfterMs)||0,gateUntil-now()):CLOUD_RESOURCE_BACKOFF_MS;
+        const retryMs=localSizeError?CLOUD_SAVE_DELAY_MS:gateBackoff?Math.max(CLOUD_SAVE_DELAY_MS,Number(e?.retryAfterMs)||0,gateUntil-now()):CLOUD_RESOURCE_BACKOFF_MS;
         cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+Math.max(CLOUD_SAVE_DELAY_MS,retryMs));
         // Ein lokaler Bucket-Größenfehler darf niemals die komplette JK.Games-Firebase
         // für alle anderen Module blockieren. Bei echtem resource-exhausted setzt der
