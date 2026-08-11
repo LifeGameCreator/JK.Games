@@ -1510,3 +1510,14 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-market-boss-demand>span{font-size:24px}.bc-market-boss-demand>div{display:flex;flex-direction:column;gap:2px}.bc-market-boss-demand b{font-size:12px;color:#244653}.bc-market-boss-demand small{font-size:9px;color:#6f6655;line-height:1.35}
 @media(max-width:900px){.bc-detail-card .bc-card-art{height:170px!important;font-size:70px!important}}
 @media(max-width:520px){.bc-detail-card{padding:11px!important}.bc-detail-card .bc-card-art{height:145px!important;font-size:60px!important}.bc-detail-card h2{font-size:23px!important}.bc-market-boss-demand{padding:9px}.bc-market-boss-demand>span{font-size:20px}}
+
+
+/* ===== V400 · Backup-K.O. + Spezial-Reparatur + VIP-Pack-Fix ===== */
+.bc-repair-kit-grid{max-height:min(58vh,620px);overscroll-behavior:contain;scrollbar-gutter:stable}
+.bc-repair-kit-grid .bc-special-repair-kit{min-height:78px}
+.bc-repair-kit-grid .bc-special-repair-kit.rar-exclusive{background:linear-gradient(135deg,rgba(77,9,25,.96),rgba(25,10,16,.98));color:#f8dadd;border-color:#a63854}
+.bc-repair-kit-grid .bc-special-repair-kit.rar-wins{background:linear-gradient(135deg,#e8f0dc,#d8ad4b);color:#24474b;border-color:#aa8733}
+.bc-repair-kit-grid .bc-special-repair-kit.rar-vip{background:linear-gradient(135deg,#fff0b2,#d7b15f 55%,#72568f);color:#2f2a39;border-color:#b78b35}
+.bc-pack-card.vip-pack>.bc-pack-badge{display:none!important}
+.bc-pack-card.vip-pack>small:first-child{margin-top:6px}
+@media(max-width:700px){.bc-repair-kit-grid{max-height:60vh}.bc-repair-kit-grid .bc-special-repair-kit{min-height:0}}
