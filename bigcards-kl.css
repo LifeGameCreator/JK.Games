@@ -1225,3 +1225,12 @@ body.bigcards-kl-open{overflow:hidden!important}
 @media(max-width:850px){.bc-nav,.bc-nav.player-nav,.bc-nav.owner-nav{grid-template-columns:repeat(6,minmax(0,1fr))!important}.bc-wins-use{grid-template-columns:1fr}.bc-wins-use-actions{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.bc-nav,.bc-nav.player-nav,.bc-nav.owner-nav{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:3px!important;padding:4px 6px 5px!important}.bc-nav button,.bc-nav.player-nav button,.bc-nav.owner-nav button{min-height:33px!important;padding:2px 1px!important}.bc-nav button>span{font-size:12px!important}.bc-nav button>b{font-size:7px!important}.bc-nav-toggle{height:20px;width:104px;font-size:7px}.bc-pack-categories{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.bc-wins-use-actions{grid-template-columns:1fr}}
 @media(max-width:390px){.bc-nav,.bc-nav.player-nav,.bc-nav.owner-nav{grid-template-columns:repeat(3,minmax(0,1fr))!important}.bc-pack-categories button{min-height:34px}.bc-pack-categories button span{font-size:14px}.bc-pack-categories button b{font-size:8px}}
+
+
+/* ===== V394 · einheitliche Info-Buttons im BigCards-Shop ===== */
+/* VIP, Spuren, Karten verbessern, Auras, Bindungen, Shiny und Card Shards
+   benutzen jetzt exakt denselben Info-Kreis oben rechts. */
+.bc-shop-panels article.bc-shop-info-card{position:relative!important;padding-top:16px!important;padding-right:54px!important}
+.bc-shop-panels article.bc-shop-info-card>.bc-shop-info{position:absolute!important;right:11px!important;top:11px!important;margin:0!important}
+.bc-shop-panels article.bc-shop-info-card .bc-shop-dual-actions{padding-right:0!important}
+@media(max-width:700px){.bc-shop-panels article.bc-shop-info-card{padding-right:50px!important}}
