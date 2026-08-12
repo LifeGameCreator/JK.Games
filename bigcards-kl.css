@@ -1981,3 +1981,34 @@ body.bigcards-kl-open{overflow:hidden!important}
 @keyframes bcPrestigeFlare{0%,100%{filter:brightness(1);opacity:.75}50%{filter:brightness(1.45);opacity:1}}
 @media(max-width:900px){.bc-prestige-hero{grid-template-columns:repeat(3,minmax(0,1fr))}.bc-prestige-requirements{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-prestige-odds>div:last-child{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.bc-prestige-hero{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-prestige-requirements,.bc-prestige-shop-grid,.bc-prestige-keep{grid-template-columns:1fr}.bc-prestige-odds>div:last-child{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-prestige-shop-item{grid-template-columns:34px 1fr}.bc-prestige-shop-item button{grid-column:1/-1;width:100%}.bc-prestige-history article{grid-template-columns:1fr}.bc-prestige-head{flex-direction:column}}
+
+
+/* ===== V413 · Spuren-Inventar / Beste Kampfkarte ===== */
+.bc-owned-trails-modal{min-width:min(860px,92vw)}
+.bc-owned-trails-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.bc-owned-trails-head h2{margin:2px 0 4px}
+.bc-owned-trails-current{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.14);border-radius:14px;margin-bottom:12px;background:rgba(255,255,255,.04)}
+.bc-owned-trails-current span{opacity:.72}
+.bc-owned-trails-current b{margin-right:auto}
+.bc-owned-trails-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:9px;max-height:58vh;overflow:auto;padding:2px}
+.bc-owned-trail-row{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;padding:11px;border:1px solid rgba(255,255,255,.11);border-radius:14px;background:rgba(255,255,255,.035)}
+.bc-owned-trail-row.equipped{outline:2px solid rgba(255,214,72,.92);box-shadow:0 0 20px rgba(255,214,72,.16)}
+.bc-owned-trail-row.locked{opacity:.58}
+.bc-owned-trail-icon{font-size:25px;text-align:center}
+.bc-owned-trail-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bc-owned-trail-copy small{opacity:.72;line-height:1.25}
+.bc-owned-trail-copy span{font-size:12px;opacity:.82}
+.bc-owned-trail-row button{white-space:nowrap}
+.bc-owned-trails-footer{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px}
+.bc-best-combat-picker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:11px;border:1px solid rgba(255,255,255,.12);border-radius:13px;background:rgba(255,255,255,.035)}
+.bc-best-combat-picker small{opacity:.7}
+.bc-best-combat-entry,.bc-best-combat-picker button{font-weight:800}
+.bc-best-combat-entry.locked,.bc-best-combat-picker button.locked{border-color:rgba(255,202,68,.6);box-shadow:inset 0 0 0 1px rgba(255,202,68,.12)}
+.bc-best-combat-entry.unlocked,.bc-best-combat-picker button.unlocked{border-color:rgba(106,255,182,.55);box-shadow:inset 0 0 0 1px rgba(106,255,182,.10)}
+.bc-battle-title-actions{flex-wrap:wrap}
+@media(max-width:700px){
+  .bc-owned-trails-grid{grid-template-columns:1fr}
+  .bc-owned-trail-row{grid-template-columns:38px 1fr}
+  .bc-owned-trail-row button{grid-column:1/-1;width:100%}
+  .bc-owned-trails-current b{width:100%}
+}
