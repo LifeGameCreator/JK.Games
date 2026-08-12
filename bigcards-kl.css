@@ -2251,3 +2251,22 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-special-card-potions{
   border-color:rgba(76,204,224,.28)!important;
 }
+
+
+/* ===== V421 · OWNER MOD-MENÜ AUF AKTUELLEM STAND ===== */
+.bc-mod-v421{padding-bottom:30px}
+.bc-mod-card-giver,.bc-mod-pack-lab,.bc-mod-latest{margin:0 0 14px;padding:14px;border:1px solid rgba(44,87,101,.18);border-radius:16px;background:linear-gradient(145deg,#fffaf0,#f2e7cc);box-shadow:0 8px 22px rgba(43,55,49,.08)}
+.bc-mod-card-giver{border-color:rgba(83,106,196,.32);background:linear-gradient(145deg,#f7f3ff,#eef6ff)}
+.bc-mod-latest{border-color:rgba(55,160,151,.3);background:linear-gradient(145deg,#f1fffb,#eef7f3)}
+.bc-mod-latest-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.bc-mod-latest-head small{font-size:8px;font-weight:1000;letter-spacing:.1em;color:#7c6841}.bc-mod-latest-head h3{margin:2px 0 3px;font:900 20px Georgia,serif;color:#203f4c}.bc-mod-latest-head p{margin:0;max-width:820px;font-size:10px;color:#5f6862}
+.bc-mod-card-giver-tools,.bc-mod-pack-controls{display:grid;grid-template-columns:minmax(150px,.35fr) minmax(220px,1fr);gap:8px;margin-bottom:9px}
+.bc-mod-card-giver-tools input,.bc-mod-card-giver-tools select,.bc-mod-pack-controls select,.bc-mod-card-giver-options input,.bc-mod-card-giver-options select,.bc-mod-resource-grid input,.bc-mod-resource-grid select{width:100%;min-width:0;box-sizing:border-box;padding:9px;border:1px solid #b8ad91;border-radius:9px;background:#fff;color:#223f4b;font-weight:800}
+.bc-mod-card-giver-options{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-bottom:10px}.bc-mod-card-giver-options label,.bc-mod-resource-grid label,.bc-mod-pack-controls label{display:grid;gap:4px;font-size:8px;font-weight:900;color:#665f52}
+.bc-mod-card-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:7px;max-height:430px;overflow:auto;padding:2px}.bc-mod-card-result{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px;border:1px solid rgba(49,71,80,.14);border-radius:11px;background:#fff}.bc-mod-card-result>span{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.48);font-size:18px}.bc-mod-card-result b,.bc-mod-card-result small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bc-mod-card-result b{font-size:11px}.bc-mod-card-result small{font-size:8px;opacity:.72;margin-top:2px}.bc-mod-card-result button{padding:8px 10px!important}
+.bc-mod-card-empty{padding:16px;border:1px dashed rgba(69,83,91,.25);border-radius:11px;text-align:center;font-size:10px;color:#6e716d;background:rgba(255,255,255,.5)}.bc-mod-card-limit{display:block;margin-top:7px;color:#846c44}
+.bc-mod-pack-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-mod-pack-controls label{padding:9px;border-radius:11px;background:rgba(255,255,255,.55)}.bc-mod-pack-controls button,.bc-mod-latest>button{margin-top:6px}
+.bc-mod-resource-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.bc-mod-resource-grid .toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border:1px solid rgba(44,87,101,.14);border-radius:9px;background:#fff}.bc-mod-resource-grid .toggle input{width:20px;height:20px}
+.bc-mod-inventory-search{display:grid;grid-template-columns:28px minmax(0,1fr) 30px;gap:6px;align-items:center;margin:0 10px 9px;padding:7px;border:1px solid rgba(42,75,88,.18);border-radius:10px;background:#fff}.bc-mod-inventory-search>span{display:grid;place-items:center}.bc-mod-inventory-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;font-weight:800;color:#203f4c}.bc-mod-inventory-search button{width:30px!important;height:30px!important;min-width:30px!important;padding:0!important;border-radius:50%!important}
+@media(max-width:820px){.bc-mod-card-giver-options{grid-template-columns:repeat(2,minmax(0,1fr))}.bc-mod-resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.bc-mod-card-giver,.bc-mod-pack-lab,.bc-mod-latest{padding:10px}.bc-mod-card-giver-tools,.bc-mod-pack-controls{grid-template-columns:1fr}.bc-mod-card-giver-options,.bc-mod-resource-grid{grid-template-columns:1fr 1fr}.bc-mod-card-results{grid-template-columns:1fr;max-height:390px}}

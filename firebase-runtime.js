@@ -28,11 +28,13 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 2200;
-  const FIRESTORE_RESOURCE_BACKOFF_MS = 900000;
+  const FIRESTORE_WRITE_GAP_MS = 3200;
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 1800000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
   // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
+  const FIRESTORE_MAX_APP_QUEUE = 12;
+  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 120000;
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
@@ -108,6 +110,12 @@
   }
 
   function queueFirestoreWrite(label, operation) {
+    if (firestoreWriteQueueDepth >= FIRESTORE_MAX_APP_QUEUE) {
+      const error = new Error(`JK.Games hält den Firestore-Schreibstrom kurz an: ${firestoreWriteQueueDepth} lokale Writes warten bereits.`);
+      error.code = "firestore-write-pressure";error.retryAfterMs = FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS;error.transient = true;
+      setFirestoreWriteBackoff(FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS, "client-pressure");
+      return Promise.reject(error);
+    }
     firestoreWriteQueueDepth += 1;
     const execute = async () => {
       try {
@@ -136,9 +144,11 @@
     return path.startsWith("centerPresenceV268/")
       || path.startsWith("centerStaffPresenceV270/")
       || path.startsWith("playerProfiles/")
+      || path.startsWith("playerPrivate/")
       || path.startsWith("bigCardsProfiles/")
       || path.startsWith("bigCardsSaves/")
-      || path.startsWith("bigCardsOnlineQueue/");
+      || path.startsWith("bigCardsOnlineQueue/")
+      || path.startsWith("egoshootKlOnline/");
   }
 
   function queueCoalescedSetDoc(args) {
@@ -416,7 +426,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-12-v416-firestore-write-queue-guard",
+    version: "2026-08-12-v421-firestore-hard-pressure-guard",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -430,7 +440,7 @@
     isResourceExhaustedError,
     runWrite: queueFirestoreWrite,
     setWriteBackoff: setFirestoreWriteBackoff,
-    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
+    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
     isFatalFirestoreAssertion,
     scheduleHardFirestoreRecovery,
     withTimeout,
