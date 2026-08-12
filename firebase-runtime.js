@@ -28,7 +28,7 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 1400;
+  const FIRESTORE_WRITE_GAP_MS = 2200;
   const FIRESTORE_RESOURCE_BACKOFF_MS = 900000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
@@ -135,7 +135,10 @@
     const path = String(ref?.path || "");
     return path.startsWith("centerPresenceV268/")
       || path.startsWith("centerStaffPresenceV270/")
-      || path.startsWith("playerProfiles/");
+      || path.startsWith("playerProfiles/")
+      || path.startsWith("bigCardsProfiles/")
+      || path.startsWith("bigCardsSaves/")
+      || path.startsWith("bigCardsOnlineQueue/");
   }
 
   function queueCoalescedSetDoc(args) {
@@ -413,7 +416,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-11-v396-firestore-coalesce-longpoll-backoff",
+    version: "2026-08-12-v416-firestore-write-queue-guard",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,

@@ -2102,3 +2102,54 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-modal-card .bc-rank-info li{font-size:11px!important}
   .bc-modal-card .bc-rank-info h2{font-size:23px!important}
 }
+
+
+/* ===== V416 · KOMPAKTE SCORES / EINSTELLUNGEN / BESTE KAMPFKARTE ===== */
+.bc-collection-score-row{align-items:stretch;gap:10px!important;margin-bottom:10px!important}
+.bc-total-collection-score{position:relative;min-height:88px!important;padding:10px 11px!important}
+.bc-total-collection-score>small{padding-right:28px;font-size:8px!important;line-height:1.2}
+.bc-total-collection-score>strong{font-size:24px!important;line-height:1.05;margin-top:5px}
+.bc-score-info-button{position:absolute!important;right:7px!important;top:7px!important;display:grid!important;place-items:center!important;width:24px!important;min-width:24px!important;height:24px!important;min-height:24px!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.52)!important;background:rgba(20,43,54,.84)!important;color:#fff!important;font:900 12px/1 Georgia,serif!important;cursor:pointer!important}
+.bc-total-collection-score.rebirth select{margin-top:5px!important;padding:5px 7px!important;font-size:9px!important}
+.bc-score-info-modal{max-width:650px}
+.bc-score-info-modal p{line-height:1.55}
+.bc-score-info-modal>button{width:100%;margin-top:12px}
+
+.bc-settings-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.bc-settings-groups>section{border:1px solid rgba(27,62,78,.15);border-radius:16px;padding:12px;background:rgba(255,255,255,.55)}
+.bc-settings-groups h3{margin:0 0 9px;font-size:14px}
+.bc-setting-row{display:grid;grid-template-columns:1fr 43px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(25,57,71,.1);cursor:pointer}
+.bc-setting-row:last-child{border-bottom:0}
+.bc-setting-row div{display:flex;flex-direction:column;gap:2px}
+.bc-setting-row b{font-size:11px}
+.bc-setting-row small{font-size:9px;line-height:1.35;opacity:.72}
+.bc-setting-row input{position:absolute;opacity:0;pointer-events:none}
+.bc-setting-row i{position:relative;width:42px;height:24px;border-radius:999px;background:#9aa8ad;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);transition:.18s ease}
+.bc-setting-row i:after{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.24);transition:.18s ease}
+.bc-setting-row input:checked+i{background:#2e9c68}
+.bc-setting-row input:checked+i:after{transform:translateX(18px)}
+.bc-settings-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:13px}
+
+.bc-best-featured{font-weight:900!important}
+.bc-best-featured.locked{border-color:#d6a437!important;box-shadow:inset 0 0 0 1px rgba(214,164,55,.2)!important}
+.bc-best-featured.unlocked{border-color:#4fbf87!important;box-shadow:inset 0 0 0 1px rgba(79,191,135,.18)!important}
+.bc-feature-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+.bc-pref-hide-rarity-scores .bc-rarity-score-item>span{display:none!important}
+.bc-pref-hide-header-collection [data-bc-head-stats]>div:nth-child(6){display:none!important}
+.bc-pref-hide-pack-descriptions .bc-pack-card>p{display:none!important}
+.bc-pref-hide-pack-descriptions .bc-pack-card{min-height:205px!important}
+.bc-pref-reduce-motion *,.bc-pref-reduce-motion *:before,.bc-pref-reduce-motion *:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+
+@media(max-width:760px){
+  .bc-collection-score-row{display:flex!important;grid-template-columns:none!important;max-width:none!important;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;padding:2px 1px 7px}
+  .bc-total-collection-score{flex:0 0 min(178px,72vw);scroll-snap-align:start}
+  .bc-settings-groups{grid-template-columns:1fr}
+  .bc-pref-compact-mobile .bc-section{padding:10px!important}
+  .bc-pref-compact-mobile .bc-pack-grid{gap:8px!important}
+  .bc-pref-compact-mobile .bc-pack-card{padding:12px!important;min-height:205px}
+  .bc-pref-compact-mobile .bc-card-grid{gap:7px!important}
+  .bc-pref-compact-mobile .bc-section-title{gap:7px!important;margin-bottom:9px!important}
+  .bc-pref-compact-mobile .bc-feature-top-actions{gap:5px!important}
+  .bc-pref-compact-mobile .bc-feature-top-actions button{padding:7px 8px!important;font-size:9px!important}
+}

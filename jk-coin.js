@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-12-jkcoin-v414-speedcar-removed";
+  const VERSION = "2026-08-12-jkcoin-v416-best-combat";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -209,6 +209,7 @@
     { game:"bigcards", id:"bigcards-pack-godly", name:"Göttlich-Pack", cost:2500, text:"1 Credit für ein Göttlich-Pack.", grant:{kind:"pack:godly",amount:1} },
     { game:"bigcards", id:"bigcards-exclusive", name:"EXCLUSIVE PACK", cost:100, text:"5 Ziehungen aus dem exklusiven Vampir-/Blutkarten-Pool.", grant:{kind:"exclusivePack",amount:1} },
     { game:"bigcards", id:"bigcards-auto-opener", name:"Auto-Opener · +1 Arbeitsstunde", cost:750, text:"Gibt 1 Stunde Auto-Opener-Arbeitszeit. Die ersten vier Käufe schalten zusätzlich Kanal 1–4 frei; mehrere aktive Kanäle teilen sich den Zeitpool und öffnen gleichzeitig.", grant:{kind:"autoOpenerHour",amount:1} },
+    { game:"bigcards", id:"bigcards-best-combat", name:"Beste Kampfkarte · Dauerhaft", cost:100, text:"Schaltet die automatische Auswahl der aktuell stärksten erlaubten Kampfkarte dauerhaft frei. Der Button erscheint im Bereich Karte und im Kartenkampf.", grant:{kind:"bestCombatAutoUnlock",amount:1} },
     { game:"bigcards", id:"bigcards-vip-clicks-2", name:"VIP-Klicks ×2 · 1 Stunde", cost:150, text:"Verdoppelt den VIP-Klick-Ertrag für exakt 1 Stunde. Beim Kauf einer höheren Stufe wird die Laufzeit wieder auf genau 1 Stunde gesetzt.", grant:{kind:"vipClickBoost:2",amount:1} },
     { game:"bigcards", id:"bigcards-vip-clicks-4", name:"VIP-Klicks ×4 · 1 Stunde", cost:350, text:"Vierfacher VIP-Klick-Ertrag für exakt 1 Stunde. Ersetzt ×2; Restzeit wird nicht addiert.", grant:{kind:"vipClickBoost:4",amount:1} },
     { game:"bigcards", id:"bigcards-vip-clicks-6", name:"VIP-Klicks ×6 · 1 Stunde", cost:650, text:"Sechsfacher VIP-Klick-Ertrag für exakt 1 Stunde. Höhere Stufen werden bewusst deutlich teurer.", grant:{kind:"vipClickBoost:6",amount:1} },
