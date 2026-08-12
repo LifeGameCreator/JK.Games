@@ -207,17 +207,18 @@
 
     const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(CONFIG);
     const auth = authMod.getAuth(app);
-    // V245: Firestore 12.17.1 + automatische Transport-Erkennung.
+    // V408: Firestore 12.17.1 + automatische Transport-Erkennung.
     // Kein erzwungenes Long-Polling: Firestore darf selbst zwischen Streaming und
-    // Long-Polling wechseln. Ein etwas kuerzerer 25-s-Polling-Timeout hilft bei
-    // Proxies/Router-Sessions, die 30-s-Hanging-GETs vorzeitig beenden.
+    // Long-Polling wechseln. Ein 20-s-Polling-Timeout gilt nur, falls Auto-Detect
+    // Long-Polling tatsächlich aktiviert.
     let db;
     try {
       db = dbMod.initializeFirestore(app, {
-        // V396: Der Nutzer hatte wiederholt abgebrochene WebChannel-/Listen-
-        // Verbindungen. Erzwungenes Long-Polling ist langsamer, aber bei solchen
-        // Proxy/Router-Problemen wesentlich robuster und verhindert reconnect-Spikes.
-        experimentalForceLongPolling: true,
+        // V408: Firestore entscheidet selbst, ob Long-Polling wirklich nötig ist.
+        // Forced Long-Polling wurde entfernt, weil es beim Listen/WebChannel zu
+        // wiederholten HTTP-400-Reconnects führen kann. Auto-Detect ist der von
+        // Firebase vorgesehene Standardweg und nutzt Long-Polling nur bei Bedarf.
+        experimentalAutoDetectLongPolling: true,
         experimentalLongPollingOptions: { timeoutSeconds: 20 }
       }, DATABASE_ID);
     } catch (error) {
