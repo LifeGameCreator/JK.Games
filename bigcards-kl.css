@@ -1911,7 +1911,8 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-shop-info,
 .bc-pack-info-btn,
 .bc-auto-info-btn,
-.bc-rank-info,
+.bc-manager-info,
+.bc-feature-top-actions .rank-info,
 .bc-card-rebirth-info-button,
 .bc-ultimate-info-btn,
 .bc-market-info-btn,
@@ -1923,7 +1924,7 @@ body.bigcards-kl-open{overflow:hidden!important}
   border:1px solid rgba(255,255,255,.22)!important;background:rgba(15,22,34,.88)!important;color:#f7fbff!important;
   box-shadow:0 4px 14px rgba(0,0,0,.24)!important;cursor:pointer!important;flex:0 0 30px!important;
 }
-.bc-info-circle:hover,.bc-shop-info:hover,.bc-pack-info-btn:hover,.bc-auto-info-btn:hover,.bc-rank-info:hover,.bc-card-rebirth-info-button:hover,.bc-ultimate-info-btn:hover,.bc-market-info-btn:hover,.bc-vip-info-btn:hover,.bc-inline-info:hover{
+.bc-info-circle:hover,.bc-shop-info:hover,.bc-pack-info-btn:hover,.bc-auto-info-btn:hover,.bc-manager-info:hover,.bc-feature-top-actions .rank-info:hover,.bc-card-rebirth-info-button:hover,.bc-ultimate-info-btn:hover,.bc-market-info-btn:hover,.bc-vip-info-btn:hover,.bc-inline-info:hover{
   transform:translateY(-1px);border-color:rgba(255,210,45,.9)!important;box-shadow:0 0 0 2px rgba(255,210,45,.12),0 6px 16px rgba(0,0,0,.28)!important;
 }
 .bc-section-title-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -2038,4 +2039,66 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-total-collection-score.rebirth em b{color:#ffd86d}
 @media(max-width:760px){
   .bc-collection-score-row{grid-template-columns:1fr;max-width:430px}
+}
+
+
+/* ===== V415 · RANK-INFO DIALOG FIX ===== */
+.bc-modal-card .bc-rank-info{
+  width:auto!important;
+  height:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  max-width:900px!important;
+  margin:0 auto!important;
+  padding:6px 4px 4px!important;
+  border:0!important;
+  border-radius:0!important;
+  display:block!important;
+  background:transparent!important;
+  color:#203b49!important;
+  box-shadow:none!important;
+  cursor:default!important;
+  flex:none!important;
+  font:inherit!important;
+}
+.bc-modal-card .bc-rank-info:hover{
+  transform:none!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+}
+.bc-modal-card .bc-rank-info>small{
+  display:block;
+  margin-bottom:3px;
+}
+.bc-modal-card .bc-rank-info h2{
+  margin:4px 0 12px!important;
+}
+.bc-modal-card .bc-rank-info p,
+.bc-modal-card .bc-rank-info li{
+  font-size:12px!important;
+  line-height:1.55!important;
+}
+.bc-modal-card .bc-rank-info ol{
+  padding-left:22px!important;
+  gap:8px!important;
+}
+.bc-modal-card .bc-rank-info>button{
+  position:sticky;
+  bottom:0;
+  margin-top:12px;
+  min-height:42px;
+  z-index:2;
+}
+.bc-manager-info,
+.bc-feature-top-actions .rank-info{
+  width:30px!important;
+  height:30px!important;
+  min-width:30px!important;
+  min-height:30px!important;
+  border-radius:50%!important;
+}
+@media(max-width:520px){
+  .bc-modal-card .bc-rank-info p,
+  .bc-modal-card .bc-rank-info li{font-size:11px!important}
+  .bc-modal-card .bc-rank-info h2{font-size:23px!important}
 }

@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V414 · Rebirth Score */
+/* BigCards.kl – JK.Games Top Game V415 · Rank Info + Firebase Rules Fix */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-12-bigcards-v414-rebirth-score";
+  const VERSION = "2026-08-12-bigcards-v415-rank-info-firebase-fix";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
