@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V416 · UI Settings + Write Queue Guard */
+/* BigCards.kl – JK.Games Top Game V417 · Hyper Feature Card Image Fix */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-12-bigcards-v416-settings-write-guard";
+  const VERSION = "2026-08-12-bigcards-v417-hyper-feature-image-fix";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
