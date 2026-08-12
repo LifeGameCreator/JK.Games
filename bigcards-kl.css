@@ -2223,3 +2223,31 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-head-stats b{font-size:10.5px!important}
   .bc-head-stats em{font-size:6px!important}
 }
+
+
+/* ===== V419 · VIP/HYPER REPARATUR + EIGENE TRANKLISTEN ===== */
+.bc-repair-kit-grid .rar-hyper.bc-special-repair-kit{
+  border-color:rgba(63,225,255,.7)!important;
+  box-shadow:inset 0 0 0 1px rgba(63,225,255,.13),0 6px 18px rgba(20,135,170,.10);
+}
+.bc-potion-tier-grid .bc-special-potion-tier{
+  position:relative;
+  overflow:hidden;
+}
+.bc-potion-tier-grid .rar-vip.bc-special-potion-tier{
+  border-color:rgba(234,194,91,.72)!important;
+  box-shadow:inset 0 0 0 1px rgba(234,194,91,.14);
+}
+.bc-potion-tier-grid .rar-hyper.bc-special-potion-tier{
+  border-color:rgba(78,226,255,.72)!important;
+  box-shadow:inset 0 0 0 1px rgba(78,226,255,.14),0 5px 16px rgba(31,153,184,.10);
+}
+.bc-special-potion-shop .bc-potion-list article.rar-vip{
+  border-color:rgba(234,194,91,.62)!important;
+}
+.bc-special-potion-shop .bc-potion-list article.rar-hyper{
+  border-color:rgba(74,226,255,.66)!important;
+}
+.bc-special-card-potions{
+  border-color:rgba(76,204,224,.28)!important;
+}

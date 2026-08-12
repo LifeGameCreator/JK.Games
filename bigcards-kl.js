@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V418 · Balanced Card XP + Compact Header */
+/* BigCards.kl – JK.Games Top Game V419 · Hyper/VIP Repair + Potion Tiers */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-12-bigcards-v418-card-xp-balance";
+  const VERSION = "2026-08-12-bigcards-v419-hyper-vip-repair-potions";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -145,7 +145,8 @@
     {id:"godly",name:"Göttliches Reparatur-Kit",icon:"👑",price:300000000},
     {id:"exclusive",name:"Exclusive Reparatur-Siegel",icon:"🩸",price:0,exclusive:true},
     {id:"wins",name:"Wins Reparatur-Pack",icon:"🏆",price:0,wins:true},
-    {id:"vip",name:"VIP Reparatur-Kit",icon:"💎",price:0,vip:true}
+    {id:"vip",name:"VIP Reparatur-Kit",icon:"💎",price:0,vip:true},
+    {id:"hyper",name:"Hyper Reparatur-Kern",icon:"⚡",price:0,hyper:true}
   ]);
   const REPAIR_KIT_BY_ID = Object.freeze(Object.fromEntries(REPAIR_KITS.map(k=>[k.id,k])));
 
@@ -601,7 +602,7 @@
   function backupLocalConflict(userId,raw){if(!raw)return;void putIndexedState(`conflict:${userId}:${now()}`,raw).catch(()=>{});}
   function persist(){if(!S)return;invalidateCollectionRenderCache();S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudFastDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_SAVE_DELAY_MS);}
   function persistPassive(){if(!S)return;S.updatedAt=now();writeLocalState(cloudUid||currentUidSync());cloudDirty=true;cloudMutationCounter++;scheduleCloudSave(CLOUD_PASSIVE_SAVE_DELAY_MS);}
-  function defaultState(){return {version:416,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},hyperCollection:{},hyperCores:0,vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,prestigeCount:0,prestigeTokens:0,prestigeLifetimeRebirths:0,prestigeJkEarned:0,prestigeBestJk:0,prestigeHistory:[],prestigeShopOwned:{},prestigePending:null,bestCombatAutoUnlocked:false,uiPrefs:{
+  function defaultState(){return {version:419,points:1000,pendingPoints:0,fieldStoredSeconds:0,level:1,xp:0,totalRebirths:0,phase:0,phaseRebirths:0,unlockedFloors:1,instances:{},floors:Array.from({length:4},()=>Array(10).fill(null)),collection:{},exclusiveCollection:{},vipCollection:{},winCollection:{},hyperCollection:{},hyperCores:0,vipUnlocked:false,vipWheelDay:"",vipWheelReward:"",vipWheelUntil:0,vipClicks:0,vipClickerLevel:1,vipClickerDefeats:0,vipClickerBosses:0,vipClickerEnemy:null,vipClickerSpecialOwned:{},vipClickerSpecialEquipped:null,vipClickerSpecialCharge:0,vipClickerLastReward:null,shards:0,fusionDust:0,auraMaterial:0,cosmeticFragments:0,prismaticCatalysts:0,bossTokens:0,packFragments:0,expeditions:[],bossLoadout:[null,null,null],bossDaily:{day:"",freeUsed:0,bonusTickets:0,packProgress:0,battleProgress:0},bossWeek:{key:"",contribution:0,attacks:0,goal:0,milestones:{},community:{}},bossQualifiedWeeks:0,bossCosmeticPity:0,setMastery:{},setWeekly:{week:"",setId:"",expeditions:0,bossDamage:0,upgrades:0,claimed:{}},ultimateSetClaimed:false,ultimateSetClaimedAt:0,prestigeCount:0,prestigeTokens:0,prestigeLifetimeRebirths:0,prestigeJkEarned:0,prestigeBestJk:0,prestigeHistory:[],prestigeShopOwned:{},prestigePending:null,bestCombatAutoUnlocked:false,uiPrefs:{
 showF2PScore:true,showRebirthScore:true,showPayScore:true,showAutoOpenerPanel:true,showAutoOpenerFloating:true,
 showCollectionRarityScores:true,showHeaderCollection:true,showPackDescriptions:true,compactMobile:true,reduceAnimations:false,
 autoOpenerStartCollapsed:false
@@ -767,7 +768,7 @@ autoOpenerStartCollapsed:false
     if(S.featuredCardId&&(!S.instances[S.featuredCardId]||S.instances[S.featuredCardId]?.listed))S.featuredCardId=null;
     for(const inst of Object.values(S.instances)){if(!inst?.backupCardId)continue;const backup=S.instances[inst.backupCardId];if(!backup||backup.id===inst.id||backup.listed)inst.backupCardId=null;}
     if(S.featuredCardId){for(const row of S.floors){const i=row.indexOf(S.featuredCardId);if(i>=0)row[i]=null;}}
-    S.version=416;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
+    S.version=419;const exclusiveFloorFixed=normalizeExclusiveFloorRestriction();const featuredFieldFixed=normalizeFeaturedCombatFieldRestriction();const repaired=normalizeFloorUniqueCards();const expeditionFixed=normalizeExpeditionUniqueCards();updateFeaturedEarnings(now(),false);if(saveLocal||exclusiveFloorFixed||featuredFieldFixed||repaired||expeditionFixed||potionInventoryMigrated||potionMasteryMigrated||potionQueueMigrated||bulkLevelMigrated)writeLocalState(userId||cloudUid||currentUidSync());return S;
   }
   function state(){
     if(S)return S;
@@ -1123,7 +1124,9 @@ autoOpenerStartCollapsed:false
     const endgameFade=1-clamp(Number(tier)||0,0,12)/12*.15;
     return 1+(raw-1)*endgameFade;
   }
+  function hyperSupportTier(){return clamp(Math.max(RARITY_INDEX.legendary,highestNormalCombatTierReached()),RARITY_INDEX.legendary,RARITY_INDEX.galaxy);}
   function repairKitId(inst){
+    if(inst?.hyper)return "hyper";
     if(inst?.vip)return "vip";
     if(inst?.exclusive)return "exclusive";
     if(inst?.win)return "wins";
@@ -1132,18 +1135,24 @@ autoOpenerStartCollapsed:false
   function repairKitMeta(id){return REPAIR_KIT_BY_ID[id]||REPAIR_KIT_BY_ID.common;}
   function repairKitPrice(id){
     const kit=repairKitMeta(id);
-    if(!kit.exclusive&&!kit.vip&&!kit.wins)return Math.max(1,Math.floor(kit.price||1));
-    const tier=exclusiveCombatTier();
-    // Spezial-Reparaturen besitzen bewusst eigene Kits. Damit kann z. B. eine
-    // VIP- oder Wins-Karte niemals mehr mit einem normalen Selten-Kit repariert werden.
+    if(!kit.exclusive&&!kit.vip&&!kit.wins&&!kit.hyper)return Math.max(1,Math.floor(kit.price||1));
+    const tier=kit.vip?vipCombatTier():kit.hyper?hyperSupportTier():exclusiveCombatTier();
+    // Jede Spezialkarten-Art besitzt ein eigenes Reparatur-Item.
     const curve=[20000,30000,50000,75000,110000,160000,200000,240000,350000,550000,850000,1300000,2000000];
     const base=curve[clamp(tier,0,curve.length-1)]||20000;
-    const mult=kit.vip?1.75:kit.wins?1.25:1;
+    const mult=kit.vip?1.75:kit.hyper?1.50:kit.wins?1.25:1;
     const raw=base*mult,round=raw>=1000000?10000:raw>=100000?1000:100;
     return Math.max(round,Math.ceil(raw/round)*round);
   }
   function repairKitCount(id){return Math.max(0,Math.floor(Number(S?.repairKits?.[id])||0));}
-  function potionTierId(inst){return inst?.exclusive?"exclusive":(RARITIES[clamp(Math.floor(inst?.rarity||0),0,RARITIES.length-1)]?.id||"common");}
+  const POTION_SPECIAL_TIERS=Object.freeze(["exclusive","vip","hyper"]);
+  function potionAllTierIds(){return [...RARITIES.map(r=>r.id),...POTION_SPECIAL_TIERS];}
+  function potionTierId(inst){
+    if(inst?.hyper)return "hyper";
+    if(inst?.vip)return "vip";
+    if(inst?.exclusive)return "exclusive";
+    return RARITIES[clamp(Math.floor(inst?.rarity||0),0,RARITIES.length-1)]?.id||"common";
+  }
   function normalizePotionTierId(value){
     const raw=String(value??"").trim().toLowerCase(),simple=raw.normalize?.("NFD").replace(/[\u0300-\u036f]/g,"")||raw;
     const compact=simple.replace(/[._\s-]+/g,"");
@@ -1161,9 +1170,11 @@ autoOpenerStartCollapsed:false
       galaxy:"galaxy",galaxie:"galaxy",
       cosmic:"cosmic",kosmisch:"cosmic",
       godly:"godly",gottlich:"godly",
-      exclusive:"exclusive",exklusiv:"exclusive"
+      exclusive:"exclusive",exklusiv:"exclusive",
+      vip:"vip",
+      hyper:"hyper",hyperkarte:"hyper",hyperkarten:"hyper"
     };
-    if(raw==="exclusive"||RARITY_INDEX[raw]!==undefined)return raw;
+    if(POTION_SPECIAL_TIERS.includes(raw)||RARITY_INDEX[raw]!==undefined)return raw;
     return aliases[compact]||null;
   }
   function normalizePotionTypeId(value){
@@ -1172,20 +1183,21 @@ autoOpenerStartCollapsed:false
     if(POTION_TYPES.some(x=>x.id===raw))return raw;
     return aliases[compact]||null;
   }
-  function potionTierIndex(tierId){const normalized=normalizePotionTierId(tierId)||"common";return normalized==="exclusive"?exclusiveCombatTier():clamp(RARITY_INDEX[normalized]??0,0,RARITIES.length-1);}
+  function potionTierIndex(tierId){const normalized=normalizePotionTierId(tierId)||"common";if(normalized==="exclusive")return exclusiveCombatTier();if(normalized==="vip")return vipCombatTier();if(normalized==="hyper")return hyperSupportTier();return clamp(RARITY_INDEX[normalized]??0,0,RARITIES.length-1);}
+  function potionTierMeta(tierId){const t=normalizePotionTierId(tierId)||"common";if(t==="exclusive")return {id:t,name:"Exclusive",symbol:"🩸",className:"rar-exclusive",special:true};if(t==="vip")return {id:t,name:"VIP",symbol:"💎",className:"rar-vip",special:true};if(t==="hyper")return {id:t,name:"Hyper",symbol:"⚡",className:"rar-hyper",special:true};const r=RARITIES[RARITY_INDEX[t]]||RARITIES[0];return {id:r.id,name:r.name,symbol:r.symbol,className:`rar-${r.id}`,special:false};}
   function potionType(typeId){const normalized=normalizePotionTypeId(typeId)||"life";return POTION_TYPES.find(x=>x.id===normalized)||POTION_TYPES[0];}
   function potionKey(tierId,typeId){return `${normalizePotionTierId(tierId)||tierId}:${normalizePotionTypeId(typeId)||typeId}`;}
   function potionCount(tierId,typeId){const t=normalizePotionTierId(tierId),type=normalizePotionTypeId(typeId);if(!t||!type)return 0;return Math.max(0,Math.floor(Number(S?.potionInventory?.[`${t}:${type}`])||0));}
   function potionTierTotal(tierId){return POTION_TYPES.reduce((sum,p)=>sum+potionCount(tierId,p.id),0);}
-  function potionInventoryTotal(){return [...RARITIES.map(r=>r.id),"exclusive"].reduce((sum,tier)=>sum+potionTierTotal(tier),0);}
-  function potionTierLabel(tierId){const t=normalizePotionTierId(tierId)||tierId;if(t==="exclusive")return "Exclusive";return RARITIES[RARITY_INDEX[t]]?.name||String(tierId||"");}
+  function potionInventoryTotal(){return potionAllTierIds().reduce((sum,tier)=>sum+potionTierTotal(tier),0);}
+  function potionTierLabel(tierId){return potionTierMeta(tierId).name;}
   function normalizePotionInventory(){
     if(!S)return false;
     const out={},setCount=(tierId,typeId,value)=>{const tier=normalizePotionTierId(tierId),type=normalizePotionTypeId(typeId),count=Math.max(0,Math.floor(Number(value)||0));if(!tier||!type||count<1)return;const key=`${tier}:${type}`;out[key]=Math.max(out[key]||0,count);};
     const parseFlat=(key,value)=>{
       const parts=String(key||"").split(/[:|/._-]+/).filter(Boolean);
       if(parts.length>=2){const aTier=normalizePotionTierId(parts[0]),aType=normalizePotionTypeId(parts.slice(1).join("")),bType=normalizePotionTypeId(parts[0]),bTier=normalizePotionTierId(parts.slice(1).join(""));if(aTier&&aType)return setCount(aTier,aType,value);if(bTier&&bType)return setCount(bTier,bType,value);}
-      const compact=String(key||"").replace(/[:|/._\s-]+/g,"");for(const tier of [...RARITIES.map(r=>r.id),"exclusive"]){for(const type of POTION_TYPES.map(x=>x.id)){if(compact.toLowerCase()===`${tier}${type}`||compact.toLowerCase()===`${type}${tier}`)return setCount(tier,type,value);}}
+      const compact=String(key||"").replace(/[:|/._\s-]+/g,"");for(const tier of potionAllTierIds()){for(const type of POTION_TYPES.map(x=>x.id)){if(compact.toLowerCase()===`${tier}${type}`||compact.toLowerCase()===`${type}${tier}`)return setCount(tier,type,value);}}
     };
     const ingest=source=>{if(!source||typeof source!=="object")return;for(const [key,value] of Object.entries(source)){if(value&&typeof value==="object"&&!Array.isArray(value)){const tier=normalizePotionTierId(key);if(tier){for(const [type,count] of Object.entries(value))setCount(tier,type,count);continue;}const type=normalizePotionTypeId(key);if(type){for(const [nestedTier,count] of Object.entries(value))setCount(nestedTier,type,count);continue;}}parseFlat(key,value);}};
     ingest(S.potionInventory);ingest(S.potions);ingest(S.potionStock);ingest(S.potionItems);
@@ -1204,9 +1216,9 @@ autoOpenerStartCollapsed:false
   function potionMasteryStage(tierId,typeId){return potionMastery(tierId,typeId).stage;}
   function potionMasteryName(tierId,typeId){return POTION_MASTERY_NAMES[potionMasteryStage(tierId,typeId)]||POTION_MASTERY_NAMES[0];}
   function potionMasteryRequirement(stage){return clamp(Math.floor(Number(stage)||0),1,POTION_MASTERY_MAX)*100;}
-  function potionMaxEffect(tierId,typeId){const tier=potionTierIndex(tierId),exclusive=tierId==="exclusive",boost=exclusive?1.06:1;let pct=0,cap=.45;if(typeId==="life"){pct=(.25+tier*.035)*boost;cap=.70;}else if(typeId==="power"){pct=(.20+tier*.03)*boost;cap=.60;}else if(typeId==="guard"){pct=(.12+tier*.025)*boost;cap=.45;}else if(typeId==="xp"){pct=(.16+tier*.022)*boost;cap=.50;}else if(typeId==="points"){pct=(.18+tier*.024)*boost;cap=.55;}return Math.min(cap,pct);}
+  function potionMaxEffect(tierId,typeId){const id=normalizePotionTierId(tierId)||"common",tier=potionTierIndex(id),boost=id==="hyper"?1.08:id==="vip"?1.06:id==="exclusive"?1.04:1;let pct=0,cap=.45;if(typeId==="life"){pct=(.25+tier*.035)*boost;cap=.70;}else if(typeId==="power"){pct=(.20+tier*.03)*boost;cap=.60;}else if(typeId==="guard"){pct=(.12+tier*.025)*boost;cap=.45;}else if(typeId==="xp"){pct=(.16+tier*.022)*boost;cap=.50;}else if(typeId==="points"){pct=(.18+tier*.024)*boost;cap=.55;}return Math.min(cap,pct);}
   function potionEffect(tierId,typeId,stage=potionMasteryStage(tierId,typeId)){const max=potionMaxEffect(tierId,typeId),base=max/1.09;return Math.min(max,base*(1+.03*clamp(stage,0,POTION_MASTERY_MAX)));}
-  function potionPrice(tierId,typeId){const tier=potionTierIndex(tierId),r=RARITIES[tier]||RARITIES[0],type=potionType(typeId),base=tierId==="exclusive"?Math.max(12000,r.price*1.15):r.price;const raw=Math.max(500,base*type.priceMult),round=raw>=1e9?1e6:raw>=1e7?1e5:raw>=1e5?1000:raw>=1e4?100:50;return Math.ceil(raw/round)*round;}
+  function potionPrice(tierId,typeId){const id=normalizePotionTierId(tierId)||"common",tier=potionTierIndex(id),r=RARITIES[tier]||RARITIES[0],type=potionType(typeId),specialMult=id==="hyper"?1.35:id==="vip"?1.25:id==="exclusive"?1.15:1,base=Math.max(500,r.price*specialMult);const raw=Math.max(500,base*type.priceMult),round=raw>=1e9?1e6:raw>=1e7?1e5:raw>=1e5?1000:raw>=1e4?100:50;return Math.ceil(raw/round)*round;}
   function potionEffectValueText(typeId,effect){const pct=(Math.max(0,Number(effect)||0)*100).toLocaleString("de-DE",{maximumFractionDigits:1});return typeId==="life"?`+${pct} % Leben`:typeId==="power"?`+${pct} % Schaden`:typeId==="guard"?`-${pct} % erlittener Schaden`:typeId==="xp"?`+${pct} % Kampf-XP`:`+${pct} % Kampf-Points`;}
   function potionEffectText(tierId,typeId){return potionEffectValueText(typeId,potionEffect(tierId,typeId));}
   function potionMaxEffectText(tierId,typeId){return potionEffectValueText(typeId,potionMaxEffect(tierId,typeId));}
@@ -1300,8 +1312,8 @@ autoOpenerStartCollapsed:false
     if(!inst)return 0;
     const level=clamp(Math.floor(Number(inst.level)||1),1,5);
     const tier=combatTier(inst),r=RARITIES[tier]||RARITIES[0],kitId=repairKitId(inst);
-    if(inst.exclusive||inst.vip||inst.win){
-      const kitPrice=repairKitPrice(kitId),factor=inst.vip?(.24+level*.055):inst.win?(.20+level*.05):(.18+level*.045),raw=kitPrice*factor;
+    if(inst.hyper||inst.exclusive||inst.vip||inst.win){
+      const kitPrice=repairKitPrice(kitId),factor=inst.hyper?(.22+level*.05):inst.vip?(.24+level*.055):inst.win?(.20+level*.05):(.18+level*.045),raw=kitPrice*factor;
       return Math.max(500,Math.ceil(raw/100)*100);
     }
     const rarityBase=Math.max(1000,Number(r.price)||1000);
@@ -1660,24 +1672,24 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function restoreCardDetailModalScroll(scrollTop){if(scrollTop===null||scrollTop===undefined)return;requestAnimationFrame(()=>{const el=UI.overlay?.querySelector("[data-bc-modal] .bc-modal-card");if(!el)return;const max=Math.max(0,el.scrollHeight-el.clientHeight);el.scrollTop=Math.min(Math.max(0,Number(scrollTop)||0),max);});}
   function equipPotion(id,typeId){
     const inst=instance(id),type=POTION_TYPES.find(x=>x.id===typeId);if(!inst||!type)return;if(inst.listed)return toast("Gelistete Karten sind gesperrt.");if(potionQueueCount(inst)>=3)return toast("Alle 3 Trank-Slots dieser Karte sind belegt.");
-    const tierId=potionTierId(inst),owned=potionCount(tierId,typeId);if(owned<1)return toast(`Du besitzt keinen passenden ${type.name} für ${tierId==="exclusive"?"Exclusive":RARITIES[potionTierIndex(tierId)].name}.`);
+    const tierId=potionTierId(inst),owned=potionCount(tierId,typeId);if(owned<1)return toast(`Du besitzt keinen passenden ${type.name} für ${potionTierLabel(tierId)}.`);
     const modalScroll=cardDetailModalScroll(),inCardDetail=modalScroll!==null;S.potionInventory[potionKey(tierId,typeId)]=owned-1;potionQueue(inst).push({tierId,typeId});persist();
     if(inCardDetail){showCardDetail(id);restoreCardDetailModalScroll(modalScroll);refresh();}else refresh(true);toast(`${type.icon} ${type.name} in Slot ${potionQueueCount(inst)}/3 gelegt · wirkt genau 1 Kampfrunde.`);
   }
   function removePotion(id,index=0){const inst=instance(id);if(!inst||!potionQueueCount(inst))return;const modalScroll=cardDetailModalScroll(),inCardDetail=modalScroll!==null,p=returnPreparedPotion(inst,index);persist();if(inCardDetail){showCardDetail(id);restoreCardDetailModalScroll(modalScroll);refresh();}else refresh(true);toast(`${p?.name||"Trank"} zurück ins Inventar gelegt.`);}
-  function buyPotion(tierId,typeId){const type=POTION_TYPES.find(x=>x.id===typeId);if(!type||(tierId!=="exclusive"&&RARITY_INDEX[tierId]===undefined))return;const price=potionPrice(tierId,typeId);if(S.points<price)return toast(`Dir fehlen ${fmt(price-S.points)} Points für ${type.name}.`);S.points-=price;const key=potionKey(tierId,typeId);S.potionInventory[key]=potionCount(tierId,typeId)+1;persist();showPotionTierShop(tierId);refresh(true);toast(`${type.name} gekauft · -${fmt(price)} Points`);}
-  function showPotionShop(){const tiers=[...RARITIES.map(r=>r.id),"exclusive"];showModal(`<div class="bc-potion-shop"><small>KAMPF-APOTHEKE</small><h2>Tränke & Meisterschaft</h2><p>Jede Karte besitzt <b>3 Trank-Slots</b>. Lebens-, Kraft- und Schutz-Tränke wirken in der Runde. <b>XP-Trank</b> und <b>Point-Trank</b> erhöhen bei einem gewonnenen Kartenkampf die entsprechende Kampfbelohnung. Mehrfach derselbe Trank verlängert nur die Anzahl der Anwendungen.</p><div class="bc-potion-tier-grid">${tiers.map(id=>{const ex=id==="exclusive",r=ex?null:RARITIES[RARITY_INDEX[id]];return `<button class="${ex?"rar-exclusive":`rar-${id}`}" data-bc-potion-tier="${id}"><span>${ex?"🩸":r.symbol}</span><div><b>${ex?"Exclusive":r.name}</b><small>${potionTierTotal(id)} Tränke · 5 Tranktypen · eigene Meisterschaft</small></div><em>Öffnen →</em></button>`}).join("")}</div><div class="bc-repair-explain"><b>Meisterschaft:</b><span>100 Anwendungen → Veredelt, 200 → Arkan, 300 → Prisma-MAX. Jede Stufe verbessert die Wirkung. XP/Point-Tränke zählen genauso und werden nach dem Kampf auf die Belohnung angewandt.</span></div></div>`);}
+  function buyPotion(tierId,typeId){tierId=normalizePotionTierId(tierId);const type=POTION_TYPES.find(x=>x.id===typeId);if(!type||!tierId||(!POTION_SPECIAL_TIERS.includes(tierId)&&RARITY_INDEX[tierId]===undefined))return;const price=potionPrice(tierId,typeId);if(S.points<price)return toast(`Dir fehlen ${fmt(price-S.points)} Points für ${type.name}.`);S.points-=price;const key=potionKey(tierId,typeId);S.potionInventory[key]=potionCount(tierId,typeId)+1;persist();showPotionTierShop(tierId);refresh(true);toast(`${type.name} gekauft · -${fmt(price)} Points`);}
+  function showPotionShop(){const tiers=potionAllTierIds();showModal(`<div class="bc-potion-shop"><small>KAMPF-APOTHEKE</small><h2>Tränke & Meisterschaft</h2><p>Jede Karte besitzt <b>3 Trank-Slots</b>. Normale Raritäten haben ihre eigenen Listen. Zusätzlich besitzen <b>Exclusive, VIP und Hyper jeweils eine komplett eigene Trankliste samt eigenem Inventar und eigener Meisterschaft</b>.</p><div class="bc-potion-tier-grid">${tiers.map(id=>{const meta=potionTierMeta(id);return `<button class="${meta.className} ${meta.special?"bc-special-potion-tier":""}" data-bc-potion-tier="${id}"><span>${meta.symbol}</span><div><b>${meta.name}</b><small>${potionTierTotal(id)} Tränke · 5 Tranktypen · eigene Meisterschaft</small></div><em>Öffnen →</em></button>`}).join("")}</div><div class="bc-repair-explain"><b>Meisterschaft:</b><span>100 Anwendungen → Veredelt, 200 → Arkan, 300 → Prisma-MAX. VIP-Tränke funktionieren nur auf VIP-Karten; Hyper-Tränke nur auf Hyper-Karten; Exclusive-Tränke nur auf Exclusive-Karten.</span></div></div>`);}
   function showPotionTierShop(tierId){
-    const ex=tierId==="exclusive",r=RARITIES[potionTierIndex(tierId)]||RARITIES[0];
-    showModal(`<div class="bc-potion-shop bc-potion-tier-shop"><button class="bc-potion-back" data-bc-potion-shop>← Alle Raritäten</button><small>${ex?"EXCLUSIVE":r.name.toUpperCase()} · KAMPF-APOTHEKE</small><h2>${ex?"Exclusive":r.name}-Tränke</h2><p>Jeder Verbrauch zählt als Anwendung. Die aktuelle Grundwirkung ist bewusst schwächer; erst <b>Prisma-MAX</b> erreicht die frühere Maximalwirkung.</p><div class="bc-potion-list">${POTION_TYPES.map(type=>{const m=potionMastery(tierId,type.id),next=m.stage<POTION_MASTERY_MAX?potionMasteryRequirement(m.stage+1):0,ready=next&&m.uses>=next;return `<article class="${ex?"rar-exclusive":`rar-${r.id}`} ${potionMasteryClass(tierId,type.id)}"><span>${type.icon}</span><div><b>${type.name}</b><small>${type.desc}</small><strong>${potionEffectText(tierId,type.id)}</strong><em>${POTION_MASTERY_NAMES[m.stage]} · Anwendungen ${m.uses}${next?`/${next}`:" · MAX"} · Inventar ×${potionCount(tierId,type.id)}</em><small class="bc-potion-max-hint">Maximal: ${potionMaxEffectText(tierId,type.id)}</small></div><div class="bc-potion-card-actions"><button data-bc-buy-potion="${type.id}" data-tier="${tierId}">${fmt(potionPrice(tierId,type.id))} Points</button>${m.stage<POTION_MASTERY_MAX?`<button class="bc-potion-mastery-up ${ready?"ready":""}" data-bc-upgrade-potion="${type.id}" data-tier="${tierId}" ${ready?"":"disabled"}>${ready?`⬆ ${POTION_MASTERY_NAMES[m.stage+1]}`:`🔒 ${m.uses}/${next}`}</button>`:`<span class="bc-potion-master-max">🌈 PRISMA-MAX</span>`}</div></article>`}).join("")}</div></div>`);
+    const id=normalizePotionTierId(tierId)||"common",meta=potionTierMeta(id);
+    showModal(`<div class="bc-potion-shop bc-potion-tier-shop ${meta.special?"bc-special-potion-shop":""}"><button class="bc-potion-back" data-bc-potion-shop>← Alle Tranklisten</button><small>${meta.name.toUpperCase()} · EIGENE KAMPF-APOTHEKE</small><h2>${meta.symbol} ${meta.name}-Tränke</h2><p>${id==="hyper"?"Diese Tränke sind ausschließlich für Hyper-Karten. Hyper besitzt damit ein vollständig getrenntes Trank-Inventar.":id==="vip"?"Diese Tränke sind ausschließlich für VIP-Karten. Normale oder Exclusive-Tränke können nicht als VIP-Tränke verwendet werden.":id==="exclusive"?"Diese Tränke sind ausschließlich für Exclusive-Karten.":"Diese Liste gilt ausschließlich für Karten dieser Rarität."} Jeder Verbrauch zählt als Anwendung; Prisma-MAX ist die höchste Meisterschaft.</p><div class="bc-potion-list">${POTION_TYPES.map(type=>{const m=potionMastery(id,type.id),next=m.stage<POTION_MASTERY_MAX?potionMasteryRequirement(m.stage+1):0,ready=next&&m.uses>=next;return `<article class="${meta.className} ${potionMasteryClass(id,type.id)}"><span>${type.icon}</span><div><b>${type.name}</b><small>${type.desc}</small><strong>${potionEffectText(id,type.id)}</strong><em>${POTION_MASTERY_NAMES[m.stage]} · Anwendungen ${m.uses}${next?`/${next}`:" · MAX"} · Inventar ×${potionCount(id,type.id)}</em><small class="bc-potion-max-hint">Maximal: ${potionMaxEffectText(id,type.id)}</small></div><div class="bc-potion-card-actions"><button data-bc-buy-potion="${type.id}" data-tier="${id}">${fmt(potionPrice(id,type.id))} Points</button>${m.stage<POTION_MASTERY_MAX?`<button class="bc-potion-mastery-up ${ready?"ready":""}" data-bc-upgrade-potion="${type.id}" data-tier="${id}" ${ready?"":"disabled"}>${ready?`⬆ ${POTION_MASTERY_NAMES[m.stage+1]}`:`🔒 ${m.uses}/${next}`}</button>`:`<span class="bc-potion-master-max">🌈 PRISMA-MAX</span>`}</div></article>`}).join("")}</div></div>`);
   }
   function cardPotionSection(inst){
-    const tierId=potionTierId(inst),r=RARITIES[potionTierIndex(tierId)]||RARITIES[0],queue=preparedPotionsMeta(inst),available=POTION_TYPES.filter(x=>potionCount(tierId,x.id)>0),total=potionInventoryTotal();
-    const otherOwned=[...RARITIES.map(x=>x.id),"exclusive"].filter(t=>t!==tierId&&potionTierTotal(t)>0).map(t=>`${potionTierLabel(t)} ×${potionTierTotal(t)}`);
+    const tierId=potionTierId(inst),tierMeta=potionTierMeta(tierId),queue=preparedPotionsMeta(inst),available=POTION_TYPES.filter(x=>potionCount(tierId,x.id)>0),total=potionInventoryTotal();
+    const otherOwned=potionAllTierIds().filter(t=>t!==tierId&&potionTierTotal(t)>0).map(t=>`${potionTierLabel(t)} ×${potionTierTotal(t)}`);
     const slots=Array.from({length:3},(_,i)=>{const p=queue[i];return p?`<div class="bc-potion-slot filled ${potionMasteryClass(p.tierId,p.typeId)}"><span>${i+1}</span><b>${p.icon} ${p.name}</b><small>${p.effectText} · ${p.stageName}</small><button data-bc-remove-potion="${inst.id}" data-bc-potion-slot="${i}" title="Zurück ins Inventar">×</button></div>`:`<div class="bc-potion-slot empty"><span>${i+1}</span><b>Leer</b><small>Runde ${i+1}</small></div>`}).join("");
-    const matchingHtml=available.length?available.map(x=>`<button data-bc-equip-potion="${x.id}" data-card="${inst.id}" ${queue.length>=3?"disabled":""}>${x.icon} ${x.name} · ${potionEffectText(tierId,x.id)} · ×${potionCount(tierId,x.id)}</button>`).join(""):`<span>${total>0?`Keine passenden ${tierId==="exclusive"?"Exclusive":r.name}-Tränke vorhanden.`:"Noch keine Tränke im Inventar."}</span>`;
-    const inventoryHint=otherOwned.length?`<small><b>Weitere gekaufte Tränke:</b> ${otherOwned.join(" · ")}</small>`:"";
-    return `<section class="bc-card-potion-section"><div class="bc-potion-section-head"><div><small>KAMPF-QUEUE</small><h3>🧪 Tränke · ${queue.length}/3</h3></div><button class="bc-potion-open-inline" data-bc-potion-shop>Tränke & Meisterschaft</button></div><p>Slot 1 wirkt in der nächsten Kampfrunde, danach Slot 2 und Slot 3. Mehrfach derselbe Trank verlängert nur die Rundenzahl – <b>keine Stärke wird gestapelt</b>.</p><div class="bc-potion-loadout">${slots}</div><div class="bc-equip-list compact">${matchingHtml}${inventoryHint}</div></section>`;
+    const matchingHtml=available.length?available.map(x=>`<button data-bc-equip-potion="${x.id}" data-card="${inst.id}" ${queue.length>=3?"disabled":""}>${x.icon} ${x.name} · ${potionEffectText(tierId,x.id)} · ×${potionCount(tierId,x.id)}</button>`).join(""):`<span>${total>0?`Keine passenden ${tierMeta.name}-Tränke vorhanden.`:"Noch keine Tränke im Inventar."}</span>`;
+    const inventoryHint=otherOwned.length?`<small><b>Andere Trank-Inventare:</b> ${otherOwned.join(" · ")}</small>`:"";
+    return `<section class="bc-card-potion-section ${tierMeta.special?"bc-special-card-potions":""}"><div class="bc-potion-section-head"><div><small>${tierMeta.symbol} ${tierMeta.name.toUpperCase()} · EIGENE TRANKLISTE</small><h3>🧪 Tränke · ${queue.length}/3</h3></div><button class="bc-potion-open-inline" data-bc-potion-tier="${tierId}">${tierMeta.name}-Tränke öffnen</button></div><p>Diese Karte kann ausschließlich Tränke aus ihrer <b>${tierMeta.name}-Liste</b> verwenden. Slot 1 wirkt in der nächsten Kampfrunde, danach Slot 2 und Slot 3.</p><div class="bc-potion-loadout">${slots}</div><div class="bc-equip-list compact">${matchingHtml}${inventoryHint}</div></section>`;
   }
   function buyTrail(id){
     const t=trailBy(id);if(!t)return;if(!trailUnlocked(id))return toast(`${t.name} ist noch gesperrt. Freischaltung erfolgt im Tab „Karte“.`,3600);
@@ -2351,8 +2363,8 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     S.points-=price;S.repairKits[kit.id]=repairKitCount(kit.id)+1;persist();showRepairShop();toast(`${kit.name} gekauft · -${fmt(price)} Points`);
   }
   function showRepairShop(){
-    const label=k=>k.vip?"Nur für VIP-Karten":k.wins?"Nur für Wins-Karten":k.exclusive?`Nur für Exclusive-Karten · Preis folgt moderat deinem Kampfbereich (${RARITIES[exclusiveCombatTier()]?.name||"Gewöhnlich"})`:`Für ${RARITIES[RARITY_INDEX[k.id]]?.name||k.id}-Karten`,cls=k=>k.vip?"rar-vip":k.wins?"rar-wins":k.exclusive?"rar-exclusive":`rar-${k.id}`;
-    showModal(`<div class="bc-repair-shop"><small>KARTENWERKSTATT</small><h2>Reparatur-Kits</h2><p>Eine zerbrochene Karte braucht <b>1 exakt passendes Reparatur-Kit + Points</b>. Normale Karten benötigen ihre Rarität. Exclusive, Wins und VIP besitzen jeweils ein eigenes Spezial-Kit und können nicht mehr mit normalen Kits repariert werden.</p><div class="bc-repair-kit-grid">${REPAIR_KITS.map(k=>`<article class="${cls(k)} ${k.exclusive||k.wins||k.vip?"bc-special-repair-kit":""}"><span>${k.icon}</span><div><b>${k.name}</b><small>${label(k)}</small><em>Inventar ×${repairKitCount(k.id)}</em></div><button data-bc-buy-repair-kit="${k.id}">${fmt(repairKitPrice(k.id))} Points</button></article>`).join("")}</div><div class="bc-repair-explain"><b>Spezial-Kits ganz unten:</b><span>Exclusive Reparatur-Siegel · Wins Reparatur-Pack · VIP Reparatur-Kit. Das Feld ist scrollbar. Sammlung → kaputte Karte → „Karte reparieren“ zeigt immer exakt das benötigte Kit.</span></div></div>`);
+    const label=k=>k.hyper?"Nur für Hyper-Karten":k.vip?"Nur für VIP-Karten":k.wins?"Nur für Wins-Karten":k.exclusive?`Nur für Exclusive-Karten · Preis folgt moderat deinem Kampfbereich (${RARITIES[exclusiveCombatTier()]?.name||"Gewöhnlich"})`:`Für ${RARITIES[RARITY_INDEX[k.id]]?.name||k.id}-Karten`,cls=k=>k.hyper?"rar-hyper":k.vip?"rar-vip":k.wins?"rar-wins":k.exclusive?"rar-exclusive":`rar-${k.id}`;
+    showModal(`<div class="bc-repair-shop"><small>KARTENWERKSTATT</small><h2>Reparatur-Kits</h2><p>Eine zerbrochene Karte braucht <b>1 exakt passendes Reparatur-Kit + Points</b>. Normale Karten benötigen ihre Rarität. <b>Exclusive, Wins, VIP und Hyper besitzen jeweils ihr eigenes Spezial-Kit</b> und können nicht mit normalen Kits repariert werden.</p><div class="bc-repair-kit-grid">${REPAIR_KITS.map(k=>`<article class="${cls(k)} ${k.exclusive||k.wins||k.vip||k.hyper?"bc-special-repair-kit":""}"><span>${k.icon}</span><div><b>${k.name}</b><small>${label(k)}</small><em>Inventar ×${repairKitCount(k.id)}</em></div><button data-bc-buy-repair-kit="${k.id}">${fmt(repairKitPrice(k.id))} Points</button></article>`).join("")}</div><div class="bc-repair-explain"><b>Spezial-Kits:</b><span>Exclusive Reparatur-Siegel · Wins Reparatur-Pack · VIP Reparatur-Kit · <b>Hyper Reparatur-Kern</b>. Sammlung → kaputte Karte → „Karte reparieren“ zeigt immer exakt das benötigte Kit.</span></div></div>`);
   }
   function openBattleRepair(id){const inst=instance(id);if(!inst)return;rememberViewScroll();UI.tab="collection";UI.collectionTier=inst.vip?14:inst.exclusive?13:inst.rarity;UI.collectionPage=(inst.vip||inst.exclusive)?0:Math.floor((inst.base||0)/48);UI.collectionSearch="";refresh(false);setTimeout(()=>showCardDetail(id),0);}
 
@@ -3370,7 +3382,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     if(!force&&Number(globalGate.queueDepth||0)>=3){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,180000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
-      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=416;
+      updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=419;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
