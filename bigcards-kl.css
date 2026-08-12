@@ -1082,10 +1082,10 @@ body.bigcards-kl-open{overflow:hidden!important}
   width:100%;
   margin:6px auto 12px;
   display:grid;
-  grid-template-columns:minmax(180px,220px) minmax(180px,220px);
+  grid-template-columns:repeat(3,minmax(180px,220px));
   justify-content:center;
   align-items:start;
-  column-gap:clamp(34px,10vw,130px);
+  column-gap:clamp(10px,3vw,34px);
   row-gap:8px;
 }
 .bc-collection-score-row .bc-total-collection-score{
@@ -2011,4 +2011,31 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-owned-trail-row{grid-template-columns:38px 1fr}
   .bc-owned-trail-row button{grid-column:1/-1;width:100%}
   .bc-owned-trails-current b{width:100%}
+}
+
+
+/* ===== V414 · Gesamter Rebirth-Score ===== */
+.bc-total-collection-score.rebirth{
+  background:linear-gradient(145deg,#3c2059,#5d3379 52%,#2b1742);
+  border-color:#d8a4ff;
+  box-shadow:0 8px 24px rgba(87,39,123,.25);
+}
+.bc-total-collection-score.rebirth small{color:#efd8ff}
+.bc-total-collection-score.rebirth strong{color:#ffd6ff}
+.bc-total-collection-score.rebirth em{color:#f6eaff}
+.bc-total-collection-score.rebirth select{
+  width:100%;
+  margin:4px 0 5px;
+  padding:6px 8px;
+  border-radius:9px;
+  border:1px solid rgba(236,200,255,.34);
+  background:#1c1029;
+  color:#fff;
+  font-size:9px;
+  font-weight:800;
+  outline:none;
+}
+.bc-total-collection-score.rebirth em b{color:#ffd86d}
+@media(max-width:760px){
+  .bc-collection-score-row{grid-template-columns:1fr;max-width:430px}
 }

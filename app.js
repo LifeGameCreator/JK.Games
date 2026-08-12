@@ -17414,7 +17414,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, Speed Car.KL, BigCards.kl und Egoshoot.KL vollständig spielen."
+    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL vollständig spielen."
   },
   {
     id: "finder",
@@ -17609,7 +17609,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, Speed Car.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar." });
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17946,10 +17946,6 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-money-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.MoneyKL?.open?.(item);
-  });
-  shell.querySelector("[data-open-speed-car-kl]")?.addEventListener("click", () => {
-    els.dialog.close();
-    window.SpeedCarKL?.open?.(item);
   });
   shell.querySelector("[data-open-bigcards-kl]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19940,7 +19936,6 @@ function openTopGamesJkInfo() {
         <article><b>Fight.KL</b><p>Bei jedem Hauptboss auf Welle 10, 20, 30 …: ca. 1 % für 50 JK/Coin und 0,01 % für 100. Jeder Hauptboss gibt zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
-        <article><b>Speed Car.KL</b><p>Speed Car.KL hat aktuell keine direkten Gratis-JK/Coin-Drops. Dort verdienst du Speed Coins über Fluchtstrecken und Rammschaden; optionale Extras findest du im JK/Coin-Spiele-Shop.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
         <article><b>Egoshoot.KL</b><p>Egoshoot.KL hat aktuell keine zufälligen Gratis-JK/Coin-Drops. Kills, Waffenlevel, Shield und Versorgung werden im Spiel erspielt; optionale Kill-Pakete findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
@@ -19956,7 +19951,7 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, Speed Car.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -19964,7 +19959,6 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
-        <button class="topgames-card speedcar" data-open-speed-car-kl><b>Speed Car.KL</b><small>Endlose Polizeiflucht, Online-Lobby, 3D-Autos, Damage, Tankstellen, Tuning, Werkstatt und Owner-Fahrzeuge.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
         <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
@@ -31075,12 +31069,63 @@ window.JKGamesOpenTopGames = function JKGamesOpenTopGames(preferredItem = "") {
   return true;
 };
 window.JKGamesOwnedPhoneItem = ownedPhoneItem;
-// V242: sichere interne Brücke für eigenständige Top-Games. Dadurch kann Speed Car.KL
-// seinen kleinen Spielstand in denselben aktiven Cloud-Slot schreiben, ohne eigene
-// konkurrierende Cloud-Save-Streams zu starten.
+// Interne Brücke für eigenständige Top-Games. Kleine Spielstände dürfen den aktiven Haupt-Slot nutzen,
+// ohne eigene konkurrierende Cloud-Save-Streams zu starten.
 window.JKGamesGetActiveState = () => state;
 window.JKGamesPersistState = () => { if (state) save(); return true; };
 window.JKGamesAwardTopGameXp = (gameId, amount, reason, options = {}) => awardTopGameMainXp(gameId, amount, reason, options);
+
+// V414: Speed Car.KL wurde vollständig aus JK.Games entfernt.
+// Alte private Speed-Car-Daten werden beim nächsten Login aus dem Hauptspielstand entfernt.
+// Der Owner räumt zusätzlich die alte Firestore-Presence-Collection automatisch leer.
+function removeLegacySpeedCarStateV414() {
+  if (!state) return false;
+  let changed = false;
+  if (Object.prototype.hasOwnProperty.call(state, "speedCarKL")) { delete state.speedCarKL; changed = true; }
+  const coin = state.jkCoin;
+  if (coin && typeof coin === "object") {
+    for (const bucket of ["gamePurchases", "entitlements", "appliedEntitlements"]) {
+      const map = coin[bucket];
+      if (!map || typeof map !== "object") continue;
+      for (const key of Object.keys(map)) if (String(key).startsWith("speedcar-")) { delete map[key]; changed = true; }
+    }
+  }
+  try {
+    localStorage.removeItem("jk-games-speed-car-kl-v242");
+    localStorage.removeItem("jk-games-speed-car-kl-custom-map");
+  } catch {}
+  if (changed) try { save(); } catch {}
+  return changed;
+}
+async function purgeSpeedCarLobbyV414() {
+  try {
+    const owner = !!(window.LifeBuilderSettingsMenu?.isOwner?.() || window.LifeBuilderSettingsMenu?.getRole?.()?.role === "owner");
+    if (!owner || localStorage.getItem("jk-games-speedcar-firebase-purge-v414") === "done") return false;
+    const core = window.LifeBuilderFirebaseCore;
+    if (!core?.load) return false;
+    const fb = await core.load(), user = await core.waitForAuth?.(7000);
+    if (!fb?.db || !user) return false;
+    let deleted = 0, guard = 0;
+    while (guard++ < 50) {
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db, "speedCarKlLobby"), fb.limit(50)));
+      if (snap.empty) break;
+      const batch = fb.writeBatch(fb.db);
+      for (const docSnap of snap.docs) batch.delete(docSnap.ref);
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 50) break;
+    }
+    localStorage.setItem("jk-games-speedcar-firebase-purge-v414", "done");
+    if (deleted && typeof addFeed === "function") addFeed(`Speed Car.KL entfernt: ${deleted} alte Online-Lobby-Datensätze gelöscht.`);
+    return true;
+  } catch (error) {
+    console.warn("Speed-Car-Firebase-Cleanup V414", error);
+    return false;
+  }
+}
+removeLegacySpeedCarStateV414();
+[2500, 8000, 16000].forEach(ms => setTimeout(() => { removeLegacySpeedCarStateV414(); purgeSpeedCarLobbyV414(); }, ms));
+
 
 // Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.
 window.addEventListener("runner-kl-world-reward", (event) => {
