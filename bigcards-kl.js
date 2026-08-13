@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V429 · Smooth Input + Deferred Local Save + Async Cloud Build */
+/* BigCards.kl – JK.Games Top Game V435 · Auto-Opener heartbeat repair */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-13-bigcards-v429-smooth-input-deferred-save-async-cloud";
+  const VERSION = "2026-08-13-bigcards-v435-auto-opener-heartbeat";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -544,7 +544,7 @@
     {name:"Ultimate",tiers:[[0,11],[5,12]]}
   ]);
 
-  const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",rebirthScoreTier:0,selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],marketStats:{},marketStatsLoaded:false,marketStatsLoading:false,leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,onlineStatus:"idle",onlineMode:null,onlineMatchId:null,onlineMatch:null,onlinePollTimer:0,onlineBusy:false,onlineQueueHeartbeat:0,onlineMatchHeartbeat:0,onlineResult:null,boss:null,bossPlayers:[],bossLoading:false,bossTeamLoading:false,setSelected:"dragon",setNormalOpen:true,setCrazyOpen:false,fusionMode:"ready",expeditionPickerSlot:0,lastHeader:0,toastTimer:0,autoNoticeTimer:0,autoNoticeDrag:null,vipWheelSpinning:false,vipWheelRotation:0,vipWheelTargetRotation:0,autoLaneSelected:0,autoLaneResults:{},rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0,modLoadToken:0,modInventoryData:null,modInventoryPage:0,modInventorySearch:"",modInventoryLoading:false,modCardsLoading:false,modCardGrantSearch:"",modCardGrantType:"all",modCardGrantSelected:"",smartSetupLoading:false,smartSetupToken:0,packCategory:"all",navCollapsed:false,autoOpenerCollapsed:false,hyperTestConfigs:null,tutorialKey:null,tutorialStep:0,tutorialReturnTab:"field"};
+  const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",rebirthScoreTier:0,selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],marketStats:{},marketStatsLoaded:false,marketStatsLoading:false,leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,onlineStatus:"idle",onlineMode:null,onlineMatchId:null,onlineMatch:null,onlinePollTimer:0,onlineBusy:false,onlineQueueHeartbeat:0,onlineMatchHeartbeat:0,onlineResult:null,boss:null,bossPlayers:[],bossLoading:false,bossTeamLoading:false,setSelected:"dragon",setNormalOpen:true,setCrazyOpen:false,fusionMode:"ready",expeditionPickerSlot:0,lastHeader:0,toastTimer:0,autoNoticeTimer:0,autoNoticeDrag:null,vipWheelSpinning:false,vipWheelRotation:0,vipWheelTargetRotation:0,autoLaneSelected:0,autoLaneResults:{},autoLaneNextAt:{},autoLastPersistAt:0,rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0,modLoadToken:0,modInventoryData:null,modInventoryPage:0,modInventorySearch:"",modInventoryLoading:false,modCardsLoading:false,modCardGrantSearch:"",modCardGrantType:"all",modCardGrantSelected:"",smartSetupLoading:false,smartSetupToken:0,packCategory:"all",navCollapsed:false,autoOpenerCollapsed:false,hyperTestConfigs:null,tutorialKey:null,tutorialStep:0,tutorialReturnTab:"field"};
   let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastChunkRefs=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveIdleHandle=0,localSaveFirstDirtyAt=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false,leaderboardProfileTimer=0,premiumNormalBaseCacheKey="",premiumNormalBaseCacheValue=1,cardPowerRevision=0,vipPopLastAt=0;
 
   const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
@@ -2256,22 +2256,22 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     for(let i=0;i<next;i++)if(!S.autoOpenerLanes[i]||typeof S.autoOpenerLanes[i]!=="object")S.autoOpenerLanes[i]={pack:"common",enabled:false};
     return true;
   }
+  function autoLaneBlockedReason(index){
+    const lane=S.autoOpenerLanes?.[index];if(!lane?.enabled)return "BEREIT";const ri=RARITY_INDEX[lane.pack]??0,r=RARITIES[ri];if(!r)return "PACK FEHLT";if(ri>rarityUnlockedIndex())return "PACK GESPERRT";if(S.points<r.price)return `WARTET · ${fmt(r.price)} P`;return "AKTIV";
+  }
   function refreshAutoOpenerControls(){
     if(!UI.overlay||UI.tab!=="packs")return;
     const box=UI.overlay.querySelector(".bc-auto-opener");if(!box)return;
-    const cap=clamp(Math.floor(Number(S.autoOpenerCapacity)||0),0,AUTO_OPENER_MAX_LANES),activeCount=autoActiveLaneIndexes().length,wallMs=activeCount?S.autoOpenerWorkMs/activeCount:S.autoOpenerWorkMs;
+    const cap=clamp(Math.floor(Number(S.autoOpenerCapacity)||0),0,AUTO_OPENER_MAX_LANES),active=autoActiveLaneIndexes(),activeCount=active.length,runnableCount=active.filter(autoLaneCanRun).length,wallMs=activeCount?S.autoOpenerWorkMs/activeCount:S.autoOpenerWorkMs;
     const time=box.querySelector("[data-bc-auto-time]");if(time){time.textContent=formatAutoWorkTime(S.autoOpenerWorkMs);if(time.classList.contains("bc-auto-compact-time"))time.hidden=S.autoOpenerWorkMs<=0;}
-    const meta=box.querySelector("[data-bc-auto-meta]");if(meta)meta.textContent=activeCount?`${activeCount} aktiv · ≈ ${formatAutoWorkTime(wallMs)} gleichzeitig`:"pausiert";
+    const meta=box.querySelector("[data-bc-auto-meta]");if(meta)meta.textContent=activeCount?(runnableCount?`${activeCount} aktiv · ≈ ${formatAutoWorkTime(wallMs)} gleichzeitig`:`${activeCount} aktiv · wartet auf Pack/Points`):"pausiert";
     for(let i=0;i<AUTO_OPENER_MAX_LANES;i++){
       const lane=S.autoOpenerLanes?.[i]||{pack:"common",enabled:false},unlocked=i<cap;
       const top=box.querySelector(`[data-bc-auto-lane="${i}"]`);
       if(top){top.classList.toggle("active",unlocked&&i===UI.autoLaneSelected);top.classList.toggle("running",unlocked&&!!lane.enabled);top.classList.toggle("locked",!unlocked);top.setAttribute("aria-disabled",unlocked?"false":"true");}
-      const card=box.querySelector(`[data-bc-auto-channel="${i}"]`);
-      if(card){card.classList.toggle("selected",unlocked&&i===UI.autoLaneSelected);card.classList.toggle("running",unlocked&&!!lane.enabled);}
-      const toggle=box.querySelector(`[data-bc-auto-lane-toggle="${i}"]`);
-      if(toggle){toggle.classList.toggle("active",!!lane.enabled);toggle.textContent=lane.enabled?"Stop":"Start";}
-      const status=box.querySelector(`[data-bc-auto-channel-status="${i}"]`);
-      if(status)status.textContent=lane.enabled?"AKTIV":"BEREIT";
+      const card=box.querySelector(`[data-bc-auto-channel="${i}"]`);if(card){card.classList.toggle("selected",unlocked&&i===UI.autoLaneSelected);card.classList.toggle("running",unlocked&&!!lane.enabled);}
+      const toggle=box.querySelector(`[data-bc-auto-lane-toggle="${i}"]`);if(toggle){toggle.classList.toggle("active",!!lane.enabled);toggle.textContent=lane.enabled?"Stop":"Start";}
+      const status=box.querySelector(`[data-bc-auto-channel-status="${i}"]`);if(status)status.textContent=unlocked?autoLaneBlockedReason(i):"GESPERRT";
     }
   }
   function toggleAuto(){const lane=clamp(Math.floor(Number(UI.autoLaneSelected)||0),0,AUTO_OPENER_MAX_LANES-1);return toggleAutoLane(lane);}
@@ -2281,7 +2281,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function resetAutoSummary(){S.autoOpenerSummary={startedAt:now(),packs:0,cards:0,newCount:0,dupes:0,totalValue:0,rarestValue:101,rarestName:"",rarities:{}};}
   function recordAutoSummary(results,laneIndex){if(!S.autoOpenerSummary||typeof S.autoOpenerSummary!=="object")resetAutoSummary();const sum=S.autoOpenerSummary;sum.packs=Math.max(0,Number(sum.packs)||0)+1;for(const result of results||[]){const inst=result?.inst;if(!inst)continue;const m=cardMeta(inst),rid=RARITIES[inst.rarity]?.id||"common",row=sum.rarities[rid]||{count:0,newCount:0};row.count++;if(result.wasNew){row.newCount++;sum.newCount=(sum.newCount||0)+1;}else sum.dupes=(sum.dupes||0)+1;sum.rarities[rid]=row;sum.cards=(sum.cards||0)+1;sum.totalValue=(sum.totalValue||0)+(Number(m?.value)||0);const rv=Number(result.rarityValue??m?.rarityValue??100);if(rv<Number(sum.rarestValue||101)){sum.rarestValue=rv;sum.rarestName=m?.name||"Karte";}}sum.lastLane=laneIndex;}
   function showAutoOpenerFinalSummary(){const sum=S.autoOpenerSummary;if(!sum||!(Number(sum.cards)>0))return;const rows=RARITIES.map(r=>({r,...(sum.rarities?.[r.id]||{count:0,newCount:0})})).filter(x=>x.count);showModal(`<div class="bc-auto-final"><small>AUTO-OPENER · GESAMTAUFLISTUNG</small><h2>📦 Session abgeschlossen</h2><div class="bc-auto-final-stats"><span><b>${fmt(sum.packs)}</b><small>Packs</small></span><span><b>${fmt(sum.cards)}</b><small>Karten</small></span><span><b>${fmt(sum.newCount)}</b><small>Neu</small></span><span><b>${fmt(sum.dupes)}</b><small>Duplikate</small></span><span><b>${fmt(sum.totalValue)}</b><small>Gesamtwert</small></span></div><div class="bc-auto-rarest"><small>SELTENSTER FUND</small><b>${esc(sum.rarestName||"–")}</b><span>${Number(sum.rarestValue||0)<=100?pct(sum.rarestValue):"–"}</span></div><div class="bc-auto-final-rarities">${rows.map(x=>`<span class="rar-${x.r.id}">${x.r.symbol}<b>${x.r.name}</b><em>×${x.count}${x.newCount?` · ${x.newCount} neu`:""}</em></span>`).join("")}</div><button class="bc-primary" data-bc-auto-summary-close>Übernehmen</button></div>`);}
-  function toggleAutoLane(index){index=clamp(Math.floor(Number(index)||0),0,AUTO_OPENER_MAX_LANES-1);if(index>=S.autoOpenerCapacity)return toast("Dieser Auto-Opener-Kanal ist noch nicht gekauft.");if(S.autoOpenerWorkMs<=0)return toast("Auto-Opener-Zeit fehlt. Im JK/Coin-Shop erhältlich.");const lane=S.autoOpenerLanes[index];lane.enabled=!lane.enabled;if(lane.enabled&&!S.autoOpenerSummary)resetAutoSummary();S.autoOpenerLastAt=now();persistPassive();refreshAutoOpenerControls();showAutoOpenerStatus(null,`Auto-Opener ${index+1} ${lane.enabled?"gestartet":"gestoppt"}`);}
+  function toggleAutoLane(index){index=clamp(Math.floor(Number(index)||0),0,AUTO_OPENER_MAX_LANES-1);if(index>=S.autoOpenerCapacity)return toast("Dieser Auto-Opener-Kanal ist noch nicht gekauft.");if(S.autoOpenerWorkMs<=0)return toast("Auto-Opener-Zeit fehlt. Im JK/Coin-Shop erhältlich.");const lane=S.autoOpenerLanes[index];lane.enabled=!lane.enabled;if(lane.enabled){if(!S.autoOpenerSummary)resetAutoSummary();UI.autoLaneNextAt[index]=0;}else delete UI.autoLaneNextAt[index];S.autoOpenerLastAt=now();persistPassive();refreshAutoOpenerControls();showAutoOpenerStatus(null,`Auto-Opener ${index+1} ${lane.enabled?"gestartet":"gestoppt"}`);}
   function autoLaneResultHtml(index){const row=UI.autoLaneResults?.[index];if(!row)return `<small>Noch kein Pack-Ergebnis auf Kanal ${index+1}.</small>`;return `<small>Letztes Pack · Kanal ${index+1}</small><b>${esc(row.rarestName||"–")} · ${pct(row.rarestValue||100)}</b><span>${row.rarityText||""}</span>`;}
   function autoRaritySummary(results){
     const counts=new Map();for(const result of results||[]){const inst=result?.inst;if(!inst)continue;const r=inst.exclusive?{id:"exclusive",name:"Exclusive",symbol:"🩸"}:RARITIES[inst.rarity]||RARITIES[0];const key=r.id,row=counts.get(key)||{r,count:0,newCount:0};row.count++;if(result.wasNew)row.newCount++;counts.set(key,row);}
@@ -2310,12 +2310,23 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function tick(){if(!S)return;const t=performance.now(),dt=Math.min(2,(t-lastTick)/1000);lastTick=t;if(!UI.overlay)return;updateFeaturedEarnings(now());const stepReset=syncCollectorPointStep(),act=activeInstances(),autoCollect=(S.autoCollectorUntil||0)>now();let pending=0,direct=0,xp=0,room=fieldStorageRemainingPoints();for(const inst of act){const fullPointGain=Math.max(0,effectivePoints(inst)*dt);if(autoCollect||inst.shiny>=3)direct+=fullPointGain;else if(room>0){const accepted=Math.min(room,fullPointGain);pending+=accepted;room-=accepted;}
       // BigCards-XP ist bewusst NICHT an das Point-Speicherlimit gekoppelt. Solange
       // BigCards geöffnet ist, geben aktive Karten ihre volle XP/s weiter.
-      xp+=effectiveXp(inst)*dt;}if(direct){direct*=vipWheelMultiplier("points");S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>900){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();refreshBulkLevelLive();refreshExpeditionCountdowns();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(now()-lastPassivePersistAt>=30000){lastPassivePersistAt=now();persistPassive();}}
-  function autoTick(){
-    if(!UI.overlay||S.autoOpenerWorkMs<=0)return;const t=now(),runnable=autoActiveLaneIndexes().filter(autoLaneCanRun);if(!runnable.length){S.autoOpenerLastAt=t;refreshAutoOpenerControls();return;}
-    const last=Math.max(0,Number(S.autoOpenerLastAt)||t),elapsed=Math.max(0,Math.min(10000,t-last));S.autoOpenerLastAt=t;if(elapsed>0)S.autoOpenerWorkMs=Math.max(0,(Number(S.autoOpenerWorkMs)||0)-elapsed*runnable.length);
-    for(const laneIndex of runnable){const lane=S.autoOpenerLanes[laneIndex],ri=RARITY_INDEX[lane.pack]??0;if(S.autoOpenerWorkMs<=0)break;autoOpenNormalPack(ri,laneIndex);}
-    if(S.autoOpenerWorkMs<=0){for(const lane of S.autoOpenerLanes)lane.enabled=false;S.autoOpenerWorkMs=0;persist();refreshAutoOpenerControls();showAutoOpenerStatus(null,"Auto-Opener-Arbeitszeit verbraucht");showAutoOpenerFinalSummary();S.autoOpenerSummary=null;return;}persistPassive();refreshAutoOpenerControls();
+      xp+=effectiveXp(inst)*dt;}if(direct){direct*=vipWheelMultiplier("points");S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>900){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();refreshBulkLevelLive();refreshExpeditionCountdowns();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(now()-lastPassivePersistAt>=30000){lastPassivePersistAt=now();persistPassive();}autoTick(now());}
+  function autoTick(t=now()){
+    if(!UI.overlay||!S)return;
+    if(S.autoOpenerWorkMs<=0){refreshAutoOpenerControls();return;}
+    const active=autoActiveLaneIndexes();if(!active.length){S.autoOpenerLastAt=t;refreshAutoOpenerControls();return;}
+    const runnable=active.filter(autoLaneCanRun);
+    const last=Math.max(0,Number(S.autoOpenerLastAt)||t),elapsed=Math.max(0,Math.min(30000,t-last));S.autoOpenerLastAt=t;
+    if(runnable.length&&elapsed>0)S.autoOpenerWorkMs=Math.max(0,(Number(S.autoOpenerWorkMs)||0)-elapsed*runnable.length);
+    let opened=false;
+    for(const laneIndex of runnable){
+      if(S.autoOpenerWorkMs<=0)break;const due=Math.max(0,Number(UI.autoLaneNextAt?.[laneIndex])||0);if(due&&t<due)continue;
+      const lane=S.autoOpenerLanes[laneIndex],ri=RARITY_INDEX[lane.pack]??0;UI.autoLaneNextAt[laneIndex]=t+2400;
+      if(autoOpenNormalPack(ri,laneIndex))opened=true;else UI.autoLaneNextAt[laneIndex]=t+800;
+    }
+    if(S.autoOpenerWorkMs<=0){for(const lane of S.autoOpenerLanes)lane.enabled=false;S.autoOpenerWorkMs=0;UI.autoLaneNextAt={};persist();refreshAutoOpenerControls();showAutoOpenerStatus(null,"Auto-Opener-Arbeitszeit verbraucht");showAutoOpenerFinalSummary();S.autoOpenerSummary=null;return;}
+    if(!runnable.length&&elapsed>0&&t-Number(UI.autoLastPersistAt||0)>15000){UI.autoLastPersistAt=t;persistPassive();}
+    refreshAutoOpenerControls();
   }
   function settleOfflineBeforePointsBooster(){
     if(!S)return;const tNow=now();updateFeaturedEarnings(tNow,false);const delta=Math.min(MAX_OFFLINE_MS,Math.max(0,tNow-(S.lastSeen||tNow)));if(delta>0){const rate=Math.max(0,productionPerSecond()),totalSec=delta/1000,start=tNow-delta,autoSec=Math.max(0,Math.min(totalSec,((Number(S.autoCollectorUntil)||0)-start)/1000)),normalSec=Math.max(0,totalSec-autoSec),directGain=rate*autoSec*OFFLINE_RATE,pendingPotential=rate*normalSec*OFFLINE_RATE,pendingGain=Math.min(fieldStorageRemainingPoints(),pendingPotential);if(directGain>0){S.points+=directGain;S.lifetimePointsEarned+=directGain}if(pendingGain>0)S.pendingPoints+=pendingGain;}S.fieldStoredSeconds=0;S.lastSeen=tNow;
@@ -3966,7 +3977,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function onCloudFocus(){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}
   function onCloudVisibility(){if(document.visibilityState==="visible"){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}else{S.lastSeen=now();writeLocalState(cloudUid||currentUidSync(),true)}}
   function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),CLOUD_POLL_MS);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
-  function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,400);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
+  function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,400);clearInterval(autoTimer);autoTimer=0;S.autoOpenerLastAt=now();autoTick(now());startCloudWatchers();}
   async function initializeCloudSession(localPreviewPromise=null){
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;
     const preview=localPreviewPromise?await localPreviewPromise:null,fb=await firebase(),u=await currentUser();

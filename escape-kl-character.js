@@ -136,17 +136,23 @@ function createFallbackHuman(gender='male'){
 }
 
 function animateFallback(f,kin,dt,t){
-  const speed=Math.max(0,kin.planarSpeed||0),moving=speed>.12,grounded=!!kin.grounded,sprint=!!kin.sprint;
+  const speed=Math.max(0,kin.planarSpeed||0),treadmill=!!kin.treadmill,moving=speed>.12||treadmill,grounded=!!kin.grounded,sprint=!!kin.sprint||treadmill;
   if(!f.lastGrounded&&grounded)f.landing=1;f.lastGrounded=grounded;f.landing=Math.max(0,f.landing-dt*6.5);
   if(grounded&&moving)f.phase+=dt*(sprint?10.5:7.2)*clamp(.65+speed/8,.75,1.75);else f.phase+=dt*1.4;
   const wave=Math.sin(f.phase),opposite=Math.sin(f.phase+Math.PI),amp=sprint?.86:.62;
   const ease=1-Math.exp(-dt*12);
   const setRot=(o,x=0,y=0,z=0)=>{o.rotation.x+=((x)-o.rotation.x)*ease;o.rotation.y+=((y)-o.rotation.y)*ease;o.rotation.z+=((z)-o.rotation.z)*ease;};
   if(!grounded){
-    const rising=(kin.verticalVelocity||0)>0;
-    setRot(f.arms.L.shoulder,rising?-1.0:-.35,0,-.12);setRot(f.arms.R.shoulder,rising?-1.0:-.35,0,.12);
-    setRot(f.legs.L.hip,rising?.32:.16);setRot(f.legs.R.hip,rising?-.22:.12);setRot(f.legs.L.knee,.34);setRot(f.legs.R.knee,.22);
-    setRot(f.torso,rising?.08:.18);f.pelvis.position.y=.72;
+    // V435: interne, symmetrische Sprungpose. Beide Knie gehen kontrolliert nach
+    // vorne, die Füße bleiben getrennt und die Arme werden nur leicht angehoben.
+    // Keine Stand-/Idle-Animation mischt hier hinein, daher kein Arm-Zittern.
+    const rising=(kin.verticalVelocity||0)>-.25;
+    const hip=rising?.48:.36,knee=rising?.72:.56,arm=rising?-.58:-.36;
+    setRot(f.arms.L.shoulder,arm,0,-.10);setRot(f.arms.R.shoulder,arm,0,.10);
+    setRot(f.arms.L.elbow,-.14,0,-.04);setRot(f.arms.R.elbow,-.14,0,.04);
+    setRot(f.legs.L.hip,hip,0,.08);setRot(f.legs.R.hip,hip,0,-.08);
+    setRot(f.legs.L.knee,knee);setRot(f.legs.R.knee,knee);
+    setRot(f.torso,rising?.055:.10);f.pelvis.position.y=.72;
   }else if(moving){
     setRot(f.arms.L.shoulder,opposite*amp*.78,0,-.05);setRot(f.arms.R.shoulder,wave*amp*.78,0,.05);
     setRot(f.arms.L.elbow,Math.max(0,-opposite)*.42);setRot(f.arms.R.elbow,Math.max(0,-wave)*.42);
@@ -175,11 +181,16 @@ function collectBones(root){
   return result;
 }
 function airPose(native,kin,dt){
-  const rising=(kin.verticalVelocity||0)>0,alpha=1-Math.exp(-dt*11),targets=[
-    [native.bones.armL,rising?-1.05:-.45,0,-.12],[native.bones.armR,rising?-1.05:-.45,0,.12],
-    [native.bones.foreL,rising?-.18:.1,0,0],[native.bones.foreR,rising?-.18:.1,0,0],
-    [native.bones.thighL,rising?.35:.15,0,0],[native.bones.thighR,rising?-.18:.10,0,0],
-    [native.bones.calfL,.38,0,0],[native.bones.calfR,.22,0,0],[native.bones.spine,rising?.08:.16,0,0]
+  const rising=(kin.verticalVelocity||0)>-.25,alpha=1-Math.exp(-dt*18);
+  // V435: echte interne Sprungpose, vollkommen symmetrisch. Beine werden nach
+  // vorn angewinkelt, mit leichtem Abstand zueinander; Arme nur moderat hoch.
+  const hip=rising?.52:.39,knee=rising?.78:.60,arm=rising?-.60:-.38;
+  const targets=[
+    [native.bones.armL,arm,0,-.10],[native.bones.armR,arm,0,.10],
+    [native.bones.foreL,-.14,0,-.03],[native.bones.foreR,-.14,0,.03],
+    [native.bones.thighL,hip,0,.075],[native.bones.thighR,hip,0,-.075],
+    [native.bones.calfL,knee,0,0],[native.bones.calfR,knee,0,0],
+    [native.bones.spine,rising?.055:.10,0,0]
   ];
   for(const [bone,x,y,z] of targets){if(!bone)continue;const base=bone.userData.escapeBindQuaternion;if(!base)continue;const q=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z)));bone.quaternion.slerp(q,alpha);}
 }
@@ -209,11 +220,27 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
     const lean=!grounded?.02:(kin.sprint&&moving?.105:moving?.035:0);visualRoot.rotation.x+=(lean-visualRoot.rotation.x)*(1-Math.exp(-dt*9));
     const targetScaleY=1-controller.landing*.025;visualRoot.scale.y+=(targetScaleY-visualRoot.scale.y)*(1-Math.exp(-dt*16));visualRoot.scale.x+=(1+(controller.landing*.012)-visualRoot.scale.x)*(1-Math.exp(-dt*16));visualRoot.scale.z=visualRoot.scale.x;
     if(controller.mode!=='native'||!controller.native){animateFallback(fallback,kin,dt,t);return;}
-    const n=controller.native;let wanted=!grounded?'air':!moving?'idle':kin.sprint||speed>7.5?'run':'walk';
-    const action=wanted==='air'?(n.actions.idle||n.actions.walk||n.actions.run):n.actions[wanted]||n.actions.walk||n.actions.idle||n.actions.run;
-    if(action&&n.active!==action){const old=n.active;if(old&&old!==action){old.paused=false;old.fadeOut(.16);}action.enabled=true;action.paused=false;action.reset().fadeIn(.18).play();n.active=action;controller.activeMode=wanted;}
-    if(n.active){if(wanted==='walk')n.active.timeScale=clamp(speed/4.8,.72,1.65);else if(wanted==='run')n.active.timeScale=clamp(speed/8.3,.82,1.8);else n.active.timeScale=1;}
-    n.mixer.update(dt);if(!grounded)airPose(n,kin,dt);
+    const n=controller.native,treadmill=!!kin.treadmill;
+    const wanted=!grounded?'air':treadmill?'run':!moving?'idle':kin.sprint||speed>7.5?'run':'walk';
+    // V435: In der Luft wird KEIN Idle/Walk/Run-Clip weiter ausgewertet. Genau das
+    // hat zuvor die Arme jedes Frame gegen die manuelle Sprungpose gezogen und das
+    // sichtbare Zittern verursacht.
+    if(wanted==='air'){
+      if(controller.activeMode!=='air'){
+        for(const a of Object.values(n.actions)){try{a.setEffectiveWeight(0);a.paused=true;}catch{}}
+        controller.activeMode='air';
+      }
+      airPose(n,kin,dt);return;
+    }
+    const action=n.actions[wanted]||n.actions.walk||n.actions.idle||n.actions.run;
+    if(controller.activeMode==='air'){
+      for(const a of Object.values(n.actions)){try{a.setEffectiveWeight(0);a.paused=true;}catch{}}
+      if(action){action.enabled=true;action.paused=false;action.reset();action.setEffectiveWeight(1);action.play();n.active=action;controller.activeMode=wanted;}
+    }else if(action&&n.active!==action){
+      const old=n.active;if(old&&old!==action){old.paused=false;old.fadeOut(.12);}action.enabled=true;action.paused=false;action.reset();action.setEffectiveWeight(1);action.fadeIn(.14).play();n.active=action;controller.activeMode=wanted;
+    }
+    if(n.active){if(wanted==='walk')n.active.timeScale=clamp(speed/4.8,.72,1.65);else if(wanted==='run')n.active.timeScale=treadmill?1.28:clamp(speed/8.3,.82,1.8);else n.active.timeScale=1;}
+    n.mixer.update(dt);
   };
   controller.dispose=()=>{
     controller.disposed=true;try{controller.native?.mixer?.stopAllAction?.();controller.native?.mixer?.uncacheRoot?.(controller.native.model);}catch{}
