@@ -28,13 +28,19 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 5000;
+  const FIRESTORE_WRITE_GAP_MS = 1000;
   const FIRESTORE_RESOURCE_BACKOFF_MS = 3600000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
   // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
-  const FIRESTORE_MAX_APP_QUEUE = 4;
-  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 600000;
+  const FIRESTORE_MAX_APP_QUEUE = 12;
+  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 30000;
+  // V430: Schreibschutz gilt jetzt auch über Reloads und mehrere offene JK.Games-Tabs.
+  // Ohne diesen gemeinsamen Zustand konnte jeder Tab seine eigene Schreibschlange starten.
+  const FIRESTORE_BACKOFF_STORAGE_KEY = "jk-games-firestore-write-backoff-v430";
+  const FIRESTORE_LAST_WRITE_STORAGE_KEY = "jk-games-firestore-last-write-v430";
+  const FIRESTORE_CROSS_TAB_LOCK = "jk-games-firestore-write-lane-v430";
+  const FIRESTORE_CROSS_TAB_LEASE_KEY = "jk-games-firestore-write-lease-v430";
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
@@ -82,7 +88,93 @@
     return new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
   }
 
+  function readSharedNumber(key) {
+    try {
+      const value = Number(localStorage.getItem(key) || 0);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch { return 0; }
+  }
+
+  function writeSharedNumber(key, value) {
+    try { localStorage.setItem(key, String(Math.max(0, Math.floor(Number(value) || 0)))); } catch {}
+  }
+
+  function syncSharedFirestoreState() {
+    const sharedBackoff = readSharedNumber(FIRESTORE_BACKOFF_STORAGE_KEY);
+    if (sharedBackoff > firestoreWriteBackoffUntil) firestoreWriteBackoffUntil = sharedBackoff;
+    return sharedBackoff;
+  }
+
+  function readSharedLease() {
+    try {
+      const raw = localStorage.getItem(FIRESTORE_CROSS_TAB_LEASE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed.token === "string" && Number(parsed.until) > 0 ? parsed : null;
+    } catch { return null; }
+  }
+
+  async function runWithLocalStorageLease(operation) {
+    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    const started = Date.now();
+    while (Date.now() - started < 30000) {
+      const now = Date.now();
+      const current = readSharedLease();
+      if (!current || Number(current.until) <= now) {
+        try {
+          localStorage.setItem(FIRESTORE_CROSS_TAB_LEASE_KEY, JSON.stringify({ token, until: now + 30000 }));
+          const verify = readSharedLease();
+          if (verify?.token === token) {
+            try { return await operation(); }
+            finally {
+              try { if (readSharedLease()?.token === token) localStorage.removeItem(FIRESTORE_CROSS_TAB_LEASE_KEY); } catch {}
+            }
+          }
+        } catch {
+          // localStorage nicht verfügbar: die lokale Promise-Kette schützt weiterhin diesen Tab.
+          return operation();
+        }
+      }
+      await sleep(120 + Math.floor(Math.random() * 90));
+    }
+    const error = new Error("Firestore-Schreibspur ist in einem anderen Tab noch belegt.");
+    error.code = "firestore-cross-tab-pressure";
+    error.retryAfterMs = 1000;
+    error.transient = true;
+    throw error;
+  }
+
+  // V430: navigator.locks serialisiert Firestore-Writes zwischen mehreren offenen Tabs.
+  // Der localStorage-Zeitstempel hält zusätzlich den Mindestabstand tabübergreifend ein.
+  async function runInCrossTabFirestoreLane(operation) {
+    const run = async () => {
+      syncSharedFirestoreState();
+      const now = Date.now();
+      if (firestoreWriteBackoffUntil > now) {
+        const error = new Error(`Firestore-Schreibpause aktiv. In ${Math.max(1, Math.ceil((firestoreWriteBackoffUntil - now) / 1000))}s erneut versuchen.`);
+        error.code = "firestore-write-backoff";
+        error.retryAfterMs = firestoreWriteBackoffUntil - now;
+        error.transient = true;
+        throw error;
+      }
+      const sharedLast = Math.max(firestoreWriteLastAt, readSharedNumber(FIRESTORE_LAST_WRITE_STORAGE_KEY));
+      const gap = FIRESTORE_WRITE_GAP_MS - (Date.now() - sharedLast);
+      if (gap > 0) await sleep(gap);
+      const result = await operation();
+      const completedAt = Date.now();
+      firestoreWriteLastAt = completedAt;
+      writeSharedNumber(FIRESTORE_LAST_WRITE_STORAGE_KEY, completedAt);
+      return result;
+    };
+    if (navigator?.locks?.request) {
+      return navigator.locks.request(FIRESTORE_CROSS_TAB_LOCK, { mode: "exclusive" }, run);
+    }
+    // Safari/ältere Browser: tabübergreifende Lease als Fallback statt paralleler Streams.
+    return runWithLocalStorageLease(run);
+  }
+
   async function waitForFirestoreWriteWindow() {
+    syncSharedFirestoreState();
     const now = Date.now();
     if (firestoreWriteBackoffUntil > now) {
       const error = new Error(`Firestore-Schreibpause aktiv. In ${Math.max(1, Math.ceil((firestoreWriteBackoffUntil - now) / 1000))}s erneut versuchen.`);
@@ -99,7 +191,8 @@
     const resourceReason = /resource|exhaust|queued|write-stream/i.test(String(reason || ""));
     const requested = Math.max(1000, Number(ms) || FIRESTORE_RESOURCE_BACKOFF_MS);
     const until = Date.now() + (resourceReason ? Math.max(FIRESTORE_RESOURCE_BACKOFF_MS, requested) : requested);
-    firestoreWriteBackoffUntil = Math.max(firestoreWriteBackoffUntil, until);
+    firestoreWriteBackoffUntil = Math.max(firestoreWriteBackoffUntil, until, readSharedNumber(FIRESTORE_BACKOFF_STORAGE_KEY));
+    writeSharedNumber(FIRESTORE_BACKOFF_STORAGE_KEY, firestoreWriteBackoffUntil);
     const now = Date.now();
     if (now - firestoreWriteBackoffNoticeAt > 30000) {
       firestoreWriteBackoffNoticeAt = now;
@@ -111,20 +204,19 @@
 
   function queueFirestoreWrite(label, operation) {
     if (firestoreWriteQueueDepth >= FIRESTORE_MAX_APP_QUEUE) {
-      const error = new Error(`JK.Games hält den Firestore-Schreibstrom kurz an: ${firestoreWriteQueueDepth} lokale Writes warten bereits.`);
+      const error = new Error(`JK.Games verwirft einen neuen Firestore-Write: ${firestoreWriteQueueDepth} lokale Writes warten bereits.`);
       error.code = "firestore-write-pressure";error.retryAfterMs = FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS;error.transient = true;
-      setFirestoreWriteBackoff(FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS, "client-pressure");
+      // Lokaler UI-Druck darf NICHT den kompletten Account/Tabs in eine lange globale Pause schicken.
+      // Nur ein echtes Firebase resource-exhausted aktiviert den persistenten Shared-Backoff.
+      window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-pressure", { detail: { queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE } }));
       return Promise.reject(error);
     }
     firestoreWriteQueueDepth += 1;
     const execute = async () => {
       try {
         await waitForFirestoreWriteWindow();
-        const result = await operation();
-        firestoreWriteLastAt = Date.now();
-        return result;
+        return await runInCrossTabFirestoreLane(operation);
       } catch (error) {
-        firestoreWriteLastAt = Date.now();
         if (isResourceExhaustedError(error)) {
           setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, label || "resource-exhausted");
           window.dispatchEvent(new CustomEvent("lifebuilder-firestore-resource-exhausted", { detail: { label: label || "resource-exhausted", until: firestoreWriteBackoffUntil } }));
@@ -386,6 +478,10 @@
     }, wait);
   }
 
+  syncSharedFirestoreState();
+  window.addEventListener("storage", (event) => {
+    if (event.key === FIRESTORE_BACKOFF_STORAGE_KEY) syncSharedFirestoreState();
+  });
   window.addEventListener("online", () => scheduleFirestoreRecovery(300, "online"));
   window.addEventListener("offline", () => emit("offline", "Keine Internetverbindung."));
   document.addEventListener("visibilitychange", () => {
@@ -429,7 +525,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-13-v427-firestore-ultra-guard",
+    version: "2026-08-13-v430-firestore-cross-tab-guard",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,

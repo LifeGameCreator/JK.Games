@@ -230,19 +230,8 @@
   async function loadOnlineFirebase() {
     if (firebasePromise) return firebasePromise;
     firebasePromise = (async () => {
-      if (window.LifeBuilderFirebaseCore?.load) {
-        return window.LifeBuilderFirebaseCore.load();
-      }
-      const [appMod, authMod, dbMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js")
-      ]);
-      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
-      const auth = authMod.getAuth(app);
-      try { await authMod.setPersistence(auth, authMod.browserLocalPersistence); } catch {}
-      const db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
-      return { ...authMod, ...dbMod, auth, db };
+      if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
+      return window.LifeBuilderFirebaseCore.load();
     })().catch((error) => {
       firebasePromise = null;
       throw error;

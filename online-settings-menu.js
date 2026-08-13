@@ -166,19 +166,8 @@
   async function runtime() {
     if (runtimePromise) return runtimePromise;
     runtimePromise = (async () => {
-      if (window.LifeBuilderFirebaseCore?.load) return window.LifeBuilderFirebaseCore.load();
-      const [appMod, authMod, dbMod, fnMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
-      ]);
-      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
-      const auth = authMod.getAuth(app);
-      let db;
-      db = dbMod.getFirestore(app, DB_ID);
-      const functions = fnMod.getFunctions(app, REGION);
-      return { ...authMod, ...dbMod, ...fnMod, app, auth, db, functions };
+      if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
+      return window.LifeBuilderFirebaseCore.load();
     })().catch((error) => {
       runtimePromise = null;
       throw error;

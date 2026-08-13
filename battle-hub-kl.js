@@ -137,22 +137,8 @@
         rt.fb = await loadFirebasePhoneRuntime();
         return rt.fb;
       }
-      if (window.LifeBuilderFirebaseCore?.load) {
-        rt.fb = await window.LifeBuilderFirebaseCore.load();
-        return rt.fb;
-      }
-      const [appMod, authMod, dbMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js")
-      ]);
-      const config = firebasePhoneConfig;
-      if (!config) throw new Error("Online-Verbindung ist nicht eingerichtet.");
-      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
-      const auth = authMod.getAuth(app);
-      let db;
-      db = dbMod.getFirestore(app, BH_DATABASE_ID);
-      rt.fb = { ...authMod, ...dbMod, auth, db };
+      if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
+      rt.fb = await window.LifeBuilderFirebaseCore.load();
       return rt.fb;
     })().catch((error) => {
       rt.firebasePromise = null;

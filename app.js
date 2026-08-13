@@ -14147,31 +14147,10 @@ async function loadFirebasePhoneRuntime() {
   if (firebasePhoneRuntime && (!firebasePhoneRuntimeUid || firebasePhoneRuntimeUid === liveUid || !liveUid)) return firebasePhoneRuntime;
   if (firebasePhoneRuntimePromise) return firebasePhoneRuntimePromise;
   firebasePhoneRuntimePromise = (async () => {
-    let fb = null;
-    if (window.LifeBuilderFirebaseCore?.load) {
-      fb = await onlineFirebaseTimeout(window.LifeBuilderFirebaseCore.load(), 18000, "Online-Grundverbindung");
-    } else {
-      const [appMod, authMod, dbMod, storageMod, functionsMod] = await onlineFirebaseTimeout(Promise.all([
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-storage.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
-      ]), 18000, "Online-Bibliotheken");
-      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
-      const auth = authMod.getAuth(app);
-      const db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
-      fb = {
-        ...authMod,
-        ...dbMod,
-        ...storageMod,
-        ...functionsMod,
-        auth,
-        db,
-        storage: storageMod.getStorage(app),
-        functions: functionsMod.getFunctions(app, FIREBASE_FUNCTIONS_REGION)
-      };
-    }
+    // V430: Firestore darf ausschließlich über die zentrale Runtime laufen.
+    // Kein Modul darf bei einem Ladeproblem eine zweite, ungedrosselte SDK-Instanz öffnen.
+    if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
+    const fb = await onlineFirebaseTimeout(window.LifeBuilderFirebaseCore.load(), 18000, "Online-Grundverbindung");
 
     let user = fb.auth.currentUser;
     if (!user && window.LifeBuilderFirebaseCore?.waitForAuth) {
@@ -31097,34 +31076,43 @@ function removeLegacySpeedCarStateV414() {
   if (changed) try { save(); } catch {}
   return changed;
 }
-async function purgeSpeedCarLobbyV414() {
-  try {
-    const owner = !!(window.LifeBuilderSettingsMenu?.isOwner?.() || window.LifeBuilderSettingsMenu?.getRole?.()?.role === "owner");
-    if (!owner || localStorage.getItem("jk-games-speedcar-firebase-purge-v414") === "done") return false;
-    const core = window.LifeBuilderFirebaseCore;
-    if (!core?.load) return false;
-    const fb = await core.load(), user = await core.waitForAuth?.(7000);
-    if (!fb?.db || !user) return false;
-    let deleted = 0, guard = 0;
-    while (guard++ < 50) {
-      const snap = await fb.getDocs(fb.query(fb.collection(fb.db, "speedCarKlLobby"), fb.limit(50)));
-      if (snap.empty) break;
-      const batch = fb.writeBatch(fb.db);
-      for (const docSnap of snap.docs) batch.delete(docSnap.ref);
-      await batch.commit();
-      deleted += snap.size;
-      if (snap.size < 50) break;
+let speedCarFirebasePurgePromiseV430 = null;
+async function purgeSpeedCarLobbyV430() {
+  if (speedCarFirebasePurgePromiseV430) return speedCarFirebasePurgePromiseV430;
+  speedCarFirebasePurgePromiseV430 = (async () => {
+    try {
+      const owner = !!(window.LifeBuilderSettingsMenu?.isOwner?.() || window.LifeBuilderSettingsMenu?.getRole?.()?.role === "owner");
+      if (!owner || localStorage.getItem("jk-games-speedcar-firebase-purge-v430") === "done") return false;
+      const core = window.LifeBuilderFirebaseCore;
+      if (!core?.load) return false;
+      const fb = await core.load(), user = await core.waitForAuth?.(7000);
+      if (!fb?.db || !user) return false;
+      let deleted = 0;
+      while (true) {
+        const snap = await fb.getDocs(fb.query(fb.collection(fb.db, "speedCarKlLobby"), fb.limit(50)));
+        if (snap.empty) break;
+        const batch = fb.writeBatch(fb.db);
+        for (const docSnap of snap.docs) batch.delete(docSnap.ref);
+        await batch.commit();
+        deleted += snap.size;
+        if (snap.size < 50) break;
+        // Cleanup bewusst langsam halten: keine neue Firestore-Schreibspitze durch die Alt-Daten-Löschung.
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      // "done" wird erst gesetzt, nachdem die Collection nachweislich vollständig abgearbeitet wurde.
+      localStorage.setItem("jk-games-speedcar-firebase-purge-v430", "done");
+      localStorage.removeItem("jk-games-speedcar-firebase-purge-v414");
+      if (deleted && typeof addFeed === "function") addFeed(`Speed Car.KL entfernt: ${deleted} alte Online-Lobby-Datensätze gelöscht.`);
+      return true;
+    } catch (error) {
+      console.warn("Speed-Car-Firebase-Cleanup V430", error);
+      return false;
     }
-    localStorage.setItem("jk-games-speedcar-firebase-purge-v414", "done");
-    if (deleted && typeof addFeed === "function") addFeed(`Speed Car.KL entfernt: ${deleted} alte Online-Lobby-Datensätze gelöscht.`);
-    return true;
-  } catch (error) {
-    console.warn("Speed-Car-Firebase-Cleanup V414", error);
-    return false;
-  }
+  })().finally(() => { speedCarFirebasePurgePromiseV430 = null; });
+  return speedCarFirebasePurgePromiseV430;
 }
 removeLegacySpeedCarStateV414();
-[2500, 8000, 16000].forEach(ms => setTimeout(() => { removeLegacySpeedCarStateV414(); purgeSpeedCarLobbyV414(); }, ms));
+[5000, 15000, 30000].forEach(ms => setTimeout(() => { removeLegacySpeedCarStateV414(); void purgeSpeedCarLobbyV430(); }, ms));
 
 
 // Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.

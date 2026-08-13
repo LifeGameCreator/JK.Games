@@ -11,25 +11,8 @@
   async function firebase() {
     if (firebasePromise) return firebasePromise;
     firebasePromise = (async () => {
-      if (window.LifeBuilderFirebaseCore?.load) return window.LifeBuilderFirebaseCore.load();
-      const [appMod, authMod, dbMod] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
-        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js")
-      ]);
-      const config = typeof firebasePhoneConfig !== "undefined" ? firebasePhoneConfig : {
-        apiKey: "AIzaSyB0rCUbDhATvtTQNOvJDNZQxK0PChnDK60",
-        authDomain: "life-kl.firebaseapp.com",
-        projectId: "life-kl",
-        storageBucket: "life-kl.firebasestorage.app",
-        messagingSenderId: "592179528713",
-        appId: "1:592179528713:web:ee9396e2695fcbe31124d8"
-      };
-      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
-      const auth = authMod.getAuth(app);
-      let db;
-      db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
-      return { ...authMod, ...dbMod, auth, db };
+      if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
+      return window.LifeBuilderFirebaseCore.load();
     })().catch((error) => { firebasePromise = null; throw error; });
     return firebasePromise;
   }

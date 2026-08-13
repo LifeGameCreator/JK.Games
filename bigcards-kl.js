@@ -34,8 +34,8 @@
   const CLOUD_POLL_MS = 45000;
   // V407: kompakte Karten-Buckets + gebündelte Firestore-Batches reduzieren die Anzahl der Writes massiv.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
-  const CLOUD_WRITE_BATCH_SIZE = 1;
-  const CLOUD_WRITE_BATCH_PAUSE_MS = 6000;
+  const CLOUD_WRITE_BATCH_SIZE = 8;
+  const CLOUD_WRITE_BATCH_PAUSE_MS = 7000;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
   const MARKET_STATS_COLLECTION = "bigCardsMarketStats";
@@ -3849,13 +3849,19 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
         chunkRefs[i]=reusable?cloudLastChunkRefs[i]:cloudChunkRefId(i,chunkHashes[i]);
         if(!reusable)changed.push(i);
       }
-      // V427 ULTRA-SAFE: exakt EIN unveraenderlicher Chunk pro Firestore-Write.
-      // Keine Mehrfachmutation in einem Batch. Erst wenn jeder Chunk bestaetigt wurde,
-      // darf das Root-Manifest umgeschaltet werden. Ein Abbruch vorher ist unschaedlich.
+      // V430: Unveraenderliche Chunks werden in kleinen atomaren Batches gebuendelt.
+      // Das Root-Manifest wird weiterhin ERST nach bestaetigten Chunk-Batches umgeschaltet.
+      // Max. 8 Chunks halten auch bei ~480 KB pro Chunk ausreichend Abstand zur 10-MiB-Request-Grenze,
+      // reduzieren aber die Zahl der Write-Stream-Commits typischerweise um etwa Faktor 8.
       for(let start=0;start<changed.length;start+=CLOUD_WRITE_BATCH_SIZE){
         await waitForBigCardsCloudWriteLane(90000);
-        const i=changed[start],id=chunkRefs[i];
-        await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,hash:chunkHashes[i],data:chunks[i],updatedAtMs:savedAt});
+        const indices=changed.slice(start,start+CLOUD_WRITE_BATCH_SIZE);
+        const batch=fb.writeBatch(fb.db);
+        for(const i of indices){
+          const id=chunkRefs[i];
+          batch.set(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,hash:chunkHashes[i],data:chunks[i],updatedAtMs:savedAt});
+        }
+        await batch.commit();
         if(start+CLOUD_WRITE_BATCH_SIZE<changed.length)await new Promise(r=>setTimeout(r,CLOUD_WRITE_BATCH_PAUSE_MS));
       }
       if(changed.length)await new Promise(r=>setTimeout(r,6000));

@@ -22,8 +22,8 @@ const WORLD_LAKES = Object.freeze([
   Object.freeze({x:-650,z:110,rx:66,rz:43,name:'Lindensee'})
 ]);
 const WORLD_OCEAN = Object.freeze({x:900,z:-650,rx:500,rz:355,level:-.18,name:'Südmeer'});
-const ONLINE_WRITE_INTERVAL_MS = 100;
-const ONLINE_HEARTBEAT_MS = 3500;
+const ONLINE_WRITE_INTERVAL_MS = 750;
+const ONLINE_HEARTBEAT_MS = 5000;
 const ONLINE_STALE_MS = 45000;
 const ONLINE_REMOTE_GRACE_MS = 7500;
 const ONLINE_QUERY_LIMIT = 48;
@@ -6135,8 +6135,8 @@ async connectMultiplayer(prepared=null) {
     try{
       const jobs=[];let dedicatedOk=false,profileOk=false,staffOk=false;
       if(this.onlinePresenceRef&&!this.onlineCompatibilityMode){const dedicated=this.presencePayload(true,false);jobs.push(this.onlineFb.setDoc(this.onlinePresenceRef,{cottbus3D:dedicated.cottbus3D},{merge:false}).then(()=>{dedicatedOk=true;this.onlinePresenceAvailable=true;}).catch((error)=>{this.onlinePresenceAvailable=false;if(!isFirebasePermissionError(error))console.warn('Center-Präsenzkanal konnte nicht geschrieben werden; Profil-Fallback bleibt aktiv.',error);}));}
-      const writeProfile=force||!this.onlinePresenceAvailable||now-this.lastProfilePresenceWriteAt>2500;if(writeProfile){jobs.push(this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true}).then(()=>{profileOk=true;this.lastProfilePresenceWriteAt=Date.now();}).catch(async(error)=>{if(!this.onlineCompatibilityMode&&isFirebasePermissionError(error)){this.onlineCompatibilityMode=true;const legacy=this.presencePayload(true,true);await this.onlineFb.setDoc(this.onlineDocRef,legacy,{merge:true});profileOk=true;this.lastProfilePresenceWriteAt=Date.now();}else if(!isFirebasePermissionError(error))console.warn('Center-Profilpresence konnte nicht geschrieben werden',error);}));}
-      const vanished=!!live.vanished,writeStaff=this.onlineStaffPresenceRef&&this.isStaffActive&&(vanished||force||now-this.lastStaffPresenceWriteAt>1400);if(writeStaff){const staffPayload=this.presencePayload(true,false);jobs.push(this.onlineFb.setDoc(this.onlineStaffPresenceRef,{role:this.activeStaffRole,cottbus3D:staffPayload.cottbus3D},{merge:false}).then(()=>{staffOk=true;this.lastStaffPresenceWriteAt=Date.now();}).catch((error)=>{if(!isFirebasePermissionError(error))console.warn('Center-Staff-Vanish-Presence konnte nicht geschrieben werden',error);}));}
+      const writeProfile=this.onlineCompatibilityMode||!this.onlinePresenceAvailable||now-this.lastProfilePresenceWriteAt>(force?15000:30000);if(writeProfile){jobs.push(this.onlineFb.setDoc(this.onlineDocRef,payload,{merge:true}).then(()=>{profileOk=true;this.lastProfilePresenceWriteAt=Date.now();}).catch(async(error)=>{if(!this.onlineCompatibilityMode&&isFirebasePermissionError(error)){this.onlineCompatibilityMode=true;const legacy=this.presencePayload(true,true);await this.onlineFb.setDoc(this.onlineDocRef,legacy,{merge:true});profileOk=true;this.lastProfilePresenceWriteAt=Date.now();}else if(!isFirebasePermissionError(error))console.warn('Center-Profilpresence konnte nicht geschrieben werden',error);}));}
+      const vanished=!!live.vanished,writeStaff=this.onlineStaffPresenceRef&&this.isStaffActive&&(vanished||!this.lastStaffPresenceWriteAt||now-this.lastStaffPresenceWriteAt>10000);if(writeStaff){const staffPayload=this.presencePayload(true,false);jobs.push(this.onlineFb.setDoc(this.onlineStaffPresenceRef,{role:this.activeStaffRole,cottbus3D:staffPayload.cottbus3D},{merge:false}).then(()=>{staffOk=true;this.lastStaffPresenceWriteAt=Date.now();}).catch((error)=>{if(!isFirebasePermissionError(error))console.warn('Center-Staff-Vanish-Presence konnte nicht geschrieben werden',error);}));}
       if(jobs.length)await Promise.allSettled(jobs);if(dedicatedOk||profileOk||staffOk||!jobs.length){this.lastPresenceWriteAt=Date.now();this.lastPresenceKey=key;return true;}return false;
     }finally{this.presenceWriteInFlight=false;if(this.presenceWriteQueued&&this.opened&&this.onlineConnected){this.presenceWriteQueued=false;queueMicrotask(()=>this.publishPresence(false).catch(()=>{}));}}
   }
