@@ -28,26 +28,44 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 1000;
-  const FIRESTORE_RESOURCE_BACKOFF_MS = 3600000;
+  const FIRESTORE_WRITE_GAP_MS = 250;
+  // V432: resource-exhausted pausiert nicht mehr pauschal eine Stunde. Die Pause
+  // beginnt bei 2 Minuten und steigt bei wiederholter echter Backend-Ueberlastung
+  // bis maximal 10 Minuten. Kritische Spielaktionen bleiben dadurch nicht unnötig
+  // eine Stunde gesperrt, waehrend der SDK-Stream trotzdem Zeit zum Leerlaufen hat.
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 120000;
+  const FIRESTORE_RESOURCE_BACKOFF_MAX_MS = 600000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
   // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
-  const FIRESTORE_MAX_APP_QUEUE = 12;
+  // V432: Nur veraltbare Hintergrund-Synchronisation wird bei lokaler Last
+  // begrenzt. Kritische Nutzeraktionen (Kauf, Nachricht, Kampf-Transaktion usw.)
+  // werden niemals nur wegen der lokalen Queue verworfen.
+  const FIRESTORE_MAX_APP_QUEUE = 8;
   const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 30000;
   // V430: Schreibschutz gilt jetzt auch über Reloads und mehrere offene JK.Games-Tabs.
   // Ohne diesen gemeinsamen Zustand konnte jeder Tab seine eigene Schreibschlange starten.
-  const FIRESTORE_BACKOFF_STORAGE_KEY = "jk-games-firestore-write-backoff-v430";
-  const FIRESTORE_LAST_WRITE_STORAGE_KEY = "jk-games-firestore-last-write-v430";
-  const FIRESTORE_CROSS_TAB_LOCK = "jk-games-firestore-write-lane-v430";
-  const FIRESTORE_CROSS_TAB_LEASE_KEY = "jk-games-firestore-write-lease-v430";
+  const FIRESTORE_BACKOFF_STORAGE_KEY = "jk-games-firestore-write-backoff-v432";
+  const FIRESTORE_LAST_WRITE_STORAGE_KEY = "jk-games-firestore-last-write-v432";
+  const FIRESTORE_CROSS_TAB_LOCK = "jk-games-firestore-write-lane-v432";
+  const FIRESTORE_CROSS_TAB_LEASE_KEY = "jk-games-firestore-write-lease-v432";
+  const FIRESTORE_DIAG_STORAGE_KEY = "jk-games-firestore-write-diagnostics-v432";
+  const FIRESTORE_DIAG_EVENT_LIMIT = 180;
+  const FIRESTORE_DIAG_TOP_LIMIT = 24;
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
   let firestoreWriteQueueDepth = 0;
   let firestoreWriteBackoffNoticeAt = 0;
+  let firestoreResourceStrike = 0;
+  let firestoreLastResourceErrorAt = 0;
   let runtimeRawSetDoc = null;
   const firestoreCoalescedWrites = new Map();
+  const firestoreWriteEvents = [];
+  const firestoreWriteSourceStats = new Map();
+  const firestoreWritePathStats = new Map();
+  let firestoreDiagPersistTimer = 0;
+  let firestoreDiagLastPressureWarnAt = 0;
 
   function emit(next, error = "") {
     status = next;
@@ -88,6 +106,206 @@
     return new Promise((resolve) => window.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
   }
 
+
+  function firestorePathOf(ref) {
+    if (!ref) return "";
+    if (typeof ref.path === "string") return ref.path;
+    try {
+      const canonical = ref?._key?.path?.canonicalString?.();
+      if (canonical) return String(canonical);
+    } catch {}
+    return "";
+  }
+
+  function firestoreCaller() {
+    try {
+      const lines = String(new Error().stack || "").split("\n").slice(2);
+      const own = /firebase-runtime\.js(?:\?[^:]*)?:/i;
+      const sdk = /gstatic\.com\/firebasejs|firebase-firestore|firebase-app/i;
+      const line = lines.find((entry) => entry && !own.test(entry) && !sdk.test(entry)) || lines[0] || "";
+      const match = line.match(/(?:https?:\/\/[^/]+\/)?([^/?#]+\.js)(?:\?[^:]*)?:(\d+):(\d+)/i);
+      if (match) return { file: match[1], line: Number(match[2]) || 0, column: Number(match[3]) || 0, raw: line.trim() };
+      return { file: "unknown", line: 0, column: 0, raw: line.trim().slice(0, 220) };
+    } catch { return { file: "unknown", line: 0, column: 0, raw: "" }; }
+  }
+
+  function firestorePathGroup(path) {
+    const parts = String(path || "").split("/").filter(Boolean);
+    if (!parts.length) return "unknown";
+    if (parts[0] === "fightKlCoopMatches" && parts.length >= 3) return `${parts[0]}/*/${parts[2]}`;
+    if (parts[0] === "arenaKlRooms" && parts.length >= 3) return `${parts[0]}/*/${parts[2]}`;
+    if (parts[0] === "bigCardsSaves" && parts[2] === "chunks") return "bigCardsSaves/*/chunks";
+    return parts.length >= 2 ? `${parts[0]}/*` : parts[0];
+  }
+
+  function isPlayerProfilePresencePayload(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+    const keys = Object.keys(data);
+    if (!keys.length) return false;
+    const allowed = new Set(["cottbus3D", "online", "lastSeenAtMs", "updatedAtMs"]);
+    if (!keys.every((key) => allowed.has(key))) return false;
+    return Object.prototype.hasOwnProperty.call(data, "cottbus3D") || Object.prototype.hasOwnProperty.call(data, "online");
+  }
+
+  // Nur wirklich veraltbare Echtzeitdaten gelten als Hintergrund. Kontostand,
+  // Spielstand, Käufe, Matchmaking, Kartenprofile usw. sind absichtlich NICHT hier
+  // enthalten und werden selbst bei Queue-Druck niemals lokal verworfen.
+  function isBackgroundFirestorePath(path, data = null) {
+    const p = String(path || "");
+    return p.startsWith("centerPresenceV268/")
+      || p.startsWith("centerStaffPresenceV270/")
+      || (p.startsWith("playerProfiles/") && isPlayerProfilePresencePayload(data))
+      || p.startsWith("egoshootKlOnline/")
+      || /^arenaKlRooms\/[^/]+\/participants\//.test(p)
+      || /^arenaKlRooms\/[^/]+\/state\/live$/.test(p)
+      || /^fightKlCoopMatches\/[^/]+\/players\//.test(p)
+      || /^fightKlCoopMatches\/[^/]+\/frames\//.test(p);
+  }
+
+  function makeFirestoreWriteMeta(op, ref, extra = {}) {
+    const path = firestorePathOf(ref);
+    const caller = firestoreCaller();
+    return {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      op: String(op || "write"),
+      path,
+      pathGroup: firestorePathGroup(path),
+      caller,
+      background: extra.background ?? isBackgroundFirestorePath(path, extra.data),
+      batchPaths: Array.isArray(extra.batchPaths) ? extra.batchPaths.slice(0, 20) : [],
+      requestedAt: Date.now()
+    };
+  }
+
+  function incrementDiagMap(map, key, field, amount = 1) {
+    const clean = String(key || "unknown").slice(0, 240);
+    let row = map.get(clean);
+    if (!row) { row = { key: clean, requested: 0, started: 0, ok: 0, failed: 0, coalesced: 0, pressureRejected: 0, lastAt: 0, lastError: "" }; map.set(clean, row); }
+    row[field] = Math.max(0, Number(row[field] || 0) + amount);
+    row.lastAt = Date.now();
+    return row;
+  }
+
+  function sourceKeyForMeta(meta) {
+    const caller = meta?.caller || {};
+    return `${caller.file || "unknown"}:${Number(caller.line) || 0} · ${meta?.op || "write"} · ${meta?.pathGroup || "unknown"}`;
+  }
+
+  function rememberFirestoreEvent(meta, stage, error = null) {
+    if (!meta) return;
+    const event = {
+      at: Date.now(), stage: String(stage || ""), id: meta.id,
+      op: meta.op, path: String(meta.path || "").slice(0, 260), pathGroup: meta.pathGroup,
+      source: sourceKeyForMeta(meta), queueDepth: firestoreWriteQueueDepth,
+      background: !!meta.background,
+      error: error ? String(error?.code || error?.message || error).slice(0, 260) : ""
+    };
+    firestoreWriteEvents.push(event);
+    if (firestoreWriteEvents.length > FIRESTORE_DIAG_EVENT_LIMIT) firestoreWriteEvents.splice(0, firestoreWriteEvents.length - FIRESTORE_DIAG_EVENT_LIMIT);
+    scheduleFirestoreDiagnosticsPersist();
+  }
+
+  function recordFirestoreRequest(meta) {
+    if (!meta) return;
+    incrementDiagMap(firestoreWriteSourceStats, sourceKeyForMeta(meta), "requested");
+    incrementDiagMap(firestoreWritePathStats, meta.pathGroup || "unknown", "requested");
+    rememberFirestoreEvent(meta, "requested");
+    const now = Date.now();
+    const recentSameSource = firestoreWriteEvents.filter((event) => event.stage === "requested" && event.source === sourceKeyForMeta(meta) && now - event.at <= 60000).length;
+    if (recentSameSource >= 20 && now - firestoreDiagLastPressureWarnAt > 30000) {
+      firestoreDiagLastPressureWarnAt = now;
+      console.warn(`JK.Games Firestore-Monitor: ${recentSameSource} Write-Anforderungen/min von ${sourceKeyForMeta(meta)}. Hintergrund-Writes werden bei Queue-Druck zusammengefasst/geblockt.`);
+    }
+  }
+
+  function recordFirestoreStage(meta, stage, error = null) {
+    if (!meta) return;
+    const field = stage === "started" ? "started" : stage === "ok" ? "ok" : stage === "failed" ? "failed" : stage === "coalesced" ? "coalesced" : stage === "pressure-rejected" ? "pressureRejected" : null;
+    if (field) {
+      const s = incrementDiagMap(firestoreWriteSourceStats, sourceKeyForMeta(meta), field);
+      const p = incrementDiagMap(firestoreWritePathStats, meta.pathGroup || "unknown", field);
+      if (error) { s.lastError = String(error?.code || error?.message || error).slice(0, 240); p.lastError = s.lastError; }
+    }
+    rememberFirestoreEvent(meta, stage, error);
+  }
+
+  function sortedDiagRows(map, field = "requested", limit = FIRESTORE_DIAG_TOP_LIMIT) {
+    return [...map.values()].sort((a, b) => Number(b[field] || 0) - Number(a[field] || 0) || Number(b.lastAt || 0) - Number(a.lastAt || 0)).slice(0, limit).map((row) => ({ ...row }));
+  }
+
+  function getFirestoreDiagnostics() {
+    return {
+      runtimeVersion: "2026-08-13-v432-write-monitor",
+      sdkVersion: FIREBASE_SDK_VERSION,
+      generatedAt: Date.now(),
+      status,
+      gate: {
+        queueDepth: firestoreWriteQueueDepth,
+        maxBackgroundQueueDepth: FIRESTORE_MAX_APP_QUEUE,
+        coalescedDepth: firestoreCoalescedWrites.size,
+        lastWriteAt: firestoreWriteLastAt,
+        backoffUntil: firestoreWriteBackoffUntil,
+        minGapMs: FIRESTORE_WRITE_GAP_MS,
+        resourceStrike: firestoreResourceStrike,
+        lastResourceErrorAt: firestoreLastResourceErrorAt
+      },
+      topSources: sortedDiagRows(firestoreWriteSourceStats),
+      topPaths: sortedDiagRows(firestoreWritePathStats),
+      recentEvents: firestoreWriteEvents.slice(-80)
+    };
+  }
+
+  function persistFirestoreDiagnostics() {
+    clearTimeout(firestoreDiagPersistTimer); firestoreDiagPersistTimer = 0;
+    try { sessionStorage.setItem(FIRESTORE_DIAG_STORAGE_KEY, JSON.stringify(getFirestoreDiagnostics())); } catch {}
+  }
+
+  function scheduleFirestoreDiagnosticsPersist() {
+    if (firestoreDiagPersistTimer) return;
+    firestoreDiagPersistTimer = window.setTimeout(persistFirestoreDiagnostics, 2500);
+  }
+
+  function printFirestoreDiagnostics() {
+    const diag = getFirestoreDiagnostics();
+    console.group("JK.Games Firestore V432 Diagnose");
+    console.log("Gate", diag.gate);
+    console.table(diag.topSources.slice(0, 15));
+    console.table(diag.topPaths.slice(0, 15));
+    console.log("Letzte Write-Ereignisse", diag.recentEvents);
+    console.groupEnd();
+    return diag;
+  }
+
+  function clearFirestoreDiagnostics() {
+    firestoreWriteEvents.length = 0;
+    firestoreWriteSourceStats.clear();
+    firestoreWritePathStats.clear();
+    try { sessionStorage.removeItem(FIRESTORE_DIAG_STORAGE_KEY); } catch {}
+    return getFirestoreDiagnostics();
+  }
+
+  function loadPreviousFirestoreDiagnostics() {
+    try {
+      const raw = JSON.parse(sessionStorage.getItem(FIRESTORE_DIAG_STORAGE_KEY) || "null");
+      if (raw?.recentEvents?.length) window.__JKFirestorePreviousDiagnostics = raw;
+    } catch {}
+  }
+
+  function printPreviousFirestoreDiagnostics() {
+    const diag = window.__JKFirestorePreviousDiagnostics || null;
+    if (!diag) {
+      console.info("JK.Games Firestore: Keine Diagnose aus der vorherigen Seitensitzung gespeichert.");
+      return null;
+    }
+    console.group("JK.Games Firestore V432 Diagnose · vorherige Sitzung");
+    console.log("Gate", diag.gate || {});
+    console.table((diag.topSources || []).slice(0, 15));
+    console.table((diag.topPaths || []).slice(0, 15));
+    console.log("Letzte Write-Ereignisse", diag.recentEvents || []);
+    console.groupEnd();
+    return diag;
+  }
+
   function readSharedNumber(key) {
     try {
       const value = Number(localStorage.getItem(key) || 0);
@@ -125,8 +343,17 @@
           localStorage.setItem(FIRESTORE_CROSS_TAB_LEASE_KEY, JSON.stringify({ token, until: now + 30000 }));
           const verify = readSharedLease();
           if (verify?.token === token) {
+            // Bei langsamer Verbindung die Lease erneuern. Sonst könnte sie nach
+            // 30 s auslaufen, während der SDK-Write noch aktiv ist, und ein zweiter
+            // Tab würde fälschlich parallel losschreiben.
+            const renew = window.setInterval(() => {
+              try {
+                if (readSharedLease()?.token === token) localStorage.setItem(FIRESTORE_CROSS_TAB_LEASE_KEY, JSON.stringify({ token, until: Date.now() + 30000 }));
+              } catch {}
+            }, 10000);
             try { return await operation(); }
             finally {
+              clearInterval(renew);
               try { if (readSharedLease()?.token === token) localStorage.removeItem(FIRESTORE_CROSS_TAB_LEASE_KEY); } catch {}
             }
           }
@@ -189,37 +416,54 @@
 
   function setFirestoreWriteBackoff(ms = FIRESTORE_RESOURCE_BACKOFF_MS, reason = "resource-exhausted") {
     const resourceReason = /resource|exhaust|queued|write-stream/i.test(String(reason || ""));
+    const now = Date.now();
+    if (resourceReason) {
+      if (now - firestoreLastResourceErrorAt > 15 * 60 * 1000) firestoreResourceStrike = 0;
+      firestoreLastResourceErrorAt = now;
+      firestoreResourceStrike = Math.min(4, firestoreResourceStrike + 1);
+    }
     const requested = Math.max(1000, Number(ms) || FIRESTORE_RESOURCE_BACKOFF_MS);
-    const until = Date.now() + (resourceReason ? Math.max(FIRESTORE_RESOURCE_BACKOFF_MS, requested) : requested);
+    const adaptive = resourceReason ? Math.min(FIRESTORE_RESOURCE_BACKOFF_MAX_MS, Math.max(requested, FIRESTORE_RESOURCE_BACKOFF_MS * (2 ** Math.max(0, firestoreResourceStrike - 1)))) : requested;
+    const until = now + adaptive;
     firestoreWriteBackoffUntil = Math.max(firestoreWriteBackoffUntil, until, readSharedNumber(FIRESTORE_BACKOFF_STORAGE_KEY));
     writeSharedNumber(FIRESTORE_BACKOFF_STORAGE_KEY, firestoreWriteBackoffUntil);
-    const now = Date.now();
+    persistFirestoreDiagnostics();
     if (now - firestoreWriteBackoffNoticeAt > 30000) {
       firestoreWriteBackoffNoticeAt = now;
       console.warn(`JK.Games Firestore-Schreibpause aktiv (${Math.ceil((firestoreWriteBackoffUntil - now) / 1000)}s) · ${reason}`);
+      if (resourceReason) printFirestoreDiagnostics();
     }
-    window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-backoff", { detail: { until: firestoreWriteBackoffUntil, reason } }));
+    window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-backoff", { detail: { until: firestoreWriteBackoffUntil, reason, diagnostics: resourceReason ? getFirestoreDiagnostics() : null } }));
     return firestoreWriteBackoffUntil;
   }
 
-  function queueFirestoreWrite(label, operation) {
-    if (firestoreWriteQueueDepth >= FIRESTORE_MAX_APP_QUEUE) {
-      const error = new Error(`JK.Games verwirft einen neuen Firestore-Write: ${firestoreWriteQueueDepth} lokale Writes warten bereits.`);
-      error.code = "firestore-write-pressure";error.retryAfterMs = FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS;error.transient = true;
-      // Lokaler UI-Druck darf NICHT den kompletten Account/Tabs in eine lange globale Pause schicken.
-      // Nur ein echtes Firebase resource-exhausted aktiviert den persistenten Shared-Backoff.
-      window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-pressure", { detail: { queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE } }));
+  function queueFirestoreWrite(label, operation, meta = null) {
+    const writeMeta = meta || makeFirestoreWriteMeta(label || "write", null);
+    if (!meta) recordFirestoreRequest(writeMeta);
+    // V432: Nur veraltbare Hintergrund-Synchronisation darf bei lokaler Last
+    // ausfallen. Kritische Nutzeraktionen bleiben in der seriellen App-Queue und
+    // werden weiterhin exakt einmal an das SDK uebergeben.
+    if (writeMeta.background && firestoreWriteQueueDepth >= FIRESTORE_MAX_APP_QUEUE) {
+      const error = new Error(`JK.Games verschiebt einen Hintergrund-Firestore-Write: ${firestoreWriteQueueDepth} lokale Writes warten bereits.`);
+      error.code = "firestore-write-pressure"; error.retryAfterMs = FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS; error.transient = true;
+      recordFirestoreStage(writeMeta, "pressure-rejected", error);
+      window.dispatchEvent(new CustomEvent("lifebuilder-firestore-write-pressure", { detail: { queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, source: sourceKeyForMeta(writeMeta), path: writeMeta.path } }));
       return Promise.reject(error);
     }
     firestoreWriteQueueDepth += 1;
     const execute = async () => {
+      recordFirestoreStage(writeMeta, "started");
       try {
         await waitForFirestoreWriteWindow();
-        return await runInCrossTabFirestoreLane(operation);
+        const result = await runInCrossTabFirestoreLane(operation);
+        recordFirestoreStage(writeMeta, "ok");
+        return result;
       } catch (error) {
+        recordFirestoreStage(writeMeta, "failed", error);
         if (isResourceExhaustedError(error)) {
-          setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, label || "resource-exhausted");
-          window.dispatchEvent(new CustomEvent("lifebuilder-firestore-resource-exhausted", { detail: { label: label || "resource-exhausted", until: firestoreWriteBackoffUntil } }));
+          setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, `${label || "resource-exhausted"} · ${sourceKeyForMeta(writeMeta)}`);
+          const diagnostics = getFirestoreDiagnostics();
+          window.dispatchEvent(new CustomEvent("lifebuilder-firestore-resource-exhausted", { detail: { label: label || "resource-exhausted", source: sourceKeyForMeta(writeMeta), path: writeMeta.path, until: firestoreWriteBackoffUntil, diagnostics } }));
         }
         throw error;
       } finally {
@@ -234,25 +478,25 @@
   // V396: Presence/Profile-Writes koennen sehr schnell erneut mit neueren Daten
   // ankommen. Solange ein Write derselben Dokument-Pfadgruppe noch wartet/laeuft,
   // behalten wir nur den neuesten Stand statt weitere SDK-Writes aufzustauen.
-  function coalescibleFirestorePath(ref) {
+  function coalescibleFirestorePath(ref, data = null) {
     const path = String(ref?.path || "");
     return path.startsWith("centerPresenceV268/")
       || path.startsWith("centerStaffPresenceV270/")
-      || path.startsWith("playerProfiles/")
-      || path.startsWith("playerPrivate/")
-      || path.startsWith("bigCardsProfiles/")
-      || path.startsWith("bigCardsSaves/")
-      || path.startsWith("bigCardsOnlineQueue/")
-      || path.startsWith("egoshootKlOnline/");
+      || (path.startsWith("playerProfiles/") && isPlayerProfilePresencePayload(data))
+      || path.startsWith("egoshootKlOnline/")
+      || /^arenaKlRooms\/[^/]+\/participants\//.test(path)
+      || /^arenaKlRooms\/[^/]+\/state\/live$/.test(path)
+      || /^fightKlCoopMatches\/[^/]+\/players\//.test(path)
+      || /^fightKlCoopMatches\/[^/]+\/frames\//.test(path);
   }
 
-  function queueCoalescedSetDoc(args) {
+  function queueCoalescedSetDoc(args, meta) {
     const ref = args?.[0];
-    if (!coalescibleFirestorePath(ref)) return queueFirestoreWrite("setDoc", () => runtimeRawSetDoc(...args));
+    if (!coalescibleFirestorePath(ref, args?.[1])) return queueFirestoreWrite(`setDoc:${String(ref?.path || "")}`, () => runtimeRawSetDoc(...args), meta);
     const key = `set:${String(ref.path)}`;
     let entry = firestoreCoalescedWrites.get(key);
     if (!entry) {
-      entry = { args, waiting: [], running: false, queued: false, dirty: false };
+      entry = { args, meta, waiting: [], running: false, queued: false, dirty: false };
       firestoreCoalescedWrites.set(key, entry);
     } else {
       const oldArgs = entry.args;
@@ -263,7 +507,9 @@
       entry.args = oldMerge && newMerge && oldArgs?.[1] && args?.[1]
         ? [args[0], { ...oldArgs[1], ...args[1] }, args[2]]
         : args;
+      entry.meta = meta;
       if (entry.running) entry.dirty = true;
+      recordFirestoreStage(meta, "coalesced");
     }
     const promise = new Promise((resolve, reject) => entry.waiting.push({ resolve, reject }));
     const launch = () => {
@@ -274,9 +520,10 @@
         entry.running = true;
         entry.dirty = false;
         const callArgs = entry.args;
+        const callMeta = entry.meta || meta;
         const waiters = entry.waiting.splice(0);
         try {
-          const result = await queueFirestoreWrite(`setDoc:${String(ref.path)}`, () => runtimeRawSetDoc(...callArgs));
+          const result = await queueFirestoreWrite(`setDoc:${String(ref.path)}`, () => runtimeRawSetDoc(...callArgs), callMeta);
           waiters.forEach((w) => w.resolve(result));
         } catch (error) {
           waiters.forEach((w) => w.reject(error));
@@ -338,21 +585,45 @@
     }
 
     runtimeRawSetDoc = dbMod.setDoc;
-    const gatedSetDoc = (...args) => queueCoalescedSetDoc(args);
-    const gatedUpdateDoc = (...args) => queueFirestoreWrite("updateDoc", () => dbMod.updateDoc(...args));
-    const gatedDeleteDoc = (...args) => queueFirestoreWrite("deleteDoc", () => dbMod.deleteDoc(...args));
-    const gatedAddDoc = (...args) => queueFirestoreWrite("addDoc", () => dbMod.addDoc(...args));
-    const gatedRunTransaction = (...args) => queueFirestoreWrite("runTransaction", () => dbMod.runTransaction(...args));
+    const gatedSetDoc = (...args) => {
+      const meta = makeFirestoreWriteMeta("setDoc", args[0], { data: args[1] }); recordFirestoreRequest(meta);
+      return queueCoalescedSetDoc(args, meta);
+    };
+    const gatedUpdateDoc = (...args) => {
+      const meta = makeFirestoreWriteMeta("updateDoc", args[0]); recordFirestoreRequest(meta);
+      return queueFirestoreWrite(`updateDoc:${meta.path}`, () => dbMod.updateDoc(...args), meta);
+    };
+    const gatedDeleteDoc = (...args) => {
+      const meta = makeFirestoreWriteMeta("deleteDoc", args[0], { background: false }); recordFirestoreRequest(meta);
+      return queueFirestoreWrite(`deleteDoc:${meta.path}`, () => dbMod.deleteDoc(...args), meta);
+    };
+    const gatedAddDoc = (...args) => {
+      const meta = makeFirestoreWriteMeta("addDoc", args[0], { background: false }); recordFirestoreRequest(meta);
+      return queueFirestoreWrite(`addDoc:${meta.path}`, () => dbMod.addDoc(...args), meta);
+    };
+    const gatedRunTransaction = (...args) => {
+      const meta = makeFirestoreWriteMeta("runTransaction", null, { background: false }); recordFirestoreRequest(meta);
+      return queueFirestoreWrite("runTransaction", () => dbMod.runTransaction(...args), meta);
+    };
     const gatedWriteBatch = (...args) => {
       const batch = dbMod.writeBatch(...args);
       const rawCommit = batch.commit.bind(batch);
+      const batchPaths = [];
       let proxy = null;
       proxy = new Proxy(batch, {
         get(target, prop, receiver) {
-          if (prop === "commit") return () => queueFirestoreWrite("writeBatch", rawCommit);
+          if (prop === "commit") return () => {
+            const primaryPath = batchPaths[0] || "";
+            const meta = makeFirestoreWriteMeta("writeBatch", { path: primaryPath }, { background: batchPaths.length > 0 && batchPaths.every(isBackgroundFirestorePath), batchPaths });
+            recordFirestoreRequest(meta);
+            return queueFirestoreWrite(`writeBatch:${firestorePathGroup(primaryPath)}`, rawCommit, meta);
+          };
           const value = Reflect.get(target, prop, receiver);
           if (typeof value !== "function") return value;
           return (...callArgs) => {
+            if (["set", "update", "delete"].includes(String(prop))) {
+              const path = firestorePathOf(callArgs[0]); if (path) batchPaths.push(path);
+            }
             const result = value.apply(target, callArgs);
             return result === target ? proxy : result;
           };
@@ -479,14 +750,17 @@
   }
 
   syncSharedFirestoreState();
+  loadPreviousFirestoreDiagnostics();
   window.addEventListener("storage", (event) => {
     if (event.key === FIRESTORE_BACKOFF_STORAGE_KEY) syncSharedFirestoreState();
   });
   window.addEventListener("online", () => scheduleFirestoreRecovery(300, "online"));
   window.addEventListener("offline", () => emit("offline", "Keine Internetverbindung."));
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && navigator.onLine !== false) scheduleFirestoreRecovery(900, "tab-visible");
+    if (document.hidden) persistFirestoreDiagnostics();
+    else if (navigator.onLine !== false) scheduleFirestoreRecovery(900, "tab-visible");
   });
+  window.addEventListener("pagehide", persistFirestoreDiagnostics);
 
   // Safety net: a Firestore INTERNAL ASSERTION poisons the SDK queue; after that
   // further reads/writes can no longer recover in-place. Flush the local save and
@@ -517,7 +791,15 @@
     return true;
   }
   window.addEventListener("unhandledrejection", (event) => {
-    if (isFatalFirestoreAssertion(event?.reason)) scheduleHardFirestoreRecovery(event.reason);
+    const reason = event?.reason;
+    if (isFatalFirestoreAssertion(reason)) scheduleHardFirestoreRecovery(reason);
+    if (isResourceExhaustedError(reason)) {
+      // Falls ein SDK-interner Pfad die normale Write-Promise umgeht, verlieren wir
+      // die Diagnose trotzdem nicht. Nicht doppelt hochzaehlen, wenn derselbe Fehler
+      // gerade bereits durch queueFirestoreWrite erkannt wurde.
+      if (Date.now() - firestoreLastResourceErrorAt > 5000) setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, "unhandled-resource-exhausted");
+      else { persistFirestoreDiagnostics(); printFirestoreDiagnostics(); }
+    }
   });
   window.addEventListener("error", (event) => {
     const candidate = event?.error || event?.message || "";
@@ -525,7 +807,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-13-v430-firestore-cross-tab-guard",
+    version: "2026-08-13-v432-write-monitor",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -539,7 +821,12 @@
     isResourceExhaustedError,
     runWrite: queueFirestoreWrite,
     setWriteBackoff: setFirestoreWriteBackoff,
-    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS }),
+    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS, resourceStrike: firestoreResourceStrike }),
+    getWriteDiagnostics: getFirestoreDiagnostics,
+    printWriteDiagnostics: printFirestoreDiagnostics,
+    clearWriteDiagnostics: clearFirestoreDiagnostics,
+    getPreviousWriteDiagnostics: () => window.__JKFirestorePreviousDiagnostics || null,
+    printPreviousWriteDiagnostics: printPreviousFirestoreDiagnostics,
     isFatalFirestoreAssertion,
     scheduleHardFirestoreRecovery,
     withTimeout,
@@ -547,4 +834,8 @@
     getStatus: () => status,
     getLastError: () => lastError
   };
+  window.JKFirestoreDiagnostics = printFirestoreDiagnostics;
+  window.JKFirestoreDiagnosticsPrevious = printPreviousFirestoreDiagnostics;
+  window.JKFirestoreDiagnosticsClear = clearFirestoreDiagnostics;
+  console.info("JK.Games Firebase Runtime V432 aktiv · serieller Write-Schutz + Diagnosemonitor. Konsole: JKFirestoreDiagnostics() · vorherige Sitzung: JKFirestoreDiagnosticsPrevious()");
 })();
