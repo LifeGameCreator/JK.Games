@@ -2307,3 +2307,59 @@ body.bigcards-kl-open{overflow:hidden!important}
   .bc-inventory-card .bc-card-art .bc-mini-effect{width:17px!important;height:17px!important;font-size:9px!important}
   .bc-inventory-card .bc-card-art .bc-mini-effect.combat{width:21px!important}
 }
+
+
+/* ===== V426 · MOD-KARTENLABOR ===== */
+.bc-mod-v426 .bc-mod-card-choice-grid{margin-top:8px}
+.bc-mod-card-choice{
+  width:100%;display:grid!important;grid-template-columns:38px minmax(0,1fr) auto!important;align-items:center!important;
+  gap:8px!important;text-align:left!important;padding:9px!important;min-height:58px;border:1px solid rgba(44,68,78,.18)!important;
+  border-radius:12px!important;background:rgba(255,255,255,.86)!important;color:#243e49!important;position:relative;overflow:hidden
+}
+.bc-mod-card-choice>span{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.62);font-size:18px}
+.bc-mod-card-choice b,.bc-mod-card-choice small{display:block}.bc-mod-card-choice small{font-size:8px;opacity:.72;margin-top:2px}
+.bc-mod-card-choice em{font-size:8px;font-style:normal;font-weight:1000;white-space:nowrap}
+.bc-mod-card-choice.selected{border:2px solid #1e8398!important;box-shadow:0 0 0 3px rgba(38,173,197,.14),0 8px 20px rgba(21,70,84,.12)!important;transform:translateY(-1px)}
+.bc-mod-card-choice.selected:after{content:"✓";position:absolute;right:5px;top:4px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;background:#12798e;color:#fff;font-size:9px;font-weight:1000}
+.bc-mod-card-choice.rar-hyper{background:linear-gradient(140deg,rgba(13,45,54,.96),rgba(20,59,76,.92))!important;color:#eefcff!important}
+.bc-mod-selected-card{display:grid;grid-template-columns:42px minmax(0,1fr) 28px;align-items:center;gap:9px;margin:10px 0;padding:10px;border-radius:12px;border:1px solid rgba(37,125,146,.34);background:#f0fbfd}
+.bc-mod-selected-card.empty{opacity:.7;border-style:dashed}.bc-mod-selected-card>span{font-size:24px;text-align:center}.bc-mod-selected-card b,.bc-mod-selected-card small,.bc-mod-selected-card em{display:block}.bc-mod-selected-card small{font-size:7px;font-weight:1000;letter-spacing:.08em}.bc-mod-selected-card b{font-size:12px}.bc-mod-selected-card em{font-size:8px;margin-top:2px}.bc-mod-selected-card strong{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#168397;color:#fff}
+.bc-mod-equip-choice{display:grid;grid-template-columns:minmax(190px,1fr) minmax(240px,1.6fr) auto;gap:8px;align-items:end;padding:10px;border-radius:12px;background:rgba(255,255,255,.62);border:1px solid rgba(79,106,111,.15)}
+.bc-mod-equip-choice label{display:grid;gap:4px;font-size:8px;font-weight:900}.bc-mod-equip-choice select{width:100%;padding:9px;border-radius:8px;border:1px solid #b7ad94;background:#fff}.bc-mod-equip-choice small{font-size:8px;line-height:1.4;color:#665f55}
+.bc-mod-bulk-equip{margin:0 0 14px;padding:14px;border-radius:16px;border:1px solid rgba(117,76,171,.28);background:linear-gradient(145deg,#f9f3ff,#eef8ff);box-shadow:0 8px 22px rgba(43,55,49,.07)}
+.bc-mod-bulk-mode{display:grid;grid-template-columns:minmax(260px,520px);margin-bottom:9px}.bc-mod-bulk-mode label{display:grid;gap:4px;font-size:8px;font-weight:900}.bc-mod-bulk-mode select{padding:9px;border:1px solid #b8ad91;border-radius:9px;background:#fff}
+.bc-mod-scope-grid{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 10px}.bc-mod-scope-chip{position:relative}.bc-mod-scope-chip input{position:absolute;opacity:0;pointer-events:none}.bc-mod-scope-chip span{display:inline-flex;align-items:center;min-height:31px;padding:0 10px;border-radius:999px;border:1px solid rgba(48,78,91,.19);background:#fff;color:#29434e;font-size:8px;font-weight:1000;cursor:pointer}.bc-mod-scope-chip input:checked+span{background:#173f50;color:#fff;border-color:#173f50;box-shadow:0 3px 10px rgba(20,58,72,.18)}.bc-mod-scope-chip.all input:checked+span{background:linear-gradient(135deg,#4a2c87,#157e94)}
+@media(max-width:700px){.bc-mod-equip-choice{grid-template-columns:1fr}.bc-mod-card-choice{grid-template-columns:34px minmax(0,1fr)!important}.bc-mod-card-choice em{grid-column:2}.bc-mod-bulk-equip{padding:10px}.bc-mod-card-giver-options{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* ===== V426 · VISUELLE KARTENAUSRÜSTUNG IN DER SAMMLUNG ===== */
+.bc-inventory-card .bc-card-art{isolation:isolate}
+.bc-collection-visual-fx{position:absolute;inset:0;z-index:5;overflow:hidden;border-radius:inherit;pointer-events:none}
+.bc-collection-visual-fx i{position:absolute;display:block;pointer-events:none}
+.bc-collection-visual-fx .aura-fx{inset:-22%;border-radius:50%;background:radial-gradient(circle,transparent 28%,hsla(var(--bc-aura-h),95%,64%,.13) 48%,hsla(var(--bc-aura-h),95%,62%,.42) 67%,transparent 72%);filter:blur(2px);animation:bcCollectionAura 3.4s ease-in-out infinite}
+.bc-collection-visual-fx .combat-fx{left:-45%;top:18%;width:190%;height:14%;transform:rotate(-18deg);background:linear-gradient(90deg,transparent,hsla(var(--bc-combat-h),100%,66%,.08),hsla(var(--bc-combat-h),100%,70%,.62),transparent);filter:blur(.5px);animation:bcCollectionCombat 3.1s ease-in-out infinite}
+.bc-collection-visual-fx .bind-fx{inset:4px;border:2px solid hsla(var(--bc-bind-h),92%,58%,.52);border-radius:inherit;box-shadow:inset 0 0 16px hsla(var(--bc-bind-h),92%,58%,.22),0 0 10px hsla(var(--bc-bind-h),92%,58%,.18)}
+.bc-collection-visual-fx .trail-fx{left:-16%;bottom:13%;width:132%;height:26%;opacity:.78;background:radial-gradient(circle at 8% 60%,hsla(var(--bc-trail-h),100%,70%,.95) 0 2px,transparent 3px),radial-gradient(circle at 30% 35%,hsla(var(--bc-trail-h),100%,75%,.85) 0 1.5px,transparent 3px),radial-gradient(circle at 55% 66%,hsla(var(--bc-trail-h),100%,66%,.9) 0 2px,transparent 3px),radial-gradient(circle at 78% 30%,hsla(var(--bc-trail-h),100%,78%,.8) 0 1.5px,transparent 3px);animation:bcCollectionTrail 2.8s linear infinite}
+.bc-collection-visual-fx .fusion-fx{inset:-30%;background:linear-gradient(110deg,transparent 38%,rgba(255,255,255,.04) 45%,rgba(255,255,255,.36) 50%,rgba(255,255,255,.04) 55%,transparent 62%);animation:bcCollectionFusion 4.4s linear infinite}
+.bc-collection-visual-fx.fusion-prismatic .fusion-fx{background:conic-gradient(from 0deg,transparent,#ff6a8e44,#ffd75d55,#63ffad44,#5ddfff55,#8f6cff55,#ff67d955,transparent);mix-blend-mode:screen}
+.bc-inventory-card .bc-card-art>span:first-child,.bc-inventory-card .bc-card-art>.bc-card-rebirth-badge,.bc-inventory-card .bc-card-art>.bc-card-effect-badges,.bc-inventory-card .bc-card-art>.bc-copy-count,.bc-inventory-card .bc-card-art>.bc-favorite-badge,.bc-inventory-card .bc-card-art>.bc-card-crack{z-index:12!important}
+@keyframes bcCollectionAura{0%,100%{transform:scale(.93);opacity:.55}50%{transform:scale(1.06);opacity:1}}
+@keyframes bcCollectionCombat{0%,100%{transform:translateX(-20%) rotate(-18deg);opacity:.25}50%{transform:translateX(20%) rotate(-18deg);opacity:.9}}
+@keyframes bcCollectionTrail{from{transform:translateX(-12%)}to{transform:translateX(13%)}}
+@keyframes bcCollectionFusion{from{transform:translateX(-30%) rotate(4deg)}to{transform:translateX(30%) rotate(4deg)}}
+.bc-pref-hide-collection-fx .bc-inventory-card .bc-collection-visual-fx{display:none!important}
+
+/* REDUZIERTE ANIMATION: Optik bleibt, Bewegung stoppt vollständig. */
+.bc-pref-reduce-motion .bc-collection-visual-fx i,
+.bc-pref-reduce-motion .card-rb-5::after,
+.bc-pref-reduce-motion .bc-card-rebirth-badge.rb-5,
+.bc-pref-reduce-motion .shiny-1:after,
+.bc-pref-reduce-motion .shiny-2:after,
+.bc-pref-reduce-motion .shiny-3:after,
+.bc-pref-reduce-motion .rar-universe,
+.bc-pref-reduce-motion .rar-galaxy,
+.bc-pref-reduce-motion .rar-cosmic,
+.bc-pref-reduce-motion .rar-godly,
+.bc-pref-reduce-motion .rar-hyper:before{animation:none!important;transition:none!important}
+.bc-pref-reduce-motion .card-rb-5::after{background:conic-gradient(from 0deg,#ff4b6e,#ffb84b,#fff55c,#58ff9a,#4be9ff,#668cff,#c76cff,#ff5fd7,#ff4b6e)!important}
+.bc-pref-reduce-motion .bc-card-rebirth-badge.rb-5{background:linear-gradient(90deg,#542fc6,#147fae,#178a68,#b08217,#b5367c)!important;background-position:50% 50%!important}
+.bc-pref-reduce-motion .shiny-1:after,.bc-pref-reduce-motion .shiny-2:after,.bc-pref-reduce-motion .shiny-3:after{transform:translateX(18%)!important;opacity:.65!important}
