@@ -4347,7 +4347,7 @@ function awardGameXp(amount, reason = "Game", options = {}) {
 }
 
 
-// V248: Gemeinsame Hauptcharakter-EP für alle acht Top Games.
+// V433: Gemeinsame Hauptcharakter-EP für alle neun Top Games inklusive Escape.kl.
 // Die jeweiligen Spiele vergeben weiterhin ihre eigenen internen Belohnungen.
 // Zusätzlich erhält der übergeordnete JK.Games-Hauptcharakter echte EP.
 // Event-Keys verhindern doppelte Gutschriften desselben Ergebnisses; ein
@@ -17393,7 +17393,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL vollständig spielen."
+    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL vollständig spielen."
   },
   {
     id: "finder",
@@ -17588,7 +17588,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL sind vollständig spielbar." });
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17929,6 +17929,10 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-bigcards-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.BigCardsKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-escape-kl]")?.addEventListener("click", () => {
+    els.dialog.close();
+    window.EscapeKL?.open?.(item);
   });
   shell.querySelector("[data-open-egoshoot-kl]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19916,6 +19920,7 @@ function openTopGamesJkInfo() {
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
+        <article><b>Escape.kl</b><p>Escape.kl vergibt Hauptcharakter-XP für abgeschlossene Keyboard-Welten und Rebirths. Speed, Wins, Trails und Shop-Upgrades werden vollständig im Spiel erspielt.</p></article>
         <article><b>Egoshoot.KL</b><p>Egoshoot.KL hat aktuell keine zufälligen Gratis-JK/Coin-Drops. Kills, Waffenlevel, Shield und Versorgung werden im Spiel erspielt; optionale Kill-Pakete findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
@@ -19930,7 +19935,7 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -19939,6 +19944,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
+        <button class="topgames-card escape" data-open-escape-kl><b>Escape.kl</b><small>3D Jump'n'Run • Speed sammeln • In-Game-Shop • Checkpoints • Welten • Rebirth.</small></button>
         <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
     </div>`;
