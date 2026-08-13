@@ -98,3 +98,9 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
   .ekl-stat:nth-child(3){display:none}
   .ekl-stage-progress{width:min(270px,70vw)}
 }
+
+/* V437 · Stage-Win progression + three-world ladder */
+.ekl-world-chip [data-ekl-next-win]{margin-top:4px;color:#ffd565;font-size:9px;font-weight:950;letter-spacing:.04em;text-shadow:0 0 14px #ffc84b44}
+.ekl-world-economy-note{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px;padding:13px 15px;border:1px solid #ffd15b35;border-radius:14px;background:linear-gradient(135deg,#3b2a0e66,#14263b88)}
+.ekl-world-economy-note b{color:#ffd565;font-size:15px}.ekl-world-economy-note span{max-width:72%;color:#b8c8da;font-size:11px;line-height:1.45;text-align:right}
+@media(max-width:700px){.ekl-world-economy-note{align-items:flex-start;flex-direction:column}.ekl-world-economy-note span{max-width:none;text-align:left}.ekl-world-chip [data-ekl-next-win]{font-size:8px}}
