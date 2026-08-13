@@ -1931,8 +1931,31 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   }
   function showFeaturedBackupPicker(){
     const main=featuredCard();if(!main)return toast("Wähle zuerst eine persönliche Karte aus.");if(cardRank(main)<1)return toast("Die erste Backup-Karte wird mit Rank 1 freigeschaltet.");
-    const rows=pickerRows(x=>x.id!==main.id).map(row=>({...row,eligible:backupCardEligible(main,row.inst)})).sort((a,b)=>{if(a.eligible!==b.eligible)return a.eligible?-1:1;if(!!a.inst.broken!==!!b.inst.broken)return a.inst.broken?1:-1;return b.power-a.power||b.inst.level-a.inst.level;}).slice(0,250);
-    showModal(`<div class="bc-backup-picker"><small>RANK-BACKUP · ${esc(cardMeta(main).name)}</small><h2>🛡 Backup-Karte wählen</h2><p>Rank ${cardRank(main)} erlaubt normale Backup-Karten bis <b>${esc(rankBackupTierName(main))}</b>. Hyper-, Exclusive- und VIP-Karten sind ab Rank 1 erlaubt. Nur Haupt- und aktive Backup-Karte dürfen eine Spur tragen.</p><div class="bc-feature-picker-grid">${rows.length?rows.map(row=>{const inst=row.inst,m=cardMeta(inst),eligible=row.eligible,current=main.backupCardId===inst.id,locked=!eligible||inst.broken;const req=(inst.hyper||inst.exclusive||inst.vip)?1:backupRankRequirementForTier(inst.rarity);return `<button data-bc-backup-select="${inst.id}" class="${m.className} ${current?"current":""} ${inst.broken?"broken":""} ${!eligible?"battle-locked":""}" ${locked?"disabled":""}><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.hyper?`HYPER · G${hyperGeneration(inst)} · ab Rank 1`:inst.vip?`VIP · ${m.rarity.name} · ab Rank 1`:inst.exclusive?"EXCLUSIVE · ab Rank 1":`${m.rarity.name} · benötigt Rank ${req}`} · Lv ${inst.level}/5 · ⚔ ${fmt(row.power)}</small></div><em>${current?"AKTIV":inst.broken?"KAPUTT":eligible?"Als Backup":"GESPERRT"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Keine Backup-Karte verfügbar</h3></div>`}</div></div>`);
+
+    // V431: Im Backup-Picker darf jedes Kartenmotiv nur EINMAL erscheinen.
+    // Alle weiteren Instanzen derselben Karte werden ausgeblendet. Zusätzlich
+    // werden das bereits als Hauptkarte gewählte Motiv und das aktuell aktive
+    // Backup-Motiv vollständig aus der Auswahl entfernt. Dadurch kann z. B.
+    // APEX GODFANG nicht dutzendfach erneut als Backup angeboten werden.
+    const mainKey=collectionKey(main),activeBackup=featuredBackupCard(main),activeBackupKey=activeBackup?collectionKey(activeBackup):"",groups=new Map();
+    for(const row of pickerRows(()=>true)){
+      const inst=row.inst,key=collectionKey(inst);
+      if(!key||key===mainKey||(activeBackupKey&&key===activeBackupKey))continue;
+      const candidate={...row,eligible:backupCardEligible(main,inst),onExpedition:isCardOnExpedition(inst.id)};
+      const current=groups.get(key);
+      if(!current){groups.set(key,candidate);continue;}
+      // Bevorzugt eine tatsächlich nutzbare, nicht kaputte und nicht auf
+      // Expedition befindliche Kopie; danach die stärker ausgebaute Kopie.
+      const candidateUsable=candidate.eligible&&!candidate.inst.broken&&!candidate.onExpedition;
+      const currentUsable=current.eligible&&!current.inst.broken&&!current.onExpedition;
+      if(candidateUsable!==currentUsable){if(candidateUsable)groups.set(key,candidate);continue;}
+      if(candidate.onExpedition!==current.onExpedition){if(!candidate.onExpedition)groups.set(key,candidate);continue;}
+      if(candidate.inst.broken!==current.inst.broken){if(!candidate.inst.broken)groups.set(key,candidate);continue;}
+      const progress=featuredProgressCompareV424(candidate.inst,current.inst);
+      if(progress>0||(progress===0&&candidate.power>current.power))groups.set(key,candidate);
+    }
+    const rows=[...groups.values()].sort((a,b)=>{if(a.eligible!==b.eligible)return a.eligible?-1:1;if(a.onExpedition!==b.onExpedition)return a.onExpedition?1:-1;if(!!a.inst.broken!==!!b.inst.broken)return a.inst.broken?1:-1;return featuredProgressCompareV424(b.inst,a.inst)||b.power-a.power;}).slice(0,250);
+    showModal(`<div class="bc-backup-picker"><small>RANK-BACKUP · ${esc(cardMeta(main).name)}</small><h2>🛡 Backup-Karte wählen</h2><p>Jedes Kartenmotiv wird hier nur <b>einmal</b> angezeigt. Deine Hauptkarte und dein bereits aktives Backup werden vollständig ausgeblendet. Rank ${cardRank(main)} erlaubt normale Backup-Karten bis <b>${esc(rankBackupTierName(main))}</b>. Hyper-, Exclusive- und VIP-Karten sind ab Rank 1 erlaubt.</p><div class="bc-feature-picker-grid">${rows.length?rows.map(row=>{const inst=row.inst,m=cardMeta(inst),eligible=row.eligible,locked=!eligible||inst.broken||row.onExpedition;const req=(inst.hyper||inst.exclusive||inst.vip)?1:backupRankRequirementForTier(inst.rarity);return `<button data-bc-backup-select="${inst.id}" class="${m.className} ${inst.broken?"broken":""} ${!eligible?"battle-locked":""}" ${locked?"disabled":""}><span>${m.icon}</span><div><b>${esc(m.name)}</b><small>${inst.hyper?`HYPER · G${hyperGeneration(inst)} · ab Rank 1`:inst.vip?`VIP · ${m.rarity.name} · ab Rank 1`:inst.exclusive?"EXCLUSIVE · ab Rank 1":`${m.rarity.name} · benötigt Rank ${req}`} · Lv ${inst.level}/5 · ⚔ ${fmt(row.power)}</small></div><em>${row.onExpedition?"EXPEDITION":inst.broken?"KAPUTT":eligible?"Als Backup":"GESPERRT"}</em></button>`}).join(""):`<div class="bc-empty-state"><span>🃏</span><h3>Keine weitere Backup-Karte verfügbar</h3><p>Bereits ausgewählte Kartenmotive werden hier nicht erneut angezeigt.</p></div>`}</div></div>`);
   }
   function setFeaturedBackupCard(id){
     const main=featuredCard(),backup=instance(id);if(!main||!backup)return;if(isCardOnExpedition(id))return toast("Diese Karte ist gerade auf Expedition.");if(cardRank(main)<1)return toast("Backup-Karten werden ab Rank 1 freigeschaltet.");if(backup.broken)return toast("Eine kaputte Karte kann nicht als Backup gesetzt werden.");if(!backupCardEligible(main,backup)){const req=(backup.hyper||backup.exclusive||backup.vip)?1:backupRankRequirementForTier(backup.rarity);return toast(`${cardMeta(backup).name} benötigt für den Backup-Slot Rank ${req}.`);}
