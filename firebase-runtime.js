@@ -28,13 +28,13 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 3200;
-  const FIRESTORE_RESOURCE_BACKOFF_MS = 1800000;
+  const FIRESTORE_WRITE_GAP_MS = 5000;
+  const FIRESTORE_RESOURCE_BACKOFF_MS = 3600000;
   // V387: Während einer aktiven Firestore-Schreibpause werden neue UI-Schreibvorgänge
   // nicht mehr minutenlang als ungelöste Promises festgehalten. Sie brechen schnell
   // mit einem retry-fähigen Fehler ab; lokale Spielstände/Timer können später neu senden.
-  const FIRESTORE_MAX_APP_QUEUE = 12;
-  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 120000;
+  const FIRESTORE_MAX_APP_QUEUE = 4;
+  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 600000;
   let firestoreWriteChain = Promise.resolve();
   let firestoreWriteLastAt = 0;
   let firestoreWriteBackoffUntil = 0;
@@ -125,7 +125,10 @@
         return result;
       } catch (error) {
         firestoreWriteLastAt = Date.now();
-        if (isResourceExhaustedError(error)) setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, label || "resource-exhausted");
+        if (isResourceExhaustedError(error)) {
+          setFirestoreWriteBackoff(FIRESTORE_RESOURCE_BACKOFF_MS, label || "resource-exhausted");
+          window.dispatchEvent(new CustomEvent("lifebuilder-firestore-resource-exhausted", { detail: { label: label || "resource-exhausted", until: firestoreWriteBackoffUntil } }));
+        }
         throw error;
       } finally {
         firestoreWriteQueueDepth = Math.max(0, firestoreWriteQueueDepth - 1);
@@ -426,7 +429,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-12-v421-firestore-hard-pressure-guard",
+    version: "2026-08-13-v427-firestore-ultra-guard",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,

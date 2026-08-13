@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V426 · Mod Card Lab + Collection FX + Adaptive Battle */
+/* BigCards.kl – JK.Games Top Game V427 · Recovery-Safe Cloud + Firestore Ultra Guard */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-13-bigcards-v426-mod-card-lab-collection-fx-adaptive-battle";
+  const VERSION = "2026-08-13-bigcards-v427-recovery-safe-cloud-firestore-ultra-guard";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -26,15 +26,15 @@
   // V387: Große Sammlungen bleiben lokal sofort sicher, während Firestore bewusst
   // ruhiger synchronisiert. Das verhindert eine überfüllte Write-Queue bei Auto-Opener
   // und sehr großen Kartenbeständen.
-  const CLOUD_SAVE_DELAY_MS = 300000;
-  const CLOUD_PASSIVE_SAVE_DELAY_MS = 900000;
-  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 3600000;
-  const CLOUD_RESOURCE_BACKOFF_MS = 1800000;
+  const CLOUD_SAVE_DELAY_MS = 900000;
+  const CLOUD_PASSIVE_SAVE_DELAY_MS = 1800000;
+  const CLOUD_PROFILE_SAVE_INTERVAL_MS = 7200000;
+  const CLOUD_RESOURCE_BACKOFF_MS = 3600000;
   const CLOUD_POLL_MS = 45000;
   // V407: kompakte Karten-Buckets + gebündelte Firestore-Batches reduzieren die Anzahl der Writes massiv.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
-  const CLOUD_WRITE_BATCH_SIZE = 6;
-  const CLOUD_WRITE_BATCH_PAUSE_MS = 15000;
+  const CLOUD_WRITE_BATCH_SIZE = 1;
+  const CLOUD_WRITE_BATCH_PAUSE_MS = 6000;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
   const MARKET_STATS_COLLECTION = "bigCardsMarketStats";
@@ -3717,6 +3717,23 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   }
   async function syncLeaderboardProfile(){if(cloudBackoffUntil>now())return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{await writeProfile(fb,u);cloudLastProfileWriteAt=now();return true}catch(e){console.warn("BigCards leaderboard current-level sync",e);return false;}}
   function scheduleLeaderboardProfileSync(delay=2500){clearTimeout(leaderboardProfileTimer);leaderboardProfileTimer=setTimeout(()=>{leaderboardProfileTimer=0;void syncLeaderboardProfile();},Math.max(100,Number(delay)||2500));}
+  function cloudSafetyRegressionReasonV427(userId,raw=S,remoteRoot=null){
+    const counts=cloudCacheCounts(raw),meta=readCloudMeta(userId),localHighCollection=Math.max(0,Math.floor(Number(meta?.safetyHighCollection)||0)),remoteCollection=Math.max(0,Math.floor(Number(remoteRoot?.collectionDiscovered)||0)),remoteInstances=Math.max(0,Math.floor(Number(remoteRoot?.instanceCount)||0));
+    const protectedCollection=Math.max(localHighCollection,remoteCollection);
+    if(protectedCollection>0&&counts.collection<protectedCollection)return `Sammlung waere kleiner (${counts.collection}) als der letzte sichere Stand (${protectedCollection}).`;
+    if(remoteInstances>=1000&&counts.instances<Math.floor(remoteInstances*.25))return `Kartenbestand waere ploetzlich von ${remoteInstances} auf ${counts.instances} gefallen.`;
+    if((remoteCollection>0||localHighCollection>0)&&counts.instances===0)return "Ein leerer Kartenbestand darf keinen vorhandenen Cloud-Spielstand ueberschreiben.";
+    return "";
+  }
+  async function verifyCloudRootBeforeCommitV427(fb,u){
+    const ref=fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),snap=await fb.getDoc(ref),root=snap.exists()?snap.data()||{}:null;
+    const reason=cloudSafetyRegressionReasonV427(u.uid,S,root);
+    if(reason){
+      const e=new Error(`V427 Cloud-Sicherheitsstopp: ${reason}`);e.code="bigcards-cloud-safety-stop";e.cloudSafety=true;throw e;
+    }
+    return root;
+  }
+
   async function syncProfile(force=false){
     if((!cloudReady&&!force)||cloudMigrationPending||cloudSaving||!S){if(cloudSaving)cloudDirty=true;return false}
     if(cloudBackoffUntil>now()){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,cloudBackoffUntil-now()));return false}
@@ -3726,7 +3743,10 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     // Bereiche bereits mehrere Firestore-Writes in der globalen Schlange haben.
     // Lokal ist der Spielstand zu diesem Zeitpunkt bereits sicher gespeichert.
     if(!force&&(Number(globalGate.queueDepth||0)>0||Number(globalGate.coalescedDepth||0)>0)){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,240000));return false}
-    const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
+    const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;
+    const localSafetyReason=cloudSafetyRegressionReasonV427(u.uid,S,null);
+    if(localSafetyReason){cloudDirty=false;cloudMigrationPending=true;toast(`☁ Cloud-Sicherheitsstopp: ${localSafetyReason} Dein Online-Spielstand wird NICHT ueberschrieben.`,7000);console.error("BigCards V427 safety stop",localSafetyReason);return false;}
+    cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
       updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=419;
       const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
@@ -3737,23 +3757,21 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
         chunkRefs[i]=reusable?cloudLastChunkRefs[i]:cloudChunkRefId(i,chunkHashes[i]);
         if(!reusable)changed.push(i);
       }
-      // V394: niemals mehr jeden geänderten Cloud-Chunk als eigenen sofortigen
-      // setDoc in den Firestore-Write-Stream drücken. Maximal acht Chunks werden
-      // gemeinsam committed; danach bekommt das SDK bewusst Zeit zum Leeren.
-      // Das reduziert „Write stream exhausted maximum allowed queued writes“
-      // besonders bei großen Sammlungen/Auto-Opener-Spielständen deutlich.
+      // V427 ULTRA-SAFE: exakt EIN unveraenderlicher Chunk pro Firestore-Write.
+      // Keine Mehrfachmutation in einem Batch. Erst wenn jeder Chunk bestaetigt wurde,
+      // darf das Root-Manifest umgeschaltet werden. Ein Abbruch vorher ist unschaedlich.
       for(let start=0;start<changed.length;start+=CLOUD_WRITE_BATCH_SIZE){
-        await waitForBigCardsCloudWriteLane();
-        const group=changed.slice(start,start+CLOUD_WRITE_BATCH_SIZE),batch=fb.writeBatch(fb.db);
-        for(const i of group){
-          const id=chunkRefs[i];
-          batch.set(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,hash:chunkHashes[i],data:chunks[i],updatedAtMs:savedAt});
-        }
-        await batch.commit();
+        await waitForBigCardsCloudWriteLane(90000);
+        const i=changed[start],id=chunkRefs[i];
+        await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid,"chunks",id),{saveId,index:i,hash:chunkHashes[i],data:chunks[i],updatedAtMs:savedAt});
         if(start+CLOUD_WRITE_BATCH_SIZE<changed.length)await new Promise(r=>setTimeout(r,CLOUD_WRITE_BATCH_PAUSE_MS));
       }
-      if(changed.length)await new Promise(r=>setTimeout(r,900));
-      await waitForBigCardsCloudWriteLane();cloudStage="Root";const payloadChars=chunks.reduce((sum,x)=>sum+x.length,0),root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeRebirths:Math.max(0,Math.floor(lifetimeRebirthCount())),prestigeCount:prestigeCount(),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,cloudFormat:CLOUD_BUCKET_FORMAT,bucketVersion:3,saveId,chunkCount:chunks.length,chunkHashes,chunkRefs,payloadChars,payloadHash:cloudHash(chunks.join("")),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
+      if(changed.length)await new Promise(r=>setTimeout(r,6000));
+      // Direkt vor dem einzigen kritischen Root-Write wird der aktuelle Remote-Root
+      // erneut gelesen. Wenn Sammlung/Kartenbestand gegen den sicheren Stand einbrechen,
+      // wird das Manifest NICHT umgeschaltet.
+      await waitForBigCardsCloudWriteLane(90000);cloudStage="Sicherheitspruefung";await verifyCloudRootBeforeCommitV427(fb,u);
+      cloudStage="Root";const payloadChars=chunks.reduce((sum,x)=>sum+x.length,0),root={uid:u.uid,points:Math.floor(S.points),level:Math.max(1,Math.floor(S.level)),totalRebirths:Math.max(0,Math.floor(S.totalRebirths)),lifetimeRebirths:Math.max(0,Math.floor(lifetimeRebirthCount())),prestigeCount:prestigeCount(),lifetimeScore:Math.max(0,Math.floor(S.lifetimeScore)),collectionDiscovered:collectionCount(),instanceCount:Object.keys(S.instances||{}).length,updatedAtMs:savedAt,schemaVersion:CLOUD_SCHEMA_VERSION,cloudFormat:CLOUD_BUCKET_FORMAT,bucketVersion:3,saveId,chunkCount:chunks.length,chunkHashes,chunkRefs,payloadChars,payloadHash:cloudHash(chunks.join("")),sourceDevice:deviceId(),cloudSavedAt:fb.serverTimestamp()};
       await fb.setDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),root,{merge:true});
       if(force||savedAt-cloudLastProfileWriteAt>=CLOUD_PROFILE_SAVE_INTERVAL_MS){try{cloudStage="Profil";await writeProfile(fb,u);cloudLastProfileWriteAt=savedAt}catch(profileError){console.warn("BigCards leaderboard profile save",profileError)}}
       cloudLastSaveId=saveId;cloudLastRemoteUpdatedAt=savedAt;cloudLastChunkHashes=chunkHashes.slice();cloudLastChunkRefs=chunkRefs.slice();cloudBackoffUntil=0;markCloudCacheVerified(u.uid,saveId,savedAt,savedAt,S);writeLocalState(u.uid,true);if(cloudMutationCounter===mutationAtStart)cloudDirty=false;return true;
@@ -3762,8 +3780,13 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
       const message=String(e?.message||e||"");
       const localSizeError=/Cloud-Bucket|Cloud-Metadaten|Cloud-Speicher zu groß/i.test(message);
       const resourceError=e?.code==="resource-exhausted"||/resource-exhausted|queued writes|maximum allowed queued writes|write stream exhausted/i.test(message);
-      const gateBackoff=e?.code==="firestore-write-backoff";
-      if(localSizeError||resourceError||gateBackoff){
+      const gateBackoff=e?.code==="firestore-write-backoff"||e?.code==="firestore-write-pressure";
+      const safetyStop=e?.code==="bigcards-cloud-safety-stop"||e?.cloudSafety===true;
+      if(safetyStop){
+        cloudDirty=false;cloudMigrationPending=true;cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+CLOUD_RESOURCE_BACKOFF_MS);
+        if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
+        toast("☁ Cloud-Sicherheitsstopp aktiv. Dein Online-Spielstand wurde NICHT ueberschrieben. BigCards muss den Cloud-Stand zuerst erneut verifizieren.",7500);
+      }else if(localSizeError||resourceError||gateBackoff){
         const gateUntil=Number(window.LifeBuilderFirebaseCore?.getWriteGateStatus?.()?.backoffUntil)||0;
         const retryMs=localSizeError?CLOUD_SAVE_DELAY_MS:gateBackoff?Math.max(CLOUD_SAVE_DELAY_MS,Number(e?.retryAfterMs)||0,gateUntil-now()):CLOUD_RESOURCE_BACKOFF_MS;
         cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+Math.max(CLOUD_SAVE_DELAY_MS,retryMs));
@@ -3777,7 +3800,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     }finally{cloudSaving=false;if(cloudDirty&&cloudReady&&!cloudMigrationPending)scheduleCloudSave(cloudFastDirty?CLOUD_SAVE_DELAY_MS:CLOUD_PASSIVE_SAVE_DELAY_MS);}
   }
   function cloudCacheCounts(raw){return {instances:Object.keys(raw?.instances||{}).length,collection:Object.keys(raw?.collection||{}).length};}
-  function markCloudCacheVerified(userId,saveId,remoteUpdatedAtMs,syncedLocalUpdatedAt,raw=S){const c=cloudCacheCounts(raw);writeCloudMeta(userId,{saveId,remoteUpdatedAtMs,syncedLocalUpdatedAt,cacheVerifiedSaveId:String(saveId||""),cacheVerifiedInstances:c.instances,cacheVerifiedCollection:c.collection,cacheVerifiedAt:now()});}
+  function markCloudCacheVerified(userId,saveId,remoteUpdatedAtMs,syncedLocalUpdatedAt,raw=S){const c=cloudCacheCounts(raw),prev=readCloudMeta(userId);writeCloudMeta(userId,{saveId,remoteUpdatedAtMs,syncedLocalUpdatedAt,cacheVerifiedSaveId:String(saveId||""),cacheVerifiedInstances:c.instances,cacheVerifiedCollection:c.collection,cacheVerifiedAt:now(),safetyHighInstances:Math.max(Number(prev?.safetyHighInstances)||0,c.instances),safetyHighCollection:Math.max(Number(prev?.safetyHighCollection)||0,c.collection)});}
   function cloudCacheMatchesManifest(localRaw,meta,root){
     if(!localRaw||typeof localRaw!=="object"||!cloudHasFullSave(root))return false;
     const c=cloudCacheCounts(localRaw),rootCollection=Math.max(0,Math.floor(Number(root.collectionDiscovered)||0));
