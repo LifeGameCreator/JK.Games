@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V427 · Recovery-Safe Cloud + Firestore Ultra Guard */
+/* BigCards.kl – JK.Games Top Game V429 · Smooth Input + Deferred Local Save + Async Cloud Build */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-13-bigcards-v427-recovery-safe-cloud-firestore-ultra-guard";
+  const VERSION = "2026-08-13-bigcards-v429-smooth-input-deferred-save-async-cloud";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -18,7 +18,8 @@
   const LOCAL_DB_NAME = "jk-games-bigcards-kl-cache";
   const LOCAL_DB_VERSION = 1;
   const LOCAL_DB_STORE = "saves";
-  const LOCAL_SAVE_DELAY_MS = 900;
+  const LOCAL_SAVE_DELAY_MS = 8000;
+  const LOCAL_SAVE_MAX_WAIT_MS = 180000;
   const CLOUD_MAX_CHUNKS = 512;
   // V402: Cloud-Chunks werden in stabilen 12er-Gruppen parallel gelesen.
   // Das ist schneller als der alte 6er-Weg, ohne den riskanten V401-IN-Query-Pfad.
@@ -544,7 +545,7 @@
   ]);
 
   const UI={overlay:null,main:null,phone:null,tab:"field",floor:0,collectionTier:0,collectionPage:0,collectionPageMenu:false,collectionSearch:"",rebirthScoreTier:0,selectedSlot:null,selectedCard:null,packReveal:null,role:"player",market:[],marketStats:{},marketStatsLoaded:false,marketStatsLoading:false,leaderboard:[],battleCard:null,battleResult:null,battleSession:null,battleEnemyTimer:0,onlineStatus:"idle",onlineMode:null,onlineMatchId:null,onlineMatch:null,onlinePollTimer:0,onlineBusy:false,onlineQueueHeartbeat:0,onlineMatchHeartbeat:0,onlineResult:null,boss:null,bossPlayers:[],bossLoading:false,bossTeamLoading:false,setSelected:"dragon",setNormalOpen:true,setCrazyOpen:false,fusionMode:"ready",expeditionPickerSlot:0,lastHeader:0,toastTimer:0,autoNoticeTimer:0,autoNoticeDrag:null,vipWheelSpinning:false,vipWheelRotation:0,vipWheelTargetRotation:0,autoLaneSelected:0,autoLaneResults:{},rarityScroll:0,mainScroll:{},drag:null,suppressClickUntil:0,modLoadToken:0,modInventoryData:null,modInventoryPage:0,modInventorySearch:"",modInventoryLoading:false,modCardsLoading:false,modCardGrantSearch:"",modCardGrantType:"all",modCardGrantSelected:"",smartSetupLoading:false,smartSetupToken:0,packCategory:"all",navCollapsed:false,autoOpenerCollapsed:false,hyperTestConfigs:null,tutorialKey:null,tutorialStep:0,tutorialReturnTab:"field"};
-  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastChunkRefs=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false,leaderboardProfileTimer=0,premiumNormalBaseCacheKey="",premiumNormalBaseCacheValue=1,cardPowerRevision=0;
+  let S=null,tickTimer=0,cloudSaveTimer=0,cloudSaveDueAt=0,cloudPollTimer=0,autoTimer=0,lastTick=performance.now(),lastPassivePersistAt=0,cloudReady=false,cloudBooting=false,cloudDirty=false,cloudFastDirty=false,cloudSaving=false,cloudMutationCounter=0,cloudLastSaveId="",cloudLastRemoteUpdatedAt=0,cloudLastChunkHashes=[],cloudLastChunkRefs=[],cloudLastProfileWriteAt=0,cloudBackoffUntil=0,cloudUid="",cloudMigrationPending=false,localDbPromise=null,localSaveTimer=0,localSaveIdleHandle=0,localSaveFirstDirtyAt=0,localSaveUser="",localSaveBusy=false,localSaveQueued=false,leaderboardProfileTimer=0,premiumNormalBaseCacheKey="",premiumNormalBaseCacheValue=1,cardPowerRevision=0,vipPopLastAt=0;
 
   const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
   const esc=(v)=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -575,20 +576,65 @@
     const db=await openLocalDb();return await new Promise((resolve,reject)=>{const tx=db.transaction(LOCAL_DB_STORE,"readwrite");tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||new Error("IndexedDB Schreibfehler"));tx.onabort=()=>reject(tx.error||new Error("IndexedDB Schreiben abgebrochen"));tx.objectStore(LOCAL_DB_STORE).put({id:indexedStateId(userId),updatedAt:Number(state?.updatedAt)||now(),state});});
   }
   function clearLegacyFullCopies(userId=""){try{localStorage.removeItem(SAVE_KEY);if(userId)localStorage.removeItem(localStateKey(userId));}catch{}}
+  function cancelLocalIdleFlushV429(){
+    if(localSaveTimer){clearTimeout(localSaveTimer);localSaveTimer=0;}
+    if(localSaveIdleHandle&&typeof cancelIdleCallback==="function"){try{cancelIdleCallback(localSaveIdleHandle)}catch{}}
+    localSaveIdleHandle=0;
+  }
+  function queueLocalIdleFlushV429(){
+    localSaveTimer=0;
+    const run=()=>{localSaveIdleHandle=0;void flushLocalState(localSaveUser);};
+    if(typeof requestIdleCallback==="function"){
+      localSaveIdleHandle=requestIdleCallback(run,{timeout:2200});
+    }else{
+      localSaveTimer=setTimeout(()=>{localSaveTimer=0;run();},0);
+    }
+  }
   async function flushLocalState(userId=""){
-    if(!S)return false;if(localSaveBusy){localSaveQueued=true;return false}localSaveBusy=true;
-    const target=userId||cloudUid||currentUidSync()||"";let snapshot;
-    try{snapshot=JSON.parse(JSON.stringify(S));await putIndexedState(target,snapshot);clearLegacyFullCopies(target);return true;}
-    catch(e){
+    if(!S)return false;
+    if(localSaveBusy){localSaveQueued=true;return false}
+    localSaveBusy=true;cancelLocalIdleFlushV429();
+    const target=userId||cloudUid||currentUidSync()||"";let ok=false;
+    try{
+      // V429: Kein JSON.stringify + JSON.parse des kompletten 100k+-Kartenstands
+      // mehr auf dem Main-Thread. IndexedDB klont den Wert beim put() selbst.
+      await putIndexedState(target,S);clearLegacyFullCopies(target);ok=true;return true;
+    }catch(e){
       console.warn("BigCards IndexedDB local save",e);
-      // Nur als Notfall genau EINE localStorage-Kopie versuchen. Keine doppelte Vollkopie mehr.
-      try{const json=JSON.stringify(snapshot||S);if(json.length>1500000){console.warn("BigCards local fallback übersprungen: Spielstand ist zu groß für localStorage.");return false}localStorage.setItem(SAVE_KEY,json);return true}catch(fallback){console.warn("BigCards local fallback save",fallback);return false}
-    }finally{localSaveBusy=false;if(localSaveQueued){localSaveQueued=false;setTimeout(()=>flushLocalState(target),120)}}
+      // localStorage bleibt nur ein kleiner Notfall-Fallback. Große Saves werden dort
+      // bewusst nicht hineingezwungen.
+      try{const json=JSON.stringify(S);if(json.length>1500000){console.warn("BigCards local fallback übersprungen: Spielstand ist zu groß für localStorage.");return false}localStorage.setItem(SAVE_KEY,json);ok=true;return true}catch(fallback){console.warn("BigCards local fallback save",fallback);return false}
+    }finally{
+      localSaveBusy=false;
+      if(ok)localSaveFirstDirtyAt=0;
+      if(localSaveQueued){
+        localSaveQueued=false;
+        if(!localSaveFirstDirtyAt)localSaveFirstDirtyAt=now();
+        writeLocalState(target,false);
+      }
+    }
   }
   function writeLocalState(userId="",immediate=false){
-    if(!S)return;localSaveUser=userId||cloudUid||currentUidSync()||localSaveUser||"";
-    if(immediate){clearTimeout(localSaveTimer);localSaveTimer=0;void flushLocalState(localSaveUser);return}
-    if(localSaveTimer)return;localSaveTimer=setTimeout(()=>{localSaveTimer=0;void flushLocalState(localSaveUser);},LOCAL_SAVE_DELAY_MS);
+    if(!S)return;
+    localSaveUser=userId||cloudUid||currentUidSync()||localSaveUser||"";
+    if(immediate){
+      cancelLocalIdleFlushV429();localSaveFirstDirtyAt=0;void flushLocalState(localSaveUser);return;
+    }
+    if(localSaveBusy){localSaveQueued=true;if(!localSaveFirstDirtyAt)localSaveFirstDirtyAt=now();return;}
+    const t=now();if(!localSaveFirstDirtyAt)localSaveFirstDirtyAt=t;
+    const waited=t-localSaveFirstDirtyAt;
+    // Sliding debounce: bei schnellem Klicken/Auto-Opener startet der 8-Sekunden-
+    // Countdown immer neu. Dadurch wird nicht mitten im Eingabestrom gespeichert.
+    if(waited<LOCAL_SAVE_MAX_WAIT_MS){
+      if(localSaveTimer)clearTimeout(localSaveTimer);
+      if(localSaveIdleHandle&&typeof cancelIdleCallback==="function"){try{cancelIdleCallback(localSaveIdleHandle)}catch{}localSaveIdleHandle=0;}
+      localSaveTimer=setTimeout(queueLocalIdleFlushV429,LOCAL_SAVE_DELAY_MS);
+      return;
+    }
+    // Sicherheitscheckpoint spätestens nach 3 Minuten Daueraktivität.
+    // Ist bereits einer geplant, wird er nicht durch weitere Klicks verschoben.
+    if(localSaveTimer||localSaveIdleHandle)return;
+    localSaveTimer=setTimeout(queueLocalIdleFlushV429,50);
   }
   async function readLocalStateForUser(userId){
     const indexed=await readIndexedState(userId);if(indexed&&typeof indexed==="object")return indexed;
@@ -825,7 +871,15 @@ autoOpenerStartCollapsed:false
   function jkVipClickMultiplier(){return (Number(S?.jkVipClickUntil)||0)>now()?clamp(Number(S?.jkVipClickMultiplier)||1,1,10):1;}
   function vipClickGainMultiplier(){return Math.max(1,Math.round(vipWheelMultiplier("clicks")*jkVipClickMultiplier()));}
   function jkBossDamageMultiplier(){return (Number(S?.jkBossDamageUntil)||0)>now()?2:1;}
-  function spawnVipDamagePop(damage,crit=false,special=false){const target=UI.overlay?.querySelector("[data-bc-vip-click]");if(!target)return;const pop=document.createElement("span");pop.className=`bc-vip-damage-pop${crit?" crit":""}${special?" special":""}`;pop.textContent=`${special&&crit?"SPECIAL KRIT ":special?"SPECIAL ":crit?"KRIT ":""}-${fmt(damage)}`;pop.style.left=`${14+Math.random()*72}%`;pop.style.top=`${16+Math.random()*62}%`;pop.style.setProperty("--pop-drift",`${-28+Math.random()*56}px`);target.append(pop);setTimeout(()=>pop.remove(),900);}
+  function spawnVipDamagePop(damage,crit=false,special=false){
+    const target=UI.overlay?.querySelector("[data-bc-vip-click]");if(!target)return;
+    const t=performance.now();
+    // Nur die Animation wird begrenzt – Schaden, Klicks und Krits werden weiterhin
+    // bei JEDEM echten Klick berechnet. Das verhindert hunderte DOM-Popups gleichzeitig.
+    if(!special&&t-vipPopLastAt<38)return;vipPopLastAt=t;
+    const existing=target.querySelectorAll(".bc-vip-damage-pop");for(let i=0;i<Math.max(0,existing.length-14);i++)existing[i]?.remove();
+    const pop=document.createElement("span");pop.className=`bc-vip-damage-pop${crit?" crit":""}${special?" special":""}`;pop.textContent=`${special&&crit?"SPECIAL KRIT ":special?"SPECIAL ":crit?"KRIT ":""}-${fmt(damage)}`;pop.style.left=`${14+Math.random()*72}%`;pop.style.top=`${16+Math.random()*62}%`;pop.style.setProperty("--pop-drift",`${-28+Math.random()*56}px`);target.append(pop);setTimeout(()=>pop.remove(),720);
+  }
   function refreshVipClickerLive(enemy=ensureVipClickerEnemy()){if(!UI.overlay||UI.tab!=="vipClicker"||!enemy)return;const pctHp=clamp(Number(enemy.hp)/Math.max(1,Number(enemy.maxHp))*100,0,100),fill=UI.overlay.querySelector("[data-bc-vip-hp-fill]"),hp=UI.overlay.querySelector("[data-bc-vip-hp-text]"),clicks=UI.overlay.querySelector("[data-bc-vip-click-count]"),charge=UI.overlay.querySelector("[data-bc-vip-special-charge]");if(fill)fill.style.width=`${pctHp}%`;if(hp)hp.textContent=`${fmt(enemy.hp)} / ${fmt(enemy.maxHp)} HP`;if(clicks)clicks.textContent=fmt(S.vipClicks);if(charge){const sp=vipSpecialBy(S.vipClickerSpecialEquipped);charge.textContent=sp?`${fmt(S.vipClickerSpecialCharge)}/${sp.charge}`:"";}}
   function vipSpecialBy(id){return VIP_SPECIAL_ATTACKS.find(x=>x.id===id)||null;}
   function vipSpecialOwned(id){return !!S?.vipClickerSpecialOwned?.[id];}
@@ -2233,7 +2287,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function tick(){if(!S)return;const t=performance.now(),dt=Math.min(2,(t-lastTick)/1000);lastTick=t;if(!UI.overlay)return;updateFeaturedEarnings(now());const stepReset=syncCollectorPointStep(),act=activeInstances(),autoCollect=(S.autoCollectorUntil||0)>now();let pending=0,direct=0,xp=0,room=fieldStorageRemainingPoints();for(const inst of act){const fullPointGain=Math.max(0,effectivePoints(inst)*dt);if(autoCollect||inst.shiny>=3)direct+=fullPointGain;else if(room>0){const accepted=Math.min(room,fullPointGain);pending+=accepted;room-=accepted;}
       // BigCards-XP ist bewusst NICHT an das Point-Speicherlimit gekoppelt. Solange
       // BigCards geöffnet ist, geben aktive Karten ihre volle XP/s weiter.
-      xp+=effectiveXp(inst)*dt;}if(direct){direct*=vipWheelMultiplier("points");S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>700){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();refreshBulkLevelLive();refreshExpeditionCountdowns();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(now()-lastPassivePersistAt>=30000){lastPassivePersistAt=now();persistPassive();}}
+      xp+=effectiveXp(inst)*dt;}if(direct){direct*=vipWheelMultiplier("points");S.points+=direct;S.lifetimePointsEarned+=direct}if(pending)S.pendingPoints+=pending;if(xp)addXp(xp);S.fieldStoredSeconds=0;updateScoreHighWater();S.lastSeen=now();if(t-UI.lastHeader>900){UI.lastHeader=t;refreshHeader();refreshFieldLive();refreshFeaturedLive();refreshBulkLevelLive();refreshExpeditionCountdowns();if(UI.tab==="battle"){const btn=UI.overlay.querySelector("[data-bc-battle-start]"),left=Math.max(0,Math.ceil(((S.battleCooldownUntil||0)-now())/1000));if(btn){btn.disabled=left>0;btn.textContent=left?`Nächster Kampf in ${left}s`:"⚔ Kampf starten";}}}if(stepReset)persist();else if(now()-lastPassivePersistAt>=30000){lastPassivePersistAt=now();persistPassive();}}
   function autoTick(){
     if(!UI.overlay||S.autoOpenerWorkMs<=0)return;const t=now(),runnable=autoActiveLaneIndexes().filter(autoLaneCanRun);if(!runnable.length){S.autoOpenerLastAt=t;refreshAutoOpenerControls();return;}
     const last=Math.max(0,Number(S.autoOpenerLastAt)||t),elapsed=Math.max(0,Math.min(10000,t-last));S.autoOpenerLastAt=t;if(elapsed>0)S.autoOpenerWorkMs=Math.max(0,(Number(S.autoOpenerWorkMs)||0)-elapsed*runnable.length);
@@ -3022,7 +3076,15 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function navItems(){const items=[["field","Spielfeld","🏗️","core"],["packs","Packs","🎴","core"],["collection","Sammlung","📚","core"],["card","Karte","🃏","core"],["battle","Kartenkampf","⚔️","play"],["expedition","Expedition","🧭","play"],["boss","Wochenboss","👹","play"],["sets","Sets","🧩","collect"],["fusion","Fusion","🔬","collect"],["prestige","Prestige","◆","prestige"],["shop","Shop","🛒","trade"],["market","Markt","🏪","trade"],["score","Beste Spieler","🏆","trade"],["tutorial","Tutorial","🎓","help"],["settings","Einstellungen","⚙️","help"]];if(UI.role==="owner")items.push(["mod","Mod","🛠️","staff"]);return items;}
   function renderNav(){const wrap=UI.overlay?.querySelector("[data-bc-nav-wrap]"),nav=UI.overlay?.querySelector("[data-bc-nav]");if(!nav)return;if(wrap)wrap.classList.toggle("collapsed",!!UI.navCollapsed);nav.classList.toggle("owner-nav",UI.role==="owner");nav.classList.toggle("player-nav",UI.role!=="owner");nav.innerHTML=navItems().map(([id,label,icon,group])=>`<button data-bc-tab="${id}" class="nav-${group} ${UI.tab===id?"active":""}"><span>${icon}</span><b>${label}</b></button>`).join("");}
   function renderShell(){return `<div class="bc-shell"><header class="bc-header"><div class="bc-brand"><button class="bc-back" data-bc-close>←</button><div><small>JK.GAMES · TOP GAME</small><h1>BigCards<span>.kl</span></h1><em class="bc-prestige-title-badge" data-bc-prestige-title hidden></em></div></div><div class="bc-head-stats" data-bc-head-stats></div></header><div class="bc-nav-wrap ${UI.navCollapsed?"collapsed":""}" data-bc-nav-wrap><button class="bc-nav-toggle" data-bc-nav-toggle title="Menü ein-/ausfahren">${UI.navCollapsed?"⌄ MENÜ":"⌃ MENÜ"}</button><nav class="bc-nav" data-bc-nav></nav></div><main class="bc-main" data-bc-main></main><div class="bc-toast" data-bc-toast></div></div>`}
-  function refreshHeader(){const el=UI.overlay?.querySelector("[data-bc-head-stats]");if(!el)return;const need=xpNeed(S.level),prod=productionPerSecond();el.innerHTML=`<div><small>POINTS</small><b>${fmt(S.points)}</b></div><div><small>PRODUKTION</small><b>+${fmt(prod)}/s</b></div><div><small>LEVEL</small><b>${S.level}</b><em>${fmt(S.xp)}/${fmt(need)} XP</em></div><div><small>REBIRTH</small><b>${S.totalRebirths} · ×${accountPointRebirthMultiplier().toFixed(2).replace(".",",")}</b></div><div><small>PRESTIGE</small><b>◆ ${prestigeCount()}</b></div><div><small>SAMMLUNG</small><b>${scorePct(overallCollectionScore())}</b></div>`}
+  function refreshHeader(){
+    const el=UI.overlay?.querySelector("[data-bc-head-stats]");if(!el)return;
+    if(el.dataset.liveReady!=="1"){
+      el.innerHTML=`<div><small>POINTS</small><b data-bc-head-points></b></div><div><small>PRODUKTION</small><b data-bc-head-production></b></div><div><small>LEVEL</small><b data-bc-head-level></b><em data-bc-head-xp></em></div><div><small>REBIRTH</small><b data-bc-head-rebirth></b></div><div><small>PRESTIGE</small><b data-bc-head-prestige></b></div><div><small>SAMMLUNG</small><b data-bc-head-collection></b></div>`;
+      el.dataset.liveReady="1";
+    }
+    const need=xpNeed(S.level),prod=productionPerSecond(),set=(sel,value)=>{const node=el.querySelector(sel);if(node&&node.textContent!==value)node.textContent=value;};
+    set("[data-bc-head-points]",fmt(S.points));set("[data-bc-head-production]",`+${fmt(prod)}/s`);set("[data-bc-head-level]",String(S.level));set("[data-bc-head-xp]",`${fmt(S.xp)}/${fmt(need)} XP`);set("[data-bc-head-rebirth]",`${S.totalRebirths} · ×${accountPointRebirthMultiplier().toFixed(2).replace(".",",")}`);set("[data-bc-head-prestige]",`◆ ${prestigeCount()}`);set("[data-bc-head-collection]",scorePct(overallCollectionScore()));
+  }
   function refreshFieldLive(){if(UI.tab!=="field"||!UI.overlay)return;const collected=UI.overlay.querySelector("[data-bc-collect] b"),cap=UI.overlay.querySelector("[data-bc-field-cap]");if(collected)collected.textContent=fmt(S.pendingPoints);if(cap)cap.textContent=fieldStorageLabel();const auto=UI.overlay.querySelector(".bc-auto");if(!auto)return;const timer=auto.querySelector(":scope > b"),button=auto.querySelector("[data-bc-buy-collector]"),remaining=collectorRemainingMinutes();if(timer)timer.textContent=timeLeft(S.autoCollectorUntil);if(button){button.disabled=remaining>=15;button.textContent=remaining>=15?"Point-Verlängerung bei < 15 Min Restzeit":`${fmt(collectorPointPrice())} Points = +1 Min`;}}
   function refreshFeaturedLive(){if(UI.tab!=="card"||!UI.overlay)return;updateFeaturedEarnings(now());const p=UI.overlay.querySelector("[data-bc-feature-pending]"),x=UI.overlay.querySelector("[data-bc-feature-xp]"),pr=UI.overlay.querySelector("[data-bc-feature-rate]"),xr=UI.overlay.querySelector("[data-bc-feature-xp-rate]"),pm=UI.overlay.querySelector("[data-bc-feature-point-meter]"),xm=UI.overlay.querySelector("[data-bc-feature-xp-meter]"),lim=featuredStorageMeta();if(p)p.textContent=fmt(S.featuredPendingPoints);if(x)x.textContent=fmt(S.featuredPendingXp);if(pm)pm.style.width=`${Math.min(100,(Number(S.featuredPendingPoints)||0)/lim.points*100)}%`;if(xm)xm.style.width=`${Math.min(100,(Number(S.featuredPendingXp)||0)/lim.xp*100)}%`;const inst=featuredCard();if(pr)pr.textContent=`+${fmt(featurePointRate(inst))}/s`;if(xr)xr.textContent=`+${fmt(featureXpRate(inst))}/s`;}
   function rememberViewScroll(){if(!UI.overlay)return;const main=UI.main||UI.overlay.querySelector("[data-bc-main]");if(main)UI.mainScroll[UI.tab]=Math.max(0,main.scrollTop||0);const rarity=UI.overlay.querySelector("[data-bc-rarity-tabs]");if(rarity)UI.rarityScroll=Math.max(0,rarity.scrollLeft||0);}
@@ -3562,6 +3624,36 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     if(out.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${out.length} Chunks).`);
     return out;
   }
+  function yieldBigCardsMainThreadV429(){return new Promise(resolve=>setTimeout(resolve,0));}
+  async function buildCloudBucketPayloadsAsyncV429(state){
+    const meta={...state};delete meta.instances;delete meta.collection;
+    const metaText=JSON.stringify({kind:"meta",value:meta});if(utf8Size(metaText)>CLOUD_CHUNK_MAX_BYTES)throw new Error("Cloud-Metadaten sind zu groß. Bitte Support melden.");
+    const base=[metaText],overflow=[],instBuckets=Array.from({length:CLOUD_INSTANCE_BUCKETS},()=>({}));
+    let n=0;
+    for(const key in (state.instances||{})){
+      if(!Object.prototype.hasOwnProperty.call(state.instances,key))continue;
+      instBuckets[cloudBucketIndex(key,CLOUD_INSTANCE_BUCKETS)][key]=compactCloudInstance(state.instances[key]);
+      if(++n%900===0)await yieldBigCardsMainThreadV429();
+    }
+    for(let i=0;i<CLOUD_INSTANCE_BUCKETS;i++){
+      const split=splitCloudBucket("instances",i,instBuckets[i]);base.push(split.primary);overflow.push(...split.overflow);
+      if(i%3===2)await yieldBigCardsMainThreadV429();
+    }
+    const colBuckets=Array.from({length:CLOUD_COLLECTION_BUCKETS},()=>({}));n=0;
+    for(const key in (state.collection||{})){
+      if(!Object.prototype.hasOwnProperty.call(state.collection,key))continue;
+      colBuckets[cloudBucketIndex(key,CLOUD_COLLECTION_BUCKETS)][key]=state.collection[key];
+      if(++n%900===0)await yieldBigCardsMainThreadV429();
+    }
+    for(let i=0;i<CLOUD_COLLECTION_BUCKETS;i++){
+      const split=splitCloudBucket("collection",i,colBuckets[i]);base.push(split.primary);overflow.push(...split.overflow);
+      if(i%3===2)await yieldBigCardsMainThreadV429();
+    }
+    const out=base.concat(overflow);
+    if(base.length!==CLOUD_BUCKET_CHUNKS)throw new Error("Cloud-Basis-Bucket-Anzahl stimmt nicht");
+    if(out.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${out.length} Chunks).`);
+    return out;
+  }
   function cloudHasFullSave(root){return Number(root?.schemaVersion)>=CLOUD_MIN_SCHEMA_VERSION&&typeof root?.saveId==="string"&&Number(root?.chunkCount)>0;}
   function meaningfulLocalProgress(raw){if(!raw||typeof raw!=="object")return false;return Object.keys(raw.instances||{}).length>0||Object.keys(raw.collection||{}).length>0||Object.keys(raw.exclusiveCollection||{}).length>0||Object.keys(raw.vipCollection||{}).length>0||Object.keys(raw.winCollection||{}).length>0||Object.keys(raw.hyperCollection||{}).length>0||Number(raw.points)>1000||Number(raw.level)>1||Number(raw.totalRebirths)>0||Number(raw.lifetimeScore)>0;}
   function mergeLegacyCheckpoint(raw,root){const out=Object.assign(defaultState(),raw||{});if(root){out.points=Math.max(0,Number(root.points)||out.points||1000);out.level=Math.max(1,Number(root.level)||out.level||1);out.totalRebirths=Math.max(0,Number(root.totalRebirths)||out.totalRebirths||0);out.lifetimeScore=Math.max(Number(out.lifetimeScore)||0,Number(root.lifetimeScore)||0);out.updatedAt=Math.max(Number(out.updatedAt)||0,Number(root.updatedAtMs)||0);}return out;}
@@ -3749,7 +3841,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
       updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=419;
-      const chunks=buildCloudBucketPayloads(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
+      const chunks=await buildCloudBucketPayloadsAsyncV429(S),chunkHashes=chunks.map(cloudHash);if(chunks.length>CLOUD_MAX_CHUNKS)throw new Error(`BigCards-Spielstand ist für den Cloud-Speicher zu groß (${chunks.length} Chunks).`);
       const saveId=`v370-${savedAt.toString(36)}-${Math.random().toString(36).slice(2,9)}`;cloudStage="Buckets";
       const chunkRefs=new Array(chunks.length),changed=[];
       for(let i=0;i<chunks.length;i++){
@@ -3845,7 +3937,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function onCloudFocus(){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}
   function onCloudVisibility(){if(document.visibilityState==="visible"){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}else{S.lastSeen=now();writeLocalState(cloudUid||currentUidSync(),true)}}
   function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),CLOUD_POLL_MS);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
-  function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,250);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
+  function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,400);clearInterval(autoTimer);autoTimer=setInterval(autoTick,2400);startCloudWatchers();}
   async function initializeCloudSession(localPreviewPromise=null){
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;
     const preview=localPreviewPromise?await localPreviewPromise:null,fb=await firebase(),u=await currentUser();
