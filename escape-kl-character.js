@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl V434 – human player + native JK.Games locomotion animations.
+/* Escape.kl V436 – human player + native JK.Games locomotion animations.
    Uses the existing man/woman idle/walk/run GLBs. A detailed procedural human
    stays available as a hard fallback so Escape.kl never fails to open. */
 
 const ASSETS = Object.freeze({
-  male:Object.freeze({walk:'./man-walk.glb?v=20260813-escape-v434',run:'./man-run.glb?v=20260813-escape-v434',idle:'./man-idle-v325.glb?v=20260813-escape-v434'}),
-  female:Object.freeze({walk:'./woman-walk.glb?v=20260813-escape-v434',run:'./woman-run.glb?v=20260813-escape-v434',idle:'./woman-idle-v325.glb?v=20260813-escape-v434'})
+  male:Object.freeze({walk:'./man-walk.glb?v=20260813-escape-v436',run:'./man-run.glb?v=20260813-escape-v436',idle:'./man-idle-v325.glb?v=20260813-escape-v436'}),
+  female:Object.freeze({walk:'./woman-walk.glb?v=20260813-escape-v436',run:'./woman-run.glb?v=20260813-escape-v436',idle:'./woman-idle-v325.glb?v=20260813-escape-v436'})
 });
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -143,16 +143,16 @@ function animateFallback(f,kin,dt,t){
   const ease=1-Math.exp(-dt*12);
   const setRot=(o,x=0,y=0,z=0)=>{o.rotation.x+=((x)-o.rotation.x)*ease;o.rotation.y+=((y)-o.rotation.y)*ease;o.rotation.z+=((z)-o.rotation.z)*ease;};
   if(!grounded){
-    // V435: interne, symmetrische Sprungpose. Beide Knie gehen kontrolliert nach
-    // vorne, die Füße bleiben getrennt und die Arme werden nur leicht angehoben.
-    // Keine Stand-/Idle-Animation mischt hier hinein, daher kein Arm-Zittern.
+    // V436: natürliche Obby-Sprungpose. Oberschenkel bleiben fast neutral;
+    // die sichtbare Beugung passiert hauptsächlich im Knie. Die Arme gehen
+    // leicht nach vorn/oben, bleiben aber eng am Körper statt seitlich abzuspreizen.
     const rising=(kin.verticalVelocity||0)>-.25;
-    const hip=rising?.48:.36,knee=rising?.72:.56,arm=rising?-.58:-.36;
-    setRot(f.arms.L.shoulder,arm,0,-.10);setRot(f.arms.R.shoulder,arm,0,.10);
-    setRot(f.arms.L.elbow,-.14,0,-.04);setRot(f.arms.R.elbow,-.14,0,.04);
-    setRot(f.legs.L.hip,hip,0,.08);setRot(f.legs.R.hip,hip,0,-.08);
+    const hip=rising?.14:.09,knee=rising?.88:.68,arm=rising?-.34:-.24;
+    setRot(f.arms.L.shoulder,arm,0,-.025);setRot(f.arms.R.shoulder,arm,0,.025);
+    setRot(f.arms.L.elbow,-.08,0,-.015);setRot(f.arms.R.elbow,-.08,0,.015);
+    setRot(f.legs.L.hip,hip,0,.025);setRot(f.legs.R.hip,hip,0,-.025);
     setRot(f.legs.L.knee,knee);setRot(f.legs.R.knee,knee);
-    setRot(f.torso,rising?.055:.10);f.pelvis.position.y=.72;
+    setRot(f.torso,rising?.025:.055);f.pelvis.position.y=.72;
   }else if(moving){
     setRot(f.arms.L.shoulder,opposite*amp*.78,0,-.05);setRot(f.arms.R.shoulder,wave*amp*.78,0,.05);
     setRot(f.arms.L.elbow,Math.max(0,-opposite)*.42);setRot(f.arms.R.elbow,Math.max(0,-wave)*.42);
@@ -182,15 +182,15 @@ function collectBones(root){
 }
 function airPose(native,kin,dt){
   const rising=(kin.verticalVelocity||0)>-.25,alpha=1-Math.exp(-dt*18);
-  // V435: echte interne Sprungpose, vollkommen symmetrisch. Beine werden nach
-  // vorn angewinkelt, mit leichtem Abstand zueinander; Arme nur moderat hoch.
-  const hip=rising?.52:.39,knee=rising?.78:.60,arm=rising?-.60:-.38;
+  // V436: Kniebeugung statt "Sitzsprung". Die Oberschenkel werden nur minimal
+  // nach vorn genommen; Knie klappen kontrolliert an, Arme bleiben körpernah.
+  const hip=rising?.12:.07,knee=rising?.92:.70,arm=rising?-.32:-.22;
   const targets=[
-    [native.bones.armL,arm,0,-.10],[native.bones.armR,arm,0,.10],
-    [native.bones.foreL,-.14,0,-.03],[native.bones.foreR,-.14,0,.03],
-    [native.bones.thighL,hip,0,.075],[native.bones.thighR,hip,0,-.075],
+    [native.bones.armL,arm,0,-.022],[native.bones.armR,arm,0,.022],
+    [native.bones.foreL,-.07,0,-.012],[native.bones.foreR,-.07,0,.012],
+    [native.bones.thighL,hip,0,.018],[native.bones.thighR,hip,0,-.018],
     [native.bones.calfL,knee,0,0],[native.bones.calfR,knee,0,0],
-    [native.bones.spine,rising?.055:.10,0,0]
+    [native.bones.spine,rising?.025:.055,0,0]
   ];
   for(const [bone,x,y,z] of targets){if(!bone)continue;const base=bone.userData.escapeBindQuaternion;if(!base)continue;const q=base.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z)));bone.quaternion.slerp(q,alpha);}
 }
@@ -222,7 +222,7 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
     if(controller.mode!=='native'||!controller.native){animateFallback(fallback,kin,dt,t);return;}
     const n=controller.native,treadmill=!!kin.treadmill;
     const wanted=!grounded?'air':treadmill?'run':!moving?'idle':kin.sprint||speed>7.5?'run':'walk';
-    // V435: In der Luft wird KEIN Idle/Walk/Run-Clip weiter ausgewertet. Genau das
+    // V436: In der Luft wird KEIN Idle/Walk/Run-Clip weiter ausgewertet. Genau das
     // hat zuvor die Arme jedes Frame gegen die manuelle Sprungpose gezogen und das
     // sichtbare Zittern verursacht.
     if(wanted==='air'){

@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS } from './escape-kl-worlds.js?v=20260813-escape-v435';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260813-escape-v435';
-import { createEscapeCharacter } from './escape-kl-character.js?v=20260813-escape-v435';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS } from './escape-kl-worlds.js?v=20260813-escape-v436';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260813-escape-v436';
+import { createEscapeCharacter } from './escape-kl-character.js?v=20260813-escape-v436';
 
-/* Escape.kl – JK.Games Top Game V435 · professional movement/world/shop polish */
-const VERSION = '2026-08-13-v435';
+/* Escape.kl – JK.Games Top Game V436 · reliable jump + walk-through portals + performance polish */
+const VERSION = '2026-08-13-v436';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -23,30 +23,32 @@ const TRAILS = Object.freeze([
   {id:'cyan',name:'Cyan Key Trail',cost:3,color:0x58e6ff},
   {id:'violet',name:'Glitch Trail',cost:8,color:0x9c6cff},
   {id:'gold',name:'Golden ESC Trail',cost:15,color:0xffcf55},
+  {id:'electric',name:'Electric Key Trail',cost:30,color:0x73a7ff},
+  {id:'toxic',name:'Toxic Keyboard Trail',cost:50,color:0x7cff72},
   {id:'galaxy',name:'Galaxy Keyboard Trail',cost:0,color:0xbd78ff,jk:true}
 ]);
 
 const G = {
-  overlay:null, scene:null, camera:null, renderer:null, clock:new THREE.Clock(), raf:0,
+  overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
   player:null, playerRoot:null, character:null, trail:null, trailPoints:[],
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false,
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
-  keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,
+  keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
   yaw:0, pitch:.32, camDistance:7.2, pointer:null,
   keyDown:null,keyUp:null,resizeHandler:null,pointerMove:null,pointerUp:null,
   lastGroundPos:new THREE.Vector3(), speedDistanceCarry:0, trainingCarry:0,
   prompt:null, activeInteractable:null, toastTimer:0, paused:false, modalOpen:false,
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
-  materials:new Map(), geometries:new Map(), textures:new Map(),
+  materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
   tmpV:new THREE.Vector3(), tmpV2:new THREE.Vector3(),tmpV3:new THREE.Vector3()
 };
 
 function defaultProgress(){
   return {
-    version:3,speed:0,wins:0,rebirths:0,speedUpgrade:0,
+    version:4,speed:0,wins:0,rebirths:0,speedUpgrade:0,
     trail:'none',ownedTrails:['none'],worldsUnlocked:['keyboard-lab'],
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
     lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,lastPlayedAt:Date.now()
@@ -72,7 +74,7 @@ function normalizeProgress(raw){
   d.dailyQuest=d.dailyQuest&&typeof d.dailyQuest==='object'?d.dailyQuest:null;
   d.jkTreadmillTier=Math.max(0,Math.min(2,Math.floor(Number(d.jkTreadmillTier)||0)));
   d.jkSpeedBoostUntil=Math.max(0,Number(d.jkSpeedBoostUntil)||0);
-  d.version=3;
+  d.version=4;
   return d;
 }
 function loadProgress(){
@@ -120,15 +122,17 @@ function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoi
   let top=mat(`top-${color}`,{color,roughness:.48,metalness:.1});
   if(label){top=new THREE.MeshStandardMaterial({map:canvasTexture(`key-${label}-${color}`,label,`#${new THREE.Color(color).getHexString()}`),roughness:.46,metalness:.06});G.materials.set(`labelmat-${label}-${color}-${G.platforms.length}`,top)}else if(blink){top=top.clone();G.materials.set(`blink-top-${color}-${G.platforms.length}`,top)}
   const mesh=new THREE.Mesh(geo(`box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),[side,side,top,side,side,side]);mesh.position.set(x,y,z);mesh.castShadow=kind==='hub'||kind==='shop-floor'||kind==='start'||kind==='finish';mesh.receiveShadow=true;G.scene.add(mesh);
-  const p={mesh,w,h,d,label,base:new THREE.Vector3(x,y,z),motion,blink,active:true,checkpoint,stage,finish,kind,hub,lastPos:new THREE.Vector3(x,y,z),delta:new THREE.Vector3(),press:0,lastContactAt:0};mesh.userData.escapePlatform=p;G.platforms.push(p);return p;
+  const p={mesh,w,h,d,label,base:new THREE.Vector3(x,y,z),motion,blink,active:true,checkpoint,stage,finish,kind,hub,scope:G.buildScope,lastPos:new THREE.Vector3(x,y,z),delta:new THREE.Vector3(),press:0,lastContactAt:0};tagScope(mesh,p.scope);mesh.userData.escapePlatform=p;G.platforms.push(p);return p;
 }
-function addSign(text,pos,color=0x58ddff,scale=1){const tex=canvasTexture(`sign-${text}-${color}`,text,'#07101b','#ffffff');const m=new THREE.MeshBasicMaterial({map:tex,transparent:false,toneMapped:false,side:THREE.FrontSide});G.materials.set(`signmat-${text}-${G.decorative.length}`,m);const plane=new THREE.Mesh(geo(`sign-${3.2*scale}-${1.25*scale}`,()=>new THREE.PlaneGeometry(3.2*scale,1.25*scale)),m);plane.position.copy(pos);plane.rotation.y=pos.z>10?Math.PI:0;G.scene.add(plane);G.decorative.push(plane);return plane;}
-function boxDeco(x,y,z,w,h,d,color,emissive=0){const m=mat(`deco-${color}-${emissive}`,{color,emissive,emissiveIntensity:emissive?.35:0,roughness:.65,metalness:.12});const o=new THREE.Mesh(geo(`deco-box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),m);o.position.set(x,y,z);o.castShadow=false;o.receiveShadow=true;G.scene.add(o);G.decorative.push(o);return o;}
-function addInteractable(id,label,x,y,z,radius,onUse){const marker={id,label,pos:new THREE.Vector3(x,y,z),radius,onUse};G.interactables.push(marker);return marker;}
-function addCylinderDeco(x,y,z,rTop,rBottom,h,color,emissive=0,segments=16){const m=mat(`cyl-${color}-${emissive}`,{color,emissive,emissiveIntensity:emissive?.45:0,roughness:.52,metalness:.18});const o=new THREE.Mesh(geo(`cyl-${rTop}-${rBottom}-${h}-${segments}`,()=>new THREE.CylinderGeometry(rTop,rBottom,h,segments)),m);o.position.set(x,y,z);o.castShadow=false;o.receiveShadow=true;G.scene.add(o);G.decorative.push(o);return o;}
-function addRingDeco(x,y,z,r,tube,color,rotX=Math.PI/2){const m=mat(`ring-${color}`,{color,emissive:color,emissiveIntensity:.72,roughness:.36,metalness:.28});const o=new THREE.Mesh(geo(`ring-${r}-${tube}`,()=>new THREE.TorusGeometry(r,tube,8,28)),m);o.position.set(x,y,z);o.rotation.x=rotX;o.castShadow=false;G.scene.add(o);G.decorative.push(o);return o;}
-function addGlowLight(x,y,z,color=0x67e8ff,intensity=1.4,distance=11){const l=new THREE.PointLight(color,intensity,distance,2);l.position.set(x,y,z);G.scene.add(l);G.decorative.push(l);return l;}
-function addCollider(x,z,w,d){G.colliders.push({x,z,w,d});}
+function tagScope(object,scope=G.buildScope){if(object?.userData)object.userData.escapeScope=scope;return object;}
+function addSign(text,pos,color=0x58ddff,scale=1){const tex=canvasTexture(`sign-${text}-${color}`,text,'#07101b','#ffffff');const m=new THREE.MeshBasicMaterial({map:tex,transparent:false,toneMapped:false,side:THREE.FrontSide});G.materials.set(`signmat-${text}-${G.decorative.length}`,m);const plane=tagScope(new THREE.Mesh(geo(`sign-${3.2*scale}-${1.25*scale}`,()=>new THREE.PlaneGeometry(3.2*scale,1.25*scale)),m));plane.position.copy(pos);plane.rotation.y=pos.z>10?Math.PI:0;G.scene.add(plane);G.decorative.push(plane);return plane;}
+function boxDeco(x,y,z,w,h,d,color,emissive=0){const m=mat(`deco-${color}-${emissive}`,{color,emissive,emissiveIntensity:emissive?.35:0,roughness:.65,metalness:.12});const o=tagScope(new THREE.Mesh(geo(`deco-box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),m));o.position.set(x,y,z);o.castShadow=false;o.receiveShadow=true;G.scene.add(o);G.decorative.push(o);return o;}
+function addInteractable(id,label,x,y,z,radius,onUse){const marker={id,label,pos:new THREE.Vector3(x,y,z),radius,onUse,scope:G.buildScope};G.interactables.push(marker);return marker;}
+function addAutoTrigger(id,x,z,w,d,onEnter){const trigger={id,x,z,w,d,onEnter,scope:G.buildScope,inside:false};G.autoTriggers.push(trigger);return trigger;}
+function addCylinderDeco(x,y,z,rTop,rBottom,h,color,emissive=0,segments=16){const m=mat(`cyl-${color}-${emissive}`,{color,emissive,emissiveIntensity:emissive?.45:0,roughness:.52,metalness:.18});const o=tagScope(new THREE.Mesh(geo(`cyl-${rTop}-${rBottom}-${h}-${segments}`,()=>new THREE.CylinderGeometry(rTop,rBottom,h,segments)),m));o.position.set(x,y,z);o.castShadow=false;o.receiveShadow=true;G.scene.add(o);G.decorative.push(o);return o;}
+function addRingDeco(x,y,z,r,tube,color,rotX=Math.PI/2){const m=mat(`ring-${color}`,{color,emissive:color,emissiveIntensity:.72,roughness:.36,metalness:.28});const o=tagScope(new THREE.Mesh(geo(`ring-${r}-${tube}`,()=>new THREE.TorusGeometry(r,tube,8,28)),m));o.position.set(x,y,z);o.rotation.x=rotX;o.castShadow=false;G.scene.add(o);G.decorative.push(o);return o;}
+function addGlowLight(x,y,z,color=0x67e8ff,intensity=1.4,distance=11){const l=tagScope(new THREE.PointLight(color,intensity,distance,2));l.position.set(x,y,z);G.scene.add(l);G.decorative.push(l);return l;}
+function addCollider(x,z,w,d){G.colliders.push({x,z,w,d,scope:G.buildScope});}
 function resolveHubColliders(prevX,prevZ){
   if(G.world!=='hub')return;
   G.pos.x=Math.max(-26.65,Math.min(26.65,G.pos.x));G.pos.z=Math.max(-26.65,Math.min(26.65,G.pos.z));
@@ -146,9 +150,22 @@ function soundFinish(){[0,100,210,330].forEach((ms,i)=>setTimeout(()=>tone([392,
 function setupScene(){
   const canvas=G.overlay.querySelector('canvas');G.renderer=new THREE.WebGLRenderer({canvas,antialias:(window.devicePixelRatio||1)<2,powerPreference:'high-performance'});G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.05;G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0x07111d);G.scene.fog=new THREE.Fog(0x07111d,38,210);G.camera=new THREE.PerspectiveCamera(63,1,.1,360);G.scene.add(new THREE.HemisphereLight(0xbfdcff,0x182010,1.55));const sun=new THREE.DirectionalLight(0xffe1b5,2.1);sun.position.set(-28,46,18);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-70;sun.shadow.camera.right=70;sun.shadow.camera.top=80;sun.shadow.camera.bottom=-80;G.scene.add(sun);
-  buildHub();buildRaceCourse();buildKeyboardLabWorld({addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,returnHub:()=>setWorld('hub')});createPlayer();resize();setWorld('hub',true);updateHud(true);
+  G.buildScope='hub';buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='keyboard-lab';buildKeyboardLabWorld({addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,returnHub:()=>setWorld('hub')});G.buildScope='hub';createPlayer();resize();setWorld('hub',true);updateHud(true);
 }
-function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];}
+function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.autoTriggers=[];G.triggerLocks.clear();}
+function applyWorldVisibility(){
+  for(const p of G.platforms)p.mesh.visible=p.scope===G.world;
+  for(const d of G.decorative){const scope=d?.userData?.escapeScope;if(scope)d.visible=scope===G.world;}
+  for(const f of G.portalFx){const scope=f?.userData?.escapeScope||'hub';f.visible=scope===G.world;}
+}
+function checkAutoTriggers(){
+  for(const tr of G.autoTriggers){
+    if(tr.scope!==G.world){tr.inside=false;continue}
+    const inside=Math.abs(G.pos.x-tr.x)<=tr.w/2&&Math.abs(G.pos.z-tr.z)<=tr.d/2;
+    if(inside&&!tr.inside){tr.inside=true;try{tr.onEnter?.()}catch(error){console.warn('Escape.kl Auto-Trigger',tr.id,error)}}
+    else if(!inside)tr.inside=false;
+  }
+}
 function buildHub(){
   addPlatform({x:0,y:0,z:0,w:56,h:.5,d:56,color:0x13243b,kind:'hub',hub:true});
   // Floor inlays make the hub feel like a giant illuminated keyboard deck.
@@ -166,21 +183,35 @@ function buildHub(){
   for(const sx of[9.1,12,14.9]){boxDeco(sx,2.6,-4.9,1.65,.12,.25,0xf0c85c,0x745814);boxDeco(sx,3.3,-4.9,1.65,.12,.25,0x60ddff,0x164c67);}
   addSign('SPEED SHOP',new THREE.Vector3(12,4.4,3.52),0xf6c85b,1.02);addGlowLight(12,3.5,-1,0xffd36a,1.35,12);addInteractable('shop','Am Tresen einkaufen',12,1.05,-1.9,4.1,()=>{soundKey('SHOP');openShop()});
 
-  // Treadmills mirror the Keyboard-Escape rhythm: standing on one trains while the runner animation plays in place.
+  // Sport-Laufbänder: kurzer Gurt, Seitenrahmen, Frontbügel und Konsole.
   const treadmillDefs=[
-    {name:'FREE ×1',mult:1,tier:0,color:0x18524f,x:-14.35},
-    {name:'GOLD ×3',mult:3,tier:1,color:0x82621f,x:-12},
-    {name:'DIAMOND ×9',mult:9,tier:2,color:0x296b88,x:-9.65}
+    {name:'FREE ×1',mult:1,tier:0,color:0x19544f,x:-15.2},
+    {name:'GOLD ×3',mult:3,tier:1,color:0x82621f,x:-11.7},
+    {name:'DIAMOND ×9',mult:9,tier:2,color:0x296b88,x:-8.2}
   ];
-  for(const def of treadmillDefs){const tr=addPlatform({x:def.x,y:.38,z:0,w:1.9,h:.28,d:11.5,color:def.color,label:def.name,kind:'training',hub:true});tr.training=true;tr.trainingMult=def.mult;tr.trainingTier=def.tier;tr.trainingName=def.name;boxDeco(def.x-.82,.72,0,.08,.56,11.6,0x45e4d2,0x155d58);boxDeco(def.x+.82,.72,0,.08,.56,11.6,0x45e4d2,0x155d58);}
-  boxDeco(-16.0,1.75,0,.22,3.5,12.1,0x36cbbb,0x115d58);boxDeco(-8.0,1.75,0,.22,3.5,12.1,0x36cbbb,0x115d58);addSign('SPEED TRAINING',new THREE.Vector3(-12,3.75,5.95),0x62f2e1,.98);addGlowLight(-12,2.8,0,0x4ef1db,.92,12);
+  for(const def of treadmillDefs){
+    const tr=addPlatform({x:def.x,y:.36,z:.25,w:2.55,h:.22,d:5.35,color:def.color,label:'',kind:'training',hub:true});tr.training=true;tr.trainingMult=def.mult;tr.trainingTier=def.tier;tr.trainingName=def.name;
+    // Belt + deck
+    boxDeco(def.x,.50,.25,2.2,.08,4.75,0x111820);for(let sl=-1.85;sl<=1.85;sl+=.74)boxDeco(def.x,.555,.25+sl,2.02,.025,.045,0x4a5966);
+    // Low side rails along the belt
+    boxDeco(def.x-1.22,.72,.25,.12,.32,5.2,0x263745);boxDeco(def.x+1.22,.72,.25,.12,.32,5.2,0x263745);
+    // Front upright + hand rail/console, like a gym treadmill
+    for(const sx of[-.92,.92])boxDeco(def.x+sx,1.48,2.48,.12,1.95,.14,0x334a59);
+    boxDeco(def.x,2.28,2.48,2.05,.13,.16,0x3d5667);boxDeco(def.x,2.02,2.38,1.18,.46,.28,0x101b25,0x0c2c3a);
+    boxDeco(def.x,2.03,2.20,.82,.22,.06,def.color,def.color);addSign(def.name,new THREE.Vector3(def.x,2.92,2.56),def.color,.44);
+  }
+  addSign('SPEED TRAINING',new THREE.Vector3(-11.7,4.0,3.1),0x62f2e1,.92);addGlowLight(-11.7,2.8,.2,0x4ef1db,.82,11);
 
-  // Rebirth altar with energy rings.
-  addPlatform({x:-11,y:.45,z:-15,w:7,h:.5,d:7,color:0x542c72,label:'REBIRTH',kind:'altar',hub:true});addCollider(-11,-15,2.9,2.9);addCylinderDeco(-11,1.1,-15,1.15,1.45,1.35,0x6c3a91,0x32195e,18);addCylinderDeco(-11,2.5,-15,.42,.55,2.3,0x9f68ff,0x452073,16);addRingDeco(-11,3.05,-15,1.45,.07,0xbb78ff,Math.PI/2);addRingDeco(-11,3.05,-15,1.05,.045,0x69dcff,Math.PI/2);addGlowLight(-11,3,-15,0xb76cff,1.7,13);addInteractable('rebirth','Rebirth-Altar benutzen',-11,1,-15,4.7,()=>{soundKey('REBIRTH');openRebirth()});
+  // Rebirth-Station: Beschriftung steht vor dem Spieler und wird nicht mehr vom Altar verdeckt.
+  addPlatform({x:-11,y:.45,z:-15,w:7,h:.5,d:7,color:0x542c72,label:'',kind:'altar',hub:true});addCollider(-11,-15,2.9,2.9);
+  boxDeco(-11,2.35,-18.15,7.4,4.4,.34,0x21152f);addCollider(-11,-18.15,7.4,.34);addSign('REBIRTH',new THREE.Vector3(-11,3.65,-17.94),0xc694ff,.86);addSign('PERMANENT SPEED',new THREE.Vector3(-11,2.48,-17.92),0x69dcff,.48);
+  addCylinderDeco(-11,1.1,-15,1.15,1.45,1.35,0x6c3a91,0x32195e,18);addCylinderDeco(-11,2.5,-15,.42,.55,2.3,0x9f68ff,0x452073,16);addRingDeco(-11,3.05,-15,1.45,.07,0xbb78ff,Math.PI/2);addRingDeco(-11,3.05,-15,1.05,.045,0x69dcff,Math.PI/2);addGlowLight(-11,3,-15,0xb76cff,1.55,12);addInteractable('rebirth','Rebirth öffnen',-11,1,-13.0,4.0,()=>{soundKey('REBIRTH');openRebirth()});
 
-  // World 1 portal: multi-layer frame, animated plane, real lighting.
-  boxDeco(0,3.2,-18,10,.45,.8,0x1a6f84,0x124c63);boxDeco(-4.65,1.65,-18,.62,6.5,.8,0x1a6f84,0x124c63);boxDeco(4.65,1.65,-18,.62,6.5,.8,0x1a6f84,0x124c63);addCollider(-4.65,-18,.62,.9);addCollider(4.65,-18,.62,.9);addRingDeco(0,2.75,-17.86,3.05,.08,0x5be9ff,0);addGlowLight(0,2.8,-17.4,0x45dfff,1.8,14);
-  const portal=new THREE.Mesh(new THREE.PlaneGeometry(8.1,5.7),new THREE.MeshBasicMaterial({color:0x4ddffc,transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false}));portal.position.set(0,2.85,-18);portal.rotation.y=Math.PI;G.scene.add(portal);G.portalFx.push(portal);addSign('WORLD 1 · KEYBOARD LAB',new THREE.Vector3(0,5.85,-17.55),0x56ddff,.82);addInteractable('world1','Keyboard Lab betreten',0,1,-16.6,6.3,()=>{soundKey('ENTER');enterWorld('keyboard-lab')});
+  // World 1 portal: offener Durchgang. Kein E mehr – einfach hindurchlaufen.
+  boxDeco(0,3.2,-18,10,.45,.8,0x1a6f84,0x124c63);boxDeco(-4.65,1.65,-18,.62,6.5,.8,0x1a6f84,0x124c63);boxDeco(4.65,1.65,-18,.62,6.5,.8,0x1a6f84,0x124c63);addCollider(-4.65,-18,.62,.9);addCollider(4.65,-18,.62,.9);addRingDeco(0,2.75,-17.86,3.05,.08,0x5be9ff,0);addGlowLight(0,2.8,-17.4,0x45dfff,1.55,13);
+  const portal=tagScope(new THREE.Mesh(new THREE.PlaneGeometry(8.1,5.7),new THREE.MeshBasicMaterial({color:0x4ddffc,transparent:true,opacity:.11,side:THREE.DoubleSide,depthWrite:false})));portal.position.set(0,2.85,-18);portal.rotation.y=Math.PI;G.scene.add(portal);G.portalFx.push(portal);addSign('WORLD 1 · KEYBOARD LAB',new THREE.Vector3(0,5.85,-17.55),0x56ddff,.82);addSign('DURCHLAUFEN = START',new THREE.Vector3(0,4.55,-17.53),0xf7c95b,.48);
+  boxDeco(-2.0,.50,-15.6,.10,.05,4.0,0x42dff5,0x16839b);boxDeco(2.0,.50,-15.6,.10,.05,4.0,0x42dff5,0x16839b);
+  addAutoTrigger('world1-walkthrough',0,-18.0,7.8,2.2,()=>{soundKey('ENTER');enterWorld('keyboard-lab')});
 
   // Prepared future portals – visually distinct but deliberately locked.
   const futures=[['CANDY KEYS',14,-16,0xde6ba8],['TOXIC',21,-8,0x70db65],['CYBER',21,8,0x6d74ff]];for(const [name,x,z,c] of futures){addPlatform({x,y:.3,z,w:5.6,h:.35,d:5.6,color:c,label:'LOCK',kind:'locked',hub:true});addCylinderDeco(x,1.55,z,.12,.18,2.7,c,c,10);addSign(name,new THREE.Vector3(x,2.75,z+2.92),c,.62);}
@@ -211,18 +242,20 @@ function createPlayer(){
 function setTrailColor(){const t=TRAILS.find(x=>x.id===G.state.trail)||TRAILS[0];if(G.trail?.material)G.trail.material.color.setHex(t.color);}
 
 function setWorld(id,initial=false){
-  G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;
+  G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;
+  applyWorldVisibility();
   if(id==='hub'){
-    G.stage=0;G.deaths=0;G.runStartedAt=0;G.checkpoint={x:0,y:1.08,z:8};teleport(0,1.08,8);toast(initial?'Willkommen bei Escape.kl · Hub, Training, Shop und Keyboard Lab sind direkt begehbar.':'Zurück im Escape.kl Hub.','good',2600);
+    G.stage=0;G.deaths=0;G.runStartedAt=0;G.runFurthestZ=8;G.checkpoint={x:0,y:1.10,z:8};teleport(0,1.10,8);toast(initial?'Willkommen bei Escape.kl · alle Bereiche sind direkt im Hub erreichbar.':'Zurück im Escape.kl Hub.','good',2300);
   }else if(id==='keyboard-lab'){
-    G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.checkpoint=null;teleport(0,1.5,-70);toast('Keyboard Lab gestartet · ein Fall beendet den Versuch und setzt dich zum Start zurück.','good',3000);
+    G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=-70;G.checkpoint=null;teleport(0,1.50,-70);toast('Keyboard Lab gestartet · Fall = kompletter Neustart.','good',2500);
   }else if(id==='race'){
-    G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.checkpoint={x:72,y:1.25,z:20};teleport(72,1.25,20);toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2400);
+    const raceY=.4+.55/2+PLAYER_HALF+.08;
+    G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=20;G.checkpoint={x:72,y:raceY,z:20};teleport(72,raceY,20);toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2200);
   }
-  updateHud(true);
+  applyWorldVisibility();updateHud(true);
 }
 function enterWorld(id){const w=WORLD_DEFS.find(x=>x.id===id);if(!w)return;if(w.locked&&!G.state.worldsUnlocked.includes(id))return toast(`${w.name} ist für ein späteres Escape.kl-Update vorbereitet.`,'bad',3000);setWorld(id);}
-function teleport(x,y,z){G.pos.set(x,y,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.support=null;G.lastSupport=null;G.lastGroundPos.copy(G.pos);G.trailPoints=[];if(G.playerRoot)G.playerRoot.position.copy(G.pos);}
+function teleport(x,y,z){G.pos.set(x,y,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.lastGroundedAt=0;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.lastGroundPos.copy(G.pos);G.trailPoints=[];if(G.playerRoot)G.playerRoot.position.copy(G.pos);}
 function respawn(){
   soundFail();
   if(G.world==='keyboard-lab'){G.deaths=0;G.stage=1;G.runStartedAt=performance.now();teleport(0,1.5,-70);toast('Versuch gescheitert · zurück zum START','bad',1800);updateHud(true);return;}
@@ -231,15 +264,16 @@ function respawn(){
 
 function updatePlatforms(t,dt=.016){
   for(const p of G.platforms){
+    if(p.scope!==G.world){p.mesh.visible=false;continue;}p.mesh.visible=true;
     p.lastPos.copy(p.mesh.position);p.mesh.position.copy(p.base);
     if(p.motion){const q=Math.sin(t*p.motion.speed+p.motion.phase)*p.motion.amp;p.mesh.position[p.motion.axis]=p.base[p.motion.axis]+q;}
     p.press=Math.max(0,(Number(p.press)||0)-dt*5.6);p.mesh.position.y-=Math.sin(Math.min(1,p.press)*Math.PI*.5)*.055;
     if(p.blink){const phase=(t*.55+(Math.abs(p.base.z)%7)*.13)%1;p.active=phase<.72;p.mesh.visible=true;p.mesh.material.forEach?.(m=>{m.transparent=true;m.opacity=p.active?1:.16;});}else p.active=true;
     p.delta.subVectors(p.mesh.position,p.lastPos);
   }
-  for(const fx of G.portalFx){fx.material.opacity=.16+Math.sin(t*2.2)*.07;fx.scale.setScalar(1+Math.sin(t*1.7)*.02);fx.rotation.z=Math.sin(t*.55)*.025;}
+  for(const fx of G.portalFx){if((fx.userData?.escapeScope||'hub')!==G.world){fx.visible=false;continue;}fx.visible=true;fx.material.opacity=.12+Math.sin(t*2.2)*.05;fx.scale.setScalar(1+Math.sin(t*1.7)*.02);fx.rotation.z=Math.sin(t*.55)*.025;}
 }
-function platformUnder(x,z,fromBottom,toBottom){let best=null,bestTop=-Infinity;for(const p of G.platforms){if(!p.active)continue;const px=p.mesh.position.x,pz=p.mesh.position.z,top=p.mesh.position.y+p.h/2;if(Math.abs(x-px)>p.w/2-PLAYER_RADIUS*.18||Math.abs(z-pz)>p.d/2-PLAYER_RADIUS*.18)continue;if(fromBottom>=top-.18&&toBottom<=top+.32&&top>bestTop){best=p;bestTop=top}}return best?{p:best,top:bestTop}:null;}
+function platformUnder(x,z,fromBottom,toBottom){let best=null,bestTop=-Infinity;for(const p of G.platforms){if(p.scope!==G.world||!p.active)continue;const px=p.mesh.position.x,pz=p.mesh.position.z,top=p.mesh.position.y+p.h/2;if(Math.abs(x-px)>p.w/2+PLAYER_RADIUS*.20||Math.abs(z-pz)>p.d/2+PLAYER_RADIUS*.20)continue;if(fromBottom>=top-.24&&toBottom<=top+.34&&top>bestTop){best=p;bestTop=top}}return best?{p:best,top:bestTop}:null;}
 function trainingInfo(){if(G.world!=='hub'||!G.grounded||!G.support?.training)return null;const tier=Math.max(0,Number(G.support.trainingTier)||0),unlocked=tier<=Math.max(0,Number(G.state.jkTreadmillTier)||0);return {platform:G.support,tier,unlocked,mult:Math.max(1,Number(G.support.trainingMult)||1),name:G.support.trainingName||'FREE ×1'};}
 function isOnTraining(){return !!trainingInfo()?.unlocked;}
 function handlePlatformContact(p){
@@ -258,29 +292,52 @@ function processMovement(dt,t){
   if(G.grounded&&G.support?.motion)G.pos.add(G.support.delta);
   const prevX=G.pos.x,prevZ=G.pos.z;G.pos.x+=G.moveVel.x*dt;G.pos.z+=G.moveVel.z*dt;
   if(G.world==='hub')resolveHubColliders(prevX,prevZ);
-  else if(G.world==='keyboard-lab'){G.pos.x=Math.max(-13.2,Math.min(13.2,G.pos.x));G.pos.z=Math.min(-63.5,G.pos.z);}
+  else if(G.world==='keyboard-lab'){
+    G.pos.x=Math.max(-13.2,Math.min(13.2,G.pos.x));
+    G.runFurthestZ=Math.min(Number.isFinite(G.runFurthestZ)?G.runFurthestZ:G.pos.z,G.pos.z);
+    // Der Kurs läuft klar nach vorn: kleine Korrekturen zurück sind möglich,
+    // aber man kann nicht mehr weit rückwärts durch die Welt laufen.
+    G.pos.z=Math.min(-63.5,G.pos.z,G.runFurthestZ+4.6);
+  }
   const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.moveIntensity=movementSpeed()>0?Math.min(1,planarSpeed/movementSpeed()):0;
   if(planarSpeed>.08&&G.playerRoot){const wanted=Math.atan2(G.moveVel.x,G.moveVel.z),diff=Math.atan2(Math.sin(wanted-G.playerRoot.rotation.y),Math.cos(wanted-G.playerRoot.rotation.y)),turn=1-Math.exp(-dt*(G.sprint?13:10));G.playerRoot.rotation.y+=diff*turn;}
 
   const wasGrounded=G.grounded,prevBottom=G.pos.y-PLAYER_HALF;G.vel.y=Math.max(-22,G.vel.y-GRAVITY*dt);let nextY=G.pos.y+G.vel.y*dt;const nextBottom=nextY-PLAYER_HALF;let landed=null;if(G.vel.y<=0)landed=platformUnder(G.pos.x,G.pos.z,prevBottom,nextBottom);
   if(landed){nextY=landed.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=landed.p;}else{const hold=G.grounded?platformUnder(G.pos.x,G.pos.z,prevBottom,prevBottom-.08):null;if(hold&&Math.abs(prevBottom-hold.top)<.28){nextY=hold.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=hold.p;}else{G.grounded=false;G.support=null;}}
-  if(!wasGrounded&&G.grounded)G.landingPulse=1;G.landingPulse=Math.max(0,G.landingPulse-dt*7);
+  if(G.grounded){G.lastGroundedAt=performance.now();G.coyoteAvailable=true;}if(!wasGrounded&&G.grounded)G.landingPulse=1;G.landingPulse=Math.max(0,G.landingPulse-dt*7);
   if(G.grounded&&G.support!==G.lastSupport){handlePlatformContact(G.support);G.lastSupport=G.support;}else if(!G.grounded)G.lastSupport=null;
   G.pos.y=nextY;if(G.playerRoot)G.playerRoot.position.copy(G.pos);
 
   if(G.grounded&&planarSpeed>.08){const dist=G.lastGroundPos.distanceTo(G.pos);if(dist<3){G.speedDistanceCarry+=dist;G.state.totalDistance+=dist;while(G.speedDistanceCarry>=1){G.speedDistanceCarry-=1;addSpeed(gainMultiplier(),true);queuePersist(1800);}}G.lastGroundPos.copy(G.pos);}else if(G.grounded)G.lastGroundPos.copy(G.pos);
   if(isOnTraining()){const tr=trainingInfo();G.trainingCarry+=dt*5*gainMultiplier()*(tr?.mult||1);if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addSpeed(add,true);queuePersist(1800);}}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
-  if(G.pos.y<MAX_FALL)respawn();detectCheckpointAndFinish();
+  if(G.pos.y<MAX_FALL){respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
 }
-function jump(){if(G.paused||G.modalOpen||G.runFinished)return;if(G.grounded){soundJump();G.vel.y=JUMP_VELOCITY;G.grounded=false;G.support=null;G.lastSupport=null;}}
+function performJump(){
+  if(G.paused||G.modalOpen||G.runFinished)return false;
+  soundJump();G.vel.y=JUMP_VELOCITY;G.grounded=false;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.jumpQueuedUntil=0;return true;
+}
+function requestJump(){
+  if(G.paused||G.modalOpen||G.runFinished)return false;
+  const now=performance.now();G.jumpQueuedUntil=now+230;
+  // Coyote-Time: auch direkt nach dem Verlassen einer Keycap reagiert Space noch.
+  if(G.grounded||(G.coyoteAvailable&&now-G.lastGroundedAt<=145))return performJump();
+  return false;
+}
+function consumeBufferedJump(){
+  if(G.paused||G.modalOpen||G.runFinished||!G.grounded)return false;
+  const now=performance.now();
+  if(G.jumpHeld||now<=G.jumpQueuedUntil)return performJump();
+  return false;
+}
+function jump(){return requestJump();}
 function detectCheckpointAndFinish(){
   const p=G.support;if(!p)return;
   if(G.world==='keyboard-lab'){
     if(p.stage&&p.stage>G.stage){G.stage=p.stage;soundCheckpoint();toast(`Stage ${G.stage}/10 erreicht`,'good',900);}
     if(p.finish&&!G.runFinished)finishWorld();
   }else if(G.world==='race'){
-    if(p.checkpoint&&p.checkpoint>G.stage){G.stage=p.checkpoint;G.checkpoint={x:p.mesh.position.x,y:p.mesh.position.y+p.h/2+PLAYER_HALF+.05,z:p.mesh.position.z};soundCheckpoint();toast(`Race Checkpoint ${G.stage}/5`,'good',850);}
+    if(p.checkpoint&&p.checkpoint>G.stage){G.stage=p.checkpoint;G.checkpoint={x:p.mesh.position.x,y:p.mesh.position.y+p.h/2+PLAYER_HALF+.10,z:p.mesh.position.z};soundCheckpoint();toast(`Race Checkpoint ${G.stage}/5`,'good',850);}
     if(p.finish&&!G.runFinished)finishRace();
   }
 }
@@ -293,10 +350,16 @@ function finishWorld(){
 
 function updateCamera(dt){if(!G.playerRoot)return;const speed=Math.hypot(G.moveVel.x,G.moveVel.z),ratio=Math.min(1,speed/17),bob=G.grounded&&speed>.35?Math.sin(performance.now()*.012*(G.sprint?1.3:1))*Math.min(.032,speed*.002):0;const target=G.tmpV.set(G.pos.x,G.pos.y+.25+bob,G.pos.z);const horiz=G.camDistance*Math.cos(G.pitch);const desired=G.tmpV2.set(target.x+Math.sin(G.yaw)*horiz,target.y+1.52+Math.sin(G.pitch)*G.camDistance,target.z+Math.cos(G.yaw)*horiz);const k=1-Math.exp(-dt*7.5);G.camera.position.lerp(desired,k);G.camera.lookAt(target);const targetFov=63+ratio*7+(G.sprint&&speed>.5?2:0);G.camera.fov+=(targetFov-G.camera.fov)*(1-Math.exp(-dt*5.5));G.camera.updateProjectionMatrix();}
 function updateTrail(dt){G.trailClock+=dt;if(G.trailClock<.038||!G.trail)return;G.trailClock=0;if(G.state.trail==='none'){G.trail.visible=false;return}G.trail.visible=true;G.trailPoints.unshift(new THREE.Vector3(G.pos.x,G.pos.y-.28,G.pos.z));if(G.trailPoints.length>48)G.trailPoints.length=48;const a=G.trail.geometry.attributes.position.array;for(let i=0;i<48;i++){const p=G.trailPoints[Math.min(i,G.trailPoints.length-1)]||G.pos;a[i*3]=p.x;a[i*3+1]=p.y;a[i*3+2]=p.z}G.trail.geometry.attributes.position.needsUpdate=true;}
-function detectInteraction(){let best=null,dist=Infinity;for(const i of G.interactables){const d=i.pos.distanceTo(G.pos);if(d<=i.radius&&d<dist){best=i;dist=d}}G.activeInteractable=best;const p=G.overlay?.querySelector('[data-ekl-prompt]');if(!p)return;const tr=trainingInfo();if(best){p.innerHTML=`<kbd>${matchMedia('(pointer:coarse)').matches?'AKTION':'E'}</kbd>${best.label}`;p.classList.add('show')}else if(tr){if(tr.unlocked)p.textContent=`${tr.name} · Sprint-Training im Stand · +${fmt(5*gainMultiplier()*tr.mult)} Speed/s`;else p.textContent=`🔒 ${tr.name} · im JK/Coin-Shop freischalten`;p.classList.add('show')}else p.classList.remove('show');}
+function detectInteraction(){let best=null,dist=Infinity;for(const i of G.interactables){if(i.scope!==G.world)continue;const d=i.pos.distanceTo(G.pos);if(d<=i.radius&&d<dist){best=i;dist=d}}G.activeInteractable=best;const p=G.overlay?.querySelector('[data-ekl-prompt]');if(!p)return;const tr=trainingInfo();if(best){p.innerHTML=`<kbd>${matchMedia('(pointer:coarse)').matches?'AKTION':'E'}</kbd>${best.label}`;p.classList.add('show')}else if(tr){if(tr.unlocked)p.textContent=`${tr.name} · Sprint-Training im Stand · +${fmt(5*gainMultiplier()*tr.mult)} Speed/s`;else p.textContent=`🔒 ${tr.name} · im JK/Coin-Shop freischalten`;p.classList.add('show')}else p.classList.remove('show');}
 function interact(){if(G.modalOpen){closeModal();return}if(G.activeInteractable?.onUse)G.activeInteractable.onUse();}
 function updateHud(force=false){
-  if(!G.overlay||!G.state)return;G.hudClock+=force?999:0;const set=(q,v)=>{const e=G.overlay.querySelector(q);if(e&&e.textContent!==String(v))e.textContent=String(v)};set('[data-ekl-speed]',fmt(G.state.speed));set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',G.state.rebirths);set('[data-ekl-gain]',`×${gainMultiplier().toFixed(2).replace('.',',')}`);const race=G.world==='race',hub=G.world==='hub',total=race?5:10;set('[data-ekl-world]',hub?'ESCAPE HUB':race?'SPEED RACE':'KEYBOARD LAB');set('[data-ekl-stage]',hub?'FREIE WELT':race?`RACE ${Math.max(1,G.stage)}/5`:`STAGE ${Math.max(1,G.stage)}/10`);set('[data-ekl-stage-total]',race?'5 CHECKPOINTS':'10 STAGES');const planar=Math.hypot(G.moveVel.x,G.moveVel.z),motion=!G.grounded?(G.vel.y>0?'SPRUNG':'FALL'):planar>.5?(G.sprint||planar>7.5?'RENNEN':'LAUFEN'):'IDLE';set('[data-ekl-motion]',motion);const motionEl=G.overlay.querySelector('[data-ekl-motion]');if(motionEl)motionEl.dataset.motion=motion.toLowerCase();const progress=G.overlay.querySelector('[data-ekl-stage-bar]');if(progress)progress.style.width=`${hub?0:Math.min(100,G.stage/total*100)}%`;}
+  if(!G.overlay||!G.state)return;G.hudClock+=force?999:0;const set=(q,v)=>{const e=G.overlay.querySelector(q);if(e&&e.textContent!==String(v))e.textContent=String(v)};
+  set('[data-ekl-speed]',fmt(G.state.speed));set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',G.state.rebirths);set('[data-ekl-gain]',`×${gainMultiplier().toFixed(2).replace('.',',')}`);
+  const race=G.world==='race',hub=G.world==='hub',total=race?5:10,worldChip=G.overlay.querySelector('.ekl-world-chip'),progressWrap=G.overlay.querySelector('.ekl-stage-progress');
+  if(worldChip)worldChip.hidden=hub;if(progressWrap)progressWrap.hidden=hub;
+  if(!hub){set('[data-ekl-world]',race?'SPEED RACE':'KEYBOARD LAB');set('[data-ekl-stage]',race?`CHECKPOINT ${Math.max(1,G.stage)}/5`:`STAGE ${Math.max(1,G.stage)}/10`);}
+  set('[data-ekl-stage-total]',race?'5 CHECKPOINTS':'10 STAGES');const progress=G.overlay.querySelector('[data-ekl-stage-bar]');if(progress)progress.style.width=`${hub?0:Math.min(100,G.stage/total*100)}%`;
+}
 function toast(message,tone='',ms=1900){const e=G.overlay?.querySelector('[data-ekl-toast]');if(!e)return;clearTimeout(G.toastTimer);e.textContent=message;e.className=`ekl-toast show ${tone}`;G.toastTimer=setTimeout(()=>e.className='ekl-toast',ms);}
 
 function openModal(html){closeModal();G.modalOpen=true;const wrap=document.createElement('div');wrap.className='ekl-modal-wrap';wrap.dataset.eklModal='1';wrap.innerHTML=html;G.overlay.append(wrap);wrap.addEventListener('click',e=>{if(e.target===wrap)closeModal()});wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=closeModal);return wrap;}
@@ -308,7 +371,15 @@ function openShop(tab='speed'){
 function renderShopBody(tab){const body=G.overlay?.querySelector('[data-ekl-shop-body]');if(!body)return;G.overlay.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.classList.toggle('active',b.dataset.eklShopTab===tab));if(tab==='speed'){body.innerHTML=`<div class="ekl-shop-grid">${SPEED_UPGRADES.map(u=>{const owned=G.state.speedUpgrade>=u.level,available=G.state.speedUpgrade===u.level-1;return `<article class="${owned?'owned':''}"><small>STUFE ${u.level}</small><h3>${u.name}</h3><p>Dauerhaft ×${u.mult.toFixed(2).replace('.',',')} Speed-Gewinn durch echte Laufstrecke und Training.</p><button data-ekl-buy-speed="${u.level}" ${owned||!available?'disabled':''}>${owned?'GEKAUFT':available?`${u.cost} Wins`:'Vorherige Stufe'}</button></article>`}).join('')}</div>`;body.querySelectorAll('[data-ekl-buy-speed]').forEach(b=>b.onclick=()=>buySpeedUpgrade(Number(b.dataset.eklBuySpeed)));}
   else if(tab==='trails'){body.innerHTML=`<div class="ekl-shop-grid">${TRAILS.map(t=>{const owned=G.state.ownedTrails.includes(t.id),active=G.state.trail===t.id;return `<article class="${owned?'owned':''} ${t.jk?'jk':''}"><small>${active?'AKTIV':t.jk?'JK/COIN':'TRAIL'}</small><h3>${t.name}</h3><p>Kosmetische Spur hinter deinem Charakter. Kein versteckter Laufgeschwindigkeitsbonus.</p><button data-ekl-trail="${t.id}" class="${t.jk?'jk':t.id==='gold'?'gold':''}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':t.jk?'Im JK/Coin-Shop':`${t.cost} Wins`}</button></article>`}).join('')}</div>`;body.querySelectorAll('[data-ekl-trail]').forEach(b=>b.onclick=()=>buyOrEquipTrail(b.dataset.eklTrail));}
   else if(tab==='worlds'){body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>`<article class="${!w.locked?'owned':''}"><small>WELT ${w.number}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?`Geplant · ${w.requiredWins} Wins`:'SPIELBAR IM HUB'}</button></article>`).join('')}</div>`;}
-  else{const balance=Number(window.JKCoinApp?.coinState?.()?.balance||0);body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES PREMIUM</small><h3>◆ Escape.kl JK/Coin-Shop</h3><p>Premium-Inhalte ergänzen das Training und Cosmetics. Keyboard Lab und alle normalen Kernwelten bleiben erspielbar.</p><b>${balance.toLocaleString('de-DE')} JK/Coin</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div>`;body.querySelector('[data-ekl-open-jk]')?.addEventListener('click',openJkCoinShop);}
+  else{
+    const balance=Number(window.JKCoinApp?.coinState?.()?.balance||0),items=[
+      {name:'Gold Speed-Treadmill ×3',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Sport-Laufband mit ×3 Trainingsrate.'},
+      {name:'Diamond Speed-Treadmill ×9',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Premium-Laufband mit ×9 Trainingsrate.'},
+      {name:'Galaxy Keyboard Trail',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Kosmetische Galaxy-Spur für Escape.kl.'},
+      {name:'Speed-Gain ×2 · 15 Min.',price:180,owned:false,desc:'Temporärer ×2 Speed-Gain für Laufstrecke und Training.'}
+    ];
+    body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES · JK/COIN</small><h3>◆ Escape.kl Premium</h3><p>Alle Käufe laufen über den zentralen JK.Games-JK/Coin-Shop mit normaler Kaufbestätigung. Welten und der Kern-Parcours bleiben erspielbar.</p><b>${balance.toLocaleString('de-DE')} JK/Coin verfügbar</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div><div class="ekl-shop-grid ekl-jk-grid">${items.map(i=>`<article class="jk ${i.owned?'owned':''}"><small>${i.owned?'DAUERHAFT FREIGESCHALTET':'JK/COIN'}</small><h3>${i.name}</h3><p>${i.desc}</p><button class="jk" data-ekl-open-jk ${i.owned?'disabled':''}>${i.owned?'GEKAUFT':`${i.price.toLocaleString('de-DE')} JK/Coin`}</button></article>`).join('')}</div>`;body.querySelectorAll('[data-ekl-open-jk]').forEach(b=>b.addEventListener('click',openJkCoinShop));
+  }
 }
 function buySpeedUpgrade(level){const u=SPEED_UPGRADES.find(x=>x.level===level);if(!u||G.state.speedUpgrade!==level-1)return;if(G.state.wins<u.cost)return toast(`Du brauchst ${u.cost} Wins.`,'bad');G.state.wins-=u.cost;G.state.speedUpgrade=level;soundBuy();queuePersist(50);toast(`${u.name} gekauft · Speed-Gain ×${u.mult.toFixed(2)}`,'good',2200);updateHud(true);openShop('speed');}
 function buyOrEquipTrail(id){const t=TRAILS.find(x=>x.id===id);if(!t)return;if(!G.state.ownedTrails.includes(id)){if(t.jk)return openJkCoinShop();if(G.state.wins<t.cost)return toast(`Du brauchst ${t.cost} Wins.`,'bad');G.state.wins-=t.cost;G.state.ownedTrails.push(id);soundBuy()}G.state.trail=id;setTrailColor();queuePersist(50);updateHud(true);toast(`${t.name} ausgerüstet.`,'good');openShop('trails');}
@@ -341,26 +412,27 @@ function openDailyQuests(){
 }
 function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().find(r=>r.id===id);if(!row||row.progress<row.target||q.claimed.includes(id))return;q.claimed.push(id);G.state.wins+=row.reward;soundBuy();queuePersist(50);updateHud(true);toast(`${row.name}: +${row.reward} Wins`,'good',2000);openDailyQuests();}
 function openRecords(){const w=WORLD_DEFS[0],best=Number(G.state.bestTimes?.[w.id]||0),raceBest=Number(G.state.bestTimes?.['speed-race']||0),stars=Number(G.state.worldStars?.[w.id]||0),completions=Number(G.state.completions?.[w.id]||0),races=Number(G.state.completions?.['speed-race']||0);openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Diese Werte kommen direkt aus deinem Escape.kl-Spielstand und erzeugen keinen dauernden Firestore-Echtzeitstream.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>BESTZEIT</small><b>${best?timeText(best):'–'}</b><span>Keyboard Lab</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>Speed Race · ${races} Läufe</span></article><article><small>STERNE</small><b>${'★'.repeat(stars)||'–'}${'☆'.repeat(Math.max(0,3-stars))}</b><span>Bestes Ergebnis</span></article><article><small>ESCAPES</small><b>${completions.toLocaleString('de-DE')}</b><span>Keyboard-Lab-Abschlüsse</span></article><article><small>DISTANZ</small><b>${Math.floor(G.state.totalDistance).toLocaleString('de-DE')} m</b><span>Gesamtlaufstrecke</span></article><article><small>SPEED</small><b>${fmt(G.state.speed)}</b><span>Aktueller Speed</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Permanente Progression</span></article></div></div>`);}
-function showHelp(){openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · STEUERUNG</small><h2>Wie spiele ich?</h2><p>Escape.kl verbindet Speed-Simulator und Keyboard-Obby. Jeder echte Meter macht dich stärker.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>🎮 PC</b><p>WASD laufen · Space springen · E interagieren · Shift sprinten · Maus ziehen = Kamera · Mausrad = Zoom · R = aktuellen Versuch neu starten.</p></article><article><b>📱 Handy</b><p>Linker virtueller Stick zum Laufen. Rechts: Sprint halten, Springen und Aktion.</p></article><article><b>⚡ Speed</b><p>Echte Laufstrecke gibt Speed × deine permanenten Multiplikatoren. Es gibt keinen künstlichen Speed-Limiter mehr.</p></article><article><b>🏃 Laufbänder</b><p>Auf einem freigeschalteten Laufband läuft dein Charakter automatisch im Sprint auf der Stelle und sammelt Speed. Vorwärts bewegst du dich nur mit deiner eigenen Eingabe.</p></article><article><b>🏁 Keyboard Lab</b><p>10 Stages in einer klaren Vorwärtsroute. Ein Fall beendet den aktuellen Versuch und setzt dich direkt zum Start zurück.</p></article><article><b>🏪 In-Game Shop</b><p>Der Speed Shop ist begehbar. Wins kaufen normale Upgrades; besondere Laufbänder und Cosmetics liegen im JK/Coin-Bereich.</p></article><article><b>🔄 Rebirth</b><p>Rebirth setzt Speed zurück und erhöht den permanenten Speed-Gain. Trails, Bestzeiten und JK/Coin-Freischaltungen bleiben erhalten.</p></article><article><b>🏎 Speed Race</b><p>Der separate Race-Modus behält eigene Race-Checkpoints und eine persönliche Bestzeit.</p></article></div></div>`);}
+function showHelp(){openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · STEUERUNG</small><h2>Wie spiele ich?</h2><p>Escape.kl verbindet Speed-Simulator und Keyboard-Obby. Jeder echte Meter macht dich stärker.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>🎮 PC</b><p>WASD laufen · Space springen (mit Kanten-/Sprungpuffer) · E nur für Shop/Rebirth/Daily-Stationen · Shift sprinten · Maus ziehen = Kamera · Mausrad = Zoom · R = aktuellen Versuch neu starten.</p></article><article><b>📱 Handy</b><p>Linker virtueller Stick zum Laufen. Rechts: Sprint halten, Springen und Aktion.</p></article><article><b>⚡ Speed</b><p>Echte Laufstrecke gibt Speed × deine permanenten Multiplikatoren. Es gibt keinen künstlichen Speed-Limiter mehr.</p></article><article><b>🏃 Laufbänder</b><p>Auf einem freigeschalteten Laufband läuft dein Charakter automatisch im Sprint auf der Stelle und sammelt Speed. Vorwärts bewegst du dich nur mit deiner eigenen Eingabe.</p></article><article><b>🏁 Keyboard Lab</b><p>Einfach durch das Keyboard-Lab-Tor laufen – kein E nötig. 10 Stages in einer klaren Vorwärtsroute; ein Fall setzt den kompletten Versuch an den Start zurück.</p></article><article><b>🏪 In-Game Shop</b><p>Der Speed Shop ist begehbar. Wins kaufen normale Upgrades; besondere Laufbänder und Cosmetics liegen im JK/Coin-Bereich.</p></article><article><b>🔄 Rebirth</b><p>Rebirth setzt Speed zurück und erhöht den permanenten Speed-Gain. Trails, Bestzeiten und JK/Coin-Freischaltungen bleiben erhalten.</p></article><article><b>🏎 Speed Race</b><p>Der separate Race-Modus behält eigene Race-Checkpoints und eine persönliche Bestzeit.</p></article></div></div>`);}
 function showPause(){G.paused=true;openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-hub>Zum Hub</button><button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false});G.overlay.querySelector('[data-ekl-hub]').onclick=()=>{G.paused=false;setWorld('hub')};G.overlay.querySelector('[data-ekl-exit]').onclick=returnToTopGames;G.overlay.querySelector('[data-ekl-help]').onclick=showHelp;}
 function showComplete(sec,stars,reward,previous){const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>WORLD 1 COMPLETE</small><h2>Keyboard Lab geschafft!</h2><div class="ekl-stars">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div><p>Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Deaths <b>${G.deaths}</b> · Belohnung <b>+${reward} Wins</b></p><div class="ekl-modal-actions"><button data-ekl-again class="gold">Nochmal</button><button data-ekl-finish-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-again]').onclick=()=>{wrap.remove();setWorld('keyboard-lab')};wrap.querySelector('[data-ekl-finish-hub]').onclick=()=>{wrap.remove();setWorld('hub')};}
 function showRaceComplete(sec,reward,previous,record){const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>SPEED RACE COMPLETE</small><h2>${record?'🏆 Neue Bestzeit!':'🏁 Rennen beendet!'}</h2><div class="ekl-stars">${record?'★★★':'★★☆'}</div><p>Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Deaths <b>${G.deaths}</b> · Belohnung <b>+${reward} Wins</b></p><div class="ekl-modal-actions"><button data-ekl-race-again class="gold">Nochmal</button><button data-ekl-race-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-race-again]').onclick=()=>{wrap.remove();setWorld('race')};wrap.querySelector('[data-ekl-race-hub]').onclick=()=>{wrap.remove();setWorld('hub')};}
 
 
 function bindInput(){
-  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','KeyE','KeyR','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(e.code==='Space'){jump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){respawn();return}G.keys.add(e.code)};G.keyUp=e=>G.keys.delete(e.code);document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
+  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','KeyE','KeyR','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(e.code==='Space'){G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){respawn();return}G.keys.add(e.code)};
+  G.keyUp=e=>{if(e.code==='Space'){G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
   const canvas=G.overlay.querySelector('canvas');canvas.addEventListener('pointerdown',e=>{ensureAudio();if(e.pointerType==='touch')return;G.pointer={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture?.(e.pointerId)});G.pointerMove=e=>{if(!G.pointer||e.pointerId!==G.pointer.id)return;const dx=e.clientX-G.pointer.x,dy=e.clientY-G.pointer.y;G.pointer.x=e.clientX;G.pointer.y=e.clientY;G.yaw-=dx*.006;G.pitch=Math.max(.06,Math.min(.70,G.pitch+dy*.004))};G.pointerUp=e=>{if(G.pointer&&e.pointerId===G.pointer.id)G.pointer=null};canvas.addEventListener('pointermove',G.pointerMove);canvas.addEventListener('pointerup',G.pointerUp);canvas.addEventListener('pointercancel',G.pointerUp);canvas.addEventListener('wheel',e=>{e.preventDefault();G.camDistance=Math.max(4.6,Math.min(9.6,G.camDistance+Math.sign(e.deltaY)*.55));},{passive:false});
   const stick=G.overlay.querySelector('[data-ekl-stick]'),knob=stick?.querySelector('.ekl-stick-knob');if(stick&&knob){let sid=null;const update=e=>{ensureAudio();const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,max=r.width*.32,len=Math.hypot(dx,dy)||1,scale=Math.min(1,max/len);dx*=scale;dy*=scale;G.mobileX=dx/max;G.mobileY=dy/max;knob.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`};stick.addEventListener('pointerdown',e=>{sid=e.pointerId;stick.setPointerCapture?.(sid);update(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===sid)update(e)});const end=e=>{if(e.pointerId!==sid)return;sid=null;G.mobileX=G.mobileY=0;knob.style.transform='translate(-50%,-50%)'};stick.addEventListener('pointerup',end);stick.addEventListener('pointercancel',end)}
-  G.overlay.querySelector('[data-ekl-jump]')?.addEventListener('pointerdown',e=>{e.preventDefault();ensureAudio();jump()});G.overlay.querySelector('[data-ekl-interact]')?.addEventListener('pointerdown',e=>{e.preventDefault();ensureAudio();interact()});
+  const jumpBtn=G.overlay.querySelector('[data-ekl-jump]');if(jumpBtn){const jumpOn=e=>{e.preventDefault();ensureAudio();G.jumpHeld=true;requestJump()},jumpOff=e=>{e.preventDefault();G.jumpHeld=false;G.jumpQueuedUntil=0};jumpBtn.addEventListener('pointerdown',jumpOn);jumpBtn.addEventListener('pointerup',jumpOff);jumpBtn.addEventListener('pointercancel',jumpOff);jumpBtn.addEventListener('pointerleave',e=>{if(G.jumpHeld)jumpOff(e)});}G.overlay.querySelector('[data-ekl-interact]')?.addEventListener('pointerdown',e=>{e.preventDefault();ensureAudio();interact()});
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on);sprint.addEventListener('pointerup',off);sprint.addEventListener('pointercancel',off);sprint.addEventListener('pointerleave',e=>{if(G.mobileSprint)off(e)});}
 }
 function resize(){if(!G.renderer||!G.camera)return;const r=G.overlay.getBoundingClientRect();G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const dt=Math.min(.034,G.clock.getDelta()||.016),t=performance.now()/1000;updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
-  if(G.overlay)return;if(sourceDevice)G.sourceDevice=String(sourceDevice);else G.sourceDevice=window.JKGamesOwnedPhoneItem?.()||'';loadProgress();const el=document.createElement('div');el.className='escape-kl-overlay';el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-logo"><small>JK.GAMES · TOP GAME</small><b>Escape.kl</b></div><div class="ekl-statrow"><div class="ekl-stat"><small>SPEED</small><b data-ekl-speed>0</b></div><div class="ekl-stat"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div><div class="ekl-stat"><small>SPEED GAIN</small><b data-ekl-gain>×1</b></div></div><div class="ekl-top-actions"><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-world-chip"><small data-ekl-world>ESCAPE HUB</small><b data-ekl-stage>FREIE WELT</b><span>V3 · Keyboard Lab · <em data-ekl-motion>IDLE</em></span></div><div class="ekl-stage-progress"><div><span>WORLD-FORTSCHRITT</span><b data-ekl-stage-total>10 STAGES</b></div><i><span data-ekl-stage-bar></span></i></div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;document.body.append(el);document.body.classList.add('escape-kl-open');G.overlay=el;setupScene();bindInput();el.querySelector('[data-ekl-close]').onclick=returnToTopGames;el.querySelector('[data-ekl-pause]').onclick=showPause;el.querySelector('[data-ekl-help]').onclick=showHelp;G.resizeHandler=resize;window.addEventListener('resize',G.resizeHandler,{passive:true});G.clock.start();G.raf=requestAnimationFrame(loop);setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
+  if(G.overlay)return;if(sourceDevice)G.sourceDevice=String(sourceDevice);else G.sourceDevice=window.JKGamesOwnedPhoneItem?.()||'';loadProgress();const el=document.createElement('div');el.className='escape-kl-overlay';el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-statrow"><div class="ekl-stat"><small>SPEED</small><b data-ekl-speed>0</b></div><div class="ekl-stat"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div><div class="ekl-stat"><small>SPEED GAIN</small><b data-ekl-gain>×1</b></div></div><div class="ekl-top-actions"><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-world-chip" hidden><small data-ekl-world>KEYBOARD LAB</small><b data-ekl-stage>STAGE 1/10</b></div><div class="ekl-stage-progress" hidden><div><span>WORLD-FORTSCHRITT</span><b data-ekl-stage-total>10 STAGES</b></div><i><span data-ekl-stage-bar></span></i></div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;document.body.append(el);document.body.classList.add('escape-kl-open');G.overlay=el;setupScene();bindInput();el.querySelector('[data-ekl-close]').onclick=returnToTopGames;el.querySelector('[data-ekl-pause]').onclick=showPause;el.querySelector('[data-ekl-help]').onclick=showHelp;G.resizeHandler=resize;window.addEventListener('resize',G.resizeHandler,{passive:true});G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();G.renderer?.dispose();clearWorldObjects();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();G.renderer?.dispose();clearWorldObjects();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){loadProgress();return JSON.parse(JSON.stringify(G.state));}
 
