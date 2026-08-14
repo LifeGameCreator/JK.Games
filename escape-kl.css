@@ -215,3 +215,6 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
   .ekl-stick{width:82px!important;height:82px!important}
   .ekl-touch-actions{grid-template-columns:48px 56px 56px!important}.ekl-touch-actions button{height:43px!important}
 }
+
+/* V440 speed item inventory */
+.ekl-item-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.ekl-item-actions button{min-width:0}.ekl-shop-grid article:has(.ekl-item-actions){min-height:210px}@media(max-width:500px){.ekl-item-actions{grid-template-columns:1fr}}

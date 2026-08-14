@@ -1,4 +1,4 @@
-/* Escape.kl world registry V438 – level-gated worlds and Keyboard-Escape-style stage payouts. */
+/* Escape.kl world registry V440 – rebalanced long-term level gates and staged world difficulty. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -24,7 +24,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     name:'Candy Keys',
     number:2,
     stageCount:10,
-    requiredLevel:140,
+    requiredLevel:250,
     finishBonusWins:500000,
     accent:0xff77bb,
     background:0x241023,
@@ -36,14 +36,14 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     time3:155,
     stageRewards:Object.freeze([25000,40000,65000,100000,175000,300000,500000,800000,1200000,2000000]),
     difficulty:'MITTEL',
-    description:'Ab Level 140: Süßigkeiten-Keyboards mit Schokolade, Candy-Bar-Sprüngen und ersten beweglichen Tasten. Spürbar schwerer als Welt 1.'
+    description:'Ab Level 250: Süßigkeiten-Keyboards mit Schokolade, Candy-Bar-Sprüngen und ersten beweglichen Tasten. Spürbar schwerer als Welt 1.'
   }),
   Object.freeze({
     id:'toxic-keyboard',
     name:'Toxic Keyboard',
     number:3,
     stageCount:10,
-    requiredLevel:400,
+    requiredLevel:800,
     finishBonusWins:100000000,
     accent:0x75ff72,
     background:0x071a0d,
@@ -55,14 +55,14 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     time3:185,
     stageRewards:Object.freeze([5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000]),
     difficulty:'SCHWER',
-    description:'Ab Level 400: Giftige Keycaps, schmalere Sprünge, Slider und instabile Glitch-Tasten. Welt 3 verlangt deutlich mehr Speed und Kontrolle.'
+    description:'Ab Level 800: Giftige Keycaps, schmalere Sprünge, Slider und instabile Glitch-Tasten. Welt 3 verlangt deutlich mehr Speed und Kontrolle.'
   }),
   Object.freeze({
     id:'cyber-city',
     name:'Cyber City',
     number:4,
     stageCount:10,
-    requiredLevel:650,
+    requiredLevel:1400,
     finishBonusWins:500,
     accent:0x6d74ff,
     locked:true,

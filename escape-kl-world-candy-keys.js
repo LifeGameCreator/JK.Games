@@ -1,4 +1,4 @@
-/* Escape.kl World 2 – Candy Keys V439. Medium difficulty · Level 140+. */
+/* Escape.kl World 2 – Candy Keys V440. Medium difficulty · Level 250+. */
 export function buildCandyKeysWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,returnHub}=api;
   const rewards=[25000,40000,65000,100000,175000,300000,500000,800000,1200000,2000000];
@@ -10,7 +10,7 @@ export function buildCandyKeysWorld(api){
     addGlowLight(i%2?-26:26,3.2,z,i%2?0xff73be:0x74dfff,.34,9);
   }
   addPlatform({x:0,y:.3,z:startZ,w:14,h:.6,d:11,color:0x9d4778,label:'CANDY',stage:1,kind:'start'});
-  addSign('WORLD 2 · CANDY KEYS',{x:0,y:5.2,z:startZ+4.5},0xff80c7,1.03);addSign('LEVEL 140+ · MITTEL',{x:0,y:4.0,z:startZ+4.52},0xffd26b,.48);
+  addSign('WORLD 2 · CANDY KEYS',{x:0,y:5.2,z:startZ+4.5},0xff80c7,1.03);addSign('LEVEL 250+ · MITTEL',{x:0,y:4.0,z:startZ+4.52},0xffd26b,.48);
   let z=startZ-10;
   const title=(n,t)=>addSign(`STAGE ${n} · ${t}`,{x:0,y:3.35,z:z+2.0},0xff8ccb,.58);
   const key=(x,y,w,d,label,color,extra={})=>addPlatform({x,y,z,w,h:.48,d,color,label,kind:'key',...extra});

@@ -1,4 +1,4 @@
-/* Escape.kl World 3 – Toxic Keyboard V439. Hard difficulty · Level 400+. */
+/* Escape.kl World 3 – Toxic Keyboard V440. Hard difficulty · Level 800+. */
 export function buildToxicKeyboardWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,returnHub}=api;
   const rewards=[5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000];
@@ -6,7 +6,7 @@ export function buildToxicKeyboardWorld(api){
   const startZ=-70;
   boxDeco(0,-9.0,-235,82,1.2,355,0x08140a);boxDeco(-33,-2.0,-235,2.6,11,340,0x15341a);boxDeco(33,-2.0,-235,2.6,11,340,0x15341a);
   for(let z=-96,i=0;z>-390;z-=52,i++){addCylinderDeco(-28,-1.5,z,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addCylinderDeco(28,-1.5,z,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addGlowLight(i%2?-27:27,2.3,z,0x64ff6d,.42,9);}
-  addPlatform({x:0,y:.3,z:startZ,w:13,h:.6,d:10,color:0x245d2c,label:'TOXIC',stage:1,kind:'start'});addSign('WORLD 3 · TOXIC KEYBOARD',{x:0,y:5.2,z:startZ+4.4},0x7bff79,1.0);addSign('LEVEL 400+ · SCHWER',{x:0,y:4.0,z:startZ+4.42},0xffd16b,.48);
+  addPlatform({x:0,y:.3,z:startZ,w:13,h:.6,d:10,color:0x245d2c,label:'TOXIC',stage:1,kind:'start'});addSign('WORLD 3 · TOXIC KEYBOARD',{x:0,y:5.2,z:startZ+4.4},0x7bff79,1.0);addSign('LEVEL 800+ · SCHWER',{x:0,y:4.0,z:startZ+4.42},0xffd16b,.48);
   let z=startZ-10;
   const title=(n,t)=>addSign(`STAGE ${n} · ${t}`,{x:0,y:3.45,z:z+2.0},0x7cff7a,.58);
   const key=(x,y,w,d,label,color=0x286d35,extra={})=>addPlatform({x,y,z,w,h:.46,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});
