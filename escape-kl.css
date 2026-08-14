@@ -236,3 +236,15 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
   .ekl-character-trail-position button{flex:1}
   .ekl-progression-note .ekl-trail-pos-inline{justify-content:flex-start}
 }
+
+
+/* ===== V442 · Zwei-Daumen-Handysteuerung ===== */
+.ekl-look-hint{display:none;position:absolute;right:18%;top:56%;transform:translate(50%,-50%);z-index:18;pointer-events:none;align-items:center;gap:7px;padding:7px 11px;border:1px solid #8bdcff22;border-radius:999px;background:#06101a52;color:#bfefff;font-size:8px;font-weight:1000;letter-spacing:.14em;opacity:0;backdrop-filter:blur(4px)}
+.escape-kl-overlay.ekl-looking .ekl-look-hint{opacity:.34}
+@media (pointer:coarse){
+  .ekl-look-hint{display:flex;animation:eklLookHint 4.6s ease 1.1s both}
+  .ekl-canvas canvas{touch-action:none!important}
+}
+@media (pointer:coarse) and (orientation:portrait){.ekl-look-hint{right:21%;top:53%}}
+@media (pointer:coarse) and (orientation:landscape){.ekl-look-hint{right:24%;top:54%;font-size:7px;padding:5px 8px}}
+@keyframes eklLookHint{0%{opacity:0;transform:translate(50%,-50%) scale(.94)}12%,58%{opacity:.28;transform:translate(50%,-50%) scale(1)}100%{opacity:0;transform:translate(50%,-50%) scale(1)}}
