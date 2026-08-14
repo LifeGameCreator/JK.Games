@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Keyboard Lab V438.
+/* Escape.kl World 1 – Keyboard Lab V439.
    Beginner-first route inspired by the keyboard-escape loop: wide keys, short gaps,
    15 linear stages and a yellow WIN pad after every stage. No respawn checkpoints. */
 export function buildKeyboardLabWorld(api){
@@ -29,11 +29,13 @@ export function buildKeyboardLabWorld(api){
     if(rec)addSign(`EMPFOHLEN: LEVEL ${rec}`,{x:0,y:2.45,z:z+2.12},0xb6c7d8,.35);
   };
   const key=(x,y,w=4.6,d=3.5,label='W',color=0x285a78,extra={})=>addPlatform({x,y,z,w,h:.48,d,color,label,kind:'key',...extra});
-  const winPad=(stage,reward,y=.62,finish=false)=>{
+  const winPad=(stage,reward,y=.62)=>{
     z-=4.0;
-    addPlatform({x:0,y:y-.15,z,w:9.8,h:.40,d:5.8,color:0x18344c,label:'',kind:'safe-zone'});
-    const p=addPlatform({x:0,y:y+.15,z,w:5.0,h:.20,d:2.45,color:0xd9a62b,label:`WIN +${compactReward(reward)}`,kind:'win-pad',winReward:reward,winStage:stage,stage:Math.min(15,stage+1),finish});
-    addSign(`STAGE ${stage} GESCHAFFT · +${compactReward(reward)} WINS`,{x:0,y:y+2.1,z:z+.15},0xffd35b,.48);
+    // Safe-Zone bleibt mittig als Weiterlauf. Das gelbe Cash-out-Pad liegt bewusst rechts:
+    // drauftreten = Wins nehmen + Run zurück zum Start; überspringen/links bleiben = weiter zur nächsten Stage.
+    addPlatform({x:0,y:y-.15,z,w:11.0,h:.40,d:5.8,color:0x18344c,label:'',kind:'safe-zone',stage:Math.min(15,stage+1)});
+    const p=addPlatform({x:3.0,y:y+.15,z,w:3.8,h:.20,d:2.25,color:0xd9a62b,label:`WIN +${compactReward(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});
+    addSign(`WIN +${compactReward(reward)} · CASH OUT`,{x:3.0,y:y+2.1,z:z+.15},0xffd35b,.43);
     return p;
   };
 
@@ -85,8 +87,9 @@ export function buildKeyboardLabWorld(api){
   z-=2.5;stageTitle(15,'FINAL ESCAPE','110+');
   for(let i=0;i<6;i++){z-=4.15;key(Math.sin(i*.9)*1.9,2.75+i*.12,3.6,3.0,i===5?'ESC':'W',0x2b7898);}
   z-=4.8;
-  addPlatform({x:0,y:3.55,z,w:12,h:.6,d:7,color:0x1f526c,label:'FINAL',kind:'safe-zone'});
-  addPlatform({x:0,y:3.93,z,w:6.2,h:.20,d:2.8,color:0xe0ad2d,label:`WIN +${compactReward(rewards[14])}`,kind:'win-pad',winReward:rewards[14],winStage:15,stage:15,finish:true});
+  addPlatform({x:0,y:3.55,z,w:12,h:.6,d:7,color:0x1f526c,label:'FINAL',kind:'safe-zone',stage:15});
+  addPlatform({x:3.1,y:3.93,z,w:3.9,h:.20,d:2.6,color:0xe0ad2d,label:`WIN +${compactReward(rewards[14])}`,kind:'win-pad',winReward:rewards[14],winStage:15});
+  addPlatform({x:0,y:3.92,z:z-2.55,w:4.1,h:.18,d:1.25,color:0x31a7bf,label:'FINISH',kind:'finish-strip',finish:true,stage:15});
   boxDeco(0,6.75,z-3.05,12,.38,.55,0xffca55,0x86580f);boxDeco(-5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);boxDeco(5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);
   addRingDeco(0,5.55,z-2.9,2.1,.07,0xffd45e,0);addRingDeco(0,5.55,z-2.82,1.5,.05,0x6ee9ff,0);addGlowLight(0,5.7,z-2.5,0xffd05c,1.35,13);
   addSign(`STAGE 15 GESCHAFFT · +${compactReward(rewards[14])} WINS`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);

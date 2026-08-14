@@ -200,11 +200,15 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
   const controlRoot=new THREE.Group();controlRoot.name='escape-character-control';
   const visualRoot=new THREE.Group();visualRoot.name='escape-character-visual';visualRoot.position.y=-floorOffset;controlRoot.add(visualRoot);
   const fallback=createFallbackHuman(gender);visualRoot.add(fallback.root);
-  const controller={root:controlRoot,visualRoot,fallback,native:null,disposed:false,mode:'fallback',activeMode:'idle',landing:0,lastGrounded:true};
+  // V439: Kein alter/Fallback-Skin darf beim Öffnen kurz aufblitzen. Während der
+  // echte JK.Games-Hauptcharakter geladen wird, bleibt die Visual-Gruppe unsichtbar.
+  // Nur wenn das native GLB wirklich fehlschlägt, wird der detaillierte Fallback gezeigt.
+  fallback.root.visible=false;visualRoot.visible=false;
+  const controller={root:controlRoot,visualRoot,fallback,native:null,disposed:false,mode:'loading',activeMode:'idle',landing:0,lastGrounded:true};
   const loader=new GLTFLoader(),paths=ASSETS[gender];
   controller.loadPromise=Promise.all([loader.loadAsync(paths.walk),loader.loadAsync(paths.run),loader.loadAsync(paths.idle)]).then(([walkGltf,runGltf,idleGltf])=>{
     if(controller.disposed)return controller;
-    const model=normalizeNativeModel(walkGltf.scene,1.76);visualRoot.add(model);fallback.root.visible=false;
+    const model=normalizeNativeModel(walkGltf.scene,1.76);visualRoot.add(model);fallback.root.visible=false;visualRoot.visible=true;
     const walkSource=(walkGltf.animations||[])[0]||null,runSource=(runGltf.animations||[])[0]||null,idleSource=(idleGltf.animations||[])[0]||null;
     const walkClip=sanitizeClip(walkSource),runClip=retargetClip(sanitizeClip(runSource),model,'run'),idleClip=retargetClip(sanitizeClip(idleSource),model,'idle');
     const mixer=new THREE.AnimationMixer(model),actions={};
@@ -213,12 +217,13 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
     const active=idle||walk||run;if(active){active.paused=false;active.reset().play();}
     const bones=collectBones(model);model.traverse(o=>{if(o.isBone)o.userData.escapeBindQuaternion=o.quaternion.clone();});
     controller.native={model,mixer,actions,active,bones};controller.mode='native';controller.activeMode=active===run?'run':active===walk?'walk':'idle';onReady(controller);return controller;
-  }).catch(error=>{console.warn('Escape.kl: native Charakteranimation konnte nicht geladen werden – detaillierter Fallback bleibt aktiv.',error);onError(error);return controller;});
+  }).catch(error=>{console.warn('Escape.kl: native Charakteranimation konnte nicht geladen werden – detaillierter Fallback wird als Notlösung aktiviert.',error);controller.mode='fallback';fallback.root.visible=true;visualRoot.visible=true;onError(error);return controller;});
   controller.update=(kin,dt,t)=>{
     if(controller.disposed)return;const grounded=!!kin.grounded,speed=Math.max(0,kin.planarSpeed||0),moving=speed>.14;
     if(!controller.lastGrounded&&grounded)controller.landing=1;controller.lastGrounded=grounded;controller.landing=Math.max(0,controller.landing-dt*7);
     const lean=!grounded?.02:(kin.sprint&&moving?.105:moving?.035:0);visualRoot.rotation.x+=(lean-visualRoot.rotation.x)*(1-Math.exp(-dt*9));
     const targetScaleY=1-controller.landing*.025;visualRoot.scale.y+=(targetScaleY-visualRoot.scale.y)*(1-Math.exp(-dt*16));visualRoot.scale.x+=(1+(controller.landing*.012)-visualRoot.scale.x)*(1-Math.exp(-dt*16));visualRoot.scale.z=visualRoot.scale.x;
+    if(controller.mode==='loading')return;
     if(controller.mode!=='native'||!controller.native){animateFallback(fallback,kin,dt,t);return;}
     const n=controller.native,treadmill=!!kin.treadmill;
     const wanted=!grounded?'air':treadmill?'run':!moving?'idle':kin.sprint||speed>7.5?'run':'walk';

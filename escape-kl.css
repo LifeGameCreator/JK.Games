@@ -146,3 +146,72 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
   .ekl-level-progress{width:calc(100vw - 100px)}
   .ekl-world-chip{top:118px}
 }
+
+
+/* ===== V439 · iPhone Portrait/Landscape + Touch-Steuerung ===== */
+.escape-kl-overlay{width:100vw;height:100dvh;overflow:hidden;-webkit-touch-callout:none}
+.ekl-stick,.ekl-touch-actions button{z-index:30;-webkit-tap-highlight-color:transparent}
+.ekl-stick.active{border-color:#7bcfff70;background:#0c2233b8;box-shadow:inset 0 0 30px #0008,0 0 0 4px #4acbff13}
+.ekl-stick-knob{pointer-events:none}
+
+/* Touchgeräte bekommen die Steuerung unabhängig von der CSS-Breite. Das behebt iPhone-Querformat. */
+@media (pointer:coarse){
+  .ekl-touch{display:block!important}
+  .ekl-hud{padding-top:max(12px,env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .ekl-top-actions{position:absolute!important;top:max(12px,env(safe-area-inset-top))!important;right:max(12px,env(safe-area-inset-right))!important;margin:0!important;z-index:40}
+  .ekl-top-actions button{min-width:50px;height:50px;border-radius:16px}
+  .ekl-stick{left:max(18px,calc(env(safe-area-inset-left) + 10px));bottom:max(22px,calc(env(safe-area-inset-bottom) + 12px))}
+  .ekl-touch-actions{right:max(16px,calc(env(safe-area-inset-right) + 10px));bottom:max(22px,calc(env(safe-area-inset-bottom) + 12px))}
+}
+
+/* iPhone Hochformat: X exakt auf Höhe der Statistik-Karten, nur die wichtigsten Werte. */
+@media (pointer:coarse) and (orientation:portrait){
+  .ekl-topbar{padding-right:70px!important}
+  .ekl-statrow{max-width:calc(100vw - 96px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;width:min(315px,calc(100vw - 100px))!important}
+  .ekl-stat{display:none!important;min-width:0!important;width:100%!important;padding:8px 9px!important;border-radius:14px!important}
+  .ekl-stat:nth-child(1),.ekl-stat:nth-child(2),.ekl-stat:nth-child(4){display:block!important}
+  .ekl-stat small{font-size:7px!important}.ekl-stat b{font-size:14px!important}
+  .ekl-top-actions button:not([data-ekl-close]){display:none!important}
+  .ekl-top-actions button[data-ekl-close]{display:block!important}
+  .ekl-level-progress{left:max(12px,env(safe-area-inset-left))!important;top:calc(max(12px,env(safe-area-inset-top)) + 58px)!important;width:min(300px,calc(100vw - 110px))!important;padding:6px 9px!important}
+  .ekl-level-progress>div span{font-size:7px}.ekl-level-progress>div b{font-size:7px}
+  .ekl-world-chip{top:calc(max(12px,env(safe-area-inset-top)) + 102px)!important;min-width:184px!important;max-width:70vw!important}
+  .ekl-run-pop{top:calc(max(12px,env(safe-area-inset-top)) + 105px)!important}
+  .ekl-stick{width:118px!important;height:118px!important}
+  .ekl-stick-knob{width:48px!important;height:48px!important}
+  .ekl-touch-actions{grid-template-columns:62px 70px 70px!important;gap:8px!important}
+  .ekl-touch-actions button{height:60px!important;border-radius:18px!important;font-size:10px!important}
+  .ekl-touch-actions button.sprint{height:52px!important}
+}
+
+/* iPhone Querformat: kompaktes HUD, Touch-Steuerung bleibt vollständig sichtbar. */
+@media (pointer:coarse) and (orientation:landscape){
+  .ekl-hud{padding-top:max(7px,env(safe-area-inset-top));padding-bottom:max(7px,env(safe-area-inset-bottom))}
+  .ekl-topbar{padding-right:178px!important}
+  .ekl-statrow{display:flex!important;flex-wrap:nowrap!important;max-width:calc(100vw - 230px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;gap:5px!important}
+  .ekl-stat{display:none!important;min-width:86px!important;padding:6px 8px!important;border-radius:12px!important}
+  .ekl-stat:nth-child(1),.ekl-stat:nth-child(2),.ekl-stat:nth-child(4){display:block!important}
+  .ekl-stat small{font-size:6.5px!important}.ekl-stat b{font-size:13px!important}
+  .ekl-top-actions{gap:5px!important;top:max(7px,env(safe-area-inset-top))!important}
+  .ekl-top-actions button{display:block!important;min-width:45px!important;width:45px!important;height:45px!important;border-radius:13px!important;font-size:14px!important}
+  .ekl-level-progress{display:none!important}
+  .ekl-world-chip{top:max(8px,env(safe-area-inset-top))!important;min-width:170px!important;max-width:34vw!important;padding:6px 10px!important}
+  .ekl-world-chip small{font-size:6.5px!important}.ekl-world-chip b{font-size:10px!important}.ekl-world-chip span{font-size:7px!important}
+  .ekl-stage-progress{display:none!important}
+  .ekl-run-pop{top:58px!important;font-size:8px!important;padding:5px 9px!important}
+  .ekl-stick{width:94px!important;height:94px!important;left:max(18px,calc(env(safe-area-inset-left) + 8px))!important;bottom:max(10px,calc(env(safe-area-inset-bottom) + 5px))!important}
+  .ekl-stick-knob{width:38px!important;height:38px!important}
+  .ekl-touch-actions{grid-template-columns:54px 62px 62px!important;gap:6px!important;right:max(18px,calc(env(safe-area-inset-right) + 8px))!important;bottom:max(10px,calc(env(safe-area-inset-bottom) + 5px))!important}
+  .ekl-touch-actions button{height:48px!important;border-radius:15px!important;font-size:8px!important;padding:0 3px!important}
+  .ekl-touch-actions button.sprint{height:43px!important}
+  .ekl-prompt{bottom:72px!important;font-size:8px!important}
+  .ekl-toast{top:64px!important;max-width:56vw!important;font-size:9px!important;padding:7px 10px!important}
+}
+
+@media (pointer:coarse) and (orientation:landscape) and (max-height:390px){
+  .ekl-world-chip{display:none!important}
+  .ekl-stat{min-width:76px!important;padding:5px 7px!important}
+  .ekl-top-actions button{width:41px!important;min-width:41px!important;height:41px!important}
+  .ekl-stick{width:82px!important;height:82px!important}
+  .ekl-touch-actions{grid-template-columns:48px 56px 56px!important}.ekl-touch-actions button{height:43px!important}
+}

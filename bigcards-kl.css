@@ -2363,3 +2363,35 @@ body.bigcards-kl-open{overflow:hidden!important}
 .bc-pref-reduce-motion .card-rb-5::after{background:conic-gradient(from 0deg,#ff4b6e,#ffb84b,#fff55c,#58ff9a,#4be9ff,#668cff,#c76cff,#ff5fd7,#ff4b6e)!important}
 .bc-pref-reduce-motion .bc-card-rebirth-badge.rb-5{background:linear-gradient(90deg,#542fc6,#147fae,#178a68,#b08217,#b5367c)!important;background-position:50% 50%!important}
 .bc-pref-reduce-motion .shiny-1:after,.bc-pref-reduce-motion .shiny-2:after,.bc-pref-reduce-motion .shiny-3:after{transform:translateX(18%)!important;opacity:.65!important}
+
+
+/* ===== V439 · iPhone Spielfeld + kompakter Auto-Opener ===== */
+.bc-unlock-block{display:flex;flex-direction:column;align-items:flex-start;min-width:180px}
+.bc-unlock-block>button[data-bc-smart]{margin-top:7px;min-height:34px;padding:8px 13px;border:0;border-radius:11px;background:linear-gradient(180deg,#f47d63,#d95847);color:#fff;font-weight:1000;font-size:11px;cursor:pointer;box-shadow:0 3px 0 #a53c35,0 7px 16px rgba(133,55,45,.20)}
+.bc-unlock-block>button[data-bc-smart]:disabled{opacity:.62;cursor:wait}
+.bc-field-actions{justify-content:flex-end}
+.bc-field-actions>.bc-info-circle{flex:0 0 auto}
+.bc-auto-opener-notice{width:auto;max-width:min(250px,calc(100vw - 28px));min-width:132px;padding:9px 10px}
+.bc-auto-opener-notice>small{margin-bottom:6px}
+.bc-auto-notice-counts{display:none!important}
+.bc-auto-notice-rarities{margin-top:0;gap:5px}
+.bc-auto-notice-rarities>span{min-width:42px;justify-content:center;min-height:27px;padding:3px 7px}
+.bc-auto-notice-rarities strong{font-size:9px}
+@media(max-width:700px){
+  .bc-atlas-toolbar{grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr)!important}
+  .bc-unlock-block{min-width:0!important;width:100%!important}
+  .bc-unlock-block>button[data-bc-smart]{display:block!important;width:100%!important;max-width:none!important;margin-top:8px!important;padding:8px 6px!important;font-size:10px!important;line-height:1.05!important;white-space:normal!important}
+  .bc-field-actions{grid-column:1/-1!important;display:grid!important;grid-template-columns:38px minmax(0,1fr)!important;gap:7px!important;align-items:center!important}
+  .bc-field-actions>small{text-align:left!important}
+  .bc-auto-opener-notice{right:max(6px,env(safe-area-inset-right));top:calc(max(8px,env(safe-area-inset-top)) + 78px);width:auto;max-width:min(178px,47vw);min-width:118px;padding:7px 8px;border-radius:12px}
+  .bc-auto-opener-notice>small{margin-bottom:5px;font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bc-auto-notice-rarities{gap:4px}
+  .bc-auto-notice-rarities>span{min-width:38px;min-height:24px;padding:2px 5px;font-size:11px}
+  .bc-auto-notice-rarities strong{font-size:8px}
+  .bc-auto-notice-rarities em{right:-2px;top:-5px;min-width:13px;height:13px;font-size:6px}
+}
+@media(max-width:390px){
+  .bc-atlas-toolbar{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)!important}
+  .bc-unlock-block>button[data-bc-smart]{font-size:9.5px!important;padding:7px 5px!important}
+  .bc-auto-opener-notice{max-width:172px}
+}
