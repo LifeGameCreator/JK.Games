@@ -218,3 +218,21 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
 
 /* V440 speed item inventory */
 .ekl-item-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.ekl-item-actions button{min-width:0}.ekl-shop-grid article:has(.ekl-item-actions){min-height:210px}@media(max-width:500px){.ekl-item-actions{grid-template-columns:1fr}}
+
+/* ===== V441 · Level-Lauftempo, Partikelspuren & Charakter Studio ===== */
+.ekl-character-modal{width:min(860px,96vw)}
+.ekl-character-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.ekl-character-choice button{min-height:82px;padding:14px 16px;border:1px solid #ffffff18;border-radius:18px;background:linear-gradient(145deg,#122335,#0b1522);color:#fff;text-align:left;display:flex;flex-direction:column;gap:5px}
+.ekl-character-choice button b{font-size:17px}.ekl-character-choice button span{font-size:11px;color:#a9bdd0}.ekl-character-choice button.active{border-color:#6fe1ff87;box-shadow:0 0 0 2px #52d7ff18 inset;background:linear-gradient(145deg,#173a50,#102438)}
+.ekl-character-special-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:18px 0 8px;padding:10px 12px;border-radius:12px;background:#ffffff08;border:1px solid #ffffff10}.ekl-character-special-head span{font-size:11px;color:#9fb5c8}
+.ekl-character-trail-position{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding:12px;border:1px solid #ffffff12;border-radius:15px;background:#ffffff07}.ekl-character-trail-position>b{margin-right:auto}.ekl-character-trail-position button,.ekl-trail-pos-inline button{min-height:36px;padding:0 12px;border:1px solid #ffffff1d;border-radius:11px;background:#111f2c;color:#dbe9f5;font-weight:900}.ekl-character-trail-position button.active,.ekl-trail-pos-inline button.active{border-color:#70e4ff80;background:#17405a;color:#fff;box-shadow:0 0 18px #54dcff1f}
+.ekl-trail-pos-inline{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.ekl-progression-note .ekl-trail-pos-inline{width:100%;justify-content:flex-end}
+
+@media(max-width:620px){
+  .ekl-character-choice{grid-template-columns:1fr}
+  .ekl-character-special-head{align-items:flex-start;flex-direction:column}
+  .ekl-character-trail-position{align-items:stretch}.ekl-character-trail-position>b{width:100%}
+  .ekl-character-trail-position button{flex:1}
+  .ekl-progression-note .ekl-trail-pos-inline{justify-content:flex-start}
+}
