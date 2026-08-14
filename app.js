@@ -19920,7 +19920,7 @@ function openTopGamesJkInfo() {
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
-        <article><b>Escape.kl</b><p>Escape.kl vergibt Hauptcharakter-XP für abgeschlossene Keyboard-Welten und Rebirths. Speed, Wins, Trails und Shop-Upgrades werden vollständig im Spiel erspielt.</p></article>
+        <article><b>Escape.kl</b><p>Escape.kl vergibt Hauptcharakter-XP für abgeschlossene Keyboard-Welten und Rebirths. Laufpunkte bauen Speed und Level auf; Wins kaufen Number Buttons, Trails und Auren.</p></article>
         <article><b>Egoshoot.KL</b><p>Egoshoot.KL hat aktuell keine zufälligen Gratis-JK/Coin-Drops. Kills, Waffenlevel, Shield und Versorgung werden im Spiel erspielt; optionale Kill-Pakete findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
@@ -19944,7 +19944,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
-        <button class="topgames-card escape" data-open-escape-kl><b>Escape.kl</b><small>3D Jump'n'Run • Speed sammeln • Stage-Wins • Welt 1–3 • In-Game-Shop • Rebirth.</small></button>
+        <button class="topgames-card escape" data-open-escape-kl><b>Escape.kl</b><small>3D Jump'n'Run • Laufpunkte → Speed/Level • Stage-Wins • Trails/Auren • Rebirth • Welt 1–3.</small></button>
         <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
     </div>`;

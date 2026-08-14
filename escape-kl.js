@@ -1,46 +1,64 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260813-escape-v437';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260813-escape-v437';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260813-escape-v437';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260813-escape-v437';
-import { createEscapeCharacter } from './escape-kl-character.js?v=20260813-escape-v437';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260813-escape-v438';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260813-escape-v438';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260813-escape-v438';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260813-escape-v438';
+import { createEscapeCharacter } from './escape-kl-character.js?v=20260813-escape-v438';
 
-/* Escape.kl – JK.Games Top Game V437 · stage-win economy + three-world difficulty ladder */
-const VERSION = '2026-08-13-v437';
+/* Escape.kl – JK.Games Top Game V438 · Keyboard-Escape-style step, level, gear and rebirth progression */
+const VERSION = '2026-08-13-v438';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
 const GRAVITY = 24;
 const JUMP_VELOCITY = 8.4;
 const MAX_FALL = -24;
-const SPEED_UPGRADES = Object.freeze([
-  {level:1,name:'Speed-Multiplikator I',cost:5,mult:1.25},
-  {level:2,name:'Speed-Multiplikator II',cost:20,mult:1.5},
-  {level:3,name:'Speed-Multiplikator III',cost:60,mult:2},
-  {level:4,name:'Speed-Multiplikator IV',cost:150,mult:3},
-  {level:5,name:'Speed-Multiplikator V',cost:400,mult:5}
+const RUN_POINT_DISTANCE = .75;
+const STEP_BUTTONS = Object.freeze([
+  {tier:0,name:'+1 Speed / Laufpunkt',cost:0,gain:1},
+  {tier:1,name:'+2 Speed / Laufpunkt',cost:3,gain:2},
+  {tier:2,name:'+3 Speed / Laufpunkt',cost:15,gain:3},
+  {tier:3,name:'+25 Speed / Laufpunkt',cost:100,gain:25},
+  {tier:4,name:'+50 Speed / Laufpunkt',cost:500,gain:50},
+  {tier:5,name:'+100 Speed / Laufpunkt',cost:2500,gain:100},
+  {tier:6,name:'+250 Speed / Laufpunkt',cost:15000,gain:250},
+  {tier:7,name:'+500 Speed / Laufpunkt',cost:50000,gain:500}
 ]);
 const TRAILS = Object.freeze([
-  {id:'none',name:'Kein Trail',cost:0,color:0xffffff},
-  {id:'cyan',name:'Cyan Key Trail',cost:10,color:0x58e6ff},
-  {id:'violet',name:'Glitch Trail',cost:35,color:0x9c6cff},
-  {id:'gold',name:'Golden ESC Trail',cost:80,color:0xffcf55},
-  {id:'electric',name:'Electric Key Trail',cost:180,color:0x73a7ff},
-  {id:'toxic',name:'Toxic Keyboard Trail',cost:350,color:0x7cff72},
-  {id:'galaxy',name:'Galaxy Keyboard Trail',cost:0,color:0xbd78ff,jk:true}
+  {id:'none',name:'Kein Trail',cost:0,color:0xffffff,mult:1},
+  {id:'green',name:'Green Trail',cost:500,color:0x60f077,mult:1.5},
+  {id:'blue',name:'Blue Trail',cost:1500,color:0x5aa7ff,mult:2},
+  {id:'purple',name:'Purple Trail',cost:5000,color:0xa06cff,mult:3},
+  {id:'red',name:'Red Trail',cost:25000,color:0xff6666,mult:4},
+  {id:'rainbow',name:'Rainbow Trail',cost:100000,color:0xffcf55,mult:5},
+  {id:'galaxy',name:'Galaxy Keyboard Trail',cost:0,color:0xbd78ff,mult:10,jk:true}
+]);
+const AURAS = Object.freeze([
+  {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1},
+  {id:'medal',name:'Medal Aura',cost:0,color:0xffd45e,mult:2,questRunPoints:2500},
+  {id:'glow',name:'Glow Aura',cost:1000000,color:0x72e8ff,mult:1.2},
+  {id:'wind',name:'Wind Aura',cost:5000000,color:0xc3f4ff,mult:1.5},
+  {id:'water',name:'Water Aura',cost:10000000,color:0x55aaff,mult:2},
+  {id:'fire',name:'Fire Aura',cost:25000000,color:0xff714d,mult:3}
+]);
+const REBIRTH_TABLE = Object.freeze([
+  {level:15,mult:1.5},{level:25,mult:2},{level:40,mult:2.5},{level:55,mult:3},{level:75,mult:3.5},
+  {level:95,mult:4},{level:120,mult:5},{level:145,mult:6},{level:170,mult:8},{level:200,mult:10},
+  {level:230,mult:50},{level:265,mult:500},{level:300,mult:10000},{level:340,mult:100000},{level:380,mult:1000000},
+  {level:420,mult:10000000},{level:465,mult:100000000},{level:510,mult:1000000000},{level:555,mult:10000000000},{level:600,mult:100000000000}
 ]);
 
 const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
-  player:null, playerRoot:null, character:null, trail:null, trailPoints:[],
+  player:null, playerRoot:null, character:null, trail:null, trailPoints:[], auraGroup:null, auraRings:[],
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
   keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
   yaw:0, pitch:.32, camDistance:7.2, pointer:null,
   keyDown:null,keyUp:null,resizeHandler:null,pointerMove:null,pointerUp:null,
-  lastGroundPos:new THREE.Vector3(), speedDistanceCarry:0, trainingCarry:0,
+  lastGroundPos:new THREE.Vector3(), speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
   prompt:null, activeInteractable:null, toastTimer:0, paused:false, modalOpen:false,
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
@@ -50,8 +68,8 @@ const G = {
 
 function defaultProgress(){
   return {
-    version:5,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,rebirths:0,speedUpgrade:0,
-    trail:'none',ownedTrails:['none'],worldsUnlocked:['keyboard-lab'],
+    version:6,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,
+    trail:'none',ownedTrails:['none'],aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
     lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,lastPlayedAt:Date.now()
   };
@@ -62,11 +80,19 @@ function normalizeProgress(raw){
   d.wins=Math.max(0,Math.floor(Number(d.wins)||0));
   d.lifetimeWins=Math.max(d.wins,Math.floor(Number(d.lifetimeWins)||0));
   d.stageWinsCollected=Math.max(0,Math.floor(Number(d.stageWinsCollected)||0));
+  d.runPoints=Math.max(0,Math.floor(Number(d.runPoints)||0));
   d.rebirths=Math.max(0,Math.floor(Number(d.rebirths)||0));
-  d.speedUpgrade=Math.max(0,Math.min(SPEED_UPGRADES.length,Math.floor(Number(d.speedUpgrade)||0)));
-  d.ownedTrails=Array.isArray(d.ownedTrails)?[...new Set(d.ownedTrails.filter(id=>TRAILS.some(t=>t.id===id)))]:['none'];
+  const legacyTier=Math.max(0,Math.floor(Number(d.speedUpgrade)||0));
+  d.stepButtonTier=Math.max(0,Math.min(STEP_BUTTONS.length-1,Math.floor(Number(d.stepButtonTier ?? legacyTier)||0)));
+  delete d.speedUpgrade;
+  const legacyTrailMap={cyan:'green',violet:'purple',gold:'red',electric:'blue',toxic:'green'};
+  const rawTrails=Array.isArray(d.ownedTrails)?d.ownedTrails.map(id=>legacyTrailMap[id]||id):['none'];
+  d.ownedTrails=[...new Set(rawTrails.filter(id=>TRAILS.some(t=>t.id===id)))];
   if(!d.ownedTrails.includes('none'))d.ownedTrails.unshift('none');
-  d.trail=d.ownedTrails.includes(d.trail)?d.trail:'none';
+  d.trail=legacyTrailMap[d.trail]||d.trail;d.trail=d.ownedTrails.includes(d.trail)?d.trail:'none';
+  d.ownedAuras=Array.isArray(d.ownedAuras)?[...new Set(d.ownedAuras.filter(id=>AURAS.some(a=>a.id===id)))]:['none'];
+  if(!d.ownedAuras.includes('none'))d.ownedAuras.unshift('none');
+  d.aura=d.ownedAuras.includes(d.aura)?d.aura:'none';
   d.worldsUnlocked=Array.isArray(d.worldsUnlocked)?[...new Set(d.worldsUnlocked)]:['keyboard-lab'];
   if(!d.worldsUnlocked.includes('keyboard-lab'))d.worldsUnlocked.unshift('keyboard-lab');
   d.worldStars=d.worldStars&&typeof d.worldStars==='object'?d.worldStars:{};
@@ -74,11 +100,12 @@ function normalizeProgress(raw){
   d.completions=d.completions&&typeof d.completions==='object'?d.completions:{};
   d.hiddenKeys=d.hiddenKeys&&typeof d.hiddenKeys==='object'?d.hiddenKeys:{};
   d.totalDistance=Math.max(0,Number(d.totalDistance)||0);
+  if(d.runPoints<=0&&d.totalDistance>0)d.runPoints=Math.floor(d.totalDistance/RUN_POINT_DISTANCE);
   d.lastWheelAt=Math.max(0,Number(d.lastWheelAt)||0);
   d.dailyQuest=d.dailyQuest&&typeof d.dailyQuest==='object'?d.dailyQuest:null;
   d.jkTreadmillTier=Math.max(0,Math.min(2,Math.floor(Number(d.jkTreadmillTier)||0)));
   d.jkSpeedBoostUntil=Math.max(0,Number(d.jkSpeedBoostUntil)||0);
-  d.version=5;
+  d.version=6;
   return d;
 }
 function loadProgress(){
@@ -109,29 +136,72 @@ function queuePersist(delay=1200){
 function awardMainXp(amount,reason,key){try{return window.JKGamesAwardMainGameXp?.('escape',amount,reason,{eventKey:key,toast:true})||0}catch{return 0}}
 function currentWorldDef(){return escapeWorldById(G.world);}
 function isEscapeWorld(id=G.world){const w=escapeWorldById(id);return !!w&&!w.locked;}
+function speedForLevel(level){level=Math.max(0,Math.floor(Number(level)||0));return Math.max(0,Math.round(level+level*level*.01));}
+function currentLevel(){const speed=Math.max(0,Number(G.state?.speed)||0);return Math.max(0,Math.floor(50*(Math.sqrt(1+.04*speed)-1)));}
+function levelProgress(){
+  const level=currentLevel(),from=speedForLevel(level),to=speedForLevel(level+1),speed=Math.max(0,Number(G.state?.speed)||0);
+  return {level,from,to,ratio:Math.max(0,Math.min(1,(speed-from)/Math.max(1,to-from)))};
+}
+function nextRebirthDef(){
+  const r=Math.max(0,Math.floor(Number(G.state?.rebirths)||0));
+  if(r<REBIRTH_TABLE.length)return REBIRTH_TABLE[r];
+  const extra=r-REBIRTH_TABLE.length+1,last=REBIRTH_TABLE[REBIRTH_TABLE.length-1];
+  return {level:last.level+extra*100,mult:last.mult*Math.pow(10,extra)};
+}
+function rebirthMultiplier(){
+  const r=Math.max(0,Math.floor(Number(G.state?.rebirths)||0));if(r<=0)return 1;
+  if(r<=REBIRTH_TABLE.length)return REBIRTH_TABLE[r-1]?.mult||1;
+  const extra=r-REBIRTH_TABLE.length,last=REBIRTH_TABLE[REBIRTH_TABLE.length-1];
+  return last.mult*Math.pow(10,extra);
+}
+function stepBaseGain(){return STEP_BUTTONS[Math.max(0,Math.min(STEP_BUTTONS.length-1,Number(G.state?.stepButtonTier)||0))]?.gain||1;}
+function trailMultiplier(){return TRAILS.find(t=>t.id===G.state?.trail)?.mult||1;}
+function auraMultiplier(){return AURAS.find(a=>a.id===G.state?.aura)?.mult||1;}
+function speedPerRunPoint(){
+  const boost=Date.now()<Number(G.state?.jkSpeedBoostUntil||0)?2:1;
+  return stepBaseGain()*trailMultiplier()*auraMultiplier()*rebirthMultiplier()*boost;
+}
+function gainMultiplier(){return speedPerRunPoint();}
 function updateWorldUnlocks(){
   if(!G.state)return [];
-  const unlocked=[];
+  const unlocked=[],level=currentLevel();
   for(const w of WORLD_DEFS){
     if(w.locked||w.number===1)continue;
     if(G.state.worldsUnlocked.includes(w.id))continue;
-    if(G.state.lifetimeWins>=Number(w.requiredLifetimeWins||0)){G.state.worldsUnlocked.push(w.id);unlocked.push(w);}
+    if(level>=Number(w.requiredLevel||0)){G.state.worldsUnlocked.push(w.id);unlocked.push(w);}
   }
   return unlocked;
 }
 function awardWins(amount,source='Wins',stageWin=false){
   amount=Math.max(0,Math.floor(Number(amount)||0));if(!amount)return 0;
   G.state.wins+=amount;G.state.lifetimeWins+=amount;if(stageWin)G.state.stageWinsCollected+=amount;
-  const newlyUnlocked=updateWorldUnlocks();queuePersist(80);updateHud(true);
-  for(const w of newlyUnlocked)setTimeout(()=>toast(`🌍 Welt ${w.number} freigeschaltet: ${w.name}!`,'good',3200),350);
+  queuePersist(80);updateHud(true);
   return amount;
 }
-function fmt(n){n=Number(n)||0;if(n<1000)return Math.floor(n).toLocaleString('de-DE');if(n<1e6)return `${(n/1e3).toFixed(n<1e4?1:0).replace('.',',')} Tsd`;if(n<1e9)return `${(n/1e6).toFixed(n<1e7?1:0).replace('.',',')} Mio`;return `${(n/1e9).toFixed(1).replace('.',',')} Mrd`;}
+function fmt(n){n=Number(n)||0;if(n<1000)return Math.floor(n).toLocaleString('de-DE');if(n<1e6)return `${(n/1e3).toFixed(n<1e4?1:0).replace('.',',')} Tsd`;if(n<1e9)return `${(n/1e6).toFixed(n<1e7?1:0).replace('.',',')} Mio`;if(n<1e12)return `${(n/1e9).toFixed(n<1e10?1:0).replace('.',',')} Mrd`;return n.toExponential(2).replace('.',',');}
 function timeText(sec){sec=Math.max(0,Number(sec)||0);const m=Math.floor(sec/60),s=sec-m*60;return `${m}:${s.toFixed(2).padStart(5,'0')}`;}
-function gainMultiplier(){const up=SPEED_UPGRADES[Math.max(0,G.state.speedUpgrade)-1]?.mult||1,boost=Date.now()<Number(G.state.jkSpeedBoostUntil||0)?2:1;return up*(1+G.state.rebirths*.5)*boost;}
 function dayKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function ensureDailyQuest(){if(!G.state)return null;const key=dayKey();if(!G.state.dailyQuest||G.state.dailyQuest.day!==key){G.state.dailyQuest={day:key,distanceStart:Number(G.state.totalDistance)||0,completionsStart:Number(G.state.completions?.['keyboard-lab']||0),speedEarned:0,claimed:[]};queuePersist(1200);}if(!Array.isArray(G.state.dailyQuest.claimed))G.state.dailyQuest.claimed=[];G.state.dailyQuest.speedEarned=Math.max(0,Number(G.state.dailyQuest.speedEarned)||0);return G.state.dailyQuest;}
-function addSpeed(amount,countDaily=true){amount=Math.max(0,Number(amount)||0);if(!amount)return;G.state.speed+=amount;if(countDaily){const q=ensureDailyQuest();if(q)q.speedEarned+=amount;}}
+function ensureDailyQuest(){if(!G.state)return null;const key=dayKey();if(!G.state.dailyQuest||G.state.dailyQuest.day!==key){G.state.dailyQuest={day:key,runPointsStart:Number(G.state.runPoints)||0,completionsStart:Number(G.state.completions?.['keyboard-lab']||0),speedEarned:0,claimed:[]};queuePersist(1200);}if(!Array.isArray(G.state.dailyQuest.claimed))G.state.dailyQuest.claimed=[];if(!Number.isFinite(Number(G.state.dailyQuest.runPointsStart)))G.state.dailyQuest.runPointsStart=Number(G.state.runPoints)||0;G.state.dailyQuest.speedEarned=Math.max(0,Number(G.state.dailyQuest.speedEarned)||0);return G.state.dailyQuest;}
+function flashRunPoints(points,speedGain){
+  const e=G.overlay?.querySelector('[data-ekl-run-pop]');if(!e)return;
+  clearTimeout(G.runPopTimer);e.textContent=`+${points.toLocaleString('de-DE')} LAUFPUNKT${points===1?'':'E'} · +${fmt(speedGain)} SPEED`;e.classList.add('show');
+  G.runPopTimer=setTimeout(()=>e.classList.remove('show'),650);
+}
+function onLevelChanged(before,after){
+  if(after<=before)return;
+  const unlocks=updateWorldUnlocks(),nextRb=nextRebirthDef();
+  soundCheckpoint();
+  const msg=after>=Number(nextRb?.level||Infinity)&&before<Number(nextRb?.level||Infinity)
+    ?`⬆ LEVEL ${after} · REBIRTH ${G.state.rebirths+1} FREIGESCHALTET!`
+    :`⬆ LEVEL ${after}`;
+  toast(msg,'good',1900);
+  for(const w of unlocks)setTimeout(()=>toast(`🌍 LEVEL ${after}: Welt ${w.number} freigeschaltet · ${w.name}!`,'good',3200),450);
+}
+function addSpeed(amount,countDaily=true){amount=Math.max(0,Number(amount)||0);if(!amount)return 0;const before=currentLevel();G.state.speed+=amount;if(countDaily){const q=ensureDailyQuest();if(q)q.speedEarned+=amount;}const after=currentLevel();onLevelChanged(before,after);return amount;}
+function awardRunPoints(points){
+  points=Math.max(0,Math.floor(Number(points)||0));if(!points)return 0;
+  const speedGain=points*speedPerRunPoint();G.state.runPoints+=points;addSpeed(speedGain,true);flashRunPoints(points,speedGain);return speedGain;
+}
 function movementSpeed(){const collected=Math.max(0,G.state.speed),curve=4.6+Math.log10(1+collected)*2.35,sprint=G.sprint?1.12:1;return Math.min(19.5,curve)*sprint;}
 
 function mat(key,params){if(G.materials.has(key))return G.materials.get(key);const m=new THREE.MeshStandardMaterial(params);G.materials.set(key,m);return m;}
@@ -231,9 +301,22 @@ function buildHub(){
   }
   addSign('SPEED TRAINING',new THREE.Vector3(-11.7,4.0,3.1),0x62f2e1,.92);addGlowLight(-11.7,2.8,.2,0x4ef1db,.82,11);
 
+  // Keyboard-Escape-style number buttons: drauftreten = Speed pro Laufpunkt dauerhaft erhöhen.
+  addSign('LAUFPUNKT-BUTTONS',new THREE.Vector3(-17.0,2.75,8.95),0xffd260,.64);
+  addSign('DRAUFLAUFEN = KAUFEN',new THREE.Vector3(-17.0,1.95,8.97),0xb9c9d9,.34);
+  const buttonPads=STEP_BUTTONS.slice(1);
+  const buttonColors=[0x40603c,0x2f5b6c,0x5a4a7d,0x755928,0x7d363a,0x70417f,0x9a6930];
+  buttonPads.forEach((def,index)=>{
+    const row=index<4?0:1,col=row===0?index:index-4;
+    const x=-24.5+col*4.0,z=row===0?7.4:11.3;
+    addPlatform({x,y:.37,z,w:3.35,h:.18,d:3.05,color:buttonColors[index],label:`+${def.gain}`,kind:'step-button',hub:true});
+    addSign(`${def.cost.toLocaleString('de-DE')} WINS`,new THREE.Vector3(x,1.25,z+1.6),0xffd260,.28);
+    addAutoTrigger(`step-button-${def.tier}`,x,z,3.1,2.8,()=>buyStepButton(def.tier,true));
+  });
+
   // Rebirth-Station: Beschriftung steht vor dem Spieler und wird nicht mehr vom Altar verdeckt.
   addPlatform({x:-11,y:.45,z:-15,w:7,h:.5,d:7,color:0x542c72,label:'',kind:'altar',hub:true});addCollider(-11,-15,2.9,2.9);
-  boxDeco(-11,2.35,-18.15,7.4,4.4,.34,0x21152f);addCollider(-11,-18.15,7.4,.34);addSign('REBIRTH',new THREE.Vector3(-11,3.65,-17.94),0xc694ff,.86);addSign('PERMANENT SPEED',new THREE.Vector3(-11,2.48,-17.92),0x69dcff,.48);
+  boxDeco(-11,2.35,-18.15,7.4,4.4,.34,0x21152f);addCollider(-11,-18.15,7.4,.34);addSign('REBIRTH',new THREE.Vector3(-11,3.65,-17.94),0xc694ff,.86);addSign('LEVEL-REBIRTH',new THREE.Vector3(-11,2.48,-17.92),0x69dcff,.48);
   addCylinderDeco(-11,1.1,-15,1.15,1.45,1.35,0x6c3a91,0x32195e,18);addCylinderDeco(-11,2.5,-15,.42,.55,2.3,0x9f68ff,0x452073,16);addRingDeco(-11,3.05,-15,1.45,.07,0xbb78ff,Math.PI/2);addRingDeco(-11,3.05,-15,1.05,.045,0x69dcff,Math.PI/2);addGlowLight(-11,3,-15,0xb76cff,1.55,12);addInteractable('rebirth','Rebirth öffnen',-11,1,-13.0,4.0,()=>{soundKey('REBIRTH');openRebirth()});
 
   // World 1 portal: offener Durchgang. Kein E mehr – einfach hindurchlaufen.
@@ -249,7 +332,7 @@ function buildHub(){
     boxDeco(x-2.8,2.0,z-2.45,.42,3.8,.55,color,color);boxDeco(x+2.8,2.0,z-2.45,.42,3.8,.55,color,color);boxDeco(x,3.78,z-2.45,6.0,.38,.55,color,color);
     addRingDeco(x,2.25,z-2.25,1.75,.07,color,0);addGlowLight(x,2.4,z-1.9,color,.9,9);
     addSign(`WORLD ${w.number} · ${w.name.toUpperCase()}`,new THREE.Vector3(x,4.65,z-2.15),color,.58);
-    addSign(`${w.requiredLifetimeWins.toLocaleString('de-DE')} LIFETIME WINS`,new THREE.Vector3(x,3.72,z-2.13),0xffd36a,.34);
+    addSign(`LEVEL ${Number(w.requiredLevel||0)}`,new THREE.Vector3(x,3.72,z-2.13),0xffd36a,.34);
     addAutoTrigger(`${id}-walkthrough`,x,z-2.4,5.5,2.2,()=>{soundKey('ENTER');enterWorld(id)});
   };
   addWorldPortal('candy-keys',18,-16,0xde6ba8);
@@ -278,8 +361,16 @@ function createPlayer(){
   G.character=createEscapeCharacter({gender,floorOffset:PLAYER_HALF,onReady:()=>toast(`${gender==='female'?'Weiblicher':'Männlicher'} JK.Games-Charakter · Idle/Walk/Run geladen`,'good',1900)});
   G.playerRoot=G.character.root;G.player=G.playerRoot;G.scene.add(G.playerRoot);
   const trailGeo=new THREE.BufferGeometry();trailGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(48*3),3));const trailMat=new THREE.LineBasicMaterial({color:TRAILS.find(t=>t.id===G.state.trail)?.color||0xffffff,transparent:true,opacity:.72});G.materials.set('trail-line',trailMat);G.trail=new THREE.Line(trailGeo,trailMat);G.trail.frustumCulled=false;G.scene.add(G.trail);G.trailPoints=[];
+  G.auraGroup=new THREE.Group();G.auraRings=[];
+  for(const [i,r] of [0.58,0.83,1.05].entries()){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.024+i*.006,7,30),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.0,depthWrite:false,blending:THREE.AdditiveBlending}));
+    ring.rotation.x=Math.PI/2;ring.position.y=-PLAYER_HALF+.08+i*.16;G.auraGroup.add(ring);G.auraRings.push(ring);
+  }
+  G.playerRoot.add(G.auraGroup);setAuraStyle();
 }
 function setTrailColor(){const t=TRAILS.find(x=>x.id===G.state.trail)||TRAILS[0];if(G.trail?.material)G.trail.material.color.setHex(t.color);}
+function setAuraStyle(){const a=AURAS.find(x=>x.id===G.state?.aura)||AURAS[0];for(const ring of G.auraRings){ring.material.color.setHex(a.color);ring.material.opacity=a.id==='none'?0:.36;ring.visible=a.id!=='none';}}
+function updateAura(t){if(!G.auraGroup||G.state?.aura==='none')return;G.auraGroup.rotation.y=t*.55;G.auraRings.forEach((r,i)=>{r.rotation.z=t*(i%2?-.8:.65)+i*.8;const pulse=1+Math.sin(t*2+i)*.05;r.scale.setScalar(pulse);r.material.opacity=.25+i*.07+Math.sin(t*2.3+i)*.04;});}
 
 function setWorld(id,initial=false){
   G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;G.stageClaims.clear();
@@ -305,8 +396,8 @@ function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
   if(w.locked)return toast(`${w.name} kommt in einem späteren Escape.kl-Update.`,'bad',2600);
   if(!G.state.worldsUnlocked.includes(id)){
-    const need=Math.max(0,Number(w.requiredLifetimeWins||0)-Number(G.state.lifetimeWins||0));
-    if(need>0)return toast(`🔒 ${w.name}: noch ${need.toLocaleString('de-DE')} Lifetime Wins benötigt.`,'bad',3000);
+    const need=Math.max(0,Number(w.requiredLevel||0)-currentLevel());
+    if(need>0)return toast(`🔒 ${w.name}: noch ${need} Level benötigt · Ziel Level ${Number(w.requiredLevel||0)}.`,'bad',3000);
     G.state.worldsUnlocked.push(id);queuePersist(80);
   }
   setWorld(id);
@@ -367,8 +458,19 @@ function processMovement(dt,t){
   if(G.grounded&&G.support!==G.lastSupport){handlePlatformContact(G.support);G.lastSupport=G.support;}else if(!G.grounded)G.lastSupport=null;
   G.pos.y=nextY;if(G.playerRoot)G.playerRoot.position.copy(G.pos);
 
-  if(G.grounded&&planarSpeed>.08){const dist=G.lastGroundPos.distanceTo(G.pos);if(dist<3){G.speedDistanceCarry+=dist;G.state.totalDistance+=dist;while(G.speedDistanceCarry>=1){G.speedDistanceCarry-=1;addSpeed(gainMultiplier(),true);queuePersist(1800);}}G.lastGroundPos.copy(G.pos);}else if(G.grounded)G.lastGroundPos.copy(G.pos);
-  if(isOnTraining()){const tr=trainingInfo();G.trainingCarry+=dt*5*gainMultiplier()*(tr?.mult||1);if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addSpeed(add,true);queuePersist(1800);}}
+  if(G.grounded&&planarSpeed>.08){
+    const dist=G.lastGroundPos.distanceTo(G.pos);
+    if(dist<3){
+      G.speedDistanceCarry+=dist;G.state.totalDistance+=dist;
+      const runPoints=Math.floor(G.speedDistanceCarry/RUN_POINT_DISTANCE);
+      if(runPoints>0){G.speedDistanceCarry-=runPoints*RUN_POINT_DISTANCE;awardRunPoints(runPoints);queuePersist(1800);}
+    }
+    G.lastGroundPos.copy(G.pos);
+  }else if(G.grounded)G.lastGroundPos.copy(G.pos);
+  if(isOnTraining()){
+    const tr=trainingInfo();G.trainingCarry+=dt*5*speedPerRunPoint()*(tr?.mult||1);
+    if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addSpeed(add,true);queuePersist(1800);}
+  }
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
   if(G.pos.y<MAX_FALL){respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
 }
@@ -431,7 +533,10 @@ function detectInteraction(){let best=null,dist=Infinity;for(const i of G.intera
 function interact(){if(G.modalOpen){closeModal();return}if(G.activeInteractable?.onUse)G.activeInteractable.onUse();}
 function updateHud(force=false){
   if(!G.overlay||!G.state)return;G.hudClock+=force?999:0;const set=(q,v)=>{const e=G.overlay.querySelector(q);if(e&&e.textContent!==String(v))e.textContent=String(v)};
-  set('[data-ekl-speed]',fmt(G.state.speed));set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',G.state.rebirths);set('[data-ekl-gain]',`×${gainMultiplier().toFixed(2).replace('.',',')}`);
+  const lp=levelProgress(),nextRb=nextRebirthDef();
+  set('[data-ekl-speed]',fmt(G.state.speed));set('[data-ekl-level]',lp.level);set('[data-ekl-runpoints]',fmt(G.state.runPoints));set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',G.state.rebirths);set('[data-ekl-gain]',`+${fmt(speedPerRunPoint())}`);
+  set('[data-ekl-level-next]',lp.level>=Number(nextRb?.level||Infinity)?`REBIRTH ${G.state.rebirths+1} BEREIT`:`NÄCHSTES LEVEL: ${fmt(lp.to)} SPEED`);
+  const levelBar=G.overlay.querySelector('[data-ekl-level-bar]');if(levelBar)levelBar.style.width=`${Math.round(lp.ratio*100)}%`;
   const race=G.world==='race',hub=G.world==='hub',w=currentWorldDef(),total=race?5:(w?.stageCount||1),worldChip=G.overlay.querySelector('.ekl-world-chip'),progressWrap=G.overlay.querySelector('.ekl-stage-progress');
   if(worldChip)worldChip.hidden=hub;if(progressWrap)progressWrap.hidden=hub;
   if(!hub){
@@ -448,45 +553,83 @@ function toast(message,tone='',ms=1900){const e=G.overlay?.querySelector('[data-
 function openModal(html){closeModal();G.modalOpen=true;const wrap=document.createElement('div');wrap.className='ekl-modal-wrap';wrap.dataset.eklModal='1';wrap.innerHTML=html;G.overlay.append(wrap);wrap.addEventListener('click',e=>{if(e.target===wrap)closeModal()});wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=closeModal);return wrap;}
 function closeModal(){G.overlay?.querySelector('[data-ekl-modal]')?.remove();G.modalOpen=false;}
 function openShop(tab='speed'){
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ECHTER IN-GAME SHOP · ESCAPE HUB</small><h2>🏪 Speed Shop</h2><p>Du stehst wirklich im Shop-Gebäude. Kaufe Upgrades mit deinen erspielten Wins.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>SPEED</small><b>${fmt(G.state.speed)}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>GAIN</small><b>×${gainMultiplier().toFixed(2)}</b></div><div><small>TRAIL</small><b>${TRAILS.find(t=>t.id===G.state.trail)?.name||'Keiner'}</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Speed</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
+  const level=currentLevel(),trail=TRAILS.find(t=>t.id===G.state.trail)||TRAILS[0],aura=AURAS.find(a=>a.id===G.state.aura)||AURAS[0];
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ECHTER IN-GAME SHOP · ESCAPE HUB</small><h2>🏪 Speed Shop</h2><p>Wie beim Keyboard-Escape-Loop: Laufpunkte geben Speed, Wins verbessern deinen Speed pro Laufpunkt, Trails und Auren stapeln Multiplikatoren.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>LEVEL</small><b>${level}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>SPEED / LP</small><b>+${fmt(speedPerRunPoint())}</b></div><div><small>GEAR</small><b>×${(trail.mult*aura.mult).toFixed(2).replace('.',',')}</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Laufpunkte</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
   wrap.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.onclick=()=>renderShopBody(b.dataset.eklShopTab));renderShopBody(tab);
 }
-function renderShopBody(tab){const body=G.overlay?.querySelector('[data-ekl-shop-body]');if(!body)return;G.overlay.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.classList.toggle('active',b.dataset.eklShopTab===tab));if(tab==='speed'){body.innerHTML=`<div class="ekl-shop-grid">${SPEED_UPGRADES.map(u=>{const owned=G.state.speedUpgrade>=u.level,available=G.state.speedUpgrade===u.level-1;return `<article class="${owned?'owned':''}"><small>STUFE ${u.level}</small><h3>${u.name}</h3><p>Dauerhaft ×${u.mult.toFixed(2).replace('.',',')} Speed-Gewinn durch echte Laufstrecke und Training.</p><button data-ekl-buy-speed="${u.level}" ${owned||!available?'disabled':''}>${owned?'GEKAUFT':available?`${u.cost} Wins`:'Vorherige Stufe'}</button></article>`}).join('')}</div>`;body.querySelectorAll('[data-ekl-buy-speed]').forEach(b=>b.onclick=()=>buySpeedUpgrade(Number(b.dataset.eklBuySpeed)));}
-  else if(tab==='trails'){body.innerHTML=`<div class="ekl-shop-grid">${TRAILS.map(t=>{const owned=G.state.ownedTrails.includes(t.id),active=G.state.trail===t.id;return `<article class="${owned?'owned':''} ${t.jk?'jk':''}"><small>${active?'AKTIV':t.jk?'JK/COIN':'TRAIL'}</small><h3>${t.name}</h3><p>Kosmetische Spur hinter deinem Charakter. Kein versteckter Laufgeschwindigkeitsbonus.</p><button data-ekl-trail="${t.id}" class="${t.jk?'jk':t.id==='gold'?'gold':''}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':t.jk?'Im JK/Coin-Shop':`${t.cost} Wins`}</button></article>`}).join('')}</div>`;body.querySelectorAll('[data-ekl-trail]').forEach(b=>b.onclick=()=>buyOrEquipTrail(b.dataset.eklTrail));}
-  else if(tab==='worlds'){body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>{const unlocked=w.number===1||G.state.worldsUnlocked.includes(w.id)||(!w.locked&&G.state.lifetimeWins>=Number(w.requiredLifetimeWins||0));const need=Math.max(0,Number(w.requiredLifetimeWins||0)-Number(G.state.lifetimeWins||0));return `<article class="${unlocked&&!w.locked?'owned':''}"><small>WELT ${w.number} · ${w.difficulty||''}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?'COMING SOON':unlocked?'IM HUB FREIGESCHALTET':`Noch ${need.toLocaleString('de-DE')} Lifetime Wins`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>${Number(G.state.lifetimeWins||0).toLocaleString('de-DE')} Lifetime Wins</b><span>Ausgegebene Wins zählen weiterhin für Welt-Freischaltungen. Jede Stage besitzt ein eigenes gelbes WIN-Pad.</span></div>`;}
-  else{
+function renderShopBody(tab){
+  const body=G.overlay?.querySelector('[data-ekl-shop-body]');if(!body)return;
+  G.overlay.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.classList.toggle('active',b.dataset.eklShopTab===tab));
+  if(tab==='speed'){
+    body.innerHTML=`<div class="ekl-progression-note"><b>🏃 ${Number(G.state.runPoints||0).toLocaleString('de-DE')} Laufpunkte</b><span>Alle ${RUN_POINT_DISTANCE.toFixed(2).replace('.',',')} m zählt ein echter Laufpunkt. Jeder Laufpunkt gibt aktuell <strong>+${fmt(speedPerRunPoint())} Speed</strong>.</span></div><div class="ekl-shop-grid">${STEP_BUTTONS.slice(1).map(u=>{const owned=G.state.stepButtonTier>=u.tier,available=G.state.stepButtonTier===u.tier-1;return `<article class="${owned?'owned':''}"><small>NUMBER BUTTON ${u.tier}</small><h3>${u.name}</h3><p>Erhöht deinen Basis-Speed pro Laufpunkt dauerhaft. Trail, Aura und Rebirth multiplizieren diesen Wert zusätzlich.</p><button data-ekl-buy-step="${u.tier}" ${owned||!available?'disabled':''}>${owned?'GEKAUFT':available?`${u.cost.toLocaleString('de-DE')} Wins`:'Vorherigen Button kaufen'}</button></article>`}).join('')}</div>`;
+    body.querySelectorAll('[data-ekl-buy-step]').forEach(b=>b.onclick=()=>buyStepButton(Number(b.dataset.eklBuyStep),false));
+  }else if(tab==='trails'){
+    body.innerHTML=`<div class="ekl-shop-grid">${TRAILS.map(t=>{const owned=G.state.ownedTrails.includes(t.id),active=G.state.trail===t.id;return `<article class="${owned?'owned':''} ${t.jk?'jk':''}"><small>${active?'AKTIV':t.jk?'JK/COIN':'TRAIL'}</small><h3>${t.name}</h3><p><b>×${t.mult.toFixed(2).replace('.',',')} Speed</b> auf jeden Laufpunkt und jedes Laufband. Du kannst genau einen Trail gleichzeitig tragen.</p><button data-ekl-trail="${t.id}" class="${t.jk?'jk':''}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':t.jk?'Im JK/Coin-Shop':`${t.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
+    body.querySelectorAll('[data-ekl-trail]').forEach(b=>b.onclick=()=>buyOrEquipTrail(b.dataset.eklTrail));
+  }else if(tab==='auras'){
+    body.innerHTML=`<div class="ekl-shop-grid">${AURAS.map(a=>{const owned=G.state.ownedAuras.includes(a.id),active=G.state.aura===a.id,quest=a.questRunPoints&&!owned,questReady=quest&&G.state.runPoints>=a.questRunPoints;return `<article class="${owned?'owned':''}"><small>${active?'AKTIV':quest?'QUEST':'AURA'}</small><h3>${a.name}</h3><p><b>×${a.mult.toFixed(2).replace('.',',')} Speed</b> · stapelt mit Trail + Rebirth.${quest?`<br>Gratis-Quest: ${Number(a.questRunPoints).toLocaleString('de-DE')} Laufpunkte.`:''}</p><button data-ekl-aura="${a.id}" ${active||(!owned&&quest&&!questReady)?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':quest?(questReady?'Gratis freischalten':`${Number(G.state.runPoints||0).toLocaleString('de-DE')} / ${Number(a.questRunPoints).toLocaleString('de-DE')} LP`):`${a.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
+    body.querySelectorAll('[data-ekl-aura]').forEach(b=>b.onclick=()=>buyOrEquipAura(b.dataset.eklAura));
+  }else if(tab==='worlds'){
+    const level=currentLevel();
+    body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>{const unlocked=w.number===1||G.state.worldsUnlocked.includes(w.id)||(!w.locked&&level>=Number(w.requiredLevel||0));const need=Math.max(0,Number(w.requiredLevel||0)-level);return `<article class="${unlocked&&!w.locked?'owned':''}"><small>WELT ${w.number} · ${w.difficulty||''}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?'COMING SOON':unlocked?'IM HUB FREIGESCHALTET':`Level ${w.requiredLevel} · noch ${need} Level`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>Aktuell Level ${level}</b><span>World 2 und 3 werden – wie im Keyboard-Escape-Spielstil – über dein Speed-Level freigeschaltet. Einmal freigeschaltet bleiben sie offen, auch nach einem Rebirth.</span></div>`;
+  }else{
     const balance=Number(window.JKCoinApp?.coinState?.()?.balance||0),items=[
       {name:'Gold Speed-Treadmill ×3',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Sport-Laufband mit ×3 Trainingsrate.'},
       {name:'Diamond Speed-Treadmill ×9',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Premium-Laufband mit ×9 Trainingsrate.'},
-      {name:'Galaxy Keyboard Trail',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Kosmetische Galaxy-Spur für Escape.kl.'},
-      {name:'Speed-Gain ×2 · 15 Min.',price:180,owned:false,desc:'Temporärer ×2 Speed-Gain für Laufstrecke und Training.'}
+      {name:'Galaxy Keyboard Trail ×10',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Galaxy-Spur mit echtem ×10 Speed-Multiplikator.'},
+      {name:'Speed-Gain ×2 · 15 Min.',price:180,owned:false,desc:'Temporärer ×2 Bonus auf Laufpunkte und Laufband-Speed.'}
     ];
-    body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES · JK/COIN</small><h3>◆ Escape.kl Premium</h3><p>Alle Käufe laufen über den zentralen JK.Games-JK/Coin-Shop mit normaler Kaufbestätigung. Welten und der Kern-Parcours bleiben erspielbar.</p><b>${balance.toLocaleString('de-DE')} JK/Coin verfügbar</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div><div class="ekl-shop-grid ekl-jk-grid">${items.map(i=>`<article class="jk ${i.owned?'owned':''}"><small>${i.owned?'DAUERHAFT FREIGESCHALTET':'JK/COIN'}</small><h3>${i.name}</h3><p>${i.desc}</p><button class="jk" data-ekl-open-jk ${i.owned?'disabled':''}>${i.owned?'GEKAUFT':`${i.price.toLocaleString('de-DE')} JK/Coin`}</button></article>`).join('')}</div>`;body.querySelectorAll('[data-ekl-open-jk]').forEach(b=>b.addEventListener('click',openJkCoinShop));
+    body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES · JK/COIN</small><h3>◆ Escape.kl Premium</h3><p>Premium beschleunigt die Progression, aber Level, Wins, Welten, Trails und Auren bleiben erspielbar.</p><b>${balance.toLocaleString('de-DE')} JK/Coin verfügbar</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div><div class="ekl-shop-grid ekl-jk-grid">${items.map(i=>`<article class="jk ${i.owned?'owned':''}"><small>${i.owned?'DAUERHAFT FREIGESCHALTET':'JK/COIN'}</small><h3>${i.name}</h3><p>${i.desc}</p><button class="jk" data-ekl-open-jk ${i.owned?'disabled':''}>${i.owned?'GEKAUFT':`${i.price.toLocaleString('de-DE')} JK/Coin`}</button></article>`).join('')}</div>`;
+    body.querySelectorAll('[data-ekl-open-jk]').forEach(b=>b.addEventListener('click',openJkCoinShop));
   }
 }
-function buySpeedUpgrade(level){const u=SPEED_UPGRADES.find(x=>x.level===level);if(!u||G.state.speedUpgrade!==level-1)return;if(G.state.wins<u.cost)return toast(`Du brauchst ${u.cost} Wins.`,'bad');G.state.wins-=u.cost;G.state.speedUpgrade=level;soundBuy();queuePersist(50);toast(`${u.name} gekauft · Speed-Gain ×${u.mult.toFixed(2)}`,'good',2200);updateHud(true);openShop('speed');}
-function buyOrEquipTrail(id){const t=TRAILS.find(x=>x.id===id);if(!t)return;if(!G.state.ownedTrails.includes(id)){if(t.jk)return openJkCoinShop();if(G.state.wins<t.cost)return toast(`Du brauchst ${t.cost} Wins.`,'bad');G.state.wins-=t.cost;G.state.ownedTrails.push(id);soundBuy()}G.state.trail=id;setTrailColor();queuePersist(50);updateHud(true);toast(`${t.name} ausgerüstet.`,'good');openShop('trails');}
+function buyStepButton(tier,fromPad=false){
+  const u=STEP_BUTTONS.find(x=>x.tier===tier);if(!u)return false;
+  if(G.state.stepButtonTier>=tier){if(fromPad)toast(`${u.name} ist bereits aktiv.`,'good',1200);return false;}
+  if(G.state.stepButtonTier!==tier-1){toast(`Erst Number Button ${G.state.stepButtonTier+1} freischalten.`,'bad',1600);return false;}
+  if(G.state.wins<u.cost){toast(`Du brauchst ${u.cost.toLocaleString('de-DE')} Wins.`,'bad',1600);return false;}
+  G.state.wins-=u.cost;G.state.stepButtonTier=tier;soundBuy();queuePersist(50);updateHud(true);toast(`⚡ ${u.name} gekauft!`,'good',2200);if(!fromPad)openShop('speed');return true;
+}
+function buyOrEquipTrail(id){
+  const t=TRAILS.find(x=>x.id===id);if(!t)return;
+  if(!G.state.ownedTrails.includes(id)){if(t.jk)return openJkCoinShop();if(G.state.wins<t.cost)return toast(`Du brauchst ${t.cost.toLocaleString('de-DE')} Wins.`,'bad');G.state.wins-=t.cost;G.state.ownedTrails.push(id);soundBuy();}
+  G.state.trail=id;setTrailColor();queuePersist(50);updateHud(true);toast(`${t.name} ausgerüstet · ×${t.mult.toFixed(2).replace('.',',')} Speed.`,'good');openShop('trails');
+}
+function buyOrEquipAura(id){
+  const a=AURAS.find(x=>x.id===id);if(!a)return;
+  if(!G.state.ownedAuras.includes(id)){
+    if(a.questRunPoints){if(G.state.runPoints<a.questRunPoints)return toast(`Noch ${Math.max(0,a.questRunPoints-G.state.runPoints).toLocaleString('de-DE')} Laufpunkte bis zur ${a.name}.`,'bad');}
+    else if(G.state.wins<a.cost)return toast(`Du brauchst ${a.cost.toLocaleString('de-DE')} Wins.`,'bad');
+    else G.state.wins-=a.cost;
+    G.state.ownedAuras.push(id);soundBuy();
+  }
+  G.state.aura=id;setAuraStyle();queuePersist(50);updateHud(true);toast(`${a.name} ausgerüstet · ×${a.mult.toFixed(2).replace('.',',')} Speed.`,'good');openShop('auras');
+}
 function openJkCoinShop(){closeModal();if(window.JKCoinApp?.openForGame?.('escape')!==true)toast('JK/Coin-Shop wird noch geladen.','bad',1800);}
 function canApplyJkPurchase(kind){kind=String(kind||'');if(kind==='speedTreadmill:gold')return Number(G.state?.jkTreadmillTier||0)<1;if(kind==='speedTreadmill:diamond')return Number(G.state?.jkTreadmillTier||0)<2;if(kind==='trail:galaxy')return !G.state?.ownedTrails?.includes('galaxy');return true;}
 function grantJkCoinPurchase(kind,amount=1){if(!G.state)loadProgress();kind=String(kind||'');if(kind==='speedTreadmill:gold')G.state.jkTreadmillTier=Math.max(1,Number(G.state.jkTreadmillTier)||0);else if(kind==='speedTreadmill:diamond')G.state.jkTreadmillTier=Math.max(2,Number(G.state.jkTreadmillTier)||0);else if(kind==='trail:galaxy'){if(!G.state.ownedTrails.includes('galaxy'))G.state.ownedTrails.push('galaxy');}else if(kind==='speedBoost:2'){G.state.jkSpeedBoostUntil=Date.now()+15*60*1000;}else return false;queuePersist(50);updateHud(true);toast('◆ JK/Coin-Inhalt für Escape.kl aktiviert.','good',2400);return true;}
-function openRebirth(){const reqSpeed=100000*Math.pow(4,G.state.rebirths),reqWins=100+G.state.rebirths*150,hasSpeed=G.state.speed>=reqSpeed,hasWins=G.state.wins>=reqWins;const wrap=openModal(`<div class="ekl-modal ekl-rebirth-modal"><div class="ekl-modal-head"><div><small>PERMANENTE PROGRESSION</small><h2>🔄 Rebirth ${G.state.rebirths+1}</h2><p>Speed wird auf 0 gesetzt. Trails, Bestzeiten, Welten und JK/Coin-Freischaltungen bleiben erhalten.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-rebirth-requirements"><article class="${hasSpeed?'ready':''}"><small>SPEED</small><b>${fmt(G.state.speed)} / ${fmt(reqSpeed)}</b><span>${hasSpeed?'✓ Bereit':'Noch Speed sammeln'}</span></article><article class="${hasWins?'ready':''}"><small>WINS</small><b>${G.state.wins} / ${reqWins}</b><span>${hasWins?'✓ Bereit':'Noch Wins benötigt'}</span></article><article class="bonus"><small>NACH REBIRTH</small><b>+50 % Speed Gain</b><span>permanent · stapelbar</span></article></div><div class="ekl-modal-actions"><button data-ekl-rebirth-confirm class="gold" ${!hasSpeed||!hasWins?'disabled':''}>Rebirth ${G.state.rebirths+1} durchführen</button><button data-ekl-modal-close>Abbrechen</button></div></div>`);wrap.querySelector('[data-ekl-rebirth-confirm]')?.addEventListener('click',()=>{if(G.state.speed<reqSpeed||G.state.wins<reqWins)return;G.state.speed=0;G.state.wins-=reqWins;G.state.rebirths++;queuePersist(50);closeModal();updateHud(true);toast(`Rebirth ${G.state.rebirths} abgeschlossen · +50 % permanenter Speed-Gain!`,'good',3000);awardMainXp(15,'Escape.kl Rebirth',`escape-rebirth-${G.state.rebirths}`)});}
+function openRebirth(){
+  const next=nextRebirthDef(),level=currentLevel(),ready=level>=Number(next.level||Infinity),currentMult=rebirthMultiplier(),afterMult=Number(next.mult||currentMult);
+  const wrap=openModal(`<div class="ekl-modal ekl-rebirth-modal"><div class="ekl-modal-head"><div><small>LEVEL-REBIRTH · PERMANENTE PROGRESSION</small><h2>🔄 Rebirth ${G.state.rebirths+1}</h2><p>Wie beim Keyboard-Escape-Loop: Rebirth setzt deinen aktuellen Speed und damit dein Speed-Level zurück. Wins, Laufpunkte, Number Buttons, Trails, Auren und Welten bleiben erhalten.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-rebirth-requirements"><article class="${ready?'ready':''}"><small>AKTUELLES LEVEL</small><b>${level} / ${next.level}</b><span>${ready?'✓ Rebirth bereit':`Noch ${Math.max(0,next.level-level)} Level`}</span></article><article><small>AKTUELLER SPEED</small><b>${fmt(G.state.speed)}</b><span>wird beim Rebirth auf 0 gesetzt</span></article><article class="bonus"><small>REBIRTH-MULTIPLIKATOR</small><b>×${currentMult.toLocaleString('de-DE')} → ×${afterMult.toLocaleString('de-DE')}</b><span>auf alle zukünftigen Speed-Gewinne</span></article></div><div class="ekl-modal-actions"><button data-ekl-rebirth-confirm class="gold" ${!ready?'disabled':''}>Rebirth ${G.state.rebirths+1} durchführen</button><button data-ekl-modal-close>Abbrechen</button></div></div>`);
+  wrap.querySelector('[data-ekl-rebirth-confirm]')?.addEventListener('click',()=>{if(currentLevel()<next.level)return;G.state.speed=0;G.state.rebirths++;G.speedDistanceCarry=0;G.trainingCarry=0;queuePersist(50);closeModal();updateHud(true);toast(`Rebirth ${G.state.rebirths} abgeschlossen · permanenter Multiplikator ×${rebirthMultiplier().toLocaleString('de-DE')}!`,'good',3000);awardMainXp(15,'Escape.kl Rebirth',`escape-rebirth-${G.state.rebirths}`);});
+}
 function wheelRemaining(){return Math.max(0,24*60*60*1000-(Date.now()-(Number(G.state.lastWheelAt)||0)));}
 function durationShort(ms){ms=Math.max(0,ms);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h>0?`${h} Std ${m} Min`:`${Math.max(1,m)} Min`;}
 function openDailyWheel(){
-  const remaining=wheelRemaining(),ready=remaining<=0;const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>TÄGLICHE BELOHNUNG · ESCAPE HUB</small><h2>🎡 Daily Wheel</h2><p>Ein kostenloser Dreh alle 24 Stunden. Der Gewinn wird sofort in Escape.kl gespeichert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Speed · Wins · selten ein kosmetischer Bonus</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const remaining=wheelRemaining(),ready=remaining<=0;const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>TÄGLICHE BELOHNUNG · ESCAPE HUB</small><h2>🎡 Daily Wheel</h2><p>Ein kostenloser Dreh alle 24 Stunden. Der Gewinn wird sofort in Escape.kl gespeichert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Speed · Wins · selten ein Trail</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   wrap.querySelector('[data-ekl-spin]')?.addEventListener('click',()=>spinDailyWheel(wrap));
 }
 function spinDailyWheel(wrap){
   if(wheelRemaining()>0)return;const button=wrap.querySelector('[data-ekl-spin]'),wheel=wrap.querySelector('[data-ekl-wheel]'),status=wrap.querySelector('[data-ekl-wheel-status]');if(button)button.disabled=true;
-  const roll=Math.random();let text='';if(roll<.28){addSpeed(750,false);text='+750 Speed';}else if(roll<.50){awardWins(5,'Daily Wheel');text='+5 Wins';}else if(roll<.68){addSpeed(2000,false);text='+2.000 Speed';}else if(roll<.84){awardWins(15,'Daily Wheel');text='+15 Wins';}else if(roll<.96){awardWins(30,'Daily Wheel');text='+30 Wins';}else if(!G.state.ownedTrails.includes('cyan')){G.state.ownedTrails.push('cyan');text='Cyan Key Trail';}else{awardWins(60,'Daily Wheel');text='+60 Wins · Jackpot';}
+  const roll=Math.random();let text='';if(roll<.28){addSpeed(750,false);text='+750 Speed';}else if(roll<.50){awardWins(250,'Daily Wheel');text='+250 Wins';}else if(roll<.68){addSpeed(2500,false);text='+2.500 Speed';}else if(roll<.84){awardWins(750,'Daily Wheel');text='+750 Wins';}else if(roll<.96){awardWins(1500,'Daily Wheel');text='+1.500 Wins';}else if(!G.state.ownedTrails.includes('green')){G.state.ownedTrails.push('green');text='Green Trail ×1,5';}else{awardWins(5000,'Daily Wheel');text='+5.000 Wins · Jackpot';}
   G.state.lastWheelAt=Date.now();queuePersist(50);soundFinish();if(wheel){wheel.style.setProperty('--spin',`${1260+Math.floor(Math.random()*360)}deg`);wheel.classList.add('spinning');}if(status)status.textContent='Dreht …';setTimeout(()=>{if(status)status.textContent=text;toast(`Daily Wheel: ${text}`,'good',2600);updateHud(true);},1150);
 }
 function dailyQuestRows(){
-  const q=ensureDailyQuest(),distance=Math.max(0,(Number(G.state.totalDistance)||0)-(Number(q.distanceStart)||0)),completions=Math.max(0,(Number(G.state.completions?.['keyboard-lab']||0))-(Number(q.completionsStart)||0));
+  const q=ensureDailyQuest(),runPoints=Math.max(0,(Number(G.state.runPoints)||0)-(Number(q.runPointsStart)||0)),completions=Math.max(0,(Number(G.state.completions?.['keyboard-lab']||0))-(Number(q.completionsStart)||0));
   return [
-    {id:'distance',icon:'🏃',name:'Laufstrecke',desc:'Lege heute 300 Meter zu Fuß zurück.',progress:distance,target:300,reward:10},
-    {id:'speed',icon:'⚡',name:'Speed Training',desc:'Verdiene heute 1.500 Speed durch Laufen oder Training.',progress:Number(q.speedEarned)||0,target:1500,reward:15},
-    {id:'escape',icon:'🏁',name:'Daily Escape',desc:'Schließe Keyboard Lab heute einmal ab.',progress:completions,target:1,reward:25}
+    {id:'runpoints',icon:'🏃',name:'Laufpunkte',desc:'Sammle heute 500 Laufpunkte durch echte Bewegung.',progress:runPoints,target:500,reward:500},
+    {id:'speed',icon:'⚡',name:'Speed Training',desc:'Verdiene heute 10.000 Speed durch Laufen oder Laufband.',progress:Number(q.speedEarned)||0,target:10000,reward:750},
+    {id:'escape',icon:'🏁',name:'Daily Escape',desc:'Schließe Keyboard Lab heute einmal komplett ab.',progress:completions,target:1,reward:2500}
   ];
 }
 function openDailyQuests(){
@@ -494,10 +637,12 @@ function openDailyQuests(){
   wrap.querySelectorAll('[data-ekl-claim-quest]').forEach(b=>b.onclick=()=>claimDailyQuest(b.dataset.eklClaimQuest));
 }
 function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().find(r=>r.id===id);if(!row||row.progress<row.target||q.claimed.includes(id))return;q.claimed.push(id);awardWins(row.reward,row.name);soundBuy();queuePersist(50);updateHud(true);toast(`${row.name}: +${row.reward} Wins`,'good',2000);openDailyQuests();}
-function openRecords(){const raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0);const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Stage-Wins, Weltabschlüsse und Bestzeiten aus deinem Escape.kl-Spielstand.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid">${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>${best?timeText(best):'–'}</b><span>${w.name} · ${runs} Runs · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>LIFETIME WINS</small><b>${Number(G.state.lifetimeWins||0).toLocaleString('de-DE')}</b><span>zählt für Welt-Freischaltungen</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>Speed Race · ${races} Läufe</span></article><article><small>DISTANZ</small><b>${Math.floor(G.state.totalDistance).toLocaleString('de-DE')} m</b><span>Gesamtlaufstrecke</span></article><article><small>SPEED</small><b>${fmt(G.state.speed)}</b><span>Aktueller Speed</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Permanente Progression</span></article></div></div>`);}
-
-function showHelp(){openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · STEUERUNG</small><h2>Wie spiele ich?</h2><p>Speed sammeln, gelbe WIN-Pads erreichen, Upgrades kaufen und schwierigere Welten freischalten.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>🎮 PC</b><p>WASD laufen · Space springen mit Sprungpuffer · Shift sprinten · Maus ziehen = Kamera · Mausrad = Zoom · R = aktuellen Welt-Run neu starten.</p></article><article><b>🏆 Stage-Wins</b><p>Jede Stage endet in einer Safe-Zone mit gelbem WIN-Pad. Erst wenn du auf das Pad läufst, werden die Wins gebucht. Höhere Stages zahlen mehr.</p></article><article><b>🌍 Schwierigkeit</b><p>World 1 hat 15 breite, faire Anfänger-Stages. World 2 führt bewegliche Candy-Keys ein. World 3 ist deutlich schwerer mit schmaleren, beweglichen und instabilen Toxic-Keys.</p></article><article><b>⚡ Speed</b><p>Jeder echte Meter erhöht deinen Speed. Wins kaufst du im begehbaren Speed Shop für permanente Multiplikatoren.</p></article><article><b>🏃 Laufbänder</b><p>Auf einem freigeschalteten Laufband sprintet dein Charakter auf der Stelle und sammelt Training-Speed. Vorwärts bewegst du dich nur selbst.</p></article><article><b>🔓 Welten</b><p>Welten werden über Lifetime Wins dauerhaft freigeschaltet. Ausgegebene Wins nehmen dir eine bereits erreichte Freischaltung nicht wieder weg.</p></article><article><b>🔄 Rebirth</b><p>Rebirth setzt Speed zurück und erhöht den permanenten Speed-Gain. Welten, Trails, Bestzeiten und JK/Coin-Inhalte bleiben erhalten.</p></article></div></div>`);}
-
+function openRecords(){
+  const raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0),level=currentLevel();
+  const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Deine Keyboard-Escape-Progression: Level, Laufpunkte, Speed, Wins, Gear und Weltrekorde.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>SPEED LEVEL</small><b>${level}</b><span>${fmt(G.state.speed)} Speed · nächstes Level bei ${fmt(speedForLevel(level+1))}</span></article><article><small>LAUFPUNKTE</small><b>${Number(G.state.runPoints||0).toLocaleString('de-DE')}</b><span>echte Laufpunkte durch Bewegung</span></article><article><small>SPEED / LP</small><b>+${fmt(speedPerRunPoint())}</b><span>Basis ${stepBaseGain()} · Trail ×${trailMultiplier()} · Aura ×${auraMultiplier()} · Rebirth ×${rebirthMultiplier()}</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>${best?timeText(best):'–'}</b><span>${w.name} · ${runs} Runs · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>LIFETIME WINS</small><b>${Number(G.state.lifetimeWins||0).toLocaleString('de-DE')}</b><span>gesamte jemals erspielte Wins</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>Speed Race · ${races} Läufe</span></article><article><small>DISTANZ</small><b>${Math.floor(G.state.totalDistance).toLocaleString('de-DE')} m</b><span>Gesamtlaufstrecke</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Multiplikator ×${rebirthMultiplier().toLocaleString('de-DE')}</span></article></div></div>`);
+}
+function showHelp(){openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · SPIELLOOP</small><h2>Wie spiele ich?</h2><p>Escape.kl orientiert sich jetzt deutlich stärker am Keyboard-Escape-Spielstil: laufen → Speed/Level → Stage-Wins → Gear → Rebirth → nächste Welt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>🏃 Laufpunkte</b><p>Alle ${RUN_POINT_DISTANCE.toFixed(2).replace('.',',')} m echte Bodenbewegung zählt als 1 Laufpunkt. Jeder Laufpunkt gibt Speed. Number Buttons im Hub erhöhen den Basis-Speed pro Laufpunkt dauerhaft bis +500.</p></article><article><b>⬆ Speed Level</b><p>Dein Level steigt automatisch mit deinem aktuellen Speed. Level 15 schaltet den ersten Rebirth frei. World 2 braucht Level 140, World 3 Level 400.</p></article><article><b>🏆 Stage-Wins</b><p>Jede Stage endet in einer Safe-Zone mit gelbem WIN-Pad. Höhere Stages zahlen viel mehr Wins. Wins kaufst du in Number Buttons, Trails und Auren.</p></article><article><b>🌈 Trails + Auren</b><p>Sie sind nicht mehr nur Kosmetik: Trail und Aura multiplizieren deinen Speed-Gewinn und stapeln sich mit Number Button, Rebirth und Boosts.</p></article><article><b>🏃 Laufbänder</b><p>Laufbänder geben Speed, obwohl du auf der Stelle sprintest. Sie erhöhen keine Laufpunkte – genau dadurch bleiben Laufen und AFK-Training zwei unterschiedliche Wege.</p></article><article><b>🔄 Rebirth</b><p>Rebirth basiert auf deinem Speed-Level, setzt Speed/Level auf 0 zurück und behält Wins, Laufpunkte, Number Buttons, Trails, Auren und freigeschaltete Welten.</p></article><article><b>🎮 Steuerung</b><p>WASD laufen · Space springen mit Sprungpuffer · Shift sprinten · Maus ziehen = Kamera · Mausrad = Zoom · R = aktuellen Welt-Run neu starten.</p></article></div></div>`);}
 function showPause(){G.paused=true;openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-hub>Zum Hub</button><button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false});G.overlay.querySelector('[data-ekl-hub]').onclick=()=>{G.paused=false;setWorld('hub')};G.overlay.querySelector('[data-ekl-exit]').onclick=returnToTopGames;G.overlay.querySelector('[data-ekl-help]').onclick=showHelp;}
 function showComplete(w,sec,stars,reward,previous){const runStageWins=(w?.stageRewards||[]).reduce((sum,value,index)=>sum+(G.stageClaims.has(`${w.id}:${index+1}`)?Number(value||0):0),0);const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>WORLD ${w.number} COMPLETE</small><h2>${w.name} geschafft!</h2><div class="ekl-stars">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div><p>Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Stage-Wins <b>+${runStageWins.toLocaleString('de-DE')}</b> · Finish-Bonus <b>+${reward.toLocaleString('de-DE')}</b></p><div class="ekl-modal-actions"><button data-ekl-again class="gold">Nochmal</button><button data-ekl-finish-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-again]').onclick=()=>{wrap.remove();setWorld(w.id)};wrap.querySelector('[data-ekl-finish-hub]').onclick=()=>{wrap.remove();setWorld('hub')};}
 
@@ -513,10 +658,10 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on);sprint.addEventListener('pointerup',off);sprint.addEventListener('pointercancel',off);sprint.addEventListener('pointerleave',e=>{if(G.mobileSprint)off(e)});}
 }
 function resize(){if(!G.renderer||!G.camera)return;const r=G.overlay.getBoundingClientRect();G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
-  if(G.overlay)return;if(sourceDevice)G.sourceDevice=String(sourceDevice);else G.sourceDevice=window.JKGamesOwnedPhoneItem?.()||'';loadProgress();const el=document.createElement('div');el.className='escape-kl-overlay';el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-statrow"><div class="ekl-stat"><small>SPEED</small><b data-ekl-speed>0</b></div><div class="ekl-stat"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div><div class="ekl-stat"><small>SPEED GAIN</small><b data-ekl-gain>×1</b></div></div><div class="ekl-top-actions"><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-world-chip" hidden><small data-ekl-world>WORLD 1 · KEYBOARD LAB</small><b data-ekl-stage>STAGE 1/15</b><span data-ekl-next-win>NÄCHSTES WIN-PAD: +1 WIN</span></div><div class="ekl-stage-progress" hidden><div><span>WORLD-FORTSCHRITT</span><b data-ekl-stage-total>15 STAGES</b></div><i><span data-ekl-stage-bar></span></i></div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;document.body.append(el);document.body.classList.add('escape-kl-open');G.overlay=el;setupScene();bindInput();el.querySelector('[data-ekl-close]').onclick=returnToTopGames;el.querySelector('[data-ekl-pause]').onclick=showPause;el.querySelector('[data-ekl-help]').onclick=showHelp;G.resizeHandler=resize;window.addEventListener('resize',G.resizeHandler,{passive:true});G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
+  if(G.overlay)return;if(sourceDevice)G.sourceDevice=String(sourceDevice);else G.sourceDevice=window.JKGamesOwnedPhoneItem?.()||'';loadProgress();const el=document.createElement('div');el.className='escape-kl-overlay';el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-statrow"><div class="ekl-stat"><small>SPEED</small><b data-ekl-speed>0</b></div><div class="ekl-stat level"><small>LEVEL</small><b data-ekl-level>0</b></div><div class="ekl-stat"><small>LAUFPUNKTE</small><b data-ekl-runpoints>0</b></div><div class="ekl-stat"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div><div class="ekl-stat"><small>SPEED / LP</small><b data-ekl-gain>+1</b></div></div><div class="ekl-level-progress"><div><span>LEVEL-FORTSCHRITT</span><b data-ekl-level-next>NÄCHSTES LEVEL</b></div><i><span data-ekl-level-bar></span></i></div><div class="ekl-top-actions"><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-world-chip" hidden><small data-ekl-world>WORLD 1 · KEYBOARD LAB</small><b data-ekl-stage>STAGE 1/15</b><span data-ekl-next-win>NÄCHSTES WIN-PAD: +1 WIN</span></div><div class="ekl-stage-progress" hidden><div><span>WORLD-FORTSCHRITT</span><b data-ekl-stage-total>15 STAGES</b></div><i><span data-ekl-stage-bar></span></i></div><div class="ekl-run-pop" data-ekl-run-pop>+1 LAUFPUNKT</div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;document.body.append(el);document.body.classList.add('escape-kl-open');G.overlay=el;setupScene();bindInput();el.querySelector('[data-ekl-close]').onclick=returnToTopGames;el.querySelector('[data-ekl-pause]').onclick=showPause;el.querySelector('[data-ekl-help]').onclick=showHelp;G.resizeHandler=resize;window.addEventListener('resize',G.resizeHandler,{passive:true});G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
 function close(){if(!G.overlay)return;clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();G.renderer?.dispose();clearWorldObjects();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}

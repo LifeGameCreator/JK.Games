@@ -1,12 +1,12 @@
-/* Escape.kl world registry V437 – worlds stay data-driven so new routes can be added cleanly. */
+/* Escape.kl world registry V438 – level-gated worlds and Keyboard-Escape-style stage payouts. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
     name:'Keyboard Lab',
     number:1,
     stageCount:15,
-    requiredLifetimeWins:0,
-    finishBonusWins:20,
+    requiredLevel:0,
+    finishBonusWins:5000,
     accent:0x58ddff,
     background:0x07111d,
     fog:0x07111d,
@@ -15,17 +15,17 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:5.2,
     time2:240,
     time3:175,
-    stageRewards:Object.freeze([1,2,3,4,5,6,8,10,12,15,20,25,30,40,50]),
+    stageRewards:Object.freeze([10,20,35,60,100,175,300,500,800,1200,2000,3500,6000,10000,15000]),
     difficulty:'LEICHT → MITTEL',
-    description:'Einsteigerwelt mit 15 klaren Keyboard-Stages, breiten Keycaps und fairen Sprüngen. Jede Stage endet an einem gelben WIN-Pad.'
+    description:'Einsteigerwelt mit 15 klaren Keyboard-Stages, breiten Keycaps und fairen Sprüngen. Jeder Laufpunkt baut Speed/Level auf, jede Stage endet an einem gelben WIN-Pad.'
   }),
   Object.freeze({
     id:'candy-keys',
     name:'Candy Keys',
     number:2,
     stageCount:10,
-    requiredLifetimeWins:200,
-    finishBonusWins:60,
+    requiredLevel:140,
+    finishBonusWins:500000,
     accent:0xff77bb,
     background:0x241023,
     fog:0x241023,
@@ -34,17 +34,17 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:4.6,
     time2:215,
     time3:155,
-    stageRewards:Object.freeze([30,40,55,70,90,120,160,220,300,400]),
+    stageRewards:Object.freeze([25000,40000,65000,100000,175000,300000,500000,800000,1200000,2000000]),
     difficulty:'MITTEL',
-    description:'Süßigkeiten-Keyboards mit Schokolade, Candy-Bar-Sprüngen und ersten beweglichen Tasten. Spürbar schwerer als Welt 1.'
+    description:'Ab Level 140: Süßigkeiten-Keyboards mit Schokolade, Candy-Bar-Sprüngen und ersten beweglichen Tasten. Spürbar schwerer als Welt 1.'
   }),
   Object.freeze({
     id:'toxic-keyboard',
     name:'Toxic Keyboard',
     number:3,
     stageCount:10,
-    requiredLifetimeWins:1200,
-    finishBonusWins:180,
+    requiredLevel:400,
+    finishBonusWins:100000000,
     accent:0x75ff72,
     background:0x071a0d,
     fog:0x071a0d,
@@ -53,16 +53,16 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:4.0,
     time2:245,
     time3:185,
-    stageRewards:Object.freeze([120,170,230,310,420,560,750,1000,1350,1800]),
+    stageRewards:Object.freeze([5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000]),
     difficulty:'SCHWER',
-    description:'Giftige Keycaps, schmalere Sprünge, Slider und instabile Glitch-Tasten. Welt 3 verlangt deutlich mehr Speed und Kontrolle.'
+    description:'Ab Level 400: Giftige Keycaps, schmalere Sprünge, Slider und instabile Glitch-Tasten. Welt 3 verlangt deutlich mehr Speed und Kontrolle.'
   }),
   Object.freeze({
     id:'cyber-city',
     name:'Cyber City',
     number:4,
     stageCount:10,
-    requiredLifetimeWins:7000,
+    requiredLevel:650,
     finishBonusWins:500,
     accent:0x6d74ff,
     locked:true,
