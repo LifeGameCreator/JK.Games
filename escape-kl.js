@@ -5,8 +5,8 @@ import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260815-
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260815-escape-v443';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260815-escape-v443';
 
-/* Escape.kl – JK.Games Top Game V446 · start movement speed 10.0 */
-const VERSION = '2026-08-15-v446';
+/* Escape.kl – JK.Games Top Game V447 · start movement speed 5.0 + Owner perk/equipment controls */
+const VERSION = '2026-08-15-v447';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -20,8 +20,9 @@ const RUN_POINT_DISTANCE = .75;
 // Level progression uses separate Training-Power (XP), so no millions/billions are shown as player Speed.
 const REGULAR_SPEED_CAP = 300;
 const OWNER_SPEED_SOFT_CAP = 9999;
-const BASE_MOVE_SPEED = 10.0;
-const MAX_REGULAR_MOVE_SPEED = 40.0; // Speed 0 starts at 10.0; Speed 300 remains the hard +300% movement ceiling.
+const BASE_MOVE_SPEED = 5.0;
+const MAX_REGULAR_MOVE_SPEED = 20.0; // Level 0 / Speed 5 starts at movement 5.0; Speed 300 reaches the hard +300% movement ceiling.
+const START_SPEED_STAT = 5;
 const SPRINT_SPEED_STAT_BONUS = 18;
 const LEVEL_XP_SCALE = 60;
 const LEVEL_XP_POWER = 2.15;
@@ -354,7 +355,11 @@ function movementSpeedStat(){
 }
 function movementSpeed(){
   const stat=movementSpeedStat();
-  if(stat<=REGULAR_SPEED_CAP){const t=Math.max(0,Math.min(1,stat/REGULAR_SPEED_CAP));return BASE_MOVE_SPEED+(MAX_REGULAR_MOVE_SPEED-BASE_MOVE_SPEED)*Math.pow(t,1.35);}
+  if(stat<=REGULAR_SPEED_CAP){
+    // Level 0 starts exactly at movement 5.0. The level-driven Speed stat then raises movement smoothly up to 20.0 at Speed 300 (+300%).
+    const t=Math.max(0,Math.min(1,(stat-START_SPEED_STAT)/Math.max(1,REGULAR_SPEED_CAP-START_SPEED_STAT)));
+    return BASE_MOVE_SPEED+(MAX_REGULAR_MOVE_SPEED-BASE_MOVE_SPEED)*Math.pow(t,1.22);
+  }
   return Math.min(80,MAX_REGULAR_MOVE_SPEED+Math.log1p((stat-REGULAR_SPEED_CAP)/80)*3.2);
 }
 function movementBonusPercent(){return Math.max(0,(movementSpeed()/BASE_MOVE_SPEED-1)*100);}
@@ -953,10 +958,10 @@ function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().fin
 function openRecords(){
   const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0);
   const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Weltgetrennte Progression: Level-Power erzeugt Level, Level und Items erzeugen Speed, regulär maximal 300.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>PHYSISCHER SPEED</small><b>${Math.round(speed)} / 300</b><span>Owner/Admin kann über 300 setzen</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Start sehr langsam · Speed 300 = reguläres Maximum</span></article><article><small>LAUFPUNKTE</small><b>${Number(G.state.runPoints||0).toLocaleString('de-DE')}</b><span>echte Bodenbewegung</span></article><article><small>POWER / LAUFPUNKT</small><b>+${fmt(levelPowerPerRunPoint())}</b><span>Basis ${stepBaseGain()} · Trail ×${trailMultiplier()} · Aura ×${auraMultiplier()} · Rebirth ×${rebirthMultiplier().toFixed(2)}</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Weltgetrennte Progression: Level-Power erzeugt Level, Level und Items erzeugen Speed, regulär maximal 300.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>PHYSISCHER SPEED</small><b>${Math.round(speed)} / 300</b><span>Owner/Admin kann über 300 setzen</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Level 0 = Tempo 5,0 · Speed 300 = Tempo 20,0 (+300 %)</span></article><article><small>LAUFPUNKTE</small><b>${Number(G.state.runPoints||0).toLocaleString('de-DE')}</b><span>echte Bodenbewegung</span></article><article><small>POWER / LAUFPUNKT</small><b>+${fmt(levelPowerPerRunPoint())}</b><span>Basis ${stepBaseGain()} · Trail ×${trailMultiplier()} · Aura ×${auraMultiplier()} · Rebirth ×${rebirthMultiplier().toFixed(2)}</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V443 PROGRESSION</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen → Level-Power → Level → physischer Speed 0–300 → Stage-Wins → bessere Power/Items → Rebirth → nächste Welt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Reguläre Spieler können pro Welt maximal Speed 300 erreichen. Start-Speed ist sehr langsam. World 3 ist besonders hart: ungefähr Level 800 ergibt Speed 120, erst Level 1000 etwa Speed 300. Owner/Admin kann für Events Werte über 300 setzen.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen erzeugt Laufpunkte und damit Level-Power. Power erhöht dein Welt-Level; sie wird nicht als Millionen-Speed angezeigt. Jede Welt besitzt ihren eigenen Level-/Speed-Fortschritt.</p></article><article><b>🌍 Schwierigkeit</b><p>World 1 trainiert normal. World 2 benötigt deutlich mehr Power pro Level. World 3 ist ein Endgame-Grind und ohne bessere Power-Stufen, Laufband, Gear, Rebirth oder Events sehr langsam.</p></article><article><b>🏆 Stage-Wins</b><p>Gelbes WIN-Pad rechts = Wins kassieren und sofort zurück zum Weltstart. Wer weiter will, lässt das Pad aus. Spätere Stages verlangen zunehmend höheren physischen Speed für die Sprungweite.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,5 · FREE+ ×2 · SILBER ×3 · GOLD ×6 · DIAMOND ×10. Laufbänder sind stärker als normales Laufen und trainieren die im Hub ausgewählte Welt.</p></article><article><b>🎒 Speed-Items</b><p>+25 %, +50 % und +100 % wirken direkt auf deinen aktuellen physischen Speed bis zum regulären Maximum 300. Überschuss wird als Level-Power genutzt.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben als Partikel kurz hinter dir und blenden aus. Trail/Aura verstärken Level-Power, nicht unbegrenzt dein Lauftempo.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen moderaten permanenten Power-Multiplikator. Wins, Gear und andere Weltfortschritte bleiben.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht im Pausenmenü ein Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung und Event-Multiplikatoren.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen laufen/lenken, rechter Daumen Kamera, separate Sprint/Springen/Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V447 PROGRESSION</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen → Level-Power → Level → physischer Speed 0–300 → Stage-Wins → bessere Power/Items → Rebirth → nächste Welt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Reguläre Spieler können pro Welt maximal Speed 300 erreichen. Level 0 startet mit physischem Speed 5 und Bewegungstempo 5,0. Mit höheren Leveln steigt der Speed stufenweise an. World 3 ist besonders hart: ungefähr Level 800 ergibt Speed 120, erst Level 1000 etwa Speed 300. Owner/Admin kann für Events Werte über 300 setzen.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen erzeugt Laufpunkte und damit Level-Power. Power erhöht dein Welt-Level; sie wird nicht als Millionen-Speed angezeigt. Jede Welt besitzt ihren eigenen Level-/Speed-Fortschritt.</p></article><article><b>🌍 Schwierigkeit</b><p>World 1 trainiert normal. World 2 benötigt deutlich mehr Power pro Level. World 3 ist ein Endgame-Grind und ohne bessere Power-Stufen, Laufband, Gear, Rebirth oder Events sehr langsam.</p></article><article><b>🏆 Stage-Wins</b><p>Gelbes WIN-Pad rechts = Wins kassieren und sofort zurück zum Weltstart. Wer weiter will, lässt das Pad aus. Spätere Stages verlangen zunehmend höheren physischen Speed für die Sprungweite.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,5 · FREE+ ×2 · SILBER ×3 · GOLD ×6 · DIAMOND ×10. Laufbänder sind stärker als normales Laufen und trainieren die im Hub ausgewählte Welt.</p></article><article><b>🎒 Speed-Items</b><p>+25 %, +50 % und +100 % wirken direkt auf deinen aktuellen physischen Speed bis zum regulären Maximum 300. Überschuss wird als Level-Power genutzt.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben als Partikel kurz hinter dir und blenden aus. Trail/Aura verstärken Level-Power, nicht unbegrenzt dein Lauftempo.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen moderaten permanenten Power-Multiplikator. Wins, Gear und andere Weltfortschritte bleiben.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht im Pausenmenü ein Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung und Event-Multiplikatoren. Dort lassen sich außerdem Power-Perk, aktive Spur, Aura und temporäre Boosts einzeln oder gemeinsam entfernen.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen laufen/lenken, rechter Daumen Kamera, separate Sprint/Springen/Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -967,27 +972,61 @@ function ownerSetExactLevel(worldId,value){
   if(!isEscapeOwner())return false;
   value=Math.max(0,Math.min(100000,Math.floor(Number(value)||0)));const p=progressForWorld(worldId);p.xp=powerForLevel(value,worldId);return true;
 }
+function ownerSetPowerTier(value){
+  if(!isEscapeOwner())return false;
+  G.state.stepButtonTier=Math.max(0,Math.min(STEP_BUTTONS.length-1,Math.floor(Number(value)||0)));return true;
+}
+function ownerSetActiveTrail(id){
+  if(!isEscapeOwner())return false;id=String(id||'none');
+  if(!TRAILS.some(t=>t.id===id))id='none';
+  if(id!=='none'&&!G.state.ownedTrails.includes(id))G.state.ownedTrails.push(id);
+  G.state.trail=id;setTrailColor();return true;
+}
+function ownerSetActiveAura(id){
+  if(!isEscapeOwner())return false;id=String(id||'none');
+  if(!AURAS.some(a=>a.id===id))id='none';
+  if(id!=='none'&&!G.state.ownedAuras.includes(id))G.state.ownedAuras.push(id);
+  G.state.aura=id;setAuraStyle();return true;
+}
+function ownerClearActivePerks({resetPowerTier=true}={}){
+  if(!isEscapeOwner())return false;
+  G.state.trail='none';G.state.aura='none';G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;
+  if(resetPowerTier)G.state.stepButtonTier=0;
+  setTrailColor();setAuraStyle();queuePersist(50);updateHud(true);return true;
+}
 function openOwnerModMenu(){
   if(!isEscapeOwner())return toast('Nur für den Owner.','bad');
   const worldId=G.state.activeTrainingWorld||'keyboard-lab';
   const options=WORLD_DEFS.filter(w=>!w.locked).map(w=>`<option value="${w.id}" ${w.id===worldId?'selected':''}>World ${w.number} · ${w.name}</option>`).join('');
-  const p=progressForWorld(worldId);
-  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Owner-Speed darf bewusst über das reguläre 300er-Limit gehen.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(currentSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${G.state.rebirths}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const powerOptions=STEP_BUTTONS.map(u=>`<option value="${u.tier}" ${Number(G.state.stepButtonTier||0)===u.tier?'selected':''}>Stufe ${u.tier} · +${u.gain} Power</option>`).join('');
+  const trailOptions=TRAILS.map(t=>`<option value="${t.id}" ${G.state.trail===t.id?'selected':''}>${t.name}</option>`).join('');
+  const auraOptions=AURAS.map(a=>`<option value="${a.id}" ${G.state.aura===a.id?'selected':''}>${a.name}</option>`).join('');
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(currentSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${G.state.rebirths}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   const selected=()=>wrap.querySelector('[data-mod-world]')?.value||worldId;
   const refresh=()=>{
     const id=selected();wrap.querySelector('[data-mod-level]').value=currentLevel(id);wrap.querySelector('[data-mod-speed]').value=Math.round(currentSpeedStat(id));
+    const event=wrap.querySelector('[data-mod-event]');if(event)event.value=String(G.state.ownerEventMultiplier||1);
+    const tier=wrap.querySelector('[data-mod-power-tier]');if(tier)tier.value=String(G.state.stepButtonTier||0);
+    const trail=wrap.querySelector('[data-mod-trail]');if(trail)trail.value=G.state.trail||'none';
+    const aura=wrap.querySelector('[data-mod-aura]');if(aura)aura.value=G.state.aura||'none';
   };
   wrap.querySelector('[data-mod-world]')?.addEventListener('change',refresh);
   wrap.querySelector('[data-mod-apply]')?.addEventListener('click',()=>{
     const id=selected();ownerSetExactLevel(id,wrap.querySelector('[data-mod-level]').value);ownerSetExactSpeed(id,wrap.querySelector('[data-mod-speed]').value);
-    G.state.wins=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-wins]').value)||0));G.state.rebirths=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-rebirth]').value)||0));G.state.ownerEventMultiplier=Math.max(1,Number(wrap.querySelector('[data-mod-event]').value)||1);G.state.activeTrainingWorld=id;updateWorldUnlocks();queuePersist(50);updateHud(true);soundBuy();toast('👑 Owner-Werte übernommen.','good',1800);closeModal();setTimeout(showPause,0);
+    G.state.wins=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-wins]').value)||0));G.state.rebirths=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-rebirth]').value)||0));G.state.ownerEventMultiplier=Math.max(1,Number(wrap.querySelector('[data-mod-event]').value)||1);G.state.activeTrainingWorld=id;
+    ownerSetPowerTier(wrap.querySelector('[data-mod-power-tier]').value);ownerSetActiveTrail(wrap.querySelector('[data-mod-trail]').value);ownerSetActiveAura(wrap.querySelector('[data-mod-aura]').value);
+    updateWorldUnlocks();queuePersist(50);updateHud(true);soundBuy();toast('👑 Owner-Werte & aktive Perks übernommen.','good',1900);closeModal();setTimeout(showPause,0);
   });
   wrap.querySelector('[data-mod-level-plus]')?.addEventListener('click',()=>{const id=selected();ownerSetExactLevel(id,currentLevel(id)+100);refresh();});
   wrap.querySelector('[data-mod-speed-plus]')?.addEventListener('click',()=>{const id=selected();ownerSetExactSpeed(id,currentSpeedStat(id)+25);refresh();});
   wrap.querySelector('[data-mod-speed-max]')?.addEventListener('click',()=>{ownerSetExactSpeed(selected(),300);refresh();});
   wrap.querySelector('[data-mod-unlock]')?.addEventListener('click',()=>{G.state.worldsUnlocked=[...new Set(WORLD_DEFS.filter(w=>!w.locked).map(w=>w.id))];queuePersist(50);toast('Alle vorhandenen Escape-Welten freigeschaltet.','good');});
-  wrap.querySelector('[data-mod-reset-world]')?.addEventListener('click',()=>{const id=selected();G.state.worldProgress[id]=emptyWorldProgress();refresh();toast('Weltfortschritt zurückgesetzt.','good');});
-  wrap.querySelector('[data-mod-reset-rebirth]')?.addEventListener('click',()=>{G.state.rebirths=0;wrap.querySelector('[data-mod-rebirth]').value=0;toast('Rebirths auf 0 gesetzt.','good');});
+  wrap.querySelector('[data-mod-reset-world]')?.addEventListener('click',()=>{const id=selected();G.state.worldProgress[id]=emptyWorldProgress();refresh();queuePersist(50);updateHud(true);toast('Weltfortschritt zurückgesetzt.','good');});
+  wrap.querySelector('[data-mod-reset-rebirth]')?.addEventListener('click',()=>{G.state.rebirths=0;wrap.querySelector('[data-mod-rebirth]').value=0;queuePersist(50);updateHud(true);toast('Rebirths auf 0 gesetzt.','good');});
+  wrap.querySelector('[data-mod-clear-trail]')?.addEventListener('click',()=>{ownerSetActiveTrail('none');refresh();queuePersist(50);updateHud(true);toast('Spur abgelegt. Besitz bleibt erhalten.','good');});
+  wrap.querySelector('[data-mod-clear-aura]')?.addEventListener('click',()=>{ownerSetActiveAura('none');refresh();queuePersist(50);updateHud(true);toast('Aura abgelegt. Besitz bleibt erhalten.','good');});
+  wrap.querySelector('[data-mod-clear-boosts]')?.addEventListener('click',()=>{G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;refresh();queuePersist(50);updateHud(true);toast('Temporäre Boosts und Admin-Event-Multiplikator entfernt.','good');});
+  wrap.querySelector('[data-mod-clear-all]')?.addEventListener('click',()=>{ownerClearActivePerks({resetPowerTier:true});refresh();toast('Alle aktiven Perks, Spur, Aura und Boosts entfernt.','good',2200);});
 }
 function showPause(){
   G.paused=true;const owner=isEscapeOwner();
