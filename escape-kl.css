@@ -248,3 +248,28 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
 @media (pointer:coarse) and (orientation:portrait){.ekl-look-hint{right:21%;top:53%}}
 @media (pointer:coarse) and (orientation:landscape){.ekl-look-hint{right:24%;top:54%;font-size:7px;padding:5px 8px}}
 @keyframes eklLookHint{0%{opacity:0;transform:translate(50%,-50%) scale(.94)}12%,58%{opacity:.28;transform:translate(50%,-50%) scale(1)}100%{opacity:0;transform:translate(50%,-50%) scale(1)}}
+
+
+/* ===== V443 · Complete Lobby / Progression / Owner Mod ===== */
+.ekl-training-world-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.ekl-training-world-card{min-height:88px;padding:14px;border:1px solid #ffffff17;border-radius:16px;background:linear-gradient(145deg,#102235,#091521);color:#eaf7ff;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.ekl-training-world-card b{font-size:14px}.ekl-training-world-card span{font-size:10px;color:#9db7ca}
+.ekl-training-world-card.active{border-color:#66e8ff8c;background:linear-gradient(145deg,#17465a,#102a3a);box-shadow:0 0 25px #43dcff16 inset}
+.ekl-training-world-card:disabled{opacity:.42}
+.ekl-treadmill-modal{width:min(790px,96vw)}
+.ekl-owner-mod{width:min(880px,97vw);border-color:#f2cc5a3b}
+.ekl-owner-mod .ekl-modal-head small{color:#ffd768}
+.ekl-owner-mod-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.ekl-owner-mod-grid label{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid #ffffff13;border-radius:14px;background:#08131f}
+.ekl-owner-mod-grid label span{font-size:9px;font-weight:1000;letter-spacing:.12em;color:#aabfd0;text-transform:uppercase}
+.ekl-owner-mod-grid input,.ekl-owner-mod-grid select{width:100%;box-sizing:border-box;border:1px solid #ffffff1f;border-radius:10px;background:#102333;color:#fff;padding:10px;font-weight:900;outline:none}
+.ekl-owner-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 18px}
+.ekl-owner-quick button,.ekl-modal-actions .owner{border-color:#e8be5075!important;background:linear-gradient(135deg,#61430d,#2b200d)!important;color:#ffe18b!important}
+@media(max-width:680px){
+  .ekl-training-world-grid{grid-template-columns:1fr}
+  .ekl-owner-mod-grid{grid-template-columns:1fr 1fr}
+  .ekl-owner-quick{grid-template-columns:1fr 1fr}
+}
+@media(max-width:430px){
+  .ekl-owner-mod-grid,.ekl-owner-quick{grid-template-columns:1fr}
+}
