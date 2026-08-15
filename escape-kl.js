@@ -5,7 +5,7 @@ import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260815-
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260815-escape-v443';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260815-escape-v443';
 
-/* Escape.kl – JK.Games Top Game V444 · normal base movement speed */
+/* Escape.kl – JK.Games Top Game V445 · slightly faster normal base movement speed */
 const VERSION = '2026-08-15-v444';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
@@ -20,7 +20,7 @@ const RUN_POINT_DISTANCE = .75;
 // Level progression uses separate Training-Power (XP), so no millions/billions are shown as player Speed.
 const REGULAR_SPEED_CAP = 300;
 const OWNER_SPEED_SOFT_CAP = 9999;
-const BASE_MOVE_SPEED = 2.8;
+const BASE_MOVE_SPEED = 3.2;
 const MAX_REGULAR_MOVE_SPEED = 8.0; // Speed 0 now feels like normal movement; Speed 300 keeps the established fast ceiling.
 const SPRINT_SPEED_STAT_BONUS = 18;
 const LEVEL_XP_SCALE = 60;
