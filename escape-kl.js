@@ -744,7 +744,8 @@ function buildRaceCourse(){
   z-=6.5;addPlatform({x:x0,y:1.05,z,w:12,h:.6,d:7,color:0xd27a38,label:'FINISH',finish:true,checkpoint:5,kind:'race-finish'});boxDeco(x0,4.5,z-2.8,12,.35,.55,0xffa24e,0x8b3e18);addSign('RACE FINISH',new THREE.Vector3(x0,5.1,z+3.45),0xffb35d,.92);addGlowLight(x0,3.2,z,0xff9a50,1.25,12);addInteractable('race-hub-return','Nach dem Rennen zum Hub',x0,1.8,z-2,5,()=>setWorld('hub'));
 }
 function buildOnlyUpCourse(){
-  const startX=0,startY=.35,startZ=0;
+  // V466: Startplattform angehoben, damit Plattform 1 mit normalem Sprung erreichbar ist.
+  const startX=0,startY=1.15,startZ=0;
   addPlatform({x:startX,y:startY,z:startZ,w:11,h:.6,d:9,color:0x27325c,label:'ONLY UP',checkpoint:1,kind:'only-up-start'});
   addSign('JK.GAMES · ONLY UP',{x:0,y:5.2,z:3.8},0xa8b7ff,.92);addSign('150 METER · KEIN SHORTCUT',{x:0,y:4.05,z:3.82},0xffd56b,.34);
   let lastX=0,lastZ=0,y=1.35;
@@ -1016,7 +1017,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     toast(`${w.name} · Speed ${Math.round(currentSpeedStat(w.id))}/300 · Bei einem Fall hast du 5 Sekunden für JK/Coin-Revive.`,'good',2400);
   }else if(id==='only-up'){
-    const startY=.35+.6/2+PLAYER_HALF+.08;G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint={x:0,y:startY,z:0};teleport(0,startY,0);G.scene.background.setHex(0x101a36);G.scene.fog.color.setHex(0x101a36);G.scene.fog.near=55;G.scene.fog.far=260;toast('ONLY UP · 150+ Meter nach oben · Checkpoints alle 16 Plattformen.','good',2400);
+    const startY=1.15+.6/2+PLAYER_HALF+.08;G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint={x:0,y:startY,z:0};teleport(0,startY,0);G.scene.background.setHex(0x101a36);G.scene.fog.color.setHex(0x101a36);G.scene.fog.near=55;G.scene.fog.far=260;toast('ONLY UP · 150+ Meter nach oben · Checkpoints alle 16 Plattformen.','good',2400);
   }else if(id==='race'){
     const raceY=.4+.55/2+PLAYER_HALF+.08;
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=20;G.checkpoint={x:72,y:raceY,z:20};teleport(72,raceY,20);
