@@ -5,8 +5,8 @@ import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260815-
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260815-escape-v443';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v449';
 
-/* Escape.kl – JK.Games Top Game V449 · male dual-idle + visible Speed HUD + World-1 return portal */
-const VERSION = '2026-08-16-v449';
+/* Escape.kl – JK.Games Top Game V450 · live Speed HUD override fix */
+const VERSION = '2026-08-16-v450';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -160,10 +160,15 @@ function normalizeProgress(raw){
   d.worldProgress=d.worldProgress&&typeof d.worldProgress==='object'?d.worldProgress:{};
   for(const w of WORLD_DEFS.filter(x=>!x.locked)){
     const src=d.worldProgress[w.id]&&typeof d.worldProgress[w.id]==='object'?d.worldProgress[w.id]:{};
+    const rawAdminOverride=src.adminSpeedOverride;
+    const validAdminOverride=rawAdminOverride!==null&&rawAdminOverride!==undefined&&rawAdminOverride!==''&&Number.isFinite(Number(rawAdminOverride));
     d.worldProgress[w.id]={
       xp:Math.max(0,Number(src.xp)||0),
       itemSpeedBonus:Math.max(0,Number(src.itemSpeedBonus)||0),
-      adminSpeedOverride:Number.isFinite(Number(src.adminSpeedOverride))?Math.max(0,Number(src.adminSpeedOverride)):null
+      // null means: no Owner/Admin override. Never coerce null to numeric 0.
+      // Old V449 saves may contain 0 because of that coercion bug; treat 0 as "no override"
+      // so normal Level -> Speed progression becomes visible again immediately.
+      adminSpeedOverride:validAdminOverride&&Number(rawAdminOverride)>0?Math.max(0,Number(rawAdminOverride)):null
     };
   }
   d.activeTrainingWorld=escapeWorldById(d.activeTrainingWorld)&&!escapeWorldById(d.activeTrainingWorld)?.locked?d.activeTrainingWorld:'keyboard-lab';
@@ -249,8 +254,9 @@ function baseSpeedForLevel(level){
   return REGULAR_SPEED_CAP;
 }
 function currentSpeedStat(id=progressWorldId()){
-  const p=progressForWorld(id),override=Number(p.adminSpeedOverride);
-  if(Number.isFinite(override)&&override>=0)return Math.min(OWNER_SPEED_SOFT_CAP,override);
+  const p=progressForWorld(id),rawOverride=p.adminSpeedOverride;
+  const hasAdminOverride=rawOverride!==null&&rawOverride!==undefined&&rawOverride!==''&&Number.isFinite(Number(rawOverride))&&Number(rawOverride)>0;
+  if(hasAdminOverride)return Math.min(OWNER_SPEED_SOFT_CAP,Number(rawOverride));
   const base=baseSpeedForLevel(currentLevel(id)),bonus=Math.max(0,Number(p.itemSpeedBonus)||0);
   return Math.min(REGULAR_SPEED_CAP,base+bonus);
 }
