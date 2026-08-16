@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V461 · Day/Night + Only Up + Hard Worlds */
-const VERSION = '2026-08-16-v461';
+/* Escape.kl – JK.Games Top Game V462 · Full Balance Pass */
+const VERSION = '2026-08-16-v462';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -49,12 +49,12 @@ const STEP_BUTTONS = Object.freeze([
 ]);
 const TRAILS = Object.freeze([
   {id:'none',name:'Keine Spur',cost:0,color:0xffffff,mult:1,effect:'none'},
-  {id:'green',name:'Green Energy',cost:500,color:0x60f077,mult:1.25,effect:'energy'},
-  {id:'blue',name:'Water Trail',cost:1500,color:0x5aa7ff,mult:1.5,effect:'water'},
-  {id:'purple',name:'Magic Trail',cost:5000,color:0xa06cff,mult:1.85,effect:'magic'},
-  {id:'red',name:'Fire Trail',cost:25000,color:0xff5b36,mult:2.25,effect:'fire'},
-  {id:'rainbow',name:'Rainbow Trail',cost:100000,color:0xffcf55,mult:2.8,effect:'rainbow'},
-  {id:'galaxy',name:'Galaxy Keyboard Trail',cost:0,color:0xbd78ff,mult:4,jk:true,effect:'galaxy'}
+  {id:'green',name:'Green Energy',cost:500,color:0x60f077,mult:1.05,effect:'energy'},
+  {id:'blue',name:'Water Trail',cost:1500,color:0x5aa7ff,mult:1.08,effect:'water'},
+  {id:'purple',name:'Magic Trail',cost:5000,color:0xa06cff,mult:1.12,effect:'magic'},
+  {id:'red',name:'Fire Trail',cost:25000,color:0xff5b36,mult:1.16,effect:'fire'},
+  {id:'rainbow',name:'Rainbow Trail',cost:100000,color:0xffcf55,mult:1.22,effect:'rainbow'},
+  {id:'galaxy',name:'Galaxy Keyboard Trail',cost:0,color:0xbd78ff,mult:1.30,jk:true,effect:'galaxy'}
 ]);
 const SPECIAL_CHARACTERS = Object.freeze([
   {id:'neon-runner',name:'Neon Runner',cost:25000,currency:'wins',baseGender:'male',color:0x43e8ff,desc:'JK.Games Spezialcharakter mit cyanfarbenem Runner-Effekt.'},
@@ -66,12 +66,12 @@ const PET_DEFS = Object.freeze([
   {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins auf eingesammelte Belohnungen.'}
 ]);
 const AURAS = Object.freeze([
-  {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1},
-  {id:'medal',name:'Medal Aura',cost:0,color:0xffd45e,mult:1.35,questRunPoints:2500},
-  {id:'glow',name:'Glow Aura',cost:1000000,color:0x72e8ff,mult:1.2},
-  {id:'wind',name:'Wind Aura',cost:5000000,color:0xc3f4ff,mult:1.4},
-  {id:'water',name:'Water Aura',cost:10000000,color:0x55aaff,mult:1.7},
-  {id:'fire',name:'Fire Aura',cost:25000000,color:0xff714d,mult:2.1}
+  {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1,speedPct:0},
+  {id:'medal',name:'Medal Aura',cost:0,color:0xffd45e,mult:1.08,speedPct:.005,questRunPoints:2500},
+  {id:'glow',name:'Glow Aura',cost:1000000,color:0x72e8ff,mult:1.10,speedPct:.0075},
+  {id:'wind',name:'Wind Aura',cost:5000000,color:0xc3f4ff,mult:1.14,speedPct:.01},
+  {id:'water',name:'Water Aura',cost:10000000,color:0x55aaff,mult:1.18,speedPct:.015},
+  {id:'fire',name:'Fire Aura',cost:25000000,color:0xff714d,mult:1.25,speedPct:.02}
 ]);
 const REBIRTH_TABLE = Object.freeze([
   {level:500,mult:1.15},{level:650,mult:1.30},{level:800,mult:1.45},{level:900,mult:1.60},
@@ -79,27 +79,30 @@ const REBIRTH_TABLE = Object.freeze([
   {level:1600,mult:2.80},{level:1850,mult:3.10},{level:2150,mult:3.50},{level:2500,mult:4.00}
 ]);
 const SPEED_ITEMS = Object.freeze([
-  {id:'speed25',name:'+25 % aktueller Speed',pct:.25,baseCost:750,scale:1.55,minSpeed:20,icon:'⚡'},
-  {id:'speed50',name:'+50 % aktueller Speed',pct:.50,baseCost:3000,scale:1.70,minSpeed:40,icon:'⚡⚡'},
-  {id:'speed100',name:'+100 % aktueller Speed',pct:1.00,baseCost:15000,scale:1.90,minSpeed:80,icon:'🚀'}
+  {id:'speed25',name:'Speed Chip',pct:.004,maxLevel:5,baseCost:1000,scale:1.55,icon:'⚡',desc:'+0,4 % effektiver Speed pro Stufe'},
+  {id:'speed50',name:'Turbo Chip',pct:.007,maxLevel:5,baseCost:5000,scale:1.65,icon:'⚡⚡',desc:'+0,7 % effektiver Speed pro Stufe'},
+  {id:'speed100',name:'Hyper Chip',pct:.010,maxLevel:5,baseCost:25000,scale:1.75,icon:'🚀',desc:'+1,0 % effektiver Speed pro Stufe'}
 ]);
 const CORE_UPGRADES = Object.freeze({
   training:Object.freeze([
-    {tier:1,cost:2500,bonus:.05,name:'Training Core I'},{tier:2,cost:15000,bonus:.10,name:'Training Core II'},{tier:3,cost:75000,bonus:.15,name:'Training Core III'}
+    {tier:1,cost:2500,bonus:.03,name:'Training Core I'},{tier:2,cost:15000,bonus:.06,name:'Training Core II'},{tier:3,cost:75000,bonus:.09,name:'Training Core III'}
   ]),
   treadmill:Object.freeze([
-    {tier:1,cost:10000,bonus:.10,name:'Treadmill Core I'},{tier:2,cost:50000,bonus:.20,name:'Treadmill Core II'},{tier:3,cost:250000,bonus:.35,name:'Treadmill Core III'}
+    {tier:1,cost:10000,bonus:.05,name:'Treadmill Core I'},{tier:2,cost:50000,bonus:.10,name:'Treadmill Core II'},{tier:3,cost:250000,bonus:.15,name:'Treadmill Core III'}
+  ]),
+  speed:Object.freeze([
+    {tier:1,cost:10000,bonus:.01,name:'Speed Core I'},{tier:2,cost:75000,bonus:.02,name:'Speed Core II'},{tier:3,cost:300000,bonus:.03,name:'Speed Core III'}
   ]),
   win:Object.freeze([
     {tier:1,cost:5000,bonus:.01,name:'Win Core I'},{tier:2,cost:30000,bonus:.02,name:'Win Core II'},{tier:3,cost:150000,bonus:.03,name:'Win Core III'}
   ])
 });
 const TREADMILLS = Object.freeze([
-  {id:'starter',name:'FREE',mult:1.5,color:0x2f8d78,access:'free',desc:'Starter-Laufband · immer verfügbar'},
-  {id:'free-plus',name:'FREE+',mult:2.0,color:0x4d879f,access:'level',level:120,desc:'Kostenlos ab Level 120 der aktiven Trainingswelt'},
-  {id:'silver',name:'SILBER',mult:3.0,color:0x9faeb8,access:'wins',cost:8000,desc:'Mit Wins dauerhaft freischaltbar'},
-  {id:'gold',name:'GOLD',mult:6.0,color:0xd6a83a,access:'jk',jkTier:1,desc:'Premium-Laufband · JK/Coin'},
-  {id:'diamond',name:'DIAMOND',mult:10.0,color:0x5bdcff,access:'jk',jkTier:2,desc:'Stärkstes reguläres Laufband'}
+  {id:'starter',name:'FREE',mult:1.30,color:0x2f8d78,access:'free',desc:'Starter-Laufband · immer verfügbar'},
+  {id:'free-plus',name:'FREE+',mult:1.60,color:0x4d879f,access:'level',level:120,desc:'Kostenlos ab Level 120 der aktiven Trainingswelt'},
+  {id:'silver',name:'SILBER',mult:2.00,color:0x9faeb8,access:'wins',cost:8000,desc:'Mit Wins dauerhaft freischaltbar'},
+  {id:'gold',name:'GOLD',mult:2.80,color:0xd6a83a,access:'jk',jkTier:1,desc:'Premium-Laufband · JK/Coin'},
+  {id:'diamond',name:'DIAMOND',mult:4.00,color:0x5bdcff,access:'jk',jkTier:2,desc:'Stärkstes reguläres Laufband'}
 ]);
 
 const G = {
@@ -126,15 +129,15 @@ const G = {
 function emptyWorldProgress(){return {xp:0,itemSpeedBonus:0,adminSpeedOverride:null};}
 function defaultProgress(){
   return {
-    version:10,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
+    version:11,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
     worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress()},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
     activePet:'none',ownedPets:['none'],
-    trainingCoreTier:0,treadmillCoreTier:0,winCoreTier:0,
+    trainingCoreTier:0,treadmillCoreTier:0,speedCoreTier:0,winCoreTier:0,
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
-    lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,speedItems:{speed25:0,speed50:0,speed100:0},speedItemPurchases:{speed25:0,speed50:0,speed100:0},lastPlayedAt:Date.now()
+    lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,speedItems:{speed25:0,speed50:0,speed100:0},speedItemPurchases:{speed25:0,speed50:0,speed100:0},speedItemLevels:{speed25:0,speed50:0,speed100:0},lastPlayedAt:Date.now()
   };
 }
 function normalizeProgress(raw){
@@ -184,9 +187,11 @@ function normalizeProgress(raw){
   d.jkSpeedBoostUntil=Math.max(0,Number(d.jkSpeedBoostUntil)||0);
   d.speedItems=d.speedItems&&typeof d.speedItems==='object'?d.speedItems:{};
   d.speedItemPurchases=d.speedItemPurchases&&typeof d.speedItemPurchases==='object'?d.speedItemPurchases:{};
+  d.speedItemLevels=d.speedItemLevels&&typeof d.speedItemLevels==='object'?d.speedItemLevels:{};
   for(const item of SPEED_ITEMS){
     d.speedItems[item.id]=Math.max(0,Math.floor(Number(d.speedItems[item.id])||0));
     d.speedItemPurchases[item.id]=Math.max(0,Math.floor(Number(d.speedItemPurchases[item.id])||0));
+    d.speedItemLevels[item.id]=Math.max(0,Math.min(item.maxLevel||5,Math.floor(Number(d.speedItemLevels[item.id])||0)));
   }
   d.worldProgress=d.worldProgress&&typeof d.worldProgress==='object'?d.worldProgress:{};
   for(const w of WORLD_DEFS.filter(x=>!x.locked)){
@@ -208,6 +213,7 @@ function normalizeProgress(raw){
   d.ownerEventMultiplier=[1,2,3,5,10,25,50,100].includes(Number(d.ownerEventMultiplier))?Number(d.ownerEventMultiplier):1;
   d.trainingCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.trainingCoreTier)||0)));
   d.treadmillCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.treadmillCoreTier)||0)));
+  d.speedCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.speedCoreTier)||0)));
   d.winCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.winCoreTier)||0)));
 
   // One-time V443 migration: preserve a sensible fraction of old progress without carrying
@@ -221,7 +227,19 @@ function normalizeProgress(raw){
     d.worldProgress['candy-keys']=emptyWorldProgress();d.worldProgress['toxic-keyboard']=emptyWorldProgress();
     d.worldsUnlocked=['keyboard-lab'];d.activeTrainingWorld='keyboard-lab';
   }
-  d.version=10;
+  // V462 Balance-Migration: alte direkte Speed-Item-Punkte würden die neue
+  // prozentuale Balance umgehen. Sie werden entfernt; wer bereits direkte
+  // Speed-Items benutzt hatte, erhält als faire Migration eine Speed-Chip-Stufe.
+  if(sourceVersion<11){
+    let hadLegacyDirectSpeed=false;
+    for(const w of WORLD_DEFS.filter(x=>!x.locked)){
+      const p=d.worldProgress[w.id];
+      if(Number(p?.itemSpeedBonus||0)>0)hadLegacyDirectSpeed=true;
+      if(p)p.itemSpeedBonus=0;
+    }
+    if(hadLegacyDirectSpeed&&Object.values(d.speedItemLevels).every(v=>Number(v||0)===0))d.speedItemLevels.speed25=1;
+  }
+  d.version=11;
   return d;
 }
 function loadProgress(){
@@ -294,16 +312,19 @@ function specialCharacterState(choice=G.state?.characterChoice){
   return {def,upgraded,speedBonus:upgraded?(def.upgradeSpeedBonus||def.speedBonus||0):(def.speedBonus||0),winsBonus:upgraded?(def.upgradeWinsBonus||def.winsBonus||0):(def.winsBonus||0)};
 }
 function activePetDef(){return PET_DEFS.find(p=>p.id===G.state?.activePet)||PET_DEFS[0];}
-function totalSpeedBonus(){const special=specialCharacterState();const pet=activePetDef();return Number(special?.speedBonus||0)+Number(pet?.speedBonus||0);}
+function speedItemBonusPct(){return SPEED_ITEMS.reduce((sum,item)=>sum+Math.max(0,Math.min(item.maxLevel||5,Number(G.state?.speedItemLevels?.[item.id])||0))*Number(item.pct||0),0);}
+function auraSpeedBonus(){return Number((AURAS.find(a=>a.id===G.state?.aura)||AURAS[0]).speedPct||0);}
+function speedCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.speedCoreTier)||0))]||0;}
+function totalSpeedBonus(){const special=specialCharacterState();const pet=activePetDef();return Number(special?.speedBonus||0)+Number(pet?.speedBonus||0)+auraSpeedBonus()+speedCoreBonus()+speedItemBonusPct();}
 function totalWinsBonus(){const special=specialCharacterState();const pet=activePetDef();return Number(special?.winsBonus||0)+Number(pet?.winsBonus||0);}
-function trainingCoreBonus(){return [0,.05,.10,.15][Math.max(0,Math.min(3,Number(G.state?.trainingCoreTier)||0))]||0;}
-function treadmillCoreBonus(){return [0,.10,.20,.35][Math.max(0,Math.min(3,Number(G.state?.treadmillCoreTier)||0))]||0;}
+function trainingCoreBonus(){return [0,.03,.06,.09][Math.max(0,Math.min(3,Number(G.state?.trainingCoreTier)||0))]||0;}
+function treadmillCoreBonus(){return [0,.05,.10,.15][Math.max(0,Math.min(3,Number(G.state?.treadmillCoreTier)||0))]||0;}
 function winCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.winCoreTier)||0))]||0;}
 function rawSpeedStat(id=progressWorldId()){
   const p=progressForWorld(id),rawOverride=p.adminSpeedOverride;
   const hasAdminOverride=rawOverride!==null&&rawOverride!==undefined&&rawOverride!==''&&Number.isFinite(Number(rawOverride))&&Number(rawOverride)>0;
   if(hasAdminOverride)return Math.min(OWNER_SPEED_SOFT_CAP,Number(rawOverride));
-  return Math.min(REGULAR_SPEED_CAP,baseSpeedForLevel(currentLevel(id))+Math.max(0,Number(p.itemSpeedBonus)||0));
+  return Math.min(REGULAR_SPEED_CAP,baseSpeedForLevel(currentLevel(id)));
 }
 function currentSpeedStat(id=progressWorldId()){
   return rawSpeedStat(id)*(1+totalSpeedBonus());
@@ -325,11 +346,9 @@ function directSpeedGrant(amount,{allowAdmin=false,worldId=progressWorldId(),cou
   if(allowAdmin&&hasEscapeAdminRights()){
     const target=Math.min(OWNER_SPEED_SOFT_CAP,before+amount);p.adminSpeedOverride=target;queuePersist(50);updateHud(true);return target-before;
   }
-  const room=Math.max(0,REGULAR_SPEED_CAP-before),applied=Math.min(room,amount),overflow=Math.max(0,amount-applied);
-  if(applied>0)p.itemSpeedBonus=Math.max(0,Number(p.itemSpeedBonus)||0)+applied;
-  // Speed above 300 no longer increases movement; overflow becomes Training-Power instead.
-  if(overflow>0)addLevelPower(overflow*2500,countDaily,worldId);
-  queuePersist(80);updateHud(true);return applied;
+  // Reguläre Belohnungen verändern seit V462 nicht mehr den 0–300 Basis-Speed direkt.
+  // Dieser kommt ausschließlich vom Level; normale Grants werden zu Training-Power.
+  addLevelPower(amount*2500,countDaily,worldId);queuePersist(80);updateHud(true);return 0;
 }
 function nextRebirthDef(){
   const r=Math.max(0,Math.floor(Number(G.state?.rebirths)||0));
@@ -346,29 +365,36 @@ function stepBaseGain(){return STEP_BUTTONS[Math.max(0,Math.min(STEP_BUTTONS.len
 function trailMultiplier(){return TRAILS.find(t=>t.id===G.state?.trail)?.mult||1;}
 function auraMultiplier(){return AURAS.find(a=>a.id===G.state?.aura)?.mult||1;}
 function ownerEventMultiplier(){return Math.max(1,Number(G.state?.ownerEventMultiplier)||1);}
-function levelPowerPerRunPoint(){
-  const boost=Date.now()<Number(G.state?.jkSpeedBoostUntil||0)?2:1;
-  return stepBaseGain()*trailMultiplier()*auraMultiplier()*rebirthMultiplier()*boost*ownerEventMultiplier()*(1+trainingCoreBonus());
+function normalPowerMultiplier(){
+  const timedBonus=Date.now()<Number(G.state?.jkSpeedBoostUntil||0)?.50:0;
+  // V462: normale Boni addieren sich. So kann Trail × Aura × Rebirth × Boost
+  // nicht mehr exponentiell explodieren. Owner-Events bleiben bewusst separat.
+  return Math.max(1,1+(trailMultiplier()-1)+(auraMultiplier()-1)+(rebirthMultiplier()-1)+trainingCoreBonus()+timedBonus);
 }
+function levelPowerPerRunPoint(){return stepBaseGain()*normalPowerMultiplier()*ownerEventMultiplier();}
 function speedPerRunPoint(){return levelPowerPerRunPoint();} // legacy internal name, now Training-Power.
 function gainMultiplier(){return levelPowerPerRunPoint();}
 function speedItemCost(item){
   const bought=Math.max(0,Math.floor(Number(G.state?.speedItemPurchases?.[item.id])||0));
   return Math.max(1,Math.round(item.baseCost*Math.pow(item.scale,bought)));
 }
+function speedItemLevel(item){return Math.max(0,Math.min(item?.maxLevel||5,Math.floor(Number(G.state?.speedItemLevels?.[item?.id])||0)));}
 function buySpeedItem(id){
   const item=SPEED_ITEMS.find(x=>x.id===id);if(!item)return false;
+  if(speedItemLevel(item)>=item.maxLevel)return toast(`${item.name} ist bereits maximal ausgebaut.`,'good',1600);
   const cost=speedItemCost(item);if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins.`,'bad',1700);
   G.state.wins-=cost;G.state.speedItems[item.id]=(Number(G.state.speedItems[item.id])||0)+1;G.state.speedItemPurchases[item.id]=(Number(G.state.speedItemPurchases[item.id])||0)+1;
   soundBuy();queuePersist(50);updateHud(true);toast(`${item.icon} ${item.name} ins Inventar gelegt.`,'good',1900);openShop('items');return true;
 }
 function useSpeedItem(id){
   const item=SPEED_ITEMS.find(x=>x.id===id);if(!item)return false;
-  const count=Math.max(0,Math.floor(Number(G.state.speedItems?.[id])||0));if(count<=0)return toast('Dieses Speed-Item ist nicht im Inventar.','bad');
-  const worldId=progressWorldId(),current=rawSpeedStat(worldId);if(current<item.minSpeed)return toast(`Erst ab Speed ${item.minSpeed} sinnvoll nutzbar.`,'bad',1800);
-  if(current>=REGULAR_SPEED_CAP&&!isEscapeOwner())return toast('Speed 300 ist das reguläre Grundmaximum. Pet/Verwandlung können darüber hinaus prozentual wirken.','bad',1900);
-  const rawAdd=Math.max(1,current*item.pct);G.state.speedItems[id]=count-1;const applied=directSpeedGrant(rawAdd,{worldId,countDaily:false});
-  soundBuy();queuePersist(50);updateHud(true);toast(`${item.icon} +${Math.round(item.pct*100)} % · +${applied.toFixed(1).replace('.',',')} Speed${rawAdd>applied?' · Rest → Level-Power':''}`,'good',2400);openShop('items');return true;
+  const count=Math.max(0,Math.floor(Number(G.state.speedItems?.[id])||0)),level=speedItemLevel(item);
+  if(count<=0)return toast('Dieses Speed-Item ist nicht im Inventar.','bad');
+  if(level>=item.maxLevel)return toast(`${item.name} ist bereits Stufe ${item.maxLevel}/${item.maxLevel}.`,'good',1600);
+  G.state.speedItems[id]=count-1;G.state.speedItemLevels[id]=level+1;
+  soundBuy();queuePersist(50);updateHud(true);
+  toast(`${item.icon} ${item.name} Stufe ${level+1}/${item.maxLevel} · dauerhaft +${(item.pct*100).toFixed(1).replace('.',',')} % effektiver Speed`,'good',2600);
+  openShop('items');return true;
 }
 function worldUnlockStatus(w){
   if(!w||w.locked)return {unlocked:false,locked:true,reason:'COMING SOON'};
@@ -1182,7 +1208,7 @@ function processMovement(dt,t){
   if(isOnTraining()){
     const tr=trainingInfo(),worldId=G.state.activeTrainingWorld||'keyboard-lab';G.trainingStreakSeconds+=dt;
     const tier=G.trainingStreakSeconds>=60?3:G.trainingStreakSeconds>=30?2:G.trainingStreakSeconds>=10?1:0;if(tier>G.trainingStreakTier){G.trainingStreakTier=tier;toast(`🔥 TRAINING-STREAK · +${Math.round(trainingStreakBonus()*100)} % Power`,'good',1400);}
-    G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(tr?.mult||1)*(1+treadmillCoreBonus())*(1+trainingStreakBonus());
+    G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(tr?.mult||1)*(1+treadmillCoreBonus()+trainingStreakBonus());
     if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addLevelPower(add,true,worldId);queuePersist(1800);}
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
@@ -1304,7 +1330,7 @@ function detectInteraction(){
   if(best){p.innerHTML=`<kbd>${matchMedia('(pointer:coarse)').matches?'AKTION':'E'}</kbd>${best.label}`;p.classList.add('show')}
   else if(tr){
     const worldId=G.state.activeTrainingWorld||'keyboard-lab';
-    if(tr.unlocked)p.textContent=`${tr.name} · Auto-Run · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus())*(1+trainingStreakBonus()))} Power/s · Streak ${Math.floor(G.trainingStreakSeconds)}s${trainingStreakBonus()?` (+${Math.round(trainingStreakBonus()*100)}%)`:''} · ${escapeWorldById(worldId)?.name||'Welt'}`;
+    if(tr.unlocked)p.textContent=`${tr.name} · Auto-Run · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus()+trainingStreakBonus()))} Power/s · Streak ${Math.floor(G.trainingStreakSeconds)}s${trainingStreakBonus()?` (+${Math.round(trainingStreakBonus()*100)}%)`:''} · ${escapeWorldById(worldId)?.name||'Welt'}`;
     else p.textContent=`🔒 ${tr.name} · ${treadmillRequirement(tr.def,worldId)}`;
     p.classList.add('show');
   }else p.classList.remove('show');
@@ -1333,7 +1359,7 @@ function buyCoreUpgrade(kind){
 }
 function openShop(tab='speed'){
   const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),trail=TRAILS.find(t=>t.id===G.state.trail)||TRAILS[0],aura=AURAS.find(a=>a.id===G.state.aura)||AURAS[0];
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · SHOP</small><h2>🏪 Escape Shop</h2><p>Speed ist dein physischer 0–300-Wert. Laufen und Laufbänder erzeugen Level-Power. Wins kaufst du für bessere Power, Gear und direkte Speed-Items.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>GEAR</small><b>×${(trail.mult*aura.mult).toFixed(2).replace('.',',')}</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · SHOP</small><h2>🏪 Escape Shop</h2><p>Level erzeugt deinen Basis-Speed bis 300. Alles darüber kommt nur aus kleinen additiven Prozent-Boni von Items, Auren, Pets und Upgrades. Power-Boni stacken ebenfalls kontrolliert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>EXTRA SPEED</small><b>+${(totalSpeedBonus()*100).toFixed(1).replace('.',',')}%</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
   wrap.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.onclick=()=>renderShopBody(b.dataset.eklShopTab));renderShopBody(tab);
 }
 function renderShopBody(tab){
@@ -1347,23 +1373,24 @@ function renderShopBody(tab){
     body.innerHTML=`<div class="ekl-progression-note"><b>🏃 TRAINING HALL</b><span>Die Laufbänder sind stärker als normales Laufen. FREE+ wird über Level freigeschaltet, Silber mit Wins, Gold/Diamond über JK/Coin. Aktive Trainingswelt: <strong>${escapeWorldById(G.state.activeTrainingWorld)?.name||'Keyboard Lab'}</strong>.</span></div><div class="ekl-shop-grid">${TREADMILLS.map(t=>{const unlocked=treadmillUnlocked(t),req=treadmillRequirement(t);return `<article class="${unlocked?'owned':''}"><small>${unlocked?'FREIGESCHALTET':'TRAININGSSTUFE'}</small><h3>${t.name} · ×${t.mult}</h3><p>${t.desc}<br>${unlocked?'Bereit zum Benutzen.':`Benötigt: ${req}`}</p><button data-ekl-treadmill="${t.id}">${unlocked?'Details':t.access==='wins'?`${t.cost.toLocaleString('de-DE')} Wins`:t.access==='jk'?'JK/Coin ansehen':'Details'}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-treadmill]').forEach(b=>b.onclick=()=>openTreadmillStation(b.dataset.eklTreadmill));
   }else if(tab==='items'){
-    body.innerHTML=`<div class="ekl-progression-note"><b>🎒 SPEED-INVENTAR · ${Math.round(speed)}/300</b><span>Speed-Items erhöhen deinen <strong>physischen Speed</strong>. Regulär endet er bei 300. Power oberhalb der Grenze wird in Level-Power umgewandelt; Owner/Admin-Tools dürfen darüber hinausgehen.</span></div><div class="ekl-shop-grid">${SPEED_ITEMS.map(item=>{const count=Math.max(0,Number(G.state.speedItems?.[item.id])||0),cost=speedItemCost(item),gain=Math.max(1,speed*item.pct),canUse=count>0&&speed>=item.minSpeed;return `<article class="${count?'owned':''}"><small>${item.icon} SPEED ITEM · ${count}×</small><h3>${item.name}</h3><p>Bei deinem aktuellen Wert etwa <b>+${gain.toFixed(1).replace('.',',')} Speed</b> · reguläres Maximum 300.</p><div class="ekl-item-actions"><button data-ekl-buy-item="${item.id}">Kaufen · ${cost.toLocaleString('de-DE')} Wins</button><button data-ekl-use-item="${item.id}" ${canUse?'':'disabled'}>Benutzen (${count})</button></div></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🎒 SPEED-INVENTAR · Basis ${Math.round(rawSpeedStat(worldId))}/300 · Effektiv ${Math.round(speed)}</b><span>V462-Balance: Speed-Items geben nur noch kleine <strong>permanente Prozent-Boni</strong>. Alle normalen Speed-Boni addieren sich statt sich gegenseitig zu multiplizieren. Maximaler Item-Bonus: +10,5 %.</span></div><div class="ekl-shop-grid">${SPEED_ITEMS.map(item=>{const count=Math.max(0,Number(G.state.speedItems?.[item.id])||0),cost=speedItemCost(item),level=speedItemLevel(item),max=item.maxLevel||5,total=level*item.pct,canUse=count>0&&level<max;return `<article class="${level?'owned':''}"><small>${item.icon} SPEED ITEM · STUFE ${level}/${max} · ${count}× INVENTAR</small><h3>${item.name}</h3><p>${item.desc}.<br><b>Aktuell: +${(total*100).toFixed(1).replace('.',',')} % effektiver Speed</b> · maximal +${(item.pct*max*100).toFixed(1).replace('.',',')} %.</p><div class="ekl-item-actions"><button data-ekl-buy-item="${item.id}" ${level>=max?'disabled':''}>${level>=max?'MAXIMAL':`Kaufen · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-ekl-use-item="${item.id}" ${canUse?'':'disabled'}>Erweitern (${count})</button></div></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-buy-item]').forEach(b=>b.onclick=()=>buySpeedItem(b.dataset.eklBuyItem));
     body.querySelectorAll('[data-ekl-use-item]').forEach(b=>b.onclick=()=>useSpeedItem(b.dataset.eklUseItem));
   }else if(tab==='trails'){
-    body.innerHTML=`<div class="ekl-progression-note"><b>✨ PARTIKELSPUREN</b><span>Fuß- oder Rückenspur. Gear multipliziert deine <strong>Level-Power</strong>, nicht das physische 300er-Lauftempo direkt.</span><div class="ekl-trail-pos-inline"><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div><div class="ekl-shop-grid">${TRAILS.map(t=>{const owned=G.state.ownedTrails.includes(t.id),active=G.state.trail===t.id;return `<article class="${owned?'owned':''} ${t.jk?'jk':''}"><small>${active?'AKTIV':t.jk?'JK/COIN':'TRAIL'}</small><h3>${t.name}</h3><p><b>×${t.mult.toFixed(2).replace('.',',')} Power</b> · ${t.effect==='fire'?'🔥 Feuer':t.effect==='water'?'💧 Wasser':t.effect==='rainbow'?'🌈 Rainbow':t.effect==='galaxy'?'🌌 Galaxy':t.effect==='magic'?'✨ Magie':t.effect==='energy'?'⚡ Energie':'–'}.</p><button data-ekl-trail="${t.id}" class="${t.jk?'jk':''}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':t.jk?'Im JK/Coin-Shop':`${t.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>✨ PARTIKELSPUREN</b><span>Fuß- oder Rückenspur. Trails geben nur noch einen kleinen additiven <strong>Power-Bonus</strong> und beeinflussen den physischen Speed nicht direkt.</span><div class="ekl-trail-pos-inline"><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div><div class="ekl-shop-grid">${TRAILS.map(t=>{const owned=G.state.ownedTrails.includes(t.id),active=G.state.trail===t.id;return `<article class="${owned?'owned':''} ${t.jk?'jk':''}"><small>${active?'AKTIV':t.jk?'JK/COIN':'TRAIL'}</small><h3>${t.name}</h3><p><b>+${Math.round((t.mult-1)*100)} % Power</b> · ${t.effect==='fire'?'🔥 Feuer':t.effect==='water'?'💧 Wasser':t.effect==='rainbow'?'🌈 Rainbow':t.effect==='galaxy'?'🌌 Galaxy':t.effect==='magic'?'✨ Magie':t.effect==='energy'?'⚡ Energie':'–'}.</p><button data-ekl-trail="${t.id}" class="${t.jk?'jk':''}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':t.jk?'Im JK/Coin-Shop':`${t.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-trail]').forEach(b=>b.onclick=()=>buyOrEquipTrail(b.dataset.eklTrail));
     body.querySelectorAll('[data-ekl-trail-pos]').forEach(b=>b.onclick=()=>{setTrailPlacement(b.dataset.eklTrailPos);openShop('trails')});
   }else if(tab==='auras'){
-    body.innerHTML=`<div class="ekl-shop-grid">${AURAS.map(a=>{const owned=G.state.ownedAuras.includes(a.id),active=G.state.aura===a.id,quest=a.questRunPoints&&!owned,questReady=quest&&G.state.runPoints>=a.questRunPoints,questPct=quest?Math.min(100,Math.floor((Number(G.state.runPoints)||0)/a.questRunPoints*100)):100;return `<article class="${owned?'owned':''}"><small>${active?'AKTIV':quest?'BEWEGUNGS-QUEST':'AURA'}</small><h3>${a.name}</h3><p><b>×${a.mult.toFixed(2).replace('.',',')} Level-Power</b>.${quest?`<br>Gratis durch aktives Spielen freischaltbar.`:''}</p><button data-ekl-aura="${a.id}" ${active||(!owned&&quest&&!questReady)?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':quest?(questReady?'Gratis freischalten':`Quest ${questPct}%`):`${a.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-shop-grid">${AURAS.map(a=>{const owned=G.state.ownedAuras.includes(a.id),active=G.state.aura===a.id,quest=a.questRunPoints&&!owned,questReady=quest&&G.state.runPoints>=a.questRunPoints,questPct=quest?Math.min(100,Math.floor((Number(G.state.runPoints)||0)/a.questRunPoints*100)):100;return `<article class="${owned?'owned':''}"><small>${active?'AKTIV':quest?'BEWEGUNGS-QUEST':'AURA'}</small><h3>${a.name}</h3><p><b>+${Math.round((a.mult-1)*100)} % Level-Power · +${(Number(a.speedPct||0)*100).toFixed(1).replace('.',',')} % Speed</b>.${quest?`<br>Gratis durch aktives Spielen freischaltbar.`:''}</p><button data-ekl-aura="${a.id}" ${active||(!owned&&quest&&!questReady)?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':quest?(questReady?'Gratis freischalten':`Quest ${questPct}%`):`${a.cost.toLocaleString('de-DE')} Wins`}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-aura]').forEach(b=>b.onclick=()=>buyOrEquipAura(b.dataset.eklAura));
   }else if(tab==='upgrades'){
     const cards=[
-      {kind:'training',icon:'⚙️',title:'Training Core',tier:coreTierValue('training'),bonus:[0,5,10,15][coreTierValue('training')],desc:'Verstärkt Level-Power aus normalem Laufen und allen Laufbändern.'},
-      {kind:'treadmill',icon:'🏃',title:'Treadmill Core',tier:coreTierValue('treadmill'),bonus:[0,10,20,35][coreTierValue('treadmill')],desc:'Zusätzlicher Bonus ausschließlich auf Laufband-Training.'},
+      {kind:'training',icon:'⚙️',title:'Training Core',tier:coreTierValue('training'),bonus:[0,3,6,9][coreTierValue('training')],desc:'Kleiner permanenter Bonus auf Level-Power aus Laufen und Laufbändern.'},
+      {kind:'treadmill',icon:'🏃',title:'Treadmill Core',tier:coreTierValue('treadmill'),bonus:[0,5,10,15][coreTierValue('treadmill')],desc:'Zusätzlicher Bonus ausschließlich auf Laufband-Training.'},
+      {kind:'speed',icon:'💨',title:'Speed Core',tier:coreTierValue('speed'),bonus:[0,1,2,3][coreTierValue('speed')],desc:'Erhöht deinen effektiven Speed prozentual und darf dadurch auch über Basis-Speed 300 hinausgehen.'},
       {kind:'win',icon:'🏆',title:'Win Core',tier:coreTierValue('win'),bonus:[0,1,2,3][coreTierValue('win')],desc:'Erhöht jede eingesammelte Win-Belohnung und stackt mit Pet/Verwandlung.'}
     ];
-    body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente Wins-Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; verbessert werden Training und Win-Auszahlungen.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const next=coreUpgradeDef(c.kind,c.tier+1);return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${next.cost.toLocaleString('de-DE')} Wins`:'MAXIMAL'}</button></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente, bewusst kleine Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; Speed Core, Auren, Pets und Speed-Chips dürfen den effektiven Wert kontrolliert über 300 anheben.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const next=coreUpgradeDef(c.kind,c.tier+1);return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${next.cost.toLocaleString('de-DE')} Wins`:'MAXIMAL'}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-core]').forEach(b=>b.onclick=()=>buyCoreUpgrade(b.dataset.eklCore));
   }else if(tab==='pets'){
     const activePet=activePetDef();
@@ -1379,15 +1406,15 @@ function renderShopBody(tab){
     body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>{const st=worldUnlockStatus(w);return `<article class="${st.unlocked&&!w.locked?'owned':''}"><small>WELT ${w.number} · ${w.difficulty||''}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?'COMING SOON':st.unlocked?'IM HUB FREIGESCHALTET':`🔒 ${st.reason}`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>Jede Welt hat eigene Level-Power und eigenen Speed 0–300.</b><span>World 2 wächst langsamer als World 1; World 3 ist absichtlich extrem grindig. Freischaltungen hängen an der Vorwelt.</span></div>`;
   }else{
     const balance=Number(window.JKCoinApp?.coinState?.()?.balance||0),items=[
-      {name:'Gold Speed-Treadmill ×6',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Gold-Laufband mit ×6 Training.'},
-      {name:'Diamond Speed-Treadmill ×10',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Diamond-Laufband mit ×10 Training.'},
-      {name:'Galaxy Keyboard Trail ×4',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Galaxy-Partikelspur mit ×4 Level-Power.'},
+      {name:'Gold Speed-Treadmill ×2,8',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Gold-Laufband mit ×2,8 Training.'},
+      {name:'Diamond Speed-Treadmill ×4',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Diamond-Laufband mit ×4 Training.'},
+      {name:'Galaxy Keyboard Trail +30 % Power',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Galaxy-Partikelspur mit +30 % additiver Level-Power.'},
       {name:'EYE Pet',price:500,owned:G.state.ownedPets.includes('cyclops-wing'),desc:'+2 % effektiver Speed und +2 % Wins · gleichzeitig mit Spezialcharakter nutzbar.'},
       {name:'Dämonenverwandlung',price:800,owned:G.state.ownedSpecialCharacters.includes('demon-transformation'),desc:'+1,5 % Speed/Wins · echte gelieferte GLB-Verwandlung.'},
       {name:'Dämon Galaxy-Upgrade',price:1000,owned:!!G.state.demonGalaxyUpgrade,desc:'Galaxy-Skin +2,5 % Speed/Wins statt +1,5 %.'},
-      {name:'Power ×2 · 15 Min.',price:180,owned:false,desc:'Temporärer ×2 Bonus auf Lauf- und Laufband-Power.'}
+      {name:'Power +50 % · 15 Min.',price:180,owned:false,desc:'Temporärer +50-%-Bonus auf Lauf- und Laufband-Power.'}
     ];
-    body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES · JK/COIN</small><h3>◆ Escape.kl Premium</h3><p>Premium beschleunigt die Progression, überschreibt aber nicht das reguläre Speed-Limit von 300.</p><b>${balance.toLocaleString('de-DE')} JK/Coin verfügbar</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div><div class="ekl-shop-grid ekl-jk-grid">${items.map(i=>`<article class="jk ${i.owned?'owned':''}"><small>${i.owned?'DAUERHAFT FREIGESCHALTET':'JK/COIN'}</small><h3>${i.name}</h3><p>${i.desc}</p><button class="jk" data-ekl-open-jk ${i.owned?'disabled':''}>${i.owned?'GEKAUFT':`${i.price.toLocaleString('de-DE')} JK/Coin`}</button></article>`).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-jk-panel"><div><small>JK.GAMES · JK/COIN</small><h3>◆ Escape.kl Premium</h3><p>Premium beschleunigt die Progression kontrolliert. Basis-Speed bleibt durch Level auf 300 begrenzt; kleine prozentuale Extras dürfen den effektiven Wert darüber anheben.</p><b>${balance.toLocaleString('de-DE')} JK/Coin verfügbar</b></div><button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button></div><div class="ekl-shop-grid ekl-jk-grid">${items.map(i=>`<article class="jk ${i.owned?'owned':''}"><small>${i.owned?'DAUERHAFT FREIGESCHALTET':'JK/COIN'}</small><h3>${i.name}</h3><p>${i.desc}</p><button class="jk" data-ekl-open-jk ${i.owned?'disabled':''}>${i.owned?'GEKAUFT':`${i.price.toLocaleString('de-DE')} JK/Coin`}</button></article>`).join('')}</div>`;
     body.querySelectorAll('[data-ekl-open-jk]').forEach(b=>b.addEventListener('click',openJkCoinShop));
   }
 }
@@ -1401,7 +1428,7 @@ function buyStepButton(tier,fromPad=false){
 function buyOrEquipTrail(id){
   const t=TRAILS.find(x=>x.id===id);if(!t)return;
   if(!G.state.ownedTrails.includes(id)){if(t.jk)return openJkCoinShop();if(G.state.wins<t.cost)return toast(`Du brauchst ${t.cost.toLocaleString('de-DE')} Wins.`,'bad');G.state.wins-=t.cost;G.state.ownedTrails.push(id);soundBuy();}
-  G.state.trail=id;setTrailColor();queuePersist(50);updateHud(true);toast(`${t.name} ausgerüstet · ×${t.mult.toFixed(2).replace('.',',')} Level-Power.`,'good');openShop('trails');
+  G.state.trail=id;setTrailColor();queuePersist(50);updateHud(true);toast(`${t.name} ausgerüstet · +${Math.round((t.mult-1)*100)} % Level-Power.`,'good');openShop('trails');
 }
 function buyOrEquipAura(id){
   const a=AURAS.find(x=>x.id===id);if(!a)return;
@@ -1411,7 +1438,7 @@ function buyOrEquipAura(id){
     else G.state.wins-=a.cost;
     G.state.ownedAuras.push(id);soundBuy();
   }
-  G.state.aura=id;setAuraStyle();queuePersist(50);updateHud(true);toast(`${a.name} ausgerüstet · ×${a.mult.toFixed(2).replace('.',',')} Level-Power.`,'good');openShop('auras');
+  G.state.aura=id;setAuraStyle();queuePersist(50);updateHud(true);toast(`${a.name} ausgerüstet · +${Math.round((a.mult-1)*100)} % Power / +${(Number(a.speedPct||0)*100).toFixed(1).replace('.',',')} % Speed.`,'good');openShop('auras');
 }
 function openJkCoinShop(){closeModal();if(window.JKCoinApp?.openForGame?.('escape')!==true)toast('JK/Coin-Shop wird noch geladen.','bad',1800);}
 function canApplyJkPurchase(kind){
@@ -1448,7 +1475,7 @@ function openRebirth(){
 function wheelRemaining(){return Math.max(0,24*60*60*1000-(Date.now()-(Number(G.state.lastWheelAt)||0)));}
 function durationShort(ms){ms=Math.max(0,ms);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h>0?`${h} Std ${m} Min`:`${Math.max(1,m)} Min`;}
 function openDailyWheel(){
-  const remaining=wheelRemaining(),ready=remaining<=0;const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>TÄGLICHE BELOHNUNG · ESCAPE HUB</small><h2>🎡 Daily Wheel</h2><p>Ein kostenloser Dreh alle 24 Stunden. Der Gewinn wird sofort in Escape.kl gespeichert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Speed · Wins · selten ein Trail</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const remaining=wheelRemaining(),ready=remaining<=0;const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>TÄGLICHE BELOHNUNG · ESCAPE HUB</small><h2>🎡 Daily Wheel</h2><p>Ein kostenloser Dreh alle 24 Stunden. Der Gewinn wird sofort in Escape.kl gespeichert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Power · Wins · selten ein Trail</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   wrap.querySelector('[data-ekl-spin]')?.addEventListener('click',()=>spinDailyWheel(wrap));
 }
 function spinDailyWheel(wrap){
@@ -1479,10 +1506,10 @@ function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().fin
 function openRecords(){
   const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0),onlyBest=Number(G.state.bestTimes?.['only-up']||0),onlyRuns=Number(G.state.completions?.['only-up']||0);
   const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>PHYSISCHER SPEED</small><b>${Math.round(speed)} / 300</b><span>Owner/Admin kann Event-Werte darüber setzen</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${(trailMultiplier()*auraMultiplier()*rebirthMultiplier()).toFixed(2).replace('.',',')}</b><span>Trail · Aura · Rebirth</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>ONLY UP BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Tower-Finishes · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>ONLY UP BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Tower-Finishes · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V461</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein physischer Speed steigt mit dem Level. Regulär ist bei 300 Schluss. Owner/Admin kann für Events bewusst höhere Werte setzen.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in einer Welt herunter, hast du 5 Sekunden Zeit: World 1 kostet 100, World 2 200 und World 3 300 JK/Coin. Danach geht es automatisch zurück zu Stage 1.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,5 · FREE+ ×2 · SILBER ×3 · GOLD ×6 · DIAMOND ×10. Laufbänder trainieren schneller als normales Laufen.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trail und Aura verstärken deine Level-Power.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Das Eye-Pet gibt +2 % Speed/Wins. Die Dämonenverwandlung gibt +1,5 % und mit Galaxy-Upgrade +2,5 %. Pet und Verwandlung können gleichzeitig aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und die Only-Up-Challenge wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ Only Up</b><p>Ein eigener vertikaler Speed-Tower führt über 140 Plattformen mehr als 150 Meter nach oben. Checkpoints verhindern, dass jeder Fehler wieder ganz unten endet.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V462</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in einer Welt herunter, hast du 5 Sekunden Zeit: World 1 kostet 100, World 2 200 und World 3 300 JK/Coin. Danach geht es automatisch zurück zu Stage 1.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Laufbänder bleiben stärker als normales Laufen, ohne die Progression zu überspringen.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Das Eye-Pet gibt +2 % Speed/Wins. Die Dämonenverwandlung gibt +1,5 % und mit Galaxy-Upgrade +2,5 %. Pet und Verwandlung können gleichzeitig aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und die Only-Up-Challenge wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ Only Up</b><p>Ein eigener vertikaler Speed-Tower führt über 140 Plattformen mehr als 150 Meter nach oben. Checkpoints verhindern, dass jeder Fehler wieder ganz unten endet.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
