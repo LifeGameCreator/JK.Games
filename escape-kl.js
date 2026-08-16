@@ -1168,7 +1168,7 @@ function spawnSummonedTreadmill(id){
   if(def.id==='admin'){addRingDeco(x,y+.42,z,2.0,.04,0xff496d,Math.PI/2);addRingDeco(x,y+.46,z,1.55,.027,0xffd36a,Math.PI/2);}
   addSign(`${def.name}  ×${String(def.mult).replace('.',',')}`,{x,y:y+3.35,z:z+3.12},def.color,.36);
   const platforms=G.platforms.slice(p0),decorative=G.decorative.slice(d0);G.buildScope=prevScope;
-  G.summonedTreadmill={id:def.id,scope:G.world,platform:tr,platforms,decorative,floorTop:Number.isFinite(floorTop)?floorTop:0};
+  G.summonedTreadmill={id:def.id,scope:G.world,platform:tr,platforms,decorative,floorTop:Number.isFinite(floorTop)?floorTop:0,wasUsed:true};
   // Spawn directly under the player: no awkward searching after closing the pause menu.
   G.pos.y=tr.mesh.position.y+tr.h/2+PLAYER_HALF+.08;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.support=tr;G.grounded=true;G.lastGroundPos.copy(G.pos);if(G.playerRoot)G.playerRoot.position.copy(G.pos);
   if(G.hitboxDebugEnabled)rebuildHitboxDebug();
@@ -1242,6 +1242,15 @@ function processMovement(dt,t){
   const wasGrounded=G.grounded,prevBottom=G.pos.y-PLAYER_HALF;G.vel.y=Math.max(-22,G.vel.y-GRAVITY*dt);let nextY=G.pos.y+G.vel.y*dt;const nextBottom=nextY-PLAYER_HALF;let landed=null;if(G.vel.y<=0)landed=platformUnder(G.pos.x,G.pos.z,prevBottom,nextBottom);
   if(landed){nextY=landed.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=landed.p;}else{const hold=G.grounded?platformUnder(G.pos.x,G.pos.z,prevBottom,prevBottom-.08):null;if(hold&&Math.abs(prevBottom-hold.top)<.28){nextY=hold.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=hold.p;}else{G.grounded=false;G.support=null;}}
   if(G.grounded){G.lastGroundedAt=performance.now();G.coyoteAvailable=true;}if(!wasGrounded&&G.grounded)G.landingPulse=1;G.landingPulse=Math.max(0,G.landingPulse-dt*7);
+  // V465: Ein über Pause erzeugtes Laufband ist nur temporär. Sobald der Spieler
+  // wirklich davon heruntergeht und wieder auf einer anderen Fläche landet,
+  // verschwindet es automatisch. Ein Sprung direkt über dem Laufband löscht es
+  // nicht mitten in der Luft; feste Training-Hall-Laufbänder sind nicht betroffen.
+  if(G.summonedTreadmill){
+    const rt=G.summonedTreadmill,onSummoned=!!(G.grounded&&G.support&&rt.platforms?.includes(G.support));
+    if(onSummoned)rt.wasUsed=true;
+    else if(rt.wasUsed&&G.grounded&&G.support){removeSummonedTreadmill();}
+  }
   if(G.grounded&&G.support!==G.lastSupport){handlePlatformContact(G.support);registerRunLanding(G.support);G.lastSupport=G.support;}else if(!G.grounded)G.lastSupport=null;
   if(G.grounded&&isEscapeWorld()&&G.support&&G.support.kind!=='win-pad'){
     const p=G.support,margin=Math.min(.55,Math.max(.18,Math.min(p.w,p.d)*.14)),minX=p.mesh.position.x-p.w/2+margin,maxX=p.mesh.position.x+p.w/2-margin,minZ=p.mesh.position.z-p.d/2+margin,maxZ=p.mesh.position.z+p.d/2-margin;
