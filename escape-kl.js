@@ -5,8 +5,8 @@ import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260815-
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260815-escape-v443';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260815-escape-v443';
 
-/* Escape.kl – JK.Games Top Game V447 · start movement speed 5.0 + Owner perk/equipment controls */
-const VERSION = '2026-08-15-v447';
+/* Escape.kl – JK.Games Top Game V448 · smoother Level 0–100 speed curve */
+const VERSION = '2026-08-16-v448';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -238,8 +238,10 @@ function levelProgress(id=progressWorldId()){
 }
 function baseSpeedForLevel(level){
   level=Math.max(0,Number(level)||0);
-  const anchors=[[0,5],[100,15],[250,30],[400,45],[600,75],[800,120],[880,155],[940,215],[1000,300]];
-  if(level<=anchors[0][0])return anchors[0][1];
+  // V448: The early game must feel alive. From Level 0–100 the stat rises by 0.2 per level,
+  // so the rounded HUD Speed increases by about +1 every 5 levels (5 -> 25).
+  if(level<=100)return START_SPEED_STAT+(level*.20);
+  const anchors=[[100,25],[250,40],[400,60],[600,85],[800,120],[880,155],[940,215],[1000,300]];
   for(let i=1;i<anchors.length;i++){
     const [l1,s1]=anchors[i-1],[l2,s2]=anchors[i];
     if(level<=l2){const t=(level-l1)/Math.max(1,l2-l1);return s1+(s2-s1)*t;}
@@ -356,9 +358,10 @@ function movementSpeedStat(){
 function movementSpeed(){
   const stat=movementSpeedStat();
   if(stat<=REGULAR_SPEED_CAP){
-    // Level 0 starts exactly at movement 5.0. The level-driven Speed stat then raises movement smoothly up to 20.0 at Speed 300 (+300%).
+    // V448: linear conversion keeps the entire 0–300 range predictable. Level 0 begins at 5.0
+    // movement units/s and Speed 300 reaches 20.0 (+300% versus the start).
     const t=Math.max(0,Math.min(1,(stat-START_SPEED_STAT)/Math.max(1,REGULAR_SPEED_CAP-START_SPEED_STAT)));
-    return BASE_MOVE_SPEED+(MAX_REGULAR_MOVE_SPEED-BASE_MOVE_SPEED)*Math.pow(t,1.22);
+    return BASE_MOVE_SPEED+(MAX_REGULAR_MOVE_SPEED-BASE_MOVE_SPEED)*t;
   }
   return Math.min(80,MAX_REGULAR_MOVE_SPEED+Math.log1p((stat-REGULAR_SPEED_CAP)/80)*3.2);
 }
