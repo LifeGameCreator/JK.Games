@@ -235,7 +235,7 @@
 
   function getFirestoreDiagnostics() {
     return {
-      runtimeVersion: "2026-08-13-v432-write-monitor",
+      runtimeVersion: "2026-08-16-v468-named-db-read-fallback",
       sdkVersion: FIREBASE_SDK_VERSION,
       generatedAt: Date.now(),
       status,
@@ -562,6 +562,123 @@
 
     const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(CONFIG);
     const auth = authMod.getAuth(app);
+
+    // V468: Kritische Einzel-Dokument-Lesevorgaenge koennen bei der benannten
+    // Firestore-Datenbank "gamekl" bei einem WebChannel/Listen-Transportfehler
+    // direkt ueber die offizielle Firestore-REST-Schnittstelle gelesen werden.
+    // Dadurch ist z. B. der BigCards-Start nicht mehr davon abhaengig, dass ein
+    // einzelner Listen-Stream im Browser fehlerfrei aufgebaut wird.
+    function decodeFirestoreRestValue(value) {
+      if (!value || typeof value !== "object") return null;
+      if (Object.prototype.hasOwnProperty.call(value, "nullValue")) return null;
+      if (Object.prototype.hasOwnProperty.call(value, "booleanValue")) return !!value.booleanValue;
+      if (Object.prototype.hasOwnProperty.call(value, "integerValue")) {
+        const n = Number(value.integerValue);
+        return Number.isSafeInteger(n) ? n : String(value.integerValue);
+      }
+      if (Object.prototype.hasOwnProperty.call(value, "doubleValue")) return Number(value.doubleValue);
+      if (Object.prototype.hasOwnProperty.call(value, "timestampValue")) return String(value.timestampValue || "");
+      if (Object.prototype.hasOwnProperty.call(value, "stringValue")) return String(value.stringValue ?? "");
+      if (Object.prototype.hasOwnProperty.call(value, "bytesValue")) return String(value.bytesValue || "");
+      if (Object.prototype.hasOwnProperty.call(value, "referenceValue")) return String(value.referenceValue || "");
+      if (Object.prototype.hasOwnProperty.call(value, "geoPointValue")) return {
+        latitude: Number(value.geoPointValue?.latitude) || 0,
+        longitude: Number(value.geoPointValue?.longitude) || 0
+      };
+      if (Object.prototype.hasOwnProperty.call(value, "arrayValue")) {
+        return (value.arrayValue?.values || []).map(decodeFirestoreRestValue);
+      }
+      if (Object.prototype.hasOwnProperty.call(value, "mapValue")) {
+        return decodeFirestoreRestFields(value.mapValue?.fields || {});
+      }
+      return null;
+    }
+
+    function decodeFirestoreRestFields(fields) {
+      const out = {};
+      for (const [key, value] of Object.entries(fields || {})) out[key] = decodeFirestoreRestValue(value);
+      return out;
+    }
+
+    function makeRestDocumentSnapshot(ref, path, payload) {
+      const exists = !!payload;
+      const data = exists ? decodeFirestoreRestFields(payload.fields || {}) : undefined;
+      const id = String(path || "").split("/").filter(Boolean).pop() || "";
+      return {
+        id,
+        ref,
+        metadata: { fromCache: false, hasPendingWrites: false },
+        exists: () => exists,
+        data: () => data,
+        get: (field) => data?.[field]
+      };
+    }
+
+    async function firestoreRestGetDoc(ref, options = {}) {
+      const path = firestorePathOf(ref);
+      if (!path) throw new Error("Firestore REST: Dokumentpfad fehlt.");
+      const user = auth.currentUser;
+      if (!user) throw new Error("Firestore REST: Keine Anmeldung vorhanden.");
+      const encodedPath = path.split("/").map((part) => encodeURIComponent(part)).join("/");
+      const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(CONFIG.projectId)}/databases/${encodeURIComponent(DATABASE_ID)}/documents/${encodedPath}`;
+      const timeoutMs = Math.max(2500, Number(options.timeoutMs) || 10000);
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
+        try {
+          const token = await authMod.getIdToken(user, attempt > 0);
+          const response = await fetch(url, {
+            method: "GET",
+            cache: "no-store",
+            signal: controller?.signal,
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (response.status === 404) return makeRestDocumentSnapshot(ref, path, null);
+          if (!response.ok) {
+            const body = await response.text().catch(() => "");
+            const error = new Error(`Firestore REST ${response.status}: ${body.slice(0, 240)}`);
+            error.code = `firestore-rest-${response.status}`;
+            throw error;
+          }
+          const payload = await response.json();
+          return makeRestDocumentSnapshot(ref, path, payload);
+        } catch (error) {
+          lastError = error;
+          if (attempt === 0 && /401|unauthenticated|token/i.test(String(error?.message || error || ""))) continue;
+          break;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+      throw lastError || new Error("Firestore REST-Lesen fehlgeschlagen.");
+    }
+
+    async function reliableGetDoc(ref, options = {}) {
+      const preferRest = options.preferRest === true;
+      const label = String(options.label || "Firestore-Dokument");
+      const timeoutMs = Math.max(2500, Number(options.timeoutMs) || 9000);
+      const sdkRead = () => withTimeout(dbMod.getDoc(ref), timeoutMs, label);
+      if (preferRest) {
+        try { return await firestoreRestGetDoc(ref, { timeoutMs }); }
+        catch (restError) {
+          try { return await sdkRead(); }
+          catch (sdkError) {
+            sdkError.restFallbackError = restError;
+            throw sdkError;
+          }
+        }
+      }
+      try { return await sdkRead(); }
+      catch (sdkError) {
+        try { return await firestoreRestGetDoc(ref, { timeoutMs }); }
+        catch (restError) {
+          sdkError.restFallbackError = restError;
+          throw sdkError;
+        }
+      }
+    }
+
     // V408: Firestore 12.17.1 + automatische Transport-Erkennung.
     // Kein erzwungenes Long-Polling: Firestore darf selbst zwischen Streaming und
     // Long-Polling wechseln. Ein 20-s-Polling-Timeout gilt nur, falls Auto-Detect
@@ -646,6 +763,8 @@
       addDoc: gatedAddDoc,
       runTransaction: gatedRunTransaction,
       writeBatch: gatedWriteBatch,
+      getDocReliable: reliableGetDoc,
+      getDocRest: firestoreRestGetDoc,
       storage: storageMod.getStorage(app),
       functions: functionsMod.getFunctions(app, FUNCTIONS_REGION),
       databaseId: DATABASE_ID,
@@ -807,7 +926,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-13-v432-write-monitor",
+    version: "2026-08-16-v468-named-db-read-fallback",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -830,6 +949,14 @@
     isFatalFirestoreAssertion,
     scheduleHardFirestoreRecovery,
     withTimeout,
+    getDocReliable: async (ref, options = {}) => {
+      const fb = await load();
+      return fb.getDocReliable(ref, options);
+    },
+    getDocRest: async (ref, options = {}) => {
+      const fb = await load();
+      return fb.getDocRest(ref, options);
+    },
     getRuntime: () => runtime,
     getStatus: () => status,
     getLastError: () => lastError
@@ -837,5 +964,5 @@
   window.JKFirestoreDiagnostics = printFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsPrevious = printPreviousFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsClear = clearFirestoreDiagnostics;
-  console.info("JK.Games Firebase Runtime V432 aktiv · serieller Write-Schutz + Diagnosemonitor. Konsole: JKFirestoreDiagnostics() · vorherige Sitzung: JKFirestoreDiagnosticsPrevious()");
+  console.info("JK.Games Firebase Runtime V468 aktiv · Write-Schutz + Named-DB REST-Lesefallback + Diagnosemonitor.");
 })();

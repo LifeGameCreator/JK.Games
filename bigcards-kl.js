@@ -1,8 +1,8 @@
-/* BigCards.kl – JK.Games Top Game V439 · Mobile setup + compact Auto-Opener */
+/* BigCards.kl – JK.Games Top Game V468 · Cloud load recovery + safety guard */
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-14-bigcards-v439-mobile-auto-setup";
+  const VERSION = "2026-08-16-bigcards-v468-cloud-recovery";
   const SAVE_KEY = "jk-games-bigcards-kl-v332";
   const CLOUD_SAVE_COLLECTION = "bigCardsSaves";
   const CLOUD_SCHEMA_VERSION = 394;
@@ -32,6 +32,7 @@
   const CLOUD_PROFILE_SAVE_INTERVAL_MS = 7200000;
   const CLOUD_RESOURCE_BACKOFF_MS = 3600000;
   const CLOUD_POLL_MS = 45000;
+  const CLOUD_RECOVERY_POLL_MS = 8000;
   // V407: kompakte Karten-Buckets + gebündelte Firestore-Batches reduzieren die Anzahl der Writes massiv.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
   const CLOUD_WRITE_BATCH_SIZE = 8;
@@ -3693,6 +3694,35 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
   function mergeLegacyCheckpoint(raw,root){const out=Object.assign(defaultState(),raw||{});if(root){out.points=Math.max(0,Number(root.points)||out.points||1000);out.level=Math.max(1,Number(root.level)||out.level||1);out.totalRebirths=Math.max(0,Number(root.totalRebirths)||out.totalRebirths||0);out.lifetimeScore=Math.max(Number(out.lifetimeScore)||0,Number(root.lifetimeScore)||0);out.updatedAt=Math.max(Number(out.updatedAt)||0,Number(root.updatedAtMs)||0);}return out;}
   function cloudIntegrityError(message){const e=new Error(message);e.code="bigcards-cloud-integrity";e.cloudIntegrity=true;return e;}
   function cloudChunkRefId(index,hash){return `bucket-${String(index).padStart(3,"0")}-${String(hash||"").slice(0,16)}`;}
+
+  // V468: BigCards-Kernspielstand wird fuer Root/Chunks bevorzugt ueber den
+  // zuverlaessigen Einzel-Dokument-Leseweg des zentralen Firebase-Runtimes geladen.
+  // Bei der benannten Datenbank "gamekl" umgeht dieser kritische Startpfad damit
+  // den intermittierenden WebChannel/Listen-Fehler und faellt nur notfalls auf das SDK zurueck.
+  async function cloudGetDocV468(fb,ref,label="BigCards Cloud") {
+    const core=window.LifeBuilderFirebaseCore;
+    if(core?.getDocReliable){
+      return core.getDocReliable(ref,{preferRest:true,timeoutMs:10000,label});
+    }
+    if(fb?.getDocReliable)return fb.getDocReliable(ref,{preferRest:true,timeoutMs:10000,label});
+    return fb.getDoc(ref);
+  }
+  function cloudSafetyHighWaterV468(userId){
+    const meta=readCloudMeta(userId);
+    return {
+      collection:Math.max(0,Math.floor(Number(meta?.safetyHighCollection)||0)),
+      instances:Math.max(0,Math.floor(Number(meta?.safetyHighInstances)||0))
+    };
+  }
+  function cloudStateEmptyV468(raw){
+    if(!raw||typeof raw!=="object")return true;
+    return Object.keys(raw.instances||{}).length===0
+      &&Object.keys(raw.collection||{}).length===0
+      &&Object.keys(raw.exclusiveCollection||{}).length===0
+      &&Object.keys(raw.vipCollection||{}).length===0
+      &&Object.keys(raw.winCollection||{}).length===0
+      &&Object.keys(raw.hyperCollection||{}).length===0;
+  }
   async function readFullCloudState(fb,userId,root){
     if(!cloudHasFullSave(root))return null;
     const count=Math.floor(Number(root.chunkCount)||0);
@@ -3725,7 +3755,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     // bleiben aber vorhersagbar und kompatibel.
     for(let start=0;start<specs.length;start+=CLOUD_SAFE_READ_BATCH){
       const group=specs.slice(start,start+CLOUD_SAFE_READ_BATCH);
-      const rows=await Promise.all(group.map(({i,id})=>fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id)).then(snap=>({i,id,snap}))));
+      const rows=await Promise.all(group.map(({i,id})=>cloudGetDocV468(fb,fb.doc(fb.db,CLOUD_SAVE_COLLECTION,userId,"chunks",id),`BigCards Chunk ${i+1}/${count}`).then(snap=>({i,id,snap}))));
       for(const row of rows)validate(row.i,row.id,row.snap);
     }
     let raw;
@@ -3852,7 +3882,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     return "";
   }
   async function verifyCloudRootBeforeCommitV427(fb,u){
-    const ref=fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),snap=await fb.getDoc(ref),root=snap.exists()?snap.data()||{}:null;
+    const ref=fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),snap=await cloudGetDocV468(fb,ref,"BigCards Sicherheits-Root"),root=snap.exists()?snap.data()||{}:null;
     const reason=cloudSafetyRegressionReasonV427(u.uid,S,root);
     if(reason){
       const e=new Error(`V427 Cloud-Sicherheitsstopp: ${reason}`);e.code="bigcards-cloud-safety-stop";e.cloudSafety=true;throw e;
@@ -3871,7 +3901,19 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     if(!force&&(Number(globalGate.queueDepth||0)>0||Number(globalGate.coalescedDepth||0)>0)){scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,240000));return false}
     const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;cloudUid=u.uid;
     const localSafetyReason=cloudSafetyRegressionReasonV427(u.uid,S,null);
-    if(localSafetyReason){cloudDirty=false;cloudMigrationPending=true;toast(`☁ Cloud-Sicherheitsstopp: ${localSafetyReason} Dein Online-Spielstand wird NICHT ueberschrieben.`,7000);console.error("BigCards V427 safety stop",localSafetyReason);return false;}
+    if(localSafetyReason){
+      const high=cloudSafetyHighWaterV468(u.uid),onlyMissingLoad=cloudStateEmptyV468(S)&&(high.collection>0||high.instances>0);
+      cloudDirty=false;cloudMigrationPending=true;
+      if(onlyMissingLoad){
+        console.warn("BigCards V468: leerer lokaler Zwischenstand wird nicht gespeichert; Cloud-Neuladen bleibt aktiv.",localSafetyReason);
+        toast(`🛟 Cloud-Laden wird erneut versucht · sicherer Stand: ${Math.max(high.collection,high.instances)}+ Kartenwerte geschützt`,6500);
+        setTimeout(()=>{if(UI.overlay&&cloudMigrationPending)void retryPendingCloudMigration();},1200);
+      }else{
+        toast(`☁ Cloud-Sicherheitsstopp: ${localSafetyReason} Dein Online-Spielstand wird NICHT ueberschrieben.`,7000);
+        console.error("BigCards V468 safety stop",localSafetyReason);
+      }
+      return false;
+    }
     cloudSaving=true;if(force&&cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}const mutationAtStart=cloudMutationCounter;cloudFastDirty=false;let cloudStage="Vorbereitung";
     try{
       updateFeaturedEarnings(now());const savedAt=now();S.updatedAt=savedAt;S.version=419;
@@ -3967,16 +4009,16 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     catch{return null}
   }
   async function pullCloudIfNewer(showToast=false){
-    if(!cloudReady||cloudBooting||cloudSaving||cloudMigrationPending||cloudDirty)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{},remoteAt=Number(root.updatedAtMs)||0;if(!cloudHasFullSave(root))return false;if(root.saveId===cloudLastSaveId&&remoteAt<=cloudLastRemoteUpdatedAt)return false;
+    if(!cloudReady||cloudBooting||cloudSaving||cloudMigrationPending||cloudDirty)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await cloudGetDocV468(fb,fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),"BigCards Pull-Root");if(!snap.exists())return false;const root=snap.data()||{},remoteAt=Number(root.updatedAtMs)||0;if(!cloudHasFullSave(root))return false;if(root.saveId===cloudLastSaveId&&remoteAt<=cloudLastRemoteUpdatedAt)return false;
       // V402 Fast-Path: gleicher immutable saveId = dieselben Chunk-Daten. Wenn
       // nur der Root (z. B. Markt-Points) neuer ist, werden NICHT alle Chunks erneut geladen.
       if(root.saveId===cloudLastSaveId&&S){const meta=readCloudMeta(u.uid);applyRootOnlyChangesToCachedState(S,meta,root);cloudLastRemoteUpdatedAt=remoteAt;writeCloudMeta(u.uid,{saveId:root.saveId,remoteUpdatedAtMs:remoteAt,syncedLocalUpdatedAt:Number(S.updatedAt)||remoteAt});writeLocalState(u.uid);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand aktualisiert.",2200);return true;}
       const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=remoteAt;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;markCloudCacheVerified(u.uid,root.saveId,remoteAt,Number(S.updatedAt)||remoteAt,S);UI.battleCard=null;UI.battleResult=null;UI.battleSession=null;resetOnlineUi();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);if(UI.overlay)refresh(false);if(showToast||root.sourceDevice!==deviceId())toast("☁ BigCards-Spielstand von einem anderen Gerät aktualisiert.",3000);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards cloud pull",e);return false}}
-  async function retryPendingCloudMigration(){if(!cloudMigrationPending||cloudBooting||cloudSaving||!UI.overlay)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(!snap.exists())return false;const root=snap.data()||{};if(!cloudHasFullSave(root))return false;const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;cloudMigrationPending=false;cloudReady=true;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;markCloudCacheVerified(u.uid,root.saveId,cloudLastRemoteUpdatedAt,Number(S.updatedAt)||cloudLastRemoteUpdatedAt,S);UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);startCloudWatchers();toast(`☁ Vollständiger PC-Spielstand geladen · ${Object.keys(S.instances||{}).length} Karten`,4200);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards migration retry",e);return false}}
+  async function retryPendingCloudMigration(){if(!cloudMigrationPending||cloudBooting||cloudSaving||!UI.overlay)return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{const snap=await cloudGetDocV468(fb,fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),"BigCards Recovery-Root");if(!snap.exists())return false;const root=snap.data()||{};if(!cloudHasFullSave(root))return false;const raw=await readFullCloudState(fb,u.uid,root);if(!raw)return false;const reason=cloudSafetyRegressionReasonV427(u.uid,raw,root);if(reason)throw cloudIntegrityError(`Recovery-Stand verletzt Sicherheitsgrenze: ${reason}`);cloudMigrationPending=false;cloudReady=true;adoptState(raw,{saveLocal:true,userId:u.uid});cloudLastSaveId=root.saveId;cloudLastRemoteUpdatedAt=Number(root.updatedAtMs)||0;cloudLastChunkHashes=Array.isArray(root.chunkHashes)?root.chunkHashes.slice():[];cloudLastChunkRefs=Array.isArray(root.chunkRefs)?root.chunkRefs.slice():[];cloudDirty=false;markCloudCacheVerified(u.uid,root.saveId,cloudLastRemoteUpdatedAt,Number(S.updatedAt)||cloudLastRemoteUpdatedAt,S);UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);startCloudWatchers();toast(`☁ BigCards wiederhergestellt · ${Object.keys(S.instances||{}).length} Karten geladen`,4800);return true}catch(e){if(!e?.cloudIntegrity)console.warn("BigCards V468 cloud recovery",e);return false}}
   function stopCloudWatchers(){clearInterval(cloudPollTimer);cloudPollTimer=0;window.removeEventListener("focus",onCloudFocus);document.removeEventListener("visibilitychange",onCloudVisibility);}
   function onCloudFocus(){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}
   function onCloudVisibility(){if(document.visibilityState==="visible"){if(cloudMigrationPending)retryPendingCloudMigration();else pullCloudIfNewer(false)}else{S.lastSeen=now();writeLocalState(cloudUid||currentUidSync(),true)}}
-  function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),CLOUD_POLL_MS);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
+  function startCloudWatchers(){stopCloudWatchers();if(!cloudReady&&!cloudMigrationPending)return;const interval=cloudMigrationPending?CLOUD_RECOVERY_POLL_MS:CLOUD_POLL_MS;cloudPollTimer=setInterval(()=>cloudMigrationPending?retryPendingCloudMigration():pullCloudIfNewer(false),interval);window.addEventListener("focus",onCloudFocus);document.addEventListener("visibilitychange",onCloudVisibility);}
   function startRuntimeTimers(){lastTick=performance.now();lastPassivePersistAt=now();clearInterval(tickTimer);tickTimer=setInterval(tick,400);clearInterval(autoTimer);autoTimer=0;S.autoOpenerLastAt=now();autoTick(now());startCloudWatchers();}
   async function initializeCloudSession(localPreviewPromise=null){
     if(cloudBooting)return;cloudBooting=true;cloudReady=false;cloudMigrationPending=false;
@@ -3987,7 +4029,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     // IndexedDB-Spielstand spätestens jetzt an – noch bevor die Cloud-Chunks kommen.
     if(localRaw&&UI.overlay){adoptState(localRaw,{saveLocal:false,userId:u.uid});UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);}
     try{
-      rootSnap=await fb.getDoc(fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid));if(rootSnap.exists())root=rootSnap.data()||{};
+      rootSnap=await cloudGetDocV468(fb,fb.doc(fb.db,CLOUD_SAVE_COLLECTION,u.uid),"BigCards Start-Root");if(rootSnap.exists())root=rootSnap.data()||{};
       if(cloudHasFullSave(root)){
         // Normaler Start auf demselben Gerät: Manifest/saveId unverändert. Der
         // vollständige Spielstand liegt bereits in IndexedDB und wird direkt benutzt.
@@ -4052,12 +4094,27 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
       }else if(localHasCards||meaningfulLocalProgress(localRaw)&&Number(root.collectionDiscovered||0)===0){adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudDirty=true;}
       else{adoptState(mergeLegacyCheckpoint(localRaw,root),{saveLocal:true,userId:u.uid});if(Number(root.collectionDiscovered||0)>0&&!localHasCards){cloudMigrationPending=true;cloudDirty=false;}}
     }
-    else{adoptState(localRaw,{saveLocal:true,userId:u.uid});cloudDirty=true;}
+    else{
+      const high=cloudSafetyHighWaterV468(u.uid),knownRemoteProgress=high.collection>0||high.instances>0;
+      adoptState(localRaw,{saveLocal:true,userId:u.uid});
+      if(cloudLoadError||knownRemoteProgress){
+        // V468: Ein fehlgeschlagener Root-Read ist NICHT gleichbedeutend mit "kein Cloud-Save".
+        // Wenn der Browser bereits einen sicheren High-Water-Stand kennt, wird weder
+        // ein leerer Save erzeugt noch syncProfile(true) gestartet. Stattdessen laden
+        // wir den vorhandenen Cloud-Stand automatisch erneut.
+        cloudMigrationPending=true;cloudDirty=false;
+        toast(`🛟 Cloud-Verbindung unterbrochen · sicherer Kartenstand bleibt geschützt (${Math.max(high.collection,high.instances)||"bekannt"}) · neuer Ladeversuch läuft`,7500);
+      }else cloudDirty=true;
+    }
     cloudBooting=false;cloudReady=!cloudMigrationPending;ensureDaily();applyOffline();UI.floor=Math.min(UI.floor,S.unlockedFloors-1);refresh(false);
     // Rolle und Auszahlungen blockieren das sichtbare Laden nicht mehr. Der Spieler
     // kann BigCards bereits benutzen, während diese kleinen Online-Aufgaben nachlaufen.
     startRuntimeTimers();void loadRole();void claimPayouts();
-    if(cloudMigrationPending){toast("🛟 SICHERHEITSSPERRE: Der leere Stand wird NICHT in die Cloud geschrieben. Bitte BigCards geöffnet lassen und den Fehlerlog senden, falls keine Karten wiederhergestellt wurden.",9000);return;}
+    if(cloudMigrationPending){
+      toast("🛟 Cloud-Recovery aktiv: Ein leerer Zwischenstand wird NICHT gespeichert. BigCards versucht den geschützten Kartenstand automatisch erneut zu laden.",8500);
+      setTimeout(()=>{if(UI.overlay&&cloudMigrationPending)void retryPendingCloudMigration();},900);
+      return;
+    }
     if(cloudDirty)void syncProfile(true);else toast(`${usedFastCache?"⚡":"☁"} BigCards geladen · ${Object.keys(S.instances||{}).length} Karten${usedFastCache?" · Schnellstart":""}`,2600);
   }
   async function loadRole(showToast=false){const fb=await firebase(),u=await currentUser();if(!fb||!u){UI.role="player";if(UI.tab==="mod")UI.tab="field";if(showToast)toast("Online-Rolle nicht verfügbar.");return refresh()}try{const snap=await fb.getDoc(fb.doc(fb.db,"staffRoles",u.uid));UI.role=String(snap.data()?.role||"player").toLowerCase();}catch{UI.role="player"}let changed=false;if(UI.role==="owner"&&!S.vipUnlocked){S.vipUnlocked=true;changed=true;}if(UI.role!=="owner"&&!S.vipUnlocked){for(const inst of Object.values(S.instances||{})){if(inst?.fieldPermit){inst.fieldPermit=false;changed=true;}}for(let floor=0;floor<(S.floors||[]).length;floor++){const max=floorMaxTier(floor),row=S.floors[floor]||[];for(let slot=0;slot<row.length;slot++){const inst=instance(row[slot]);if(inst&&!inst.exclusive&&!inst.vip&&inst.rarity>max){row[slot]=null;changed=true;}}}}if(changed)persist();if(UI.role!=="owner"&&UI.tab==="mod")UI.tab="field";refresh();}
