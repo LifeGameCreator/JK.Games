@@ -1,8 +1,8 @@
-/* Escape.kl World 1 – Keyboard Lab V451.
+/* Escape.kl World 1 – Keyboard Lab V458.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
-  const {addPlatform,addSign,boxDeco,addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},returnHub}=api;
+  const {addPlatform,addSign,boxDeco,addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},returnHub,finishAndReturnHub=returnHub}=api;
   const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
   const startZ=-70;
   const rewards=[10,20,35,60,100,175,300,500,800,1200,2000,3500,6000,10000,15000];
@@ -66,5 +66,5 @@ export function buildKeyboardLabWorld(api){
   boxDeco(0,6.75,z-3.05,12,.38,.55,0xffca55,0x86580f);boxDeco(-5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);boxDeco(5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);
   addRingDeco(0,5.55,z-2.9,2.1,.07,0xffd45e,0);addRingDeco(0,5.55,z-2.82,1.5,.05,0x6ee9ff,0);addGlowLight(0,5.7,z-2.5,0xffd05c,1.35,13);
   addSign(`STAGE 15 · SPEED 300 ZIEL`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);addSign('WORLD 1 COMPLETE',{x:0,y:5.45,z:z+3.62},0x72eaff,.78);
-  addInteractable('hub-return','Zum Hub zurück',0,4.4,z-2.0,5,returnHub);
+  addInteractable('hub-return','Finish + Wins · Zum Hub',0,4.4,z-2.0,5,finishAndReturnHub);
 }
