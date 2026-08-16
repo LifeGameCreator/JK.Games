@@ -268,7 +268,12 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
     }else if(action&&controller.activeMode!==wanted){
       controller.activeMode=wanted;
     }
-    if(n.active){if(wanted==='walk')n.active.timeScale=clamp(speed/4.8,.72,1.65);else if(wanted==='run')n.active.timeScale=treadmill?1.28:clamp(speed/8.3,.82,1.8);else n.active.timeScale=1;}
+    if(n.active){
+      const synced=clamp(Number(kin.animationRate)||1,.68,2.2);
+      if(wanted==='walk')n.active.timeScale=clamp(synced*.90,.68,1.95);
+      else if(wanted==='run')n.active.timeScale=synced;
+      else n.active.timeScale=1;
+    }
     n.mixer.update(dt);
   };
   controller.dispose=()=>{
