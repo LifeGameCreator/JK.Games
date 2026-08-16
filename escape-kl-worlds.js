@@ -1,4 +1,4 @@
-/* Escape.kl world registry V443 – separate world progression, 300 regular-speed cap and rising difficulty. */
+/* Escape.kl world registry V461 – separate world progression, 300 regular-speed cap and rising difficulty. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -19,7 +19,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:5.4,
     time2:235,
     time3:170,
-    speedRecommendations:Object.freeze([15,20,30,40,55,70,85,105,130,155,185,215,245,275,300]),
+    speedRecommendations:Object.freeze([15,20,30,40,55,70,85,105,130,155,185,220,250,280,300]),
     stageRewards:Object.freeze([10,20,35,60,100,175,300,500,800,1200,2000,3500,6000,10000,15000]),
     difficulty:'EINSTIEG → MITTEL',
     description:'Die Lernwelt. Breite Keycaps, klare Speed-Gaps und 15 Stages. Bis Speed 300 ist alles regulär erspielbar; höhere physische Speed-Werte sind nur per Mod/Admin möglich.'
@@ -34,7 +34,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     requiredCompletions:1,
     progressionFactor:6,
     maxPlayerSpeed:300,
-    finishBonusWins:500000,
+    finishBonusWins:0,
     accent:0xff77bb,
     background:0x241023,
     fog:0x241023,
@@ -43,10 +43,10 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:4.8,
     time2:220,
     time3:160,
-    speedRecommendations:Object.freeze([20,30,45,60,80,105,135,170,215,300]),
-    stageRewards:Object.freeze([25000,40000,65000,100000,175000,300000,500000,800000,1200000,2000000]),
-    difficulty:'MITTEL → SCHWER',
-    description:'Welt 2 wird nach einem vollständigen World-1-Run und World-1-Level 250 freigeschaltet. Die gleichen Level existieren weiter, brauchen hier aber deutlich mehr Training-Power.'
+    speedRecommendations:Object.freeze([15,35,60,90,120,150,185,220,260,295]),
+    stageRewards:Object.freeze([5000,10000,18000,30000,45000,65000,90000,120000,160000,200000]),
+    difficulty:'SCHWER',
+    description:'Welt 2 wird nach World 1 Level 250 + Finish freigeschaltet. Die letzten Sprünge sind echte Speed-Gates und verlangen ungefähr Speed 260–300. Der finale Cash-out ist auf 200.000 Wins reduziert.'
   }),
   Object.freeze({
     id:'toxic-keyboard',
@@ -65,12 +65,12 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     start:{x:0,y:1.50,z:-70},
     laneHalfWidth:12.5,
     backtrackAllowance:4.0,
-    time2:255,
-    time3:195,
-    speedRecommendations:Object.freeze([25,40,60,85,115,145,180,220,260,300]),
+    time2:330,
+    time3:245,
+    speedRecommendations:Object.freeze([30,60,90,120,150,180,210,240,270,300]),
     stageRewards:Object.freeze([5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000]),
     difficulty:'ENDGAME',
-    description:'Welt 3 ist die Grind-Welt. Freischaltung über Candy Keys Level 800 + einen vollständigen World-2-Run. Level 800 entspricht ungefähr Speed 120; reguläre Speed 300 wird erst um Level 1000 erreicht.'
+    description:'Welt 3 ist jetzt die echte Endgame-Skillwelt: Air-Control, vertikale Sprünge, bewegte/glitchende Keys, eine tödliche Chase-Wall und ein Speed-300-Finale. Freischaltung über Candy Keys Level 800 + World-2-Finish.'
   }),
   Object.freeze({
     id:'cyber-city',

@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260815-escape-v443';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260816-escape-v458-candy-finish';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260815-escape-v443';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260815-escape-v443';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260816-escape-v461';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260816-escape-v461-speed-gaps';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260816-escape-v461-hard';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260816-escape-v461-overhaul';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V460 · Owner-Hitbox-Play + Demon-Hitbox-Fix */
-const VERSION = '2026-08-16-v460';
+/* Escape.kl – JK.Games Top Game V461 · Day/Night + Only Up + Hard Worlds */
+const VERSION = '2026-08-16-v461';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -34,6 +34,8 @@ const TOUCH_LOOK_SENSITIVITY_X = .0062;
 const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
 const REVIVE_COSTS = Object.freeze({'keyboard-lab':100,'candy-keys':200,'toxic-keyboard':300});
+const DAY_NIGHT_CYCLE_SECONDS = 300;
+const ONLY_UP_FINISH_REWARD = 50000;
 
 const STEP_BUTTONS = Object.freeze([
   {tier:0,name:'+1 Power / Bewegung',cost:0,gain:1},
@@ -104,7 +106,7 @@ const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
   player:null, playerRoot:null, character:null, trail:null, trailPoints:[],trailParticles:[],trailEmitCarry:0,auraGroup:null, auraRings:[],specialFxGroup:null, petModel:null, petWrapper:null, petMixer:null, petLoadSeq:0, formModel:null, formWrapper:null, formMixer:null, formActions:null, formAction:null, formLoadSeq:0, gltfLoader:null,
-  platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[],
+  platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[], hazards:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
   keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
@@ -115,6 +117,7 @@ const G = {
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
   hitboxDebugEnabled:false,hitboxDebugGroup:null,hitboxDebugItems:[],hitboxDebugPlayer:null,
+  hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
   tmpV:new THREE.Vector3(), tmpV2:new THREE.Vector3(),tmpV3:new THREE.Vector3()
@@ -468,6 +471,26 @@ function addCylinderDeco(x,y,z,rTop,rBottom,h,color,emissive=0,segments=16){cons
 function addRingDeco(x,y,z,r,tube,color,rotX=Math.PI/2){const m=mat(`ring-${color}`,{color,emissive:color,emissiveIntensity:.72,roughness:.36,metalness:.28});const o=tagScope(new THREE.Mesh(geo(`ring-${r}-${tube}`,()=>new THREE.TorusGeometry(r,tube,8,28)),m));o.position.set(x,y,z);o.rotation.x=rotX;o.castShadow=false;G.scene.add(o);G.decorative.push(o);return o;}
 function addGlowLight(x,y,z,color=0x67e8ff,intensity=1.4,distance=11){const l=tagScope(new THREE.PointLight(color,intensity,distance,2));l.position.set(x,y,z);G.scene.add(l);G.decorative.push(l);return l;}
 function addCollider(x,z,w,d){G.colliders.push({x,z,w,d,scope:G.buildScope});}
+function addHazardBox({x=0,y=2,z=0,w=4,h=4,d=1,color=0xff345f,emissive=0xff123d,motion=null,kind='hazard'}){
+  const m=mat(`hazard-${color}-${emissive}`,{color,emissive,emissiveIntensity:.55,roughness:.34,metalness:.18,transparent:true,opacity:.92});
+  const mesh=tagScope(new THREE.Mesh(geo(`hazard-box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),m));mesh.position.set(x,y,z);mesh.castShadow=false;mesh.receiveShadow=false;G.scene.add(mesh);G.decorative.push(mesh);
+  const hz={mesh,scope:G.buildScope,kind,w,h,d,base:new THREE.Vector3(x,y,z),motion,active:true,chase:false,started:false,startZ:z,endZ:z,triggerZ:z,speed:0};G.hazards.push(hz);return hz;
+}
+function addChaseWall({x=0,y=2.7,startZ=0,triggerZ=-5,endZ=-45,w=22,h=6,d=1.2,speed=12.5,color=0x7dff58}){
+  const hz=addHazardBox({x,y,z:startZ,w,h,d,color,emissive:color,kind:'chase-wall'});hz.chase=true;hz.started=false;hz.startZ=startZ;hz.triggerZ=triggerZ;hz.endZ=endZ;hz.speed=Math.max(1,Number(speed)||12.5);return hz;
+}
+function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;h.mesh.visible=h.scope===G.world;}}
+function hazardTouchesPlayer(h){
+  if(!h?.mesh?.visible||!h.active)return false;const r=currentPlayerRadius();
+  return Math.abs(G.pos.x-h.mesh.position.x)<=h.w/2+r&&Math.abs(G.pos.z-h.mesh.position.z)<=h.d/2+r&&Math.abs(G.pos.y-h.mesh.position.y)<=h.h/2+PLAYER_HALF;
+}
+function updateHazards(dt){
+  for(const h of G.hazards){if(h.scope!==G.world){h.mesh.visible=false;continue;}h.mesh.visible=true;
+    if(h.chase){if(!h.started&&G.pos.z<=h.triggerZ){h.started=true;toast('☣ TOXIC WALL · LAUF!','bad',1400);tone(95,.16,'sawtooth',.022,35);}if(h.started&&h.active){h.mesh.position.z-=h.speed*dt;if(h.mesh.position.z<=h.endZ){h.active=false;h.mesh.visible=false;}}}
+    else if(h.motion){const t=performance.now()/1000,q=Math.sin(t*h.motion.speed+(h.motion.phase||0))*h.motion.amp;h.mesh.position[h.motion.axis]=h.base[h.motion.axis]+q;}
+    if(hazardTouchesPlayer(h)){if(isEscapeWorld())beginReviveOffer();else respawn();return true;}
+  }return false;
+}
 function resolveHubColliders(prevX,prevZ){
   if(G.world!=='hub')return;
   G.pos.x=Math.max(-54.35,Math.min(54.35,G.pos.x));G.pos.z=Math.max(-54.35,Math.min(54.35,G.pos.z));
@@ -484,19 +507,34 @@ function soundFinish(){[0,100,210,330].forEach((ms,i)=>setTimeout(()=>tone([392,
 
 function buildHubSky(){
   const skyMat=new THREE.MeshBasicMaterial({color:0x07162c,side:THREE.BackSide,fog:false});G.materials.set('hub-sky-mat',skyMat);
-  const dome=tagScope(new THREE.Mesh(geo('hub-sky-dome',()=>new THREE.SphereGeometry(165,24,14)),skyMat),'hub');dome.position.set(0,30,0);G.scene.add(dome);G.decorative.push(dome);
-  const positions=[];for(let i=0;i<260;i++){const a=Math.random()*Math.PI*2,r=58+Math.random()*92,y=12+Math.random()*75;positions.push(Math.cos(a)*r,y,Math.sin(a)*r);}
+  const dome=tagScope(new THREE.Mesh(geo('hub-sky-dome',()=>new THREE.SphereGeometry(165,24,14)),skyMat),'hub');dome.position.set(0,30,0);G.scene.add(dome);G.decorative.push(dome);G.hubSkyDome=dome;
+  const positions=[];for(let i=0;i<290;i++){const a=Math.random()*Math.PI*2,r=58+Math.random()*92,y=12+Math.random()*75;positions.push(Math.cos(a)*r,y,Math.sin(a)*r);}
   const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));G.geometries.set('hub-stars-geo',starGeo);
-  const starMat=new THREE.PointsMaterial({color:0xbfe8ff,size:.33,transparent:true,opacity:.72,sizeAttenuation:true,fog:false});G.materials.set('hub-stars-mat',starMat);
-  const stars=tagScope(new THREE.Points(starGeo,starMat),'hub');G.scene.add(stars);G.decorative.push(stars);
-  const moonMat=new THREE.MeshBasicMaterial({color:0x9edcff,transparent:true,opacity:.30,fog:false});G.materials.set('hub-moon-mat',moonMat);
-  const moon=tagScope(new THREE.Mesh(geo('hub-moon',()=>new THREE.SphereGeometry(8,18,12)),moonMat),'hub');moon.position.set(-58,52,-74);G.scene.add(moon);G.decorative.push(moon);
-  // Lightweight aurora ribbons: atmosphere without expensive particles on mobile.
+  const starMat=new THREE.PointsMaterial({color:0xd7ecff,size:.34,transparent:true,opacity:.78,sizeAttenuation:true,fog:false});G.materials.set('hub-stars-mat',starMat);
+  const stars=tagScope(new THREE.Points(starGeo,starMat),'hub');G.scene.add(stars);G.decorative.push(stars);G.hubStars=stars;
+  const moonMat=new THREE.MeshBasicMaterial({color:0xc7e8ff,transparent:true,opacity:.42,fog:false});G.materials.set('hub-moon-mat',moonMat);
+  const moon=tagScope(new THREE.Mesh(geo('hub-moon',()=>new THREE.SphereGeometry(7.5,18,12)),moonMat),'hub');moon.position.set(-58,52,-74);G.scene.add(moon);G.decorative.push(moon);G.hubMoon=moon;
+  const sunMat=new THREE.MeshBasicMaterial({color:0xffefb1,transparent:true,opacity:0,fog:false});G.materials.set('hub-sun-disc-mat',sunMat);
+  const sunDisc=tagScope(new THREE.Mesh(geo('hub-sun-disc',()=>new THREE.SphereGeometry(6.2,18,12)),sunMat),'hub');sunDisc.position.set(60,45,-80);G.scene.add(sunDisc);G.decorative.push(sunDisc);G.hubSun=sunDisc;
+  // Lightweight aurora ribbons: strong at night, nearly invisible during the day.
   [[0x4ee6ff,-10,34,-82,-.08],[0x8d73ff,18,41,-91,.10],[0x55ffb0,-28,27,-88,.18]].forEach(([color,x,y,z,rot],i)=>{
-    const m=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.055,side:THREE.DoubleSide,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});G.materials.set(`hub-aurora-${i}`,m);
+    const m=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.055,side:THREE.DoubleSide,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});m.userData.escapeAurora=true;G.hubAuroraMats.push(m);G.materials.set(`hub-aurora-${i}`,m);
     const band=tagScope(new THREE.Mesh(geo(`hub-aurora-geo-${i}`,()=>new THREE.PlaneGeometry(94-i*9,8+i*2)),m),'hub');band.position.set(x,y,z);band.rotation.z=rot;G.scene.add(band);G.decorative.push(band);
   });
 }
+function updateDayNight(t){
+  const dynamic=G.world==='hub'||G.world==='only-up';
+  if(!dynamic){if(G.lastDayNightMode!=='fixed'){G.lastDayNightMode='fixed';if(G.sunLight)G.sunLight.intensity=2.0;if(G.hemiLight)G.hemiLight.intensity=1.5;}return;}
+  G.lastDayNightMode='dynamic';const phase=((t/DAY_NIGHT_CYCLE_SECONDS)+.24)%1,ang=phase*Math.PI*2-Math.PI/2,sunHeight=Math.sin(ang),day=Math.max(0,Math.min(1,(sunHeight+.16)/.68)),twilight=Math.max(0,1-Math.abs(sunHeight)*3.1);
+  const night=new THREE.Color(0x061022),dawn=new THREE.Color(0x5b2855),dayColor=new THREE.Color(0x6fb8e8);let sky=night.clone().lerp(dawn,twilight*.58).lerp(dayColor,day*.92);
+  if(G.world==='hub'&&G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);G.scene.background.copy(sky);G.scene.fog.color.copy(sky.clone().multiplyScalar(.55));
+  if(G.sunLight){G.sunLight.intensity=.18+day*2.55;G.sunLight.color.set(day>.2?0xffe5b8:0xff8b74);G.sunLight.position.set(Math.cos(ang)*58,10+Math.max(-.2,sunHeight)*58,Math.sin(ang)*44);}
+  if(G.hemiLight){G.hemiLight.intensity=.46+day*1.35;G.hemiLight.color.set(day>.35?0xd8ecff:0x8697d8);}
+  if(G.hubStars?.material)G.hubStars.material.opacity=.78*(1-day*.95);if(G.hubMoon){G.hubMoon.material.opacity=.48*(1-day);G.hubMoon.position.set(-Math.cos(ang)*62,18+Math.max(0,-sunHeight)*48,-66);}
+  if(G.hubSun){G.hubSun.material.opacity=Math.max(0,day*.92);G.hubSun.position.set(Math.cos(ang)*70,18+Math.max(0,sunHeight)*53,-78+Math.sin(ang)*18);}
+  for(const m of G.hubAuroraMats)m.opacity=.055*(1-day*.94);
+}
+
 function prewarmEscapeScenes(){
   try{
     for(const p of G.platforms)p.mesh.visible=true;for(const d of G.decorative)d.visible=true;for(const f of G.portalFx)f.visible=true;
@@ -525,13 +563,13 @@ function setupScene(){
   G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.05;
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0x07111d);G.scene.fog=new THREE.Fog(0x07111d,42,220);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
-  G.scene.add(new THREE.HemisphereLight(0xbfdcff,0x182010,1.50));const sun=new THREE.DirectionalLight(0xffe1b5,2.0);sun.position.set(-28,46,18);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-74;sun.shadow.camera.right=74;sun.shadow.camera.top=82;sun.shadow.camera.bottom=-82;G.scene.add(sun);
-  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
-  G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();
+  G.hemiLight=new THREE.HemisphereLight(0xbfdcff,0x182010,1.50);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xffe1b5,2.0);G.sunLight.position.set(-28,46,18);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
+  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
+  G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);
   G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
 }
-function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.autoTriggers=[];G.triggerLocks.clear();}
+function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();}
 function applyWorldVisibility(){
   for(const p of G.platforms)p.mesh.visible=p.scope===G.world;
   for(const d of G.decorative){const scope=d?.userData?.escapeScope;if(scope)d.visible=scope===G.world;}
@@ -554,6 +592,9 @@ function buildHub(){
   addPlatform({x:0,y:.292,z:4,w:12,h:.075,d:92,color:0x10283b,kind:'hub-lane',hub:true});
   addPlatform({x:0,y:.296,z:-31,w:78,h:.075,d:10,color:0x10283b,kind:'hub-lane',hub:true});
   addPlatform({x:0,y:.297,z:30,w:92,h:.075,d:11,color:0x0f2537,kind:'hub-lane',hub:true});
+  // V461: giant JK.GAMES landmark – readable from the main plaza without blocking movement.
+  boxDeco(0,13.6,-8.0,28,.38,.55,0x0b2033,0x1e5f86);boxDeco(-13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);boxDeco(13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);
+  addSign('JK.GAMES',{x:0,y:14.65,z:-7.68},0xffffff,1.72);addSign('ESCAPE.KL',{x:0,y:12.95,z:-7.66},0x6ee7ff,.58);
   for(const x of[-5.9,5.9])boxDeco(x,.355,4,.055,.035,92,0x53def7,0x143f55);
   for(const z of[-35.9,-26.1])boxDeco(0,.356,z,78,.035,.055,0x53def7,0x143f55);
   for(const z of[24.6,35.4])boxDeco(0,.356,z,92,.035,.055,0x3b91ad,0x143f55);
@@ -651,6 +692,12 @@ function buildHub(){
   addPlatform({x:32,y:.37,z:30.4,w:10,h:.20,d:5.4,color:0x4a2b23,kind:'race-gate',hub:true});
   addInteractable('speed-race','Speed Race starten',32,1.0,30.4,5.3,()=>setWorld('race'));
 
+  // ONLY UP – vertical speed challenge, separate from Worlds 1–3.
+  boxDeco(45,2.45,18.3,15,4.3,.38,0x101b31,0x263f78);addCollider(45,18.3,15,.38);
+  addSign('ONLY UP',{x:45,y:4.78,z:18.05},0x9aa7ff,.56);addSign('SEHR HOCH · SPEED CHALLENGE',{x:45,y:3.72,z:18.03},0xd6dcff,.25);
+  addPlatform({x:45,y:.38,z:12.0,w:10,h:.22,d:5.2,color:0x27345c,kind:'only-up-gate',hub:true});
+  addInteractable('only-up','Only Up Tower starten',45,1.0,12.0,5.2,()=>setWorld('only-up'));
+
   // Atmospheric light columns and low decorative benches keep the plaza alive without clutter.
   for(const [x,z,c] of [[-14,14,0x5ce6ff],[14,14,0x7a91ff],[-14,-22,0x67e7dc],[14,-22,0xffcf69]]){
     addCylinderDeco(x,1.55,z,.22,.32,2.5,0x173248,c,12);addGlowLight(x,2.6,z,c,.55,7);
@@ -663,6 +710,31 @@ function buildRaceCourse(){
   let z=z0-7;const names=['W','A','S','D','SHIFT','SPACE','1','2','3','GO','FAST','ESC','RUN','KEY','WIN','RACE'];for(let i=0;i<16;i++){z-=4.25;const cp=i===3?2:i===7?3:i===11?4:i===15?5:0;const motion=i===5||i===10?{axis:'x',amp:2.7,speed:.85,phase:i*.5}:null;addPlatform({x:x0+Math.sin(i*.9)*3.2,y:.65+(i%4===3?.35:0),z,w:i%5===4?5.4:2.8,h:.48,d:2.8,color:cp?0xb35538:0x7b4939,label:names[i],checkpoint:cp,kind:'race-key',motion});if(cp)addGlowLight(x0,2.1,z,0xff815c,.52,8);}
   z-=6.5;addPlatform({x:x0,y:1.05,z,w:12,h:.6,d:7,color:0xd27a38,label:'FINISH',finish:true,checkpoint:5,kind:'race-finish'});boxDeco(x0,4.5,z-2.8,12,.35,.55,0xffa24e,0x8b3e18);addSign('RACE FINISH',new THREE.Vector3(x0,5.1,z+3.45),0xffb35d,.92);addGlowLight(x0,3.2,z,0xff9a50,1.25,12);addInteractable('race-hub-return','Nach dem Rennen zum Hub',x0,1.8,z-2,5,()=>setWorld('hub'));
 }
+function buildOnlyUpCourse(){
+  const startX=0,startY=.35,startZ=0;
+  addPlatform({x:startX,y:startY,z:startZ,w:11,h:.6,d:9,color:0x27325c,label:'ONLY UP',checkpoint:1,kind:'only-up-start'});
+  addSign('JK.GAMES · ONLY UP',{x:0,y:5.2,z:3.8},0xa8b7ff,.92);addSign('150 METER · KEIN SHORTCUT',{x:0,y:4.05,z:3.82},0xffd56b,.34);
+  let lastX=0,lastZ=0,y=1.35;
+  const total=144;
+  for(let i=1;i<=total;i++){
+    const tier=i/total,angle=i*(.46+tier*.12),radius=5.2+tier*5.8+Math.sin(i*.17)*1.25;
+    const x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;
+    y+=1.05+(i%17===0?.10:0);
+    const checkpoint=i%16===0,rest=i%10===0,w=checkpoint?7.2:rest?4.6:3.2,d=checkpoint?5.8:rest?3.6:2.8;
+    const color=checkpoint?0x7868c8:rest?0x43569b:(i%2?0x293963:0x344777);
+    const motion=i>42&&i%13===0?{axis:'x',amp:1.2+tier*1.3,speed:.42+tier*.28,phase:i*.33}:null;
+    addPlatform({x,y,z,w,h:.42,d,color,label:checkpoint?`CP ${Math.floor(i/16)+1}`:'',checkpoint:checkpoint?Math.floor(i/16)+1:0,kind:'only-up-key',motion});
+    if(checkpoint){addRingDeco(x,y+1.9,z,1.45,.055,0xb6a9ff,Math.PI/2);addGlowLight(x,y+1.2,z,0x8999ff,.48,8);}
+    lastX=x;lastZ=z;
+  }
+  y+=1.05;addPlatform({x:lastX,y,z:lastZ,w:11,h:.62,d:8,color:0xc69d3b,label:'TOP',finish:true,checkpoint:10,kind:'only-up-finish'});
+  addSign('ONLY UP · TOP',{x:lastX,y:y+4.2,z:lastZ+3.6},0xffd66b,.78);addSign('150 METER GESCHAFFT',{x:lastX,y:y+3.1,z:lastZ+3.62},0xcad0ff,.32);addGlowLight(lastX,y+2,lastZ,0xffd66b,1.1,13);
+}
+function finishOnlyUp(){
+  if(G.runFinished)return;G.runFinished=true;soundFinish();const sec=Math.max(0,(performance.now()-G.runStartedAt)/1000),key='only-up',previous=Number(G.state.bestTimes[key]||0),record=!previous||sec<previous;if(record)G.state.bestTimes[key]=sec;G.state.completions[key]=Math.max(0,Number(G.state.completions[key]||0))+1;const reward=awardWins(ONLY_UP_FINISH_REWARD,'Only Up Tower');queuePersist(50);awardMainXp(12,'Escape.kl · Only Up Tower',`escape-only-up-${Date.now()}-${Math.round(sec*100)}`);
+  const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>JK.GAMES · ONLY UP</small><h2>🏔️ Ganz oben!</h2><div class="ekl-stars">★★★</div><p>Höhe <b>150+ Meter</b> · Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Belohnung <b>+${reward.toLocaleString('de-DE')} Wins</b></p><div class="ekl-modal-actions"><button data-ekl-only-again class="gold">Nochmal</button><button data-ekl-only-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-only-again]').onclick=()=>{wrap.remove();setWorld('only-up')};wrap.querySelector('[data-ekl-only-hub]').onclick=()=>{wrap.remove();setWorld('hub')};updateHud(true);
+}
+
 function activeCharacterDef(choice=G.state?.characterChoice){return SPECIAL_CHARACTERS.find(c=>c.id===choice)||null;}
 function characterBaseGender(choice=G.state?.characterChoice){const special=activeCharacterDef(choice);if(special)return special.baseGender;return choice==='female'?'female':'male';}
 function currentPlayerRadius(){return G.state?.characterChoice==='demon-transformation'?.46:PLAYER_RADIUS;}
@@ -879,11 +951,12 @@ function rebuildHitboxDebug(){
   for(const p of G.platforms){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(p.kind==='win-pad'?0xffd84d:0x56ff9a,.42)));mesh.scale.set(p.w,p.h,p.d);group.add(mesh);G.hitboxDebugItems.push({mesh,p,scope:p.scope});}
   for(const c of G.colliders){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xff5f68,.5)));mesh.scale.set(c.w,3.2,c.d);mesh.position.set(c.x,1.6,c.z);group.add(mesh);G.hitboxDebugItems.push({mesh,c,scope:c.scope,collider:true});}
   for(const tr of G.autoTriggers){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xffd65c,.48)));mesh.scale.set(tr.w,.18,tr.d);mesh.position.set(tr.x,.75,tr.z);group.add(mesh);G.hitboxDebugItems.push({mesh,tr,scope:tr.scope,trigger:true});}
+  for(const h of G.hazards){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xff304f,.58)));mesh.scale.set(h.w,h.h,h.d);mesh.position.copy(h.mesh.position);group.add(mesh);G.hitboxDebugItems.push({mesh,h,scope:h.scope,hazard:true});}
   const player=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0x55d9ff,.75)));player.renderOrder=1000;group.add(player);G.hitboxDebugPlayer=player;updateHitboxDebug();
 }
 function updateHitboxDebug(){
   if(!G.hitboxDebugEnabled||!G.hitboxDebugGroup)return;
-  for(const it of G.hitboxDebugItems){it.mesh.visible=it.scope===G.world;if(!it.mesh.visible)continue;if(it.p)it.mesh.position.copy(it.p.mesh.position);}
+  for(const it of G.hitboxDebugItems){it.mesh.visible=it.scope===G.world;if(!it.mesh.visible)continue;if(it.p)it.mesh.position.copy(it.p.mesh.position);else if(it.h)it.mesh.position.copy(it.h.mesh.position);}
   if(G.hitboxDebugPlayer){G.hitboxDebugPlayer.visible=true;G.hitboxDebugPlayer.position.copy(G.pos);G.hitboxDebugPlayer.scale.set(currentPlayerRadius()*2,PLAYER_HALF*2,currentPlayerRadius()*2);}
 }
 function setHitboxDebug(enabled){G.hitboxDebugEnabled=!!enabled;if(G.hitboxDebugEnabled)rebuildHitboxDebug();else disposeHitboxDebug();toast(G.hitboxDebugEnabled?'🧰 Hitbox-Debug AN · Grün=Sprungflächen · Rot=Wände · Gelb=Trigger':'🧰 Hitbox-Debug AUS','good',2100);}
@@ -909,13 +982,15 @@ function setWorld(id,initial=false){
     teleport(Number(w.start?.x)||0,Number(w.start?.y)||1.5,Number(w.start?.z)||-70);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;
     G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     toast(`${w.name} · Speed ${Math.round(currentSpeedStat(w.id))}/300 · Bei einem Fall hast du 5 Sekunden für JK/Coin-Revive.`,'good',2400);
+  }else if(id==='only-up'){
+    const startY=.35+.6/2+PLAYER_HALF+.08;G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint={x:0,y:startY,z:0};teleport(0,startY,0);G.scene.background.setHex(0x101a36);G.scene.fog.color.setHex(0x101a36);G.scene.fog.near=55;G.scene.fog.far=260;toast('ONLY UP · 150+ Meter nach oben · Checkpoints alle 16 Plattformen.','good',2400);
   }else if(id==='race'){
     const raceY=.4+.55/2+PLAYER_HALF+.08;
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=20;G.checkpoint={x:72,y:raceY,z:20};teleport(72,raceY,20);
     G.scene.background.setHex(0x1b0c08);G.scene.fog.color.setHex(0x1b0c08);
     toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2000);
   }
-  applyWorldVisibility();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);
+  resetHazardsForWorld(id);applyWorldVisibility();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);
 }
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
@@ -943,6 +1018,7 @@ function resetEscapeRun({countDeath=true,showToast=true}={}){
   const w=currentWorldDef();if(!w)return;
   if(countDeath)G.deaths++;
   G.stage=1;G.stageClaims.clear();resetRunTech();G.runStartedAt=performance.now();G.runFurthestZ=Number(w?.start?.z)||-70;
+  resetHazardsForWorld(w.id);
   teleport(Number(w?.start?.x)||0,Number(w?.start?.y)||1.5,Number(w?.start?.z)||-70);
   G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;
   if(showToast)toast(`Run verloren · ${w?.name||'Welt'} startet wieder bei Stage 1`,'bad',1750);
@@ -970,7 +1046,7 @@ function tryReviveWithJk(){
   if(spend.call(window.JKCoinApp,cost,`Escape.kl · World ${w?.number||'?'} Wiederbelebung`)!==true)return toast('Wiederbelebung konnte nicht bezahlt werden.','bad',1600),false;
   const elapsed=Math.max(0,performance.now()-G.reviveStartedAt),anchor=G.reviveAnchor.clone(),stage=Math.max(1,G.reviveStage||G.stage||1),yaw=G.reviveYaw;
   if(G.reviveSupport?.scope===G.world&&G.reviveSupport?.mesh){const p=G.reviveSupport;anchor.set(p.mesh.position.x+G.reviveOffsetX,p.mesh.position.y+p.h/2+PLAYER_HALF+.10,p.mesh.position.z+G.reviveOffsetZ);}
-  cancelReviveOffer(false);G.paused=false;if(G.runStartedAt)G.runStartedAt+=elapsed;
+  cancelReviveOffer(false);G.paused=false;if(G.runStartedAt)G.runStartedAt+=elapsed;resetHazardsForWorld(G.world);
   teleport(anchor.x,anchor.y+.08,anchor.z);G.stage=stage;if(G.playerRoot)G.playerRoot.rotation.y=yaw;
   soundFinish();toast(`◆ Wiederbelebt · ${cost} JK/Coin · Stage ${stage}`,'good',1900);updateHud(true);return true;
 }
@@ -987,7 +1063,7 @@ function respawn(){
   if(G.revivePending){cancelReviveOffer(false);G.paused=false;}
   soundFail();
   if(isEscapeWorld()){resetEscapeRun({countDeath:true,showToast:true});return;}
-  G.deaths++;const c=G.checkpoint||{x:0,y:1.08,z:30};teleport(c.x,c.y,c.z);toast(G.world==='race'?`Race-Respawn · Checkpoint ${Math.max(1,G.stage)}`:'Respawn','bad',1500);
+  G.deaths++;const c=G.checkpoint||{x:0,y:1.08,z:30};teleport(c.x,c.y,c.z);toast(G.world==='race'?`Race-Respawn · Checkpoint ${Math.max(1,G.stage)}`:G.world==='only-up'?`Only Up · zurück zu Checkpoint ${Math.max(1,G.stage)}`:'Respawn','bad',1500);
 }
 
 function updatePlatforms(t,dt=.016){
@@ -1110,7 +1186,8 @@ function processMovement(dt,t){
     if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addLevelPower(add,true,worldId);queuePersist(1800);}
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
-  if(G.pos.y<(isEscapeWorld()||G.world==='race'?WORLD_FAIL_Y:MAX_FALL)){if(isEscapeWorld())beginReviveOffer();else respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
+  if(updateHazards(dt))return;
+  if(G.pos.y<(isEscapeWorld()||G.world==='race'||G.world==='only-up'?WORLD_FAIL_Y:MAX_FALL)){if(isEscapeWorld())beginReviveOffer();else respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
 }
 function performJump(){
   if(G.paused||G.modalOpen||G.runFinished)return false;
@@ -1158,6 +1235,9 @@ function detectCheckpointAndFinish(){
   }else if(G.world==='race'){
     if(p.checkpoint&&p.checkpoint>G.stage){G.stage=p.checkpoint;G.checkpoint={x:p.mesh.position.x,y:p.mesh.position.y+p.h/2+PLAYER_HALF+.10,z:p.mesh.position.z};soundCheckpoint();toast(`Race Checkpoint ${G.stage}/5`,'good',850);}
     if(p.finish&&!G.runFinished)finishRace();
+  }else if(G.world==='only-up'){
+    if(p.checkpoint&&p.checkpoint>G.stage){G.stage=p.checkpoint;G.checkpoint={x:p.mesh.position.x,y:p.mesh.position.y+p.h/2+PLAYER_HALF+.10,z:p.mesh.position.z};soundCheckpoint();toast(`Only Up Checkpoint ${G.stage}`,'good',950);}
+    if(p.finish&&!G.runFinished)finishOnlyUp();
   }
 }
 function finishRace(){
@@ -1397,12 +1477,12 @@ function openDailyQuests(){
 }
 function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().find(r=>r.id===id);if(!row||row.progress<row.target||q.claimed.includes(id))return;q.claimed.push(id);awardWins(row.reward,row.name);soundBuy();queuePersist(50);updateHud(true);toast(`${row.name}: +${row.reward} Wins`,'good',2000);openDailyQuests();}
 function openRecords(){
-  const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0);
+  const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0),onlyBest=Number(G.state.bestTimes?.['only-up']||0),onlyRuns=Number(G.state.completions?.['only-up']||0);
   const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>PHYSISCHER SPEED</small><b>${Math.round(speed)} / 300</b><span>Owner/Admin kann Event-Werte darüber setzen</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${(trailMultiplier()*auraMultiplier()*rebirthMultiplier()).toFixed(2).replace('.',',')}</b><span>Trail · Aura · Rebirth</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>PHYSISCHER SPEED</small><b>${Math.round(speed)} / 300</b><span>Owner/Admin kann Event-Werte darüber setzen</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${(trailMultiplier()*auraMultiplier()*rebirthMultiplier()).toFixed(2).replace('.',',')}</b><span>Trail · Aura · Rebirth</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>ONLY UP BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Tower-Finishes · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V458</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein physischer Speed steigt mit dem Level. Regulär ist bei 300 Schluss. Owner/Admin kann für Events bewusst höhere Werte setzen.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in einer Welt herunter, hast du 5 Sekunden Zeit: World 1 kostet 100, World 2 200 und World 3 300 JK/Coin. Danach geht es automatisch zurück zu Stage 1.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,5 · FREE+ ×2 · SILBER ×3 · GOLD ×6 · DIAMOND ×10. Laufbänder trainieren schneller als normales Laufen.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trail und Aura verstärken deine Level-Power.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Das Eye-Pet gibt +2 % Speed/Wins. Die Dämonenverwandlung gibt +1,5 % und mit Galaxy-Upgrade +2,5 %. Pet und Verwandlung können gleichzeitig aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V461</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein physischer Speed steigt mit dem Level. Regulär ist bei 300 Schluss. Owner/Admin kann für Events bewusst höhere Werte setzen.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in einer Welt herunter, hast du 5 Sekunden Zeit: World 1 kostet 100, World 2 200 und World 3 300 JK/Coin. Danach geht es automatisch zurück zu Stage 1.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,5 · FREE+ ×2 · SILBER ×3 · GOLD ×6 · DIAMOND ×10. Laufbänder trainieren schneller als normales Laufen.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trail und Aura verstärken deine Level-Power.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Das Eye-Pet gibt +2 % Speed/Wins. Die Dämonenverwandlung gibt +1,5 % und mit Galaxy-Upgrade +2,5 %. Pet und Verwandlung können gleichzeitig aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und die Only-Up-Challenge wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ Only Up</b><p>Ein eigener vertikaler Speed-Tower führt über 140 Plattformen mehr als 150 Meter nach oben. Checkpoints verhindern, dass jeder Fehler wieder ganz unten endet.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -1571,7 +1651,7 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on,{passive:false});sprint.addEventListener('pointerup',off,{passive:false});sprint.addEventListener('pointercancel',off,{passive:false});}
 }
 function resize(){if(!G.renderer||!G.camera||!G.overlay)return;const r=G.overlay.getBoundingClientRect(),vv=window.visualViewport;const w=Math.max(1,Math.round(vv?.width||r.width)),h=Math.max(1,Math.round(vv?.height||r.height));G.overlay.style.setProperty('--ekl-vw',`${w}px`);G.overlay.style.setProperty('--ekl-vh',`${h}px`);G.overlay.classList.toggle('ekl-landscape',w>h);G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
   if(G.overlay)return;

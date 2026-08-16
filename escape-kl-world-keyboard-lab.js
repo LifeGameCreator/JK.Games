@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Keyboard Lab V458.
+/* Escape.kl World 1 – Keyboard Lab V461.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
@@ -51,13 +51,13 @@ export function buildKeyboardLabWorld(api){
   z-=2.4;stageTitle(7,'LEICHTE SLIDER');for(let i=0;i<6;i++)key(4.9,0,1.25,4.5,2.9,labels[i],0x665da6,{motion:{axis:'x',amp:1.2,speed:.38+i*.02,phase:i*.65}});winPad(7,rewards[6],1.38);
   z-=2.4;stageTitle(8,'DOPPELREIHE');for(let i=0;i<8;i++)key(5.1,i%2?1.85:-1.85,1.10+(i%4===3?.12:0),4.35,2.85,labels[6+i],0x6d5aa3);winPad(8,rewards[7],1.25);
   z-=2.4;stageTitle(9,'ENTER PATH');for(let i=0;i<7;i++)key(5.35,Math.sin(i*.8)*1.9,1.05+i*.08,4.25,2.8,i===3?'ENTER':labels[10+i],0x65518f);winPad(9,rewards[8],1.75);
-  z-=2.4;stageTitle(10,'NUMPAD SPEED');for(let i=0;i<8;i++)key(5.7,((i%3)-1)*1.45,1.35+(Math.floor(i/3)%2)*.15,4.0,2.75,String((i+1)%10),0x4d679b);winPad(10,rewards[9],1.65);
+  z-=2.4;stageTitle(10,'NUMPAD SPEED');for(let i=0;i<8;i++)key(6.6,((i%3)-1)*1.45,1.35+(Math.floor(i/3)%2)*.15,3.9,2.65,String((i+1)%10),0x4d679b);winPad(10,rewards[9],1.65);
 
-  z-=2.5;stageTitle(11,'SHIFT RUN');for(let i=0;i<7;i++)key(6.0,i%2?2.1:-2.1,1.45,3.95,2.7,i%2?'SHIFT':'CTRL',0x5b578f);winPad(11,rewards[10],1.62);
-  z-=2.5;stageTitle(12,'WEITSPRUNG');for(let i=0;i<7;i++)key(6.35,Math.sin(i*.72)*2.15,1.45+i*.14,3.9,2.65,labels[(i+8)%labels.length],0x60528c);winPad(12,rewards[11],2.65);
-  z-=2.5;stageTitle(13,'MOVING SPACE');for(let i=0;i<6;i++)key(6.7,0,2.20,4.1,2.6,i%2?'SPACE':'ENTER',0x6a4f8e,{motion:{axis:'x',amp:1.7,speed:.45+i*.022,phase:i*.7}});winPad(13,rewards[12],2.42);
-  z-=2.5;stageTitle(14,'ESC APPROACH');for(let i=0;i<6;i++)key(7.15,i%2?2.15:-2.15,2.20+i*.10,3.8,2.55,labels[i],0x4b658d);winPad(14,rewards[13],3.0);
-  z-=2.5;stageTitle(15,'SPEED 300 FINALE');for(let i=0;i<6;i++)key(7.7,Math.sin(i*.9)*2.0,2.70+i*.12,3.8,2.5,i===5?'ESC':'W',0x2b7898);
+  z-=2.5;stageTitle(11,'SHIFT RUN');for(let i=0;i<7;i++)key(7.6,i%2?2.2:-2.2,1.45,3.75,2.55,i%2?'SHIFT':'CTRL',0x5b578f);winPad(11,rewards[10],1.62);
+  z-=2.5;stageTitle(12,'WEITSPRUNG');for(let i=0;i<7;i++)key(9.0,Math.sin(i*.72)*2.25,1.45+i*.12,3.65,2.45,labels[(i+8)%labels.length],0x60528c);winPad(12,rewards[11],2.65);
+  z-=2.5;stageTitle(13,'MOVING SPACE');for(let i=0;i<6;i++)key(10.6,0,2.20,3.65,2.4,i%2?'SPACE':'ENTER',0x6a4f8e,{motion:{axis:'x',amp:1.9,speed:.48+i*.024,phase:i*.7}});winPad(13,rewards[12],2.42);
+  z-=2.5;stageTitle(14,'ESC APPROACH');for(let i=0;i<6;i++)key(12.2,i%2?2.35:-2.35,2.20+i*.09,3.45,2.35,labels[i],0x4b658d);winPad(14,rewards[13],3.0);
+  z-=2.5;stageTitle(15,'SPEED 280–300 FINALE');for(let i=0;i<6;i++)key(13.8+i*.12,Math.sin(i*.9)*2.35,2.70+i*.10,3.35,2.25,i===5?'ESC':'W',0x2b7898);
 
   z-=5.1;
   addPlatform({x:0,y:3.55,z,w:13,h:.6,d:7,color:0x1f526c,label:'FINAL',kind:'safe-zone',stage:15});
@@ -65,6 +65,6 @@ export function buildKeyboardLabWorld(api){
   addPlatform({x:0,y:3.92,z:z-2.55,w:4.4,h:.18,d:1.25,color:0x31a7bf,label:'FINISH',kind:'finish-strip',finish:true,stage:15});
   boxDeco(0,6.75,z-3.05,12,.38,.55,0xffca55,0x86580f);boxDeco(-5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);boxDeco(5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);
   addRingDeco(0,5.55,z-2.9,2.1,.07,0xffd45e,0);addRingDeco(0,5.55,z-2.82,1.5,.05,0x6ee9ff,0);addGlowLight(0,5.7,z-2.5,0xffd05c,1.35,13);
-  addSign(`STAGE 15 · SPEED 300 ZIEL`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);addSign('WORLD 1 COMPLETE',{x:0,y:5.45,z:z+3.62},0x72eaff,.78);
+  addSign(`STAGE 15 · SPEED 280–300 ZIEL`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);addSign('WORLD 1 COMPLETE',{x:0,y:5.45,z:z+3.62},0x72eaff,.78);
   addInteractable('hub-return','Finish + Wins · Zum Hub',0,4.4,z-2.0,5,finishAndReturnHub);
 }
