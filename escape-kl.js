@@ -57,11 +57,11 @@ const TRAILS = Object.freeze([
 const SPECIAL_CHARACTERS = Object.freeze([
   {id:'neon-runner',name:'Neon Runner',cost:25000,currency:'wins',baseGender:'male',color:0x43e8ff,desc:'JK.Games Spezialcharakter mit cyanfarbenem Runner-Effekt.'},
   {id:'flame-runner',name:'Flame Runner',cost:75000,currency:'wins',baseGender:'female',color:0xff743d,desc:'Spezialcharakter mit warmem Flame-Runner-Effekt.'},
-  {id:'demon-transformation',name:'Dämonenverwandlung',cost:800,currency:'jk',baseGender:'male',color:0xbf6cff,desc:'Verwandelt dich in den gelieferten Dämonen-Charakter. Bonus: +1,5 % Speed und +1,5 % Wins.',speedBonus:.015,winsBonus:.015,asset:'./escape-demon-transformation.glb?v=20260816-escape-v452',galaxyAsset:'./escape-demon-transformation-galaxy.glb?v=20260816-escape-v452',upgradeCost:1000,upgradeSpeedBonus:.025,upgradeWinsBonus:.025,upgradeName:'Galaxy-Skin-Upgrade'}
+  {id:'demon-transformation',name:'Dämonenverwandlung',cost:800,currency:'jk',baseGender:'male',color:0xbf6cff,desc:'Verwandelt dich in den gelieferten Dämonen-Charakter. Bonus: +1,5 % Speed und +1,5 % Wins.',speedBonus:.015,winsBonus:.015,asset:'./escape-demon-transformation.glb?v=20260816-escape-v452',galaxyAsset:'./escape-demon-transformation-galaxy.glb?v=20260816-escape-v454-red-galaxy',upgradeCost:1000,upgradeSpeedBonus:.025,upgradeWinsBonus:.025,upgradeName:'Galaxy-Skin-Upgrade'}
 ]);
 const PET_DEFS = Object.freeze([
   {id:'none',name:'Kein Pet',cost:0,currency:'none',speedBonus:0,winsBonus:0,desc:'Kein aktives Pet.'},
-  {id:'cyclops-wing',name:'Creatur mit Flügeln · 1 Auge',cost:500,currency:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins auf eingesammelte Belohnungen.'}
+  {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins auf eingesammelte Belohnungen.'}
 ]);
 const AURAS = Object.freeze([
   {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1},
@@ -681,7 +681,7 @@ function loadCharacterFormVisual(choice=G.state?.characterChoice){
     const wrap=new THREE.Group();wrap.name='escape-form-wrapper';
     const model=normalizeExternalModel(gltf.scene,{targetHeight:1.88});
     model.position.set(0,-PLAYER_HALF,0);
-    if(choice==='demon-transformation')model.scale.multiplyScalar(1.08);
+    if(choice==='demon-transformation'){model.scale.multiplyScalar(1.08);model.rotation.y=Math.PI/2;}
     wrap.add(model);G.playerRoot.add(wrap);G.formWrapper=wrap;G.formModel=model;
     const clips=gltf.animations||[],find=re=>clips.find(a=>re.test(a.name||''));
     if(clips.length){
@@ -1191,7 +1191,7 @@ function renderShopBody(tab){
       {name:'Gold Speed-Treadmill ×6',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Gold-Laufband mit ×6 Training.'},
       {name:'Diamond Speed-Treadmill ×10',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Diamond-Laufband mit ×10 Training.'},
       {name:'Galaxy Keyboard Trail ×4',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Galaxy-Partikelspur mit ×4 Level-Power.'},
-      {name:'Eye Wing Pet',price:500,owned:G.state.ownedPets.includes('cyclops-wing'),desc:'+2 % effektiver Speed und +2 % Wins · gleichzeitig mit Spezialcharakter nutzbar.'},
+      {name:'EYE Pet',price:500,owned:G.state.ownedPets.includes('cyclops-wing'),desc:'+2 % effektiver Speed und +2 % Wins · gleichzeitig mit Spezialcharakter nutzbar.'},
       {name:'Dämonenverwandlung',price:800,owned:G.state.ownedSpecialCharacters.includes('demon-transformation'),desc:'+1,5 % Speed/Wins · echte gelieferte GLB-Verwandlung.'},
       {name:'Dämon Galaxy-Upgrade',price:1000,owned:!!G.state.demonGalaxyUpgrade,desc:'Galaxy-Skin +2,5 % Speed/Wins statt +1,5 %.'},
       {name:'Power ×2 · 15 Min.',price:180,owned:false,desc:'Temporärer ×2 Bonus auf Lauf- und Laufband-Power.'}

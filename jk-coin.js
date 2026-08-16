@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-16-jkcoin-v452-escape-pets";
+  const VERSION = "2026-08-16-jkcoin-v454-eye-pet-galaxy";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -180,7 +180,7 @@
     { game:"escape", id:"escape-treadmill-diamond", name:"Diamond Speed-Treadmill ×10 · Dauerhaft", cost:850, text:"Schaltet das Diamond-Laufband dauerhaft frei. Es trainiert im Stand mit ×10 Level-Power und behält deine normale Bewegungssteuerung.", grant:{kind:"speedTreadmill:diamond",amount:1} },
     { game:"escape", id:"escape-galaxy-trail", name:"Galaxy Keyboard Trail ×4 Power · Dauerhaft", cost:300, text:"Exklusive violett-kosmische Fuß- oder Rückenspur für Escape.kl. Gibt ×4 Level-Power, aber keinen direkten Bewegungsbonus über Speed 300.", grant:{kind:"trail:galaxy",amount:1} },
     { game:"escape", id:"escape-speed-boost-2", name:"Escape Power ×2 · 15 Min.", cost:180, text:"Verdoppelt 15 Minuten lang die Level-Power aus echter Laufstrecke und freigeschalteten Laufbändern. Der physische Speed bleibt regulär auf 300 begrenzt.", grant:{kind:"speedBoost:2",amount:1} },
-    { game:"escape", id:"escape-pet-cyclops-wing", name:"Eye Wing Pet · Dauerhaft", cost:500, text:"Schaltet das fliegende Ein-Auge-Pet für Escape.kl dauerhaft frei. Ausgerüstet: +2 % effektiver Speed auch oberhalb 300 sowie +2 % auf eingesammelte Wins.", grant:{kind:"pet:cyclops-wing",amount:1} },
+    { game:"escape", id:"escape-pet-cyclops-wing", name:"EYE Pet · Dauerhaft", cost:500, text:"Schaltet das EYE Pet für Escape.kl dauerhaft frei. Ausgerüstet: +2 % effektiver Speed auch oberhalb 300 sowie +2 % auf eingesammelte Wins.", grant:{kind:"pet:cyclops-wing",amount:1} },
     { game:"escape", id:"escape-demon-transformation", name:"Dämonenverwandlung · Dauerhaft", cost:800, text:"Schaltet die echte Dämonenverwandlung als Spezialcharakter frei. Ausgerüstet: +1,5 % effektiver Speed und +1,5 % Wins; kann gleichzeitig mit einem Pet genutzt werden.", grant:{kind:"character:demon-transformation",amount:1} },
 
     { game:"bigcards", id:"bigcards-vip", name:"BigCards VIP · Dauerhaft", cost:500, text:"Permanenter VIP-Zugang für BigCards.kl: tägliches Glücksrad, VIP-Klicker, 100 VIP-Karten, Boss-System, Klicker-Upgrades, Boss-Special-Attacken und die Möglichkeit, noch nicht regulär freigeschaltete Karten gegen hohe Point-Kosten vorzeitig fürs Spielfeld freizuschalten. Ohne VIP werden solche alten Vorzeit-Freigaben entfernt.", grant:{kind:"vipUnlock",amount:1} },
