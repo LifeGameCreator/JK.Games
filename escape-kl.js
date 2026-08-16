@@ -1063,10 +1063,17 @@ function processMovement(dt,t){
   const prevX=G.pos.x,prevZ=G.pos.z;G.pos.x+=G.moveVel.x*dt;G.pos.z+=G.moveVel.z*dt;
   if(G.world==='hub')resolveHubColliders(prevX,prevZ);
   else if(isEscapeWorld()){
-    const w=currentWorldDef(),half=Math.max(8,Number(w?.laneHalfWidth)||13.2),back=Math.max(2,Number(w?.backtrackAllowance)||4.6,G.world==='keyboard-lab'?9:0),startZ=Number(w?.start?.z)||-70;
+    const w=currentWorldDef(),half=Math.max(8,Number(w?.laneHalfWidth)||13.2),startZ=Number(w?.start?.z)||-70;
     G.pos.x=Math.max(-half,Math.min(half,G.pos.x));
+    // V459: Bereits geschaffte Stages bleiben vollständig rückwärts begehbar.
+    // runFurthestZ wird nur noch als Fortschritts-/Diagnosewert geführt und begrenzt
+    // die Bewegung nicht mehr. So kann der Spieler für weite Sprünge jederzeit
+    // mehrere Keycaps zurücklaufen und wieder echten Anlauf nehmen.
     G.runFurthestZ=Math.min(Number.isFinite(G.runFurthestZ)?G.runFurthestZ:G.pos.z,G.pos.z);
-    G.pos.z=Math.min(startZ+(G.world==='keyboard-lab'?9:6.5),G.pos.z,G.runFurthestZ+back);
+    // Nur hinter den eigentlichen Weltstart darf man nicht weiter hinauslaufen.
+    // Keyboard Lab behält den etwas größeren Portalbereich für den Rückweg zum Hub.
+    const startBackLimit=startZ+(G.world==='keyboard-lab'?9:6.5);
+    G.pos.z=Math.min(startBackLimit,G.pos.z);
   }
   const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.moveIntensity=movementSpeed()>0?Math.min(1,planarSpeed/movementSpeed()):0;
   if(planarSpeed>.08&&G.playerRoot){const wanted=Math.atan2(G.moveVel.x,G.moveVel.z),diff=Math.atan2(Math.sin(wanted-G.playerRoot.rotation.y),Math.cos(wanted-G.playerRoot.rotation.y)),turn=1-Math.exp(-dt*(G.sprint?13:10));G.playerRoot.rotation.y+=diff*turn;}
