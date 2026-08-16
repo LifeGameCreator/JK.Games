@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V458 · World-Finish + Candy-Unlock-Fix */
-const VERSION = '2026-08-16-v458';
+/* Escape.kl – JK.Games Top Game V460 · Owner-Hitbox-Play + Demon-Hitbox-Fix */
+const VERSION = '2026-08-16-v460';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -665,7 +665,7 @@ function buildRaceCourse(){
 }
 function activeCharacterDef(choice=G.state?.characterChoice){return SPECIAL_CHARACTERS.find(c=>c.id===choice)||null;}
 function characterBaseGender(choice=G.state?.characterChoice){const special=activeCharacterDef(choice);if(special)return special.baseGender;return choice==='female'?'female':'male';}
-function currentPlayerRadius(){return G.state?.characterChoice==='demon-transformation'?.42:PLAYER_RADIUS;}
+function currentPlayerRadius(){return G.state?.characterChoice==='demon-transformation'?.46:PLAYER_RADIUS;}
 function createSharedLoader(){if(!G.gltfLoader)G.gltfLoader=new GLTFLoader();return G.gltfLoader;}
 function removeNamedPlayerChildren(name){
   if(!G.playerRoot)return;
@@ -871,11 +871,15 @@ function disposeHitboxDebug(){
 function rebuildHitboxDebug(){
   disposeHitboxDebug();if(!G.scene||!G.hitboxDebugEnabled)return;
   const group=new THREE.Group();group.name='escape-owner-hitbox-debug';G.scene.add(group);G.hitboxDebugGroup=group;
-  const mk=(color,opacity=.18)=>new THREE.MeshBasicMaterial({color,wireframe:true,transparent:true,opacity,depthTest:false});
-  for(const p of G.platforms){const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(p.kind==='win-pad'?0xffd84d:0x56ff9a,.42));mesh.renderOrder=999;mesh.scale.set(p.w,p.h,p.d);group.add(mesh);G.hitboxDebugItems.push({mesh,p,scope:p.scope});}
-  for(const c of G.colliders){const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xff5f68,.5));mesh.renderOrder=999;mesh.scale.set(c.w,3.2,c.d);mesh.position.set(c.x,1.6,c.z);group.add(mesh);G.hitboxDebugItems.push({mesh,c,scope:c.scope,collider:true});}
-  for(const tr of G.autoTriggers){const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xffd65c,.48));mesh.renderOrder=999;mesh.scale.set(tr.w,.18,tr.d);mesh.position.set(tr.x,.75,tr.z);group.add(mesh);G.hitboxDebugItems.push({mesh,tr,scope:tr.scope,trigger:true});}
-  const player=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0x55d9ff,.75));player.renderOrder=1000;group.add(player);G.hitboxDebugPlayer=player;updateHitboxDebug();
+  const mk=(color,opacity=.18)=>new THREE.MeshBasicMaterial({color,wireframe:true,transparent:true,opacity,depthTest:false,depthWrite:false});
+  const debugOnly=mesh=>{mesh.renderOrder=999;mesh.frustumCulled=false;mesh.userData.escapeHitboxDebug=true;mesh.raycast=()=>{};return mesh;};
+  // V460: Debug-Hitboxen sind ausschließlich eine sichtbare Overlay-Hilfe. Sie werden
+  // niemals als Kollisions-, Trigger- oder Raycast-Flächen benutzt und können die
+  // Spielerbewegung deshalb nicht blockieren oder verändern.
+  for(const p of G.platforms){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(p.kind==='win-pad'?0xffd84d:0x56ff9a,.42)));mesh.scale.set(p.w,p.h,p.d);group.add(mesh);G.hitboxDebugItems.push({mesh,p,scope:p.scope});}
+  for(const c of G.colliders){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xff5f68,.5)));mesh.scale.set(c.w,3.2,c.d);mesh.position.set(c.x,1.6,c.z);group.add(mesh);G.hitboxDebugItems.push({mesh,c,scope:c.scope,collider:true});}
+  for(const tr of G.autoTriggers){const mesh=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0xffd65c,.48)));mesh.scale.set(tr.w,.18,tr.d);mesh.position.set(tr.x,.75,tr.z);group.add(mesh);G.hitboxDebugItems.push({mesh,tr,scope:tr.scope,trigger:true});}
+  const player=debugOnly(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mk(0x55d9ff,.75)));player.renderOrder=1000;group.add(player);G.hitboxDebugPlayer=player;updateHitboxDebug();
 }
 function updateHitboxDebug(){
   if(!G.hitboxDebugEnabled||!G.hitboxDebugGroup)return;
@@ -1439,6 +1443,9 @@ function openOwnerModMenu(){
   const trailOptions=TRAILS.map(t=>`<option value="${t.id}" ${G.state.trail===t.id?'selected':''}>${t.name}</option>`).join('');
   const auraOptions=AURAS.map(a=>`<option value="${a.id}" ${G.state.aura===a.id?'selected':''}>${a.name}</option>`).join('');
   const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${G.state.rebirths}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  // V460: X/Schließen im Owner-Menü führt sauber zurück ins Pause-Menü. So bleibt
+  // kein unsichtbarer Pause-Zustand hängen.
+  wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
   const selected=()=>wrap.querySelector('[data-mod-world]')?.value||worldId;
   const refresh=()=>{
     const id=selected();wrap.querySelector('[data-mod-level]').value=currentLevel(id);wrap.querySelector('[data-mod-speed]').value=Math.round(rawSpeedStat(id));
@@ -1464,7 +1471,13 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-clear-aura]')?.addEventListener('click',()=>{ownerSetActiveAura('none');refresh();queuePersist(50);updateHud(true);toast('Aura abgelegt. Besitz bleibt erhalten.','good');});
   wrap.querySelector('[data-mod-clear-boosts]')?.addEventListener('click',()=>{G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;refresh();queuePersist(50);updateHud(true);toast('Temporäre Boosts und Admin-Event-Multiplikator entfernt.','good');});
   wrap.querySelector('[data-mod-clear-all]')?.addEventListener('click',()=>{ownerClearActivePerks({resetPowerTier:true});refresh();toast('Alle aktiven Perks, Spur, Aura und Boosts entfernt.','good',2200);});
-  wrap.querySelector('[data-mod-hitboxes]')?.addEventListener('click',e=>{setHitboxDebug(!G.hitboxDebugEnabled);e.currentTarget.textContent=`Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}`;});
+  wrap.querySelector('[data-mod-hitboxes]')?.addEventListener('click',()=>{
+    setHitboxDebug(!G.hitboxDebugEnabled);
+    // V460: Nach dem Umschalten direkt zurück ins Spiel. Das Pause-/Mod-Modal
+    // darf die Bewegung nicht weiter blockieren, während die Hitboxen sichtbar sind.
+    closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;
+    toast(G.hitboxDebugEnabled?'🧰 Hitboxen sichtbar · Debug-Overlay aktiv · Bewegung frei':'🧰 Hitboxen ausgeblendet · Bewegung frei','good',2200);
+  });
 }
 function showPause(){
   G.paused=true;const owner=isEscapeOwner();
