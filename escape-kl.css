@@ -312,3 +312,11 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
   .ekl-level-progress{display:none!important}
   .ekl-revive-card{width:min(560px,70vw);padding:14px 18px;border-radius:18px}.ekl-revive-card h2{font-size:20px;margin:2px 0 4px}.ekl-revive-card p{font-size:9px;line-height:1.35}.ekl-revive-count{margin:8px 0;grid-template-columns:120px 1fr}.ekl-revive-count>*{min-height:35px}.ekl-revive-count b{font-size:17px}.ekl-revive-count span{font-size:9px}.ekl-revive-card>button{min-height:38px;font-size:10px}.ekl-revive-card>em{margin-top:5px;font-size:7px}
 }
+/* V452 · Pets, Transformation & Core-Upgrades */
+.ekl-tabs button[data-ekl-shop-tab="pets"]{border-color:#7fd9ff42;color:#d9f5ff}
+.ekl-tabs button[data-ekl-shop-tab="pets"].active{border-color:#7fe6ff82;background:#173b4b;color:#fff}
+.ekl-tabs button[data-ekl-shop-tab="upgrades"]{border-color:#88f3a542;color:#dfffe8}
+.ekl-tabs button[data-ekl-shop-tab="upgrades"].active{border-color:#88f3a580;background:#183d2a;color:#fff}
+.ekl-character-special-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:18px;padding:11px 13px;border:1px solid #ffffff12;border-radius:14px;background:#ffffff06}
+.ekl-character-special-head span{color:#9eb3c7;font-size:12px;text-align:right}
+@media(max-width:600px){.ekl-character-special-head{align-items:flex-start;flex-direction:column}.ekl-character-special-head span{text-align:left}.ekl-tabs button{min-width:88px;padding:0 9px;font-size:11px}}
