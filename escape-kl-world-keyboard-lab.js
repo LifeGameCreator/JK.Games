@@ -1,8 +1,8 @@
-/* Escape.kl World 1 – Keyboard Lab V443.
+/* Escape.kl World 1 – Keyboard Lab V449.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
-  const {addPlatform,addSign,boxDeco,addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,returnHub}=api;
+  const {addPlatform,addSign,boxDeco,addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},returnHub}=api;
   const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
   const startZ=-70;
   const rewards=[10,20,35,60,100,175,300,500,800,1200,2000,3500,6000,10000,15000];
@@ -23,6 +23,11 @@ export function buildKeyboardLabWorld(api){
   addRingDeco(0,2.8,startZ+4.2,2.4,.07,0x57e7ff,0);addGlowLight(0,3.2,startZ+2.4,0x55e7ff,1.0,12);
   addSign('WORLD 1 · KEYBOARD LAB',{x:0,y:5.75,z:startZ+4.72},0x58ddff,1.04);
   addSign('SPEED 5 → 300 · BREITE KEYS · LANGE SPEED-GAPS',{x:0,y:4.08,z:startZ+4.73},0xffd25f,.45);
+  // V449: Derselbe Portal-Kreis am Weltanfang ist jetzt auch der Rückweg.
+  // Der Trigger liegt auf der Hub-Seite hinter dem Ring, damit der Spawn bei z=-70
+  // nicht sofort wieder zurück in den Hub geschickt wird.
+  addSign('↩ ZURÜCK ZUM HUB',{x:0,y:2.05,z:startZ+6.65},0x9beaff,.38);
+  addAutoTrigger('keyboard-lab-return-hub',0,startZ+6.4,8.4,2.8,returnHub);
 
   let z=startZ-8;
   const stageTitle=(n,title)=>{

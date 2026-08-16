@@ -1,13 +1,23 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl V436 – human player + native JK.Games locomotion animations.
-   Uses the existing man/woman idle/walk/run GLBs. A detailed procedural human
-   stays available as a hard fallback so Escape.kl never fails to open. */
+/* Escape.kl V449 – human player + native JK.Games locomotion animations.
+   The male character now has two native idle/standing animations. Every time
+   he enters the idle state, one of the two poses is selected with a 50/50 roll.
+   A detailed procedural human stays available as a hard fallback. */
 
 const ASSETS = Object.freeze({
-  male:Object.freeze({walk:'./man-walk.glb?v=20260813-escape-v436',run:'./man-run.glb?v=20260813-escape-v436',idle:'./man-idle-v325.glb?v=20260813-escape-v436'}),
-  female:Object.freeze({walk:'./woman-walk.glb?v=20260813-escape-v436',run:'./woman-run.glb?v=20260813-escape-v436',idle:'./woman-idle-v325.glb?v=20260813-escape-v436'})
+  male:Object.freeze({
+    walk:'./man-walk.glb?v=20260813-escape-v436',
+    run:'./man-run.glb?v=20260813-escape-v436',
+    idle:'./man-idle-v325.glb?v=20260813-escape-v436',
+    idle2:'./man-idle-v449-2.glb?v=20260816-escape-v449'
+  }),
+  female:Object.freeze({
+    walk:'./woman-walk.glb?v=20260813-escape-v436',
+    run:'./woman-run.glb?v=20260813-escape-v436',
+    idle:'./woman-idle-v325.glb?v=20260813-escape-v436'
+  })
 });
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -206,17 +216,22 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
   fallback.root.visible=false;visualRoot.visible=false;
   const controller={root:controlRoot,visualRoot,fallback,native:null,disposed:false,mode:'loading',activeMode:'idle',landing:0,lastGrounded:true};
   const loader=new GLTFLoader(),paths=ASSETS[gender];
-  controller.loadPromise=Promise.all([loader.loadAsync(paths.walk),loader.loadAsync(paths.run),loader.loadAsync(paths.idle)]).then(([walkGltf,runGltf,idleGltf])=>{
+  const idle2Promise=paths.idle2
+    ? loader.loadAsync(paths.idle2).catch(error=>{console.warn('Escape.kl: zweite männliche Stehposition konnte nicht geladen werden – Pose 1 bleibt verfügbar.',error);return null;})
+    : Promise.resolve(null);
+  controller.loadPromise=Promise.all([loader.loadAsync(paths.walk),loader.loadAsync(paths.run),loader.loadAsync(paths.idle),idle2Promise]).then(([walkGltf,runGltf,idleGltf,idle2Gltf])=>{
     if(controller.disposed)return controller;
     const model=normalizeNativeModel(walkGltf.scene,1.76);visualRoot.add(model);fallback.root.visible=false;visualRoot.visible=true;
-    const walkSource=(walkGltf.animations||[])[0]||null,runSource=(runGltf.animations||[])[0]||null,idleSource=(idleGltf.animations||[])[0]||null;
-    const walkClip=sanitizeClip(walkSource),runClip=retargetClip(sanitizeClip(runSource),model,'run'),idleClip=retargetClip(sanitizeClip(idleSource),model,'idle');
+    const walkSource=(walkGltf.animations||[])[0]||null,runSource=(runGltf.animations||[])[0]||null,idleSource=(idleGltf.animations||[])[0]||null,idle2Source=(idle2Gltf?.animations||[])[0]||null;
+    const walkClip=sanitizeClip(walkSource),runClip=retargetClip(sanitizeClip(runSource),model,'run'),idleClip=retargetClip(sanitizeClip(idleSource),model,'idle-1'),idle2Clip=retargetClip(sanitizeClip(idle2Source),model,'idle-2');
     const mixer=new THREE.AnimationMixer(model),actions={};
     const make=(clip,name)=>{if(!clip)return null;clip.name=name;const a=mixer.clipAction(clip);a.setLoop(THREE.LoopRepeat,Infinity);a.enabled=true;a.play();a.paused=true;actions[name]=a;return a;};
-    const idle=make(idleClip,'idle'),walk=make(walkClip,'walk'),run=make(runClip,'run');
-    const active=idle||walk||run;if(active){active.paused=false;active.reset().play();}
+    const idle1=make(idleClip,'idle1'),idle2=make(idle2Clip,'idle2'),walk=make(walkClip,'walk'),run=make(runClip,'run');
+    const idleActions=[idle1,idle2].filter(Boolean);
+    const pickIdle=()=>idleActions.length>1?(Math.random()<.5?idleActions[0]:idleActions[1]):idleActions[0]||walk||run||null;
+    const active=pickIdle()||walk||run;if(active){active.paused=false;active.reset().play();}
     const bones=collectBones(model);model.traverse(o=>{if(o.isBone)o.userData.escapeBindQuaternion=o.quaternion.clone();});
-    controller.native={model,mixer,actions,active,bones};controller.mode='native';controller.activeMode=active===run?'run':active===walk?'walk':'idle';onReady(controller);return controller;
+    controller.native={model,mixer,actions,active,bones,idleActions,pickIdle};controller.mode='native';controller.activeMode=active===run?'run':active===walk?'walk':'idle';onReady(controller);return controller;
   }).catch(error=>{console.warn('Escape.kl: native Charakteranimation konnte nicht geladen werden – detaillierter Fallback wird als Notlösung aktiviert.',error);controller.mode='fallback';fallback.root.visible=true;visualRoot.visible=true;onError(error);return controller;});
   controller.update=(kin,dt,t)=>{
     if(controller.disposed)return;const grounded=!!kin.grounded,speed=Math.max(0,kin.planarSpeed||0),moving=speed>.14;
@@ -237,12 +252,21 @@ export function createEscapeCharacter({gender='male',floorOffset=.82,onReady=()=
       }
       airPose(n,kin,dt);return;
     }
-    const action=n.actions[wanted]||n.actions.walk||n.actions.idle||n.actions.run;
+    // V449: Beim männlichen Charakter wird bei JEDEM neuen Eintritt in Idle
+    // genau einmal 50/50 zwischen Stehpose 1 und Stehpose 2 gewählt.
+    // Solange der Spieler stehen bleibt, läuft die gewählte Pose weiter und
+    // flackert nicht zwischen beiden Animationen hin und her.
+    let action=null;
+    if(wanted==='idle'){
+      action=controller.activeMode==='idle'&&n.active?n.active:(n.pickIdle?.()||n.actions.idle1||n.actions.walk||n.actions.run);
+    }else action=n.actions[wanted]||n.actions.walk||n.actions.idle1||n.actions.idle2||n.actions.run;
     if(controller.activeMode==='air'){
       for(const a of Object.values(n.actions)){try{a.setEffectiveWeight(0);a.paused=true;}catch{}}
       if(action){action.enabled=true;action.paused=false;action.reset();action.setEffectiveWeight(1);action.play();n.active=action;controller.activeMode=wanted;}
     }else if(action&&n.active!==action){
       const old=n.active;if(old&&old!==action){old.paused=false;old.fadeOut(.12);}action.enabled=true;action.paused=false;action.reset();action.setEffectiveWeight(1);action.fadeIn(.14).play();n.active=action;controller.activeMode=wanted;
+    }else if(action&&controller.activeMode!==wanted){
+      controller.activeMode=wanted;
     }
     if(n.active){if(wanted==='walk')n.active.timeScale=clamp(speed/4.8,.72,1.65);else if(wanted==='run')n.active.timeScale=treadmill?1.28:clamp(speed/8.3,.82,1.8);else n.active.timeScale=1;}
     n.mixer.update(dt);

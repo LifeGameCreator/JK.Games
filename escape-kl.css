@@ -273,3 +273,11 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
 @media(max-width:430px){
   .ekl-owner-mod-grid,.ekl-owner-quick{grid-template-columns:1fr}
 }
+
+
+/* ===== V449 · Speed HUD muss auf PC + Handy immer sichtbar bleiben ===== */
+.ekl-stat.speed{display:block!important;visibility:visible!important;opacity:1!important}
+.ekl-stat.speed b{color:#bff6ff!important;white-space:nowrap}
+@media (pointer:coarse){
+  .ekl-stat.speed{display:block!important;visibility:visible!important;opacity:1!important}
+}
