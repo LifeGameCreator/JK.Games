@@ -539,7 +539,7 @@ function soundBuy(){tone(520,.055,'triangle',.02,130);setTimeout(()=>tone(760,.0
 function soundFinish(){[0,100,210,330].forEach((ms,i)=>setTimeout(()=>tone([392,523,659,784][i],.16,'triangle',.025,45),ms))}
 
 function buildHubSky(){
-  const skyMat=new THREE.MeshBasicMaterial({color:0x07162c,side:THREE.BackSide,fog:false});G.materials.set('hub-sky-mat',skyMat);
+  const skyMat=new THREE.MeshBasicMaterial({color:0x132a46,side:THREE.BackSide,fog:false});G.materials.set('hub-sky-mat',skyMat);
   const dome=tagScope(new THREE.Mesh(geo('hub-sky-dome',()=>new THREE.SphereGeometry(165,24,14)),skyMat),'hub');dome.position.set(0,30,0);G.scene.add(dome);G.decorative.push(dome);G.hubSkyDome=dome;
   const positions=[];for(let i=0;i<290;i++){const a=Math.random()*Math.PI*2,r=58+Math.random()*92,y=12+Math.random()*75;positions.push(Math.cos(a)*r,y,Math.sin(a)*r);}
   const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));G.geometries.set('hub-stars-geo',starGeo);
@@ -559,13 +559,13 @@ function updateDayNight(t){
   const dynamic=G.world==='hub'||G.world==='only-up';
   if(!dynamic){if(G.lastDayNightMode!=='fixed'){G.lastDayNightMode='fixed';if(G.sunLight)G.sunLight.intensity=2.0;if(G.hemiLight)G.hemiLight.intensity=1.5;}return;}
   G.lastDayNightMode='dynamic';const phase=((t/DAY_NIGHT_CYCLE_SECONDS)+.24)%1,ang=phase*Math.PI*2-Math.PI/2,sunHeight=Math.sin(ang),day=Math.max(0,Math.min(1,(sunHeight+.16)/.68)),twilight=Math.max(0,1-Math.abs(sunHeight)*3.1);
-  const night=new THREE.Color(0x061022),dawn=new THREE.Color(0x5b2855),dayColor=new THREE.Color(0x6fb8e8);let sky=night.clone().lerp(dawn,twilight*.58).lerp(dayColor,day*.92);
-  if(G.world==='hub'&&G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);G.scene.background.copy(sky);G.scene.fog.color.copy(sky.clone().multiplyScalar(.55));
-  if(G.sunLight){G.sunLight.intensity=.18+day*2.55;G.sunLight.color.set(day>.2?0xffe5b8:0xff8b74);G.sunLight.position.set(Math.cos(ang)*58,10+Math.max(-.2,sunHeight)*58,Math.sin(ang)*44);}
-  if(G.hemiLight){G.hemiLight.intensity=.46+day*1.35;G.hemiLight.color.set(day>.35?0xd8ecff:0x8697d8);}
+  const night=new THREE.Color(0x142a47),dawn=new THREE.Color(0x8a4f7c),dayColor=new THREE.Color(0xa8dcff);let sky=night.clone().lerp(dawn,twilight*.62).lerp(dayColor,day*.96);
+  if(G.world==='hub'&&G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);G.scene.background.copy(sky);G.scene.fog.color.copy(sky.clone().multiplyScalar(.78));
+  if(G.sunLight){G.sunLight.intensity=.72+day*2.95;G.sunLight.color.set(day>.2?0xfff0cf:0xffa68f);G.sunLight.position.set(Math.cos(ang)*58,10+Math.max(-.2,sunHeight)*58,Math.sin(ang)*44);}
+  if(G.hemiLight){G.hemiLight.intensity=1.05+day*1.55;G.hemiLight.color.set(day>.35?0xeaf6ff:0xaab9ee);}
   if(G.hubStars?.material)G.hubStars.material.opacity=.78*(1-day*.95);if(G.hubMoon){G.hubMoon.material.opacity=.48*(1-day);G.hubMoon.position.set(-Math.cos(ang)*62,18+Math.max(0,-sunHeight)*48,-66);}
   if(G.hubSun){G.hubSun.material.opacity=Math.max(0,day*.92);G.hubSun.position.set(Math.cos(ang)*70,18+Math.max(0,sunHeight)*53,-78+Math.sin(ang)*18);}
-  for(const m of G.hubAuroraMats)m.opacity=.055*(1-day*.94);
+  for(const m of G.hubAuroraMats)m.opacity=.07*(1-day*.88);if(G.renderer)G.renderer.toneMappingExposure=1.14+day*.18;
 }
 
 function prewarmEscapeScenes(){
@@ -593,10 +593,10 @@ function refreshHubWorldPortalStatus(){
 function setupScene(){
   const canvas=G.overlay.querySelector('canvas');
   G.renderer=new THREE.WebGLRenderer({canvas,antialias:(window.devicePixelRatio||1)<2,powerPreference:'high-performance'});
-  G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.05;
+  G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.14;
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
-  G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0x07111d);G.scene.fog=new THREE.Fog(0x07111d,42,220);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
-  G.hemiLight=new THREE.HemisphereLight(0xbfdcff,0x182010,1.50);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xffe1b5,2.0);G.sunLight.position.set(-28,46,18);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
+  G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0x13283f);G.scene.fog=new THREE.Fog(0x13283f,42,220);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
+  G.hemiLight=new THREE.HemisphereLight(0xd8ecff,0x283526,1.65);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xffedcf,2.35);G.sunLight.position.set(-28,46,18);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
   const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);
