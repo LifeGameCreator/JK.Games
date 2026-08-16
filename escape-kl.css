@@ -281,3 +281,34 @@ body.escape-kl-open{overflow:hidden!important;overscroll-behavior:none!important
 @media (pointer:coarse){
   .ekl-stat.speed{display:block!important;visibility:visible!important;opacity:1!important}
 }
+
+/* ===== V451 · compact gameplay HUD, revive card, cleaner mobile layout ===== */
+.ekl-world-chip,.ekl-stage-progress,.ekl-run-pop{display:none!important}
+.ekl-statrow{max-width:calc(100vw - 170px)!important;gap:6px!important;flex-wrap:nowrap!important}
+.ekl-stat{min-width:82px!important;padding:7px 9px!important;border-radius:13px!important}
+.ekl-stat small{font-size:7px!important}.ekl-stat b{font-size:14px!important}
+.ekl-stat.wins{border-color:#f7c95b35!important}.ekl-stat.rebirth{border-color:#c58aff38!important}
+.ekl-level-progress{top:62px!important;width:min(380px,48vw)!important;padding:6px 9px!important}
+.ekl-level-progress>div{font-size:7px!important}.ekl-level-progress>div b{font-size:7px!important}
+
+.ekl-revive{position:absolute;inset:0;z-index:70;display:grid;place-items:center;padding:max(18px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));background:radial-gradient(circle at 50% 45%,#12223880,rgba(1,4,9,.86) 62%);backdrop-filter:blur(5px);pointer-events:auto}
+.ekl-revive-card{width:min(470px,92vw);padding:24px;border:1px solid #ffcd6555;border-radius:24px;background:radial-gradient(circle at 80% 0,#ffbd5124,transparent 38%),linear-gradient(145deg,#101b2afa,#070e18fa);box-shadow:0 28px 90px #000d;text-align:center}
+.ekl-revive-card>small{display:block;color:#81e7ff;font-size:9px;font-weight:950;letter-spacing:.14em}.ekl-revive-card h2{margin:5px 0 7px;font-size:29px}.ekl-revive-card p{margin:0 auto;color:#afc0d1;font-size:12px;line-height:1.5;max-width:390px}
+.ekl-revive-count{display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin:16px 0}.ekl-revive-count>*{display:grid;place-items:center;min-height:54px;border:1px solid #ffffff16;border-radius:14px;background:#ffffff08}.ekl-revive-count b{color:#ffd16e;font-size:23px}.ekl-revive-count span{padding:8px;color:#c6d6e4;font-size:11px;font-weight:850}
+.ekl-revive-card>button{width:100%;min-height:48px;border:1px solid #c899ff70;border-radius:14px;background:linear-gradient(135deg,#6d42a2,#342253);color:#fff;font-size:13px;font-weight:950;box-shadow:0 12px 30px #552d892d}.ekl-revive-card>button:disabled{opacity:.42;filter:saturate(.45)}
+.ekl-revive-card>em{display:block;margin-top:10px;color:#7f91a3;font-size:9px;font-style:normal;line-height:1.4}
+
+@media (pointer:coarse) and (orientation:portrait){
+  .ekl-statrow{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;width:min(310px,calc(100vw - 100px))!important;max-width:calc(100vw - 96px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;gap:5px!important}
+  .ekl-stat{display:none!important;min-width:0!important;width:100%!important;padding:7px 8px!important}
+  .ekl-stat:nth-child(1),.ekl-stat:nth-child(2),.ekl-stat:nth-child(3){display:block!important}
+  .ekl-level-progress{top:calc(max(12px,env(safe-area-inset-top)) + 55px)!important;width:min(285px,calc(100vw - 112px))!important}
+  .ekl-revive-card{padding:19px;border-radius:21px}.ekl-revive-card h2{font-size:24px}.ekl-revive-card p{font-size:11px}.ekl-revive-count{grid-template-columns:1fr;margin:12px 0}.ekl-revive-count>*{min-height:42px}.ekl-revive-count b{font-size:20px}
+}
+@media (pointer:coarse) and (orientation:landscape){
+  .ekl-statrow{display:flex!important;max-width:calc(100vw - 220px - env(safe-area-inset-left) - env(safe-area-inset-right))!important;gap:4px!important}
+  .ekl-stat{display:none!important;min-width:80px!important;padding:5px 7px!important}
+  .ekl-stat:nth-child(1),.ekl-stat:nth-child(2),.ekl-stat:nth-child(3){display:block!important}
+  .ekl-level-progress{display:none!important}
+  .ekl-revive-card{width:min(560px,70vw);padding:14px 18px;border-radius:18px}.ekl-revive-card h2{font-size:20px;margin:2px 0 4px}.ekl-revive-card p{font-size:9px;line-height:1.35}.ekl-revive-count{margin:8px 0;grid-template-columns:120px 1fr}.ekl-revive-count>*{min-height:35px}.ekl-revive-count b{font-size:17px}.ekl-revive-count span{font-size:9px}.ekl-revive-card>button{min-height:38px;font-size:10px}.ekl-revive-card>em{margin-top:5px;font-size:7px}
+}

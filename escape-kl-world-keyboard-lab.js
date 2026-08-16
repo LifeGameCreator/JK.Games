@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Keyboard Lab V449.
+/* Escape.kl World 1 – Keyboard Lab V451.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
@@ -23,11 +23,10 @@ export function buildKeyboardLabWorld(api){
   addRingDeco(0,2.8,startZ+4.2,2.4,.07,0x57e7ff,0);addGlowLight(0,3.2,startZ+2.4,0x55e7ff,1.0,12);
   addSign('WORLD 1 · KEYBOARD LAB',{x:0,y:5.75,z:startZ+4.72},0x58ddff,1.04);
   addSign('SPEED 5 → 300 · BREITE KEYS · LANGE SPEED-GAPS',{x:0,y:4.08,z:startZ+4.73},0xffd25f,.45);
-  // V449: Derselbe Portal-Kreis am Weltanfang ist jetzt auch der Rückweg.
-  // Der Trigger liegt auf der Hub-Seite hinter dem Ring, damit der Spawn bei z=-70
-  // nicht sofort wieder zurück in den Hub geschickt wird.
-  addSign('↩ ZURÜCK ZUM HUB',{x:0,y:2.05,z:startZ+6.65},0x9beaff,.38);
-  addAutoTrigger('keyboard-lab-return-hub',0,startZ+6.4,8.4,2.8,returnHub);
+  // V451: Der sichtbare Portal-Kreis selbst ist der Rückweg zum Hub.
+  // Spawn liegt deutlich davor, deshalb wird der Spieler beim Weltstart nicht sofort zurückgeschickt.
+  addSign('↩ ZURÜCK ZUM HUB',{x:0,y:2.05,z:startZ+5.55},0x9beaff,.34);
+  addAutoTrigger('keyboard-lab-return-hub',0,startZ+4.2,7.8,1.8,returnHub);
 
   let z=startZ-8;
   const stageTitle=(n,title)=>{
