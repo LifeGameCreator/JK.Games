@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v452';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V452 · JK/Coin pets + demon transformation */
-const VERSION = '2026-08-16-v452';
+/* Escape.kl – JK.Games Top Game V453 · Trail-Pool Runtime-Fix */
+const VERSION = '2026-08-16-v453';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -796,6 +796,17 @@ function buyOrEquipPet(id,refreshStudio=false){
   toast(`${pet.name} aktiviert · +${(pet.speedBonus*100).toFixed(1).replace('.',',')} % Speed / Wins.`,'good',2400);
   if(refreshStudio)openCharacterStudio('base');else openShop('pets');
   return true;
+}
+function createTrailPool(){
+  if(G.trail){try{G.scene?.remove(G.trail)}catch{}G.trail=null;}
+  G.trail=new THREE.Group();G.trail.name='escape-particle-trail';G.scene.add(G.trail);G.trailParticles=[];
+  const particleGeo=geo('trail-particle',()=>new THREE.SphereGeometry(.09,7,5));
+  for(let i=0;i<52;i++){
+    const material=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
+    G.materials.set(`trail-particle-${i}`,material);
+    const mesh=new THREE.Mesh(particleGeo,material);mesh.visible=false;G.trail.add(mesh);
+    G.trailParticles.push({mesh,age:9,life:1,vel:new THREE.Vector3(),seed:Math.random()});
+  }
 }
 function createPlayer(){mountCharacter(G.state.characterChoice);createTrailPool();}
 function trailDef(){return TRAILS.find(x=>x.id===G.state?.trail)||TRAILS[0];}
