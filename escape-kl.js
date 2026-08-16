@@ -681,7 +681,7 @@ function loadCharacterFormVisual(choice=G.state?.characterChoice){
     const wrap=new THREE.Group();wrap.name='escape-form-wrapper';
     const model=normalizeExternalModel(gltf.scene,{targetHeight:1.88});
     model.position.set(0,-PLAYER_HALF,0);
-    if(choice==='demon-transformation'){model.scale.multiplyScalar(1.08);model.rotation.y=Math.PI/2;}
+    if(choice==='demon-transformation'){model.scale.multiplyScalar(1.08);model.rotation.y=Math.PI;}
     wrap.add(model);G.playerRoot.add(wrap);G.formWrapper=wrap;G.formModel=model;
     const clips=gltf.animations||[],find=re=>clips.find(a=>re.test(a.name||''));
     if(clips.length){
