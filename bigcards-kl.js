@@ -1,4 +1,4 @@
-/* BigCards.kl – JK.Games Top Game V468 · Cloud load recovery + safety guard */
+/* BigCards.kl – JK.Games Top Game V470 · Firestore write-stream pressure protection */
 (() => {
   "use strict";
 
@@ -35,8 +35,8 @@
   const CLOUD_RECOVERY_POLL_MS = 8000;
   // V407: kompakte Karten-Buckets + gebündelte Firestore-Batches reduzieren die Anzahl der Writes massiv.
   // So liegen nie dutzende Einzel-Writes gleichzeitig im SDK-Write-Stream.
-  const CLOUD_WRITE_BATCH_SIZE = 8;
-  const CLOUD_WRITE_BATCH_PAUSE_MS = 7000;
+  const CLOUD_WRITE_BATCH_SIZE = 4;
+  const CLOUD_WRITE_BATCH_PAUSE_MS = 15000;
   const PROFILE_COLLECTION = "bigCardsProfiles";
   const MARKET_COLLECTION = "bigCardsMarket";
   const MARKET_STATS_COLLECTION = "bigCardsMarketStats";
@@ -3591,7 +3591,15 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     if(!until)return;
     cloudBackoffUntil=Math.max(cloudBackoffUntil,until);
     if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
+    if(leaderboardProfileTimer){clearTimeout(leaderboardProfileTimer);leaderboardProfileTimer=0;}
     if(cloudReady&&!cloudMigrationPending)scheduleCloudSave(Math.max(CLOUD_SAVE_DELAY_MS,until-now()));
+  });
+  window.addEventListener("lifebuilder-firestore-resource-exhausted",(event)=>{
+    const until=Math.max(now()+CLOUD_RESOURCE_BACKOFF_MS,Number(event?.detail?.until)||0);
+    cloudBackoffUntil=Math.max(cloudBackoffUntil,until);
+    if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=0;cloudSaveDueAt=0;}
+    if(leaderboardProfileTimer){clearTimeout(leaderboardProfileTimer);leaderboardProfileTimer=0;}
+    console.warn("BigCards V470: Firestore Write-Stream ueberlastet · Cloud-Saves pausiert, lokaler Spielstand bleibt aktiv.");
   });
   async function currentUser(){const fb=await firebase();if(!fb)return null;try{return fb.auth.currentUser||await window.LifeBuilderFirebaseCore.waitForAuth?.(5000)}catch{return fb.auth.currentUser}}
   function currentUidSync(){return window.LifeBuilderFirebaseCore?.getRuntime?.()?.auth?.currentUser?.uid||""}
@@ -3850,10 +3858,13 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
         const e=new Error("Firestore-Schreibpause aktiv.");e.code="firestore-write-backoff";e.retryAfterMs=backoff-now();throw e;
       }
       const queued=Math.max(0,Number(gate.queueDepth)||0),coalesced=Math.max(0,Number(gate.coalescedDepth)||0);
-      if(queued===0&&coalesced===0)return true;
-      await new Promise(r=>setTimeout(r,2200));
+      if(queued===0&&coalesced===0){
+        try{await window.LifeBuilderFirebaseCore?.waitForWriteDrain?.(12000)}catch(e){e.code=e.code||"firestore-write-drain-timeout";throw e}
+        return true;
+      }
+      await new Promise(r=>setTimeout(r,2500));
     }
-    return true;
+    const e=new Error("JK.Games Firestore-Schreibschlange wurde vor dem BigCards-Cloudsave nicht frei.");e.code="firestore-write-pressure";e.retryAfterMs=120000;throw e;
   }
 
   function scheduleCloudSave(delay=CLOUD_SAVE_DELAY_MS){
@@ -3871,8 +3882,18 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
     try{const snap=await fb.getDoc(ref);if(snap.exists()){const old=snap.data()||{};for(const k of ["lifetimeScore","lifetimePointsEarned","maxLevelEver","totalRebirths","prestigeCount","prestigeJkEarned","highestProductionEver","highestXpProductionEver","collectionDiscovered","exclusiveDiscovered","unlockedFloors"])profile[k]=Math.max(Number(profile[k])||0,Number(old[k])||0);}}catch{}
     await fb.setDoc(ref,profile,{merge:true});
   }
-  async function syncLeaderboardProfile(){if(cloudBackoffUntil>now())return false;const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;try{await writeProfile(fb,u);cloudLastProfileWriteAt=now();return true}catch(e){console.warn("BigCards leaderboard current-level sync",e);return false;}}
-  function scheduleLeaderboardProfileSync(delay=2500){clearTimeout(leaderboardProfileTimer);leaderboardProfileTimer=setTimeout(()=>{leaderboardProfileTimer=0;void syncLeaderboardProfile();},Math.max(100,Number(delay)||2500));}
+  async function syncLeaderboardProfile(){
+    if(cloudBackoffUntil>now())return false;
+    const gate=window.LifeBuilderFirebaseCore?.getWriteGateStatus?.()||{};
+    if(Number(gate.backoffUntil||0)>now()||Number(gate.queueDepth||0)>0||Number(gate.coalescedDepth||0)>0){scheduleLeaderboardProfileSync(120000);return false}
+    const fb=await firebase(),u=await currentUser();if(!fb||!u)return false;
+    try{await window.LifeBuilderFirebaseCore?.waitForWriteDrain?.(12000);await writeProfile(fb,u);cloudLastProfileWriteAt=now();return true}catch(e){console.warn("BigCards leaderboard current-level sync",e);scheduleLeaderboardProfileSync(120000);return false;}
+  }
+  function scheduleLeaderboardProfileSync(delay=120000){
+    clearTimeout(leaderboardProfileTimer);
+    const requested=Math.max(30000,Number(delay)||120000);
+    leaderboardProfileTimer=setTimeout(()=>{leaderboardProfileTimer=0;void syncLeaderboardProfile();},requested);
+  }
   function cloudSafetyRegressionReasonV427(userId,raw=S,remoteRoot=null){
     const counts=cloudCacheCounts(raw),meta=readCloudMeta(userId),localHighCollection=Math.max(0,Math.floor(Number(meta?.safetyHighCollection)||0)),remoteCollection=Math.max(0,Math.floor(Number(remoteRoot?.collectionDiscovered)||0)),remoteInstances=Math.max(0,Math.floor(Number(remoteRoot?.instanceCount)||0));
     const protectedCollection=Math.max(localHighCollection,remoteCollection);
@@ -3940,7 +3961,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
         await batch.commit();
         if(start+CLOUD_WRITE_BATCH_SIZE<changed.length)await new Promise(r=>setTimeout(r,CLOUD_WRITE_BATCH_PAUSE_MS));
       }
-      if(changed.length)await new Promise(r=>setTimeout(r,6000));
+      if(changed.length)await new Promise(r=>setTimeout(r,15000));
       // Direkt vor dem einzigen kritischen Root-Write wird der aktuelle Remote-Root
       // erneut gelesen. Wenn Sammlung/Kartenbestand gegen den sicheren Stand einbrechen,
       // wird das Manifest NICHT umgeschaltet.
@@ -3954,7 +3975,7 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
       const message=String(e?.message||e||"");
       const localSizeError=/Cloud-Bucket|Cloud-Metadaten|Cloud-Speicher zu groß/i.test(message);
       const resourceError=e?.code==="resource-exhausted"||/resource-exhausted|queued writes|maximum allowed queued writes|write stream exhausted/i.test(message);
-      const gateBackoff=e?.code==="firestore-write-backoff"||e?.code==="firestore-write-pressure";
+      const gateBackoff=e?.code==="firestore-write-backoff"||e?.code==="firestore-write-pressure"||e?.code==="firestore-write-drain-timeout";
       const safetyStop=e?.code==="bigcards-cloud-safety-stop"||e?.cloudSafety===true;
       if(safetyStop){
         cloudDirty=false;cloudMigrationPending=true;cloudBackoffUntil=Math.max(cloudBackoffUntil,now()+CLOUD_RESOURCE_BACKOFF_MS);
@@ -4171,3 +4192,5 @@ Hyper-Kerne werden für die hohen Hyper-Generationen benötigt.`,confirmText:"Hy
 
   window.BigCardsKL=Object.freeze({version:VERSION,open,close,returnToTopGames,grantJkCoinPurchase,canApplyJkPurchase:(kind)=>{state();if(kind==="bestCombatAutoUnlock")return !S.bestCombatAutoUnlocked;if(/^finishExpedition:[0-3]$/.test(String(kind))){const slot=Number(String(kind).split(":")[1]),ex=expeditionAtSlot(slot);return !!ex&&Number(ex.endsAt)>now();}return true;},getState:()=>state(),getFeaturedStorageTier:()=>Math.floor(Number(state().featuredStorageTier)||0),hasBulkLevelUnlock:()=>bulkLevelUnlocked(),hasVip:()=>!!state().vipUnlocked,getBulkLevelAccessState:()=>{state();return {active:bulkLevelUnlocked(),until:Math.max(0,Number(S.bulkLevelUntil)||0),remainingMs:bulkLevelRemainingMs(),durationMs:BULK_LEVEL_ACCESS_MS};},getBulkRebirthAccessState:()=>{state();return {active:bulkRebirthUnlocked(),until:Math.max(0,Number(S.bulkRebirthUntil)||0),remainingMs:bulkRebirthRemainingMs(),durationMs:BULK_LEVEL_ACCESS_MS};},getJkBoosterState:(kind)=>{state();if(kind==="vipClicks")return {active:S.jkVipClickUntil>now(),value:jkVipClickMultiplier(),until:S.jkVipClickUntil,max:10};if(kind==="bossDamage")return {active:S.jkBossDamageUntil>now(),value:jkBossDamageMultiplier(),until:S.jkBossDamageUntil,max:2};return jkBoosterState(kind)},getAutoOpenerState:()=>{state();return {workMs:Math.max(0,Number(S.autoOpenerWorkMs)||0),capacity:Math.max(0,Number(S.autoOpenerCapacity)||0),active:autoActiveLaneIndexes().length};},featuredStorageTiers:FEATURED_STORAGE_TIERS,featuredRanks:FEATURED_RANKS,rarities:RARITIES,trails:TRAILS,baseNames:BASE_NAMES});
 })();
+
+console.info("BigCards V470 aktiv · Cloud-Write-Drosselung + Firestore Write-Stream Schutz.");

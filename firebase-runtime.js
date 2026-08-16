@@ -28,7 +28,7 @@
   // V377: eine zentrale Schreibschlange für ALLE JK.Games-Module. Dadurch können
   // BigCards, Hauptspiel, Telefon, Shop usw. Firestore nicht mehr gleichzeitig mit
   // hunderten Writes fluten. Das SDK sieht höchstens einen gestarteten Write zur Zeit.
-  const FIRESTORE_WRITE_GAP_MS = 250;
+  const FIRESTORE_WRITE_GAP_MS = 1200;
   // V432: resource-exhausted pausiert nicht mehr pauschal eine Stunde. Die Pause
   // beginnt bei 2 Minuten und steigt bei wiederholter echter Backend-Ueberlastung
   // bis maximal 10 Minuten. Kritische Spielaktionen bleiben dadurch nicht unnötig
@@ -41,8 +41,12 @@
   // V432: Nur veraltbare Hintergrund-Synchronisation wird bei lokaler Last
   // begrenzt. Kritische Nutzeraktionen (Kauf, Nachricht, Kampf-Transaktion usw.)
   // werden niemals nur wegen der lokalen Queue verworfen.
-  const FIRESTORE_MAX_APP_QUEUE = 8;
-  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 30000;
+  const FIRESTORE_MAX_APP_QUEUE = 4;
+  const FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS = 60000;
+  // V470: Vor jedem neuen SDK-Write wird der bereits im Firestore-SDK wartende
+  // Schreibstrom kontrolliert geleert. Das erfasst auch Writes von Altmodulen, die
+  // versehentlich nicht ueber die JK.Games-Queue laufen.
+  const FIRESTORE_SDK_DRAIN_TIMEOUT_MS = 18000;
   // V430: Schreibschutz gilt jetzt auch über Reloads und mehrere offene JK.Games-Tabs.
   // Ohne diesen gemeinsamen Zustand konnte jeder Tab seine eigene Schreibschlange starten.
   const FIRESTORE_BACKOFF_STORAGE_KEY = "jk-games-firestore-write-backoff-v432";
@@ -60,6 +64,10 @@
   let firestoreResourceStrike = 0;
   let firestoreLastResourceErrorAt = 0;
   let runtimeRawSetDoc = null;
+  let runtimeFirestoreDb = null;
+  let runtimeRawWaitForPendingWrites = null;
+  let firestoreSdkDrainPromise = null;
+  let firestoreSdkDrainLastAt = 0;
   const firestoreCoalescedWrites = new Map();
   const firestoreWriteEvents = [];
   const firestoreWriteSourceStats = new Map();
@@ -152,7 +160,8 @@
   // enthalten und werden selbst bei Queue-Druck niemals lokal verworfen.
   function isBackgroundFirestorePath(path, data = null) {
     const p = String(path || "");
-    return p.startsWith("centerPresenceV268/")
+    return p.startsWith("bigCardsProfiles/")
+      || p.startsWith("centerPresenceV268/")
       || p.startsWith("centerStaffPresenceV270/")
       || (p.startsWith("playerProfiles/") && isPlayerProfilePresencePayload(data))
       || p.startsWith("egoshootKlOnline/")
@@ -437,6 +446,41 @@
     return firestoreWriteBackoffUntil;
   }
 
+  async function waitForSdkPendingWrites(timeoutMs = FIRESTORE_SDK_DRAIN_TIMEOUT_MS) {
+    if (!runtimeFirestoreDb || typeof runtimeRawWaitForPendingWrites !== "function") return true;
+    if (firestoreSdkDrainPromise) return firestoreSdkDrainPromise;
+    const startedAt = Date.now();
+    let timer = 0;
+    firestoreSdkDrainPromise = Promise.race([
+      Promise.resolve().then(() => runtimeRawWaitForPendingWrites(runtimeFirestoreDb)),
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => {
+          const error = new Error("Firestore-SDK-Schreibstrom konnte nicht rechtzeitig geleert werden.");
+          error.code = "firestore-write-drain-timeout";
+          error.retryAfterMs = FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS;
+          error.transient = true;
+          reject(error);
+        }, Math.max(3000, Number(timeoutMs) || FIRESTORE_SDK_DRAIN_TIMEOUT_MS));
+      })
+    ]).then(() => {
+      firestoreSdkDrainLastAt = Date.now();
+      return true;
+    }).finally(() => {
+      if (timer) clearTimeout(timer);
+      firestoreSdkDrainPromise = null;
+    });
+    try {
+      return await firestoreSdkDrainPromise;
+    } catch (error) {
+      // Wenn der SDK-Strom schon festhaengt, schicken wir NICHT noch weitere Writes
+      // hinterher. Dadurch entsteht kein neuer "maximum allowed queued writes"-Stau.
+      if (Date.now() - startedAt >= 2500) {
+        setFirestoreWriteBackoff(Math.max(FIRESTORE_LOCAL_PRESSURE_BACKOFF_MS, Number(error?.retryAfterMs) || 0), "sdk-write-drain");
+      }
+      throw error;
+    }
+  }
+
   function queueFirestoreWrite(label, operation, meta = null) {
     const writeMeta = meta || makeFirestoreWriteMeta(label || "write", null);
     if (!meta) recordFirestoreRequest(writeMeta);
@@ -455,7 +499,13 @@
       recordFirestoreStage(writeMeta, "started");
       try {
         await waitForFirestoreWriteWindow();
+        // V470: SDK-Drain ist die zweite Schutzstufe neben der App-Queue.
+        // So warten auch unbemerkte direkte Firestore-Writes erst aus, bevor der
+        // naechste JK.Games-Write den WebChannel erreicht.
+        await waitForSdkPendingWrites(writeMeta.background ? 10000 : FIRESTORE_SDK_DRAIN_TIMEOUT_MS);
         const result = await runInCrossTabFirestoreLane(operation);
+        firestoreWriteLastAt = Date.now();
+        writeSharedNumber(FIRESTORE_LAST_WRITE_STORAGE_KEY, firestoreWriteLastAt);
         recordFirestoreStage(writeMeta, "ok");
         return result;
       } catch (error) {
@@ -480,7 +530,8 @@
   // behalten wir nur den neuesten Stand statt weitere SDK-Writes aufzustauen.
   function coalescibleFirestorePath(ref, data = null) {
     const path = String(ref?.path || "");
-    return path.startsWith("centerPresenceV268/")
+    return path.startsWith("bigCardsProfiles/")
+      || path.startsWith("centerPresenceV268/")
       || path.startsWith("centerStaffPresenceV270/")
       || (path.startsWith("playerProfiles/") && isPlayerProfilePresencePayload(data))
       || path.startsWith("egoshootKlOnline/")
@@ -701,6 +752,8 @@
       db = dbMod.getFirestore(app, DATABASE_ID);
     }
 
+    runtimeFirestoreDb = db;
+    runtimeRawWaitForPendingWrites = dbMod.waitForPendingWrites;
     runtimeRawSetDoc = dbMod.setDoc;
     const gatedSetDoc = (...args) => {
       const meta = makeFirestoreWriteMeta("setDoc", args[0], { data: args[1] }); recordFirestoreRequest(meta);
@@ -926,7 +979,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-16-v468-named-db-read-fallback",
+    version: "2026-08-16-v470-write-stream-drain",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -940,7 +993,8 @@
     isResourceExhaustedError,
     runWrite: queueFirestoreWrite,
     setWriteBackoff: setFirestoreWriteBackoff,
-    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS, resourceStrike: firestoreResourceStrike }),
+    getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS, resourceStrike: firestoreResourceStrike, sdkDrainActive: !!firestoreSdkDrainPromise, sdkDrainLastAt: firestoreSdkDrainLastAt }),
+    waitForWriteDrain: (timeoutMs = FIRESTORE_SDK_DRAIN_TIMEOUT_MS) => waitForSdkPendingWrites(timeoutMs),
     getWriteDiagnostics: getFirestoreDiagnostics,
     printWriteDiagnostics: printFirestoreDiagnostics,
     clearWriteDiagnostics: clearFirestoreDiagnostics,
@@ -964,5 +1018,5 @@
   window.JKFirestoreDiagnostics = printFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsPrevious = printPreviousFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsClear = clearFirestoreDiagnostics;
-  console.info("JK.Games Firebase Runtime V468 aktiv · Write-Schutz + Named-DB REST-Lesefallback + Diagnosemonitor.");
+  console.info("JK.Games Firebase Runtime V470 aktiv · SDK-Write-Drain + 1,2s Global-Gate + Named-DB REST-Recovery.");
 })();
