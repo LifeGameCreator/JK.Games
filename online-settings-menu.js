@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-07-settings-menu-firestore-recovery-v233";
+  const VERSION = "2026-08-17-settings-menu-weed-owner-approvals-v476";
   const DB_ID = "gamekl";
   const REGION = "europe-west3";
   const SESSION_KEY = "lifebuilder-2026-online-mod-session";
@@ -166,8 +166,19 @@
   async function runtime() {
     if (runtimePromise) return runtimePromise;
     runtimePromise = (async () => {
-      if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
-      return window.LifeBuilderFirebaseCore.load();
+      if (window.LifeBuilderFirebaseCore?.load) return window.LifeBuilderFirebaseCore.load();
+      const [appMod, authMod, dbMod, fnMod] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
+      ]);
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
+      const auth = authMod.getAuth(app);
+      let db;
+      db = dbMod.getFirestore(app, DB_ID);
+      const functions = fnMod.getFunctions(app, REGION);
+      return { ...authMod, ...dbMod, ...fnMod, app, auth, db, functions };
     })().catch((error) => {
       runtimePromise = null;
       throw error;
@@ -1405,9 +1416,12 @@
       .filter(Boolean);
   }
 
-  async function createMoneyApprovalRequest(command, reason) {
+  async function createMoneyApprovalRequest(command, reason, targetOverride = null) {
     if (roleData?.role !== "admin") throw new Error("Nur Admin-Geldkorrekturen verwenden den Owner-Freigabeweg.");
-    if (!currentUser?.uid || !selectedPlayer?.uid) throw new Error("Admin- oder Zielaccount fehlt.");
+    const targetUid = String(targetOverride?.uid || selectedPlayer?.uid || "");
+    const targetName = String(targetOverride?.name || (selectedPlayer ? playerName() : currentUser?.displayName || currentUser?.email || "Spieler"));
+    const targetSlot = targetOverride?.slot !== undefined ? Math.max(0, Math.min(3, Math.floor(num(targetOverride.slot)))) : selectedPlayerSlot();
+    if (!currentUser?.uid || !targetUid) throw new Error("Admin- oder Zielaccount fehlt.");
     const fb = await runtime();
     const allApprovers = await eligibleMoneyApprovers();
     const eligible = [...new Set(allApprovers.filter((uid) => uid !== currentUser.uid))];
@@ -1421,9 +1435,9 @@
       requesterUid: currentUser.uid,
       requesterName: currentUser.displayName || currentUser.email || "Admin",
       requesterRole: "admin",
-      targetUid: selectedPlayer.uid,
-      targetName: playerName(),
-      slot: selectedPlayerSlot(),
+      targetUid,
+      targetName,
+      slot: targetSlot,
       command: { ...command },
       reason: String(reason || "Admin-Geldkorrektur").slice(0, 240),
       eligibleApproverUids: eligible,
@@ -1517,7 +1531,8 @@
     }), 12000, "Freigabestimme");
     if (approve && after?.approvalCount >= num(after.threshold, 1)) await executeApprovedMoneyRequest(requestId);
     else toast(approve ? "Zustimmung gespeichert." : "Ablehnung gespeichert.");
-    await renderGovernancePanel();
+    if (activePanel === "weed") { await loadGovernanceQueues(); renderWeedPanel(); }
+    else await renderGovernancePanel();
   }
 
   async function resolveFraudAlert(alertId, resolution) {
@@ -1739,6 +1754,26 @@
     return window.WeedKL?.admin || null;
   }
 
+  function currentWeedAccountTarget() {
+    let slot = 0;
+    let displayName = currentUser?.displayName || currentUser?.email || "Admin";
+    try {
+      if (typeof selectedSlot !== "undefined") slot = Math.max(0, Math.min(3, Math.floor(num(selectedSlot))));
+      else if (typeof activeSlot !== "undefined") slot = Math.max(0, Math.min(3, Math.floor(num(activeSlot))));
+      if (typeof state !== "undefined" && state) {
+        const characterName = [state.firstName, state.lastName].filter(Boolean).join(" ").trim();
+        if (characterName) displayName = characterName;
+      }
+    } catch {}
+    return { uid: currentUser?.uid || "", name: displayName, slot };
+  }
+
+  function weedMoneyApprovalRows() {
+    return moneyApprovalRequests
+      .filter((entry) => String(entry.reason || "").toLowerCase().includes("[weed business]"))
+      .sort((a, b) => num(b.createdAtMs) - num(a.createdAtMs));
+  }
+
   function weedNumberInput(name, label, value, max = 999999999) {
     return `<label>${esc(label)}<input name="${esc(name)}" type="number" min="0" max="${max}" step="1" value="${Math.max(0, Math.round(num(value)))}"></label>`;
   }
@@ -1761,6 +1796,25 @@
     const seedRows = strains.map((strain) => `<article class="online-mod-weed-strain"><span style="--weed-accent:${esc(strain.accent || "#72efad")}"></span><div><small>${esc(strain.rarity || "Sorte")}</small><b>${esc(strain.name)}</b></div><label>Samen<input name="seed_${esc(strain.id)}" type="number" min="0" max="999999" value="${Math.max(0, Math.floor(num(data.seeds?.[strain.id])))}"></label><label>Gramm<input name="inventory_${esc(strain.id)}" type="number" min="0" max="999999999" value="${Math.max(0, Math.floor(num(data.inventory?.[strain.id])))}"></label></article>`).join("");
     const upgradeRows = upgrades.map((upgrade) => `<label>${esc(upgrade.label)}<input name="upgrade_${esc(upgrade.id)}" type="number" min="0" max="${num(upgrade.max)}" value="${Math.max(0, Math.floor(num(data.upgrades?.[upgrade.id])))}"><small>Stufe 0–${num(upgrade.max)}</small></label>`).join("");
     const eliteRows = eliteUpgrades.map((upgrade) => `<label>${esc(upgrade.label)}<input name="elite_${esc(upgrade.id)}" type="number" min="0" max="${num(upgrade.max)}" value="${Math.max(0, Math.floor(num(data.eliteUpgrades?.[upgrade.id])))}"><small>Master 0–${num(upgrade.max)}</small></label>`).join("");
+    const weedApprovals = weedMoneyApprovalRows();
+    const weedMoneyApprovalHtml = roleData?.role === "owner" ? `
+      <section class="online-mod-card"><div class="online-mod-card-title"><span>€</span><div><small>WEED BUSINESS · OWNER-FREIGABEN</small><h3>Offene Geldkorrekturen</h3></div><button type="button" data-weed-money-refresh>↻</button></div>
+        <p class="online-mod-approval-note">Hier erscheinen Geldkorrekturen, die ein Admin direkt aus dem Weed-Business-Bereich beim Owner beantragt hat.</p>
+        <div class="online-mod-governance-list">${weedApprovals.length ? weedApprovals.map((entry) => {
+          const command = safeObject(entry.command), approvals = Object.values(safeObject(entry.approvals)).filter(Boolean).length, eligible = safeArray(entry.eligibleApproverUids).includes(currentUser?.uid), voted = currentUser?.uid && (safeObject(entry.approvals)[currentUser.uid] === true || safeObject(entry.rejections)[currentUser.uid] === true);
+          return `<article class="online-mod-governance-row ${esc(entry.status || "pending")}"><header><div><small>${dateTime(entry.createdAtMs)}</small><h3>${esc(entry.requesterName || "Admin")} → ${esc(entry.targetName || "Spieler")}</h3></div><span>${esc(entry.status || "pending")}</span></header><p>${esc(command.kind || "setMoney")} · ${esc(command.target || "cash")} · <b>${euro(command.value)}</b></p><p>${esc(entry.reason || "Weed Business")}</p><footer><b>${approvals}/${num(entry.threshold,1)} Zustimmungen</b>${entry.status === "pending" && eligible && !voted ? `<div><button data-money-approval-vote="approve" data-request-id="${esc(entry.id)}">Bestätigen</button><button class="danger" data-money-approval-vote="reject" data-request-id="${esc(entry.id)}">Ablehnen</button></div>` : ""}</footer></article>`;
+        }).join("") : `<div class="online-mod-empty-state compact"><span>✓</span><p>Keine offenen Weed-Business-Geldanträge.</p></div>`}</div>
+      </section>` : roleData?.role === "admin" ? `
+      <section class="online-mod-card"><div class="online-mod-card-title"><span>€</span><div><small>OWNER BEANTRAGEN</small><h3>Weed-Business-Geld korrigieren</h3></div></div>
+        <p class="online-mod-approval-note">Die Korrektur wird dem Owner direkt im Weed-Business-Mod-Menue angezeigt und erst nach Freigabe ausgefuehrt.</p>
+        <form data-weed-money-request class="online-mod-form-grid">
+          <label>Aktion<select name="kind"><option value="setMoney">Geld genau setzen</option><option value="addMoney">Geld gutschreiben</option><option value="removeMoney">Geld abziehen</option></select></label>
+          <label>Ziel<select name="target"><option value="cash">Bargeld</option><option value="bank">Bankkonto</option></select></label>
+          <label>Betrag<input name="value" type="number" min="0" step="1" value="0"></label>
+          <label class="wide">Grund<input name="reason" maxlength="180" placeholder="z. B. Weed-Business-Geld nach Fehler korrigieren" required></label>
+          <button class="online-mod-primary wide" type="submit">Beim Owner beantragen</button>
+        </form>
+      </section>` : "";
 
     content().innerHTML = `
       ${pageHead("TEAM · WEED BUSINESS", "Komplette Teststeuerung", "Alle Werte gelten für deinen aktuell geöffneten Spielstand. Samen, Ware, Materialien, Geld, Statistiken und Ausbau können direkt gesetzt werden.", `<button type="button" data-weed-admin-open>Weed-App öffnen</button><button type="button" data-weed-admin-refresh>↻ Aktualisieren</button>`)}
@@ -1770,6 +1824,7 @@
         ${statCard("SAMEN", Math.round(totalSeeds).toLocaleString("de-DE"), `${strains.length} Sorten`)}
         ${statCard("WARE", `${Math.round(totalInventory).toLocaleString("de-DE")} g`, `${num(data.stats?.customersServed)} Verkäufe`)}
       </section>
+      ${weedMoneyApprovalHtml}
       <section class="online-mod-card online-mod-weed-actions-card"><div class="online-mod-card-title"><span>⚡</span><div><small>SCHNELLTEST</small><h3>Testpakete und direkte Aktionen</h3></div></div><div class="online-mod-weed-action-grid">
         <button type="button" data-weed-admin-action="test-package">Komplettes Testpaket</button>
         <button type="button" data-weed-admin-action="all-seeds">Alle Samen ×999</button>
@@ -1789,9 +1844,8 @@
         <article class="online-mod-card"><div class="online-mod-card-title"><span>€</span><div><small>GELD & RISIKO</small><h3>Konten direkt setzen</h3></div></div><form data-weed-admin-form="core" class="online-mod-form-grid">
           ${weedNumberInput("capital", "Betriebskapital", data.capital)}
           ${weedNumberInput("danger", "Gefahr in %", data.danger, 100)}
-          ${weedNumberInput("playerCash", "Bargeld des Spielers", snapshot.player?.cash)}
-          ${weedNumberInput("playerBank", "Bankkonto des Spielers", snapshot.player?.bank)}
-          <button class="online-mod-primary wide" type="submit">Geld und Gefahr speichern</button>
+          ${roleData?.role === "owner" ? `${weedNumberInput("playerCash", "Bargeld des Spielers", snapshot.player?.cash)}${weedNumberInput("playerBank", "Bankkonto des Spielers", snapshot.player?.bank)}` : `<p class="online-mod-approval-note wide">Bargeld und Bankkonto duerfen nur Owner direkt setzen. Als Admin nutzt du dafuer oben „Beim Owner beantragen“.</p>`}
+          <button class="online-mod-primary wide" type="submit">${roleData?.role === "owner" ? "Geld und Gefahr speichern" : "Betriebskapital und Gefahr speichern"}</button>
         </form></article>
         <article class="online-mod-card"><div class="online-mod-card-title"><span>▰</span><div><small>MATERIALIEN</small><h3>Topf, Erde und Wasser</h3></div></div><form data-weed-admin-form="supplies" class="online-mod-form-grid">
           ${weedNumberInput("pot", "Blumentöpfe", data.supplies?.pot)}
@@ -1890,6 +1944,9 @@
     if (panelButton && !panelButton.disabled) {
       activePanel = panelButton.dataset.modPanel;
       renderPanel();
+      if (activePanel === "weed" && ["admin", "owner"].includes(String(roleData?.role || ""))) {
+        loadGovernanceQueues().then(() => { if (activePanel === "weed") renderWeedPanel(); }).catch((error) => console.warn("Weed Owner-Freigaben", error));
+      }
       return;
     }
     if (event.target.closest("[data-mod-close]")) return closeModMenu();
@@ -1911,6 +1968,10 @@
     }
     if (event.target.closest("[data-mod-refresh-players]")) return renderPlayersPanel();
     if (event.target.closest("[data-weed-admin-refresh]")) { renderWeedPanel(); return; }
+    if (event.target.closest("[data-weed-money-refresh]")) {
+      try { await loadGovernanceQueues(); renderWeedPanel(); } catch (error) { toast(error.message || String(error), "error"); }
+      return;
+    }
     if (event.target.closest("[data-weed-admin-open]")) {
       if (!canAccessWeedRole()) return;
       const api = weedOwnerApi();
@@ -2200,6 +2261,22 @@
       } catch (error) { renderSessionLogin(error.message); }
       return;
     }
+    if (form.matches("[data-weed-money-request]")) {
+      if (roleData?.role !== "admin" || !has("money.request")) return toast("Nur Admins duerfen eine Owner-Geldkorrektur beantragen.", "error");
+      const values = formDataObject(form);
+      const kind = ["addMoney", "removeMoney", "setMoney"].includes(String(values.kind)) ? String(values.kind) : "setMoney";
+      const target = ["cash", "bank"].includes(String(values.target)) ? String(values.target) : "cash";
+      const value = Math.max(0, Math.round(num(values.value)));
+      const reason = String(values.reason || "").trim();
+      if (reason.length < 4) return toast("Bitte einen nachvollziehbaren Grund eingeben.", "error");
+      try {
+        await createMoneyApprovalRequest({ kind, target, value }, `[Weed Business] ${reason}`, currentWeedAccountTarget());
+        form.reset();
+        await loadGovernanceQueues();
+        renderWeedPanel();
+      } catch (error) { toast(error.message || String(error), "error"); }
+      return;
+    }
     if (form.matches("[data-weed-admin-form]")) {
       if (!canAccessWeedRole()) return;
       const api = weedOwnerApi();
@@ -2210,8 +2287,10 @@
       if (kind === "core") {
         payload.capital = num(values.capital);
         payload.danger = num(values.danger);
-        payload.playerCash = num(values.playerCash);
-        payload.playerBank = num(values.playerBank);
+        if (roleData?.role === "owner") {
+          payload.playerCash = num(values.playerCash);
+          payload.playerBank = num(values.playerBank);
+        }
       } else if (kind === "supplies") {
         payload.supplies = { pot: num(values.pot), soil: num(values.soil), water: num(values.water) };
       } else if (kind === "stats") {

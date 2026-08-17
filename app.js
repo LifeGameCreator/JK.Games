@@ -2707,12 +2707,16 @@ function migrateState(save) {
       : [];
   }
   save.phoneEditingNoteId ||= "";
+  // V476: App-Installationen aus dem Cloud-Spielstand duerfen beim Login nicht
+  // durch eine alte Allowlist verschwinden. Besonders Top Games, Casino und
+  // fobile.de waren regulaer installierbar, wurden hier aber bislang geloescht.
+  const persistentPhoneAppIds = new Set([
+    "topgames", "finder", "finster", "onlinecasino", "fobile", "event",
+    "dailygifts", "dailyquests", "ringpack-neon", "smspack-classic",
+    "aergermensch-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"
+  ]);
   save.installedPhoneApps = Array.isArray(save.installedPhoneApps)
-    ? [...new Set(save.installedPhoneApps.filter((id) => [
-        "finder", "finster", "event", "dailygifts", "dailyquests",
-        "ringpack-neon", "smspack-classic",
-        "aergermensch-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"
-      ].includes(id)))]
+    ? [...new Set(save.installedPhoneApps.filter((id) => typeof id === "string" && persistentPhoneAppIds.has(id)))]
     : [];
   save.finder = normalizeFinderSave(save.finder, save);
   save.starterHome ||= { city: save.homeCity || "Essen", type: "Einraumwohnung", rooms: ["Eingang", "Wohn-/Schlafraum", "Küche", "Bad"], rentable: false, active: true, dailyRent: 65, lastPaidDay: save.day || 1 };
@@ -4347,7 +4351,7 @@ function awardGameXp(amount, reason = "Game", options = {}) {
 }
 
 
-// V433: Gemeinsame Hauptcharakter-EP für alle neun Top Games inklusive Escape.kl.
+// V248: Gemeinsame Hauptcharakter-EP für alle acht Top Games.
 // Die jeweiligen Spiele vergeben weiterhin ihre eigenen internen Belohnungen.
 // Zusätzlich erhält der übergeordnete JK.Games-Hauptcharakter echte EP.
 // Event-Keys verhindern doppelte Gutschriften desselben Ergebnisses; ein
@@ -14147,10 +14151,31 @@ async function loadFirebasePhoneRuntime() {
   if (firebasePhoneRuntime && (!firebasePhoneRuntimeUid || firebasePhoneRuntimeUid === liveUid || !liveUid)) return firebasePhoneRuntime;
   if (firebasePhoneRuntimePromise) return firebasePhoneRuntimePromise;
   firebasePhoneRuntimePromise = (async () => {
-    // V430: Firestore darf ausschließlich über die zentrale Runtime laufen.
-    // Kein Modul darf bei einem Ladeproblem eine zweite, ungedrosselte SDK-Instanz öffnen.
-    if (!window.LifeBuilderFirebaseCore?.load) throw new Error("Zentrale Firebase-Laufzeit wurde nicht geladen.");
-    const fb = await onlineFirebaseTimeout(window.LifeBuilderFirebaseCore.load(), 18000, "Online-Grundverbindung");
+    let fb = null;
+    if (window.LifeBuilderFirebaseCore?.load) {
+      fb = await onlineFirebaseTimeout(window.LifeBuilderFirebaseCore.load(), 18000, "Online-Grundverbindung");
+    } else {
+      const [appMod, authMod, dbMod, storageMod, functionsMod] = await onlineFirebaseTimeout(Promise.all([
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-storage.js"),
+        import("https://www.gstatic.com/firebasejs/12.17.1/firebase-functions.js")
+      ]), 18000, "Online-Bibliotheken");
+      const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebasePhoneConfig);
+      const auth = authMod.getAuth(app);
+      const db = dbMod.getFirestore(app, FIRESTORE_DATABASE_ID);
+      fb = {
+        ...authMod,
+        ...dbMod,
+        ...storageMod,
+        ...functionsMod,
+        auth,
+        db,
+        storage: storageMod.getStorage(app),
+        functions: functionsMod.getFunctions(app, FIREBASE_FUNCTIONS_REGION)
+      };
+    }
 
     let user = fb.auth.currentUser;
     if (!user && window.LifeBuilderFirebaseCore?.waitForAuth) {
@@ -17393,7 +17418,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL vollständig spielen."
+    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL vollständig spielen."
   },
   {
     id: "finder",
@@ -17464,8 +17489,13 @@ function persistInstalledPhoneAppsBackup(appIds = state?.installedPhoneApps || [
 function installedPhoneApps() {
   const fromSave = Array.isArray(state.installedPhoneApps) ? state.installedPhoneApps : [];
   const fromBackup = readInstalledPhoneAppsBackup();
+  const knownPersistentIds = new Set([
+    "topgames", "finder", "finster", "onlinecasino", "fobile", "event",
+    "dailygifts", "dailyquests", "ringpack-neon", "smspack-classic",
+    "aergermensch-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"
+  ]);
   state.installedPhoneApps = [...new Set([...fromSave, ...fromBackup])]
-    .filter((id) => phoneAppStoreCatalog.some((app) => app.id === id && app.status === "available"));
+    .filter((id) => knownPersistentIds.has(id) || phoneAppStoreCatalog.some((app) => app.id === id && app.status === "available"));
   persistInstalledPhoneAppsBackup(state.installedPhoneApps);
   return state.installedPhoneApps;
 }
@@ -17588,7 +17618,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar." });
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17929,10 +17959,6 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-bigcards-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.BigCardsKL?.open?.(item);
-  });
-  shell.querySelector("[data-open-escape-kl]")?.addEventListener("click", () => {
-    els.dialog.close();
-    window.EscapeKL?.open?.(item);
   });
   shell.querySelector("[data-open-egoshoot-kl]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19920,7 +19946,6 @@ function openTopGamesJkInfo() {
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
-        <article><b>Escape.kl</b><p>Escape.kl vergibt Hauptcharakter-XP für abgeschlossene Keyboard-Welten und Rebirths. Laufpunkte bauen Speed und Level auf; Wins kaufen Number Buttons, Trails und Auren.</p></article>
         <article><b>Egoshoot.KL</b><p>Egoshoot.KL hat aktuell keine zufälligen Gratis-JK/Coin-Drops. Kills, Waffenlevel, Shield und Versorgung werden im Spiel erspielt; optionale Kill-Pakete findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
@@ -19935,7 +19960,7 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -19944,7 +19969,6 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
-        <button class="topgames-card escape" data-open-escape-kl><b>Escape.kl</b><small>3D Jump'n'Run • Laufpunkte → Speed/Level • Stage-Wins • Trails/Auren • Rebirth • Welt 1–3.</small></button>
         <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
     </div>`;
@@ -31082,43 +31106,34 @@ function removeLegacySpeedCarStateV414() {
   if (changed) try { save(); } catch {}
   return changed;
 }
-let speedCarFirebasePurgePromiseV430 = null;
-async function purgeSpeedCarLobbyV430() {
-  if (speedCarFirebasePurgePromiseV430) return speedCarFirebasePurgePromiseV430;
-  speedCarFirebasePurgePromiseV430 = (async () => {
-    try {
-      const owner = !!(window.LifeBuilderSettingsMenu?.isOwner?.() || window.LifeBuilderSettingsMenu?.getRole?.()?.role === "owner");
-      if (!owner || localStorage.getItem("jk-games-speedcar-firebase-purge-v430") === "done") return false;
-      const core = window.LifeBuilderFirebaseCore;
-      if (!core?.load) return false;
-      const fb = await core.load(), user = await core.waitForAuth?.(7000);
-      if (!fb?.db || !user) return false;
-      let deleted = 0;
-      while (true) {
-        const snap = await fb.getDocs(fb.query(fb.collection(fb.db, "speedCarKlLobby"), fb.limit(50)));
-        if (snap.empty) break;
-        const batch = fb.writeBatch(fb.db);
-        for (const docSnap of snap.docs) batch.delete(docSnap.ref);
-        await batch.commit();
-        deleted += snap.size;
-        if (snap.size < 50) break;
-        // Cleanup bewusst langsam halten: keine neue Firestore-Schreibspitze durch die Alt-Daten-Löschung.
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-      // "done" wird erst gesetzt, nachdem die Collection nachweislich vollständig abgearbeitet wurde.
-      localStorage.setItem("jk-games-speedcar-firebase-purge-v430", "done");
-      localStorage.removeItem("jk-games-speedcar-firebase-purge-v414");
-      if (deleted && typeof addFeed === "function") addFeed(`Speed Car.KL entfernt: ${deleted} alte Online-Lobby-Datensätze gelöscht.`);
-      return true;
-    } catch (error) {
-      console.warn("Speed-Car-Firebase-Cleanup V430", error);
-      return false;
+async function purgeSpeedCarLobbyV414() {
+  try {
+    const owner = !!(window.LifeBuilderSettingsMenu?.isOwner?.() || window.LifeBuilderSettingsMenu?.getRole?.()?.role === "owner");
+    if (!owner || localStorage.getItem("jk-games-speedcar-firebase-purge-v414") === "done") return false;
+    const core = window.LifeBuilderFirebaseCore;
+    if (!core?.load) return false;
+    const fb = await core.load(), user = await core.waitForAuth?.(7000);
+    if (!fb?.db || !user) return false;
+    let deleted = 0, guard = 0;
+    while (guard++ < 50) {
+      const snap = await fb.getDocs(fb.query(fb.collection(fb.db, "speedCarKlLobby"), fb.limit(50)));
+      if (snap.empty) break;
+      const batch = fb.writeBatch(fb.db);
+      for (const docSnap of snap.docs) batch.delete(docSnap.ref);
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 50) break;
     }
-  })().finally(() => { speedCarFirebasePurgePromiseV430 = null; });
-  return speedCarFirebasePurgePromiseV430;
+    localStorage.setItem("jk-games-speedcar-firebase-purge-v414", "done");
+    if (deleted && typeof addFeed === "function") addFeed(`Speed Car.KL entfernt: ${deleted} alte Online-Lobby-Datensätze gelöscht.`);
+    return true;
+  } catch (error) {
+    console.warn("Speed-Car-Firebase-Cleanup V414", error);
+    return false;
+  }
 }
 removeLegacySpeedCarStateV414();
-[5000, 15000, 30000].forEach(ms => setTimeout(() => { removeLegacySpeedCarStateV414(); void purgeSpeedCarLobbyV430(); }, ms));
+[2500, 8000, 16000].forEach(ms => setTimeout(() => { removeLegacySpeedCarStateV414(); purgeSpeedCarLobbyV414(); }, ms));
 
 
 // Runner.KL V101 – einmalige Gutschrift eines serverseitig bestätigten Monatsbonus.
