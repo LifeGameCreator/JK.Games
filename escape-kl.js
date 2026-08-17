@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V467 · JK SKYRUN */
-const VERSION = '2026-08-16-v467';
+/* Escape.kl – JK.Games Top Game V472 · Firebase Online-Multiplayer */
+const VERSION = '2026-08-17-v472';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -38,6 +38,13 @@ const DAY_NIGHT_CYCLE_SECONDS = 300;
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
 const SKYRUN_MILESTONE_REWARDS = Object.freeze([250,500,1000,2000,3500,5000,7500,10000,15000]);
+const ESCAPE_PRESENCE_COLLECTION = 'escapeKlPresenceV472';
+const ESCAPE_ONLINE_ACTIVE_WRITE_MS = 1200;
+const ESCAPE_ONLINE_SOLO_WRITE_MS = 5000;
+const ESCAPE_ONLINE_HEARTBEAT_MS = 10000;
+const ESCAPE_ONLINE_STALE_MS = 18000;
+const ESCAPE_ONLINE_LIMIT = 16;
+const ESCAPE_ONLINE_FALLBACK_POLL_MS = 2600;
 
 const STEP_BUTTONS = Object.freeze([
   {tier:0,name:'+1 Power / Bewegung',cost:0,gain:1},
@@ -128,8 +135,194 @@ const G = {
   hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
+  onlineFb:null,onlineUser:null,onlineSessionId:'',onlineUnsub:null,onlineWorld:'',onlineTickTimer:0,onlinePollTimer:0,onlineReconnectTimer:0,
+  onlineLastWriteAt:0,onlineLastKey:'',onlineWriteInFlight:false,onlineStatus:'offline',onlineLastError:'',remotePlayers:new Map(),
   tmpV:new THREE.Vector3(), tmpV2:new THREE.Vector3(),tmpV3:new THREE.Vector3()
 };
+
+
+function onlineLerpAngle(a,b,t){const d=Math.atan2(Math.sin(b-a),Math.cos(b-a));return a+d*Math.max(0,Math.min(1,t));}
+function escapeOnlineDisplayName(){
+  try{
+    const root=window.JKGamesGetActiveState?.()||{};
+    const direct=String(root.displayName||root.name||'').trim();
+    if(direct)return direct.slice(0,50);
+    const first=String(root.firstName||root.player?.firstName||'').trim(),last=String(root.lastName||root.player?.lastName||'').trim();
+    const combined=`${first} ${last}`.trim();if(combined)return combined.slice(0,50);
+  }catch{}
+  return String(G.onlineUser?.displayName||'Spieler').trim().slice(0,50)||'Spieler';
+}
+function setEscapeOnlineHud(status=G.onlineStatus,count=1,message=''){
+  G.onlineStatus=status;const el=G.overlay?.querySelector?.('[data-ekl-online]');if(!el)return;
+  const total=Math.max(1,Math.floor(Number(count)||1)),online=status==='online',connecting=status==='connecting';
+  el.textContent=online?`● ${total}`:connecting?'● …':'○ OFF';
+  el.title=message||(online?`${total} Spieler in dieser Escape-Welt · Firebase Live`:`Escape Multiplayer ${connecting?'verbindet':'offline'}`);
+  el.style.color=online?'#8dffb0':connecting?'#ffe08a':'#a7b2c1';
+  el.style.borderColor=online?'rgba(89,255,140,.35)':connecting?'rgba(255,214,105,.34)':'rgba(170,185,204,.24)';
+}
+function escapeOnlinePresencePath(uid=G.onlineUser?.uid){return uid?`${ESCAPE_PRESENCE_COLLECTION}/${uid}`:'';}
+function escapeOnlinePresencePayload(online=true){
+  const choice=String(G.state?.characterChoice||'male').slice(0,40),gender=characterBaseGender(choice);
+  const speed=Math.max(0,Math.min(10000,Number(currentSpeedStat()||0)));
+  return {
+    uid:String(G.onlineUser?.uid||'').slice(0,128),
+    sessionId:String(G.onlineSessionId||'').slice(0,80),
+    online:!!online,worldId:String(G.world||'hub').slice(0,40),
+    x:Number((G.pos?.x||0).toFixed(3)),y:Number((G.pos?.y||0).toFixed(3)),z:Number((G.pos?.z||0).toFixed(3)),
+    yaw:Number((G.playerRoot?.rotation?.y||0).toFixed(4)),
+    vx:Number((G.moveVel?.x||0).toFixed(3)),vy:Number((G.vel?.y||0).toFixed(3)),vz:Number((G.moveVel?.z||0).toFixed(3)),
+    grounded:!!G.grounded,sprint:!!G.sprint,speed:Number(speed.toFixed(2)),stage:Math.max(0,Math.min(500,Math.floor(Number(G.stage)||0))),
+    gender,characterChoice:choice,displayName:escapeOnlineDisplayName(),updatedAtMs:Date.now(),version:VERSION
+  };
+}
+function escapeOnlinePresenceKey(payload){
+  return `${payload.worldId}|${Math.round(payload.x*20)}|${Math.round(payload.y*20)}|${Math.round(payload.z*20)}|${Math.round(payload.yaw*25)}|${payload.grounded?1:0}|${payload.sprint?1:0}|${payload.characterChoice}`;
+}
+async function publishEscapePresence(force=false,online=true){
+  if(!G.overlay||!G.onlineFb||!G.onlineUser?.uid||G.onlineWriteInFlight)return false;
+  const fb=G.onlineFb;if(typeof fb.presenceSetRest!=='function')return false;
+  const now=Date.now(),payload=escapeOnlinePresencePayload(online),key=escapeOnlinePresenceKey(payload),activePeers=G.remotePlayers.size>0;
+  const minGap=activePeers?ESCAPE_ONLINE_ACTIVE_WRITE_MS:ESCAPE_ONLINE_SOLO_WRITE_MS;
+  const changed=key!==G.onlineLastKey,heartbeat=now-G.onlineLastWriteAt>=ESCAPE_ONLINE_HEARTBEAT_MS;
+  if(!force&&(!changed||now-G.onlineLastWriteAt<minGap)&&!heartbeat)return false;
+  G.onlineWriteInFlight=true;
+  try{
+    await fb.presenceSetRest(escapeOnlinePresencePath(),payload,{timeoutMs:6500});
+    G.onlineLastWriteAt=Date.now();G.onlineLastKey=key;G.onlineLastError='';
+    return true;
+  }catch(error){
+    G.onlineLastError=String(error?.message||error||'');
+    if(!/abort|offline|network/i.test(G.onlineLastError))console.warn('Escape.kl Presence schreiben',error);
+    return false;
+  }finally{G.onlineWriteInFlight=false}
+}
+function disposeRemotePlayer(remote){
+  if(!remote)return;try{remote.character?.dispose?.()}catch{}
+  try{remote.label?.material?.map?.dispose?.()}catch{}try{remote.label?.material?.dispose?.()}catch{}
+  try{remote.group?.removeFromParent?.()}catch{}
+}
+function removeEscapeRemotePlayer(uid){
+  const remote=G.remotePlayers.get(uid);if(!remote)return;disposeRemotePlayer(remote);G.remotePlayers.delete(uid);
+  setEscapeOnlineHud(G.onlineStatus,1+G.remotePlayers.size);
+}
+function clearEscapeRemotePlayers(){for(const uid of [...G.remotePlayers.keys()])removeEscapeRemotePlayer(uid);G.remotePlayers.clear();}
+function makeEscapeRemoteLabel(name){
+  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,512,96);ctx.fillStyle='rgba(4,12,22,.80)';ctx.beginPath();ctx.roundRect?.(10,12,492,70,24);if(ctx.roundRect)ctx.fill();else ctx.fillRect(10,12,492,70);
+  ctx.font='700 30px system-ui,Segoe UI,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f7fbff';ctx.fillText(String(name||'Spieler').slice(0,28),256,47);
+  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const mat=new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true});
+  const sprite=new THREE.Sprite(mat);sprite.scale.set(3.8,.72,1);sprite.position.set(0,1.38,0);sprite.renderOrder=30;return sprite;
+}
+function createEscapeRemotePlayer(uid,data){
+  const group=new THREE.Group();group.name=`escape-remote-${uid}`;group.position.set(Number(data.x)||0,Number(data.y)||1,Number(data.z)||0);
+  const gender=data.gender==='female'?'female':'male',character=createEscapeCharacter({gender,floorOffset:PLAYER_HALF});
+  group.add(character.root);const label=makeEscapeRemoteLabel(data.displayName||'Spieler');group.add(label);G.scene?.add(group);
+  const remote={uid,group,character,label,gender,name:String(data.displayName||'Spieler'),target:new THREE.Vector3(group.position.x,group.position.y,group.position.z),velocity:new THREE.Vector3(),targetYaw:Number(data.yaw)||0,grounded:!!data.grounded,sprint:!!data.sprint,speed:Number(data.speed)||0,serverUpdatedAt:Number(data.updatedAtMs)||Date.now(),receivedAt:performance.now(),sessionId:String(data.sessionId||'')};
+  G.remotePlayers.set(uid,remote);return remote;
+}
+function updateEscapeRemoteFromData(uid,data){
+  if(!uid||uid===G.onlineUser?.uid||!data||data.online!==true||String(data.worldId||'')!==String(G.world||''))return;
+  const updatedAt=Math.max(0,Number(data.updatedAtMs)||0);if(!updatedAt||Date.now()-updatedAt>ESCAPE_ONLINE_STALE_MS){removeEscapeRemotePlayer(uid);return}
+  let remote=G.remotePlayers.get(uid),gender=data.gender==='female'?'female':'male';
+  if(!remote)remote=createEscapeRemotePlayer(uid,data);
+  if(remote.gender!==gender){disposeRemotePlayer(remote);G.remotePlayers.delete(uid);remote=createEscapeRemotePlayer(uid,data)}
+  const newSession=remote.sessionId&&String(data.sessionId||'')!==remote.sessionId;
+  const next=new THREE.Vector3(Number(data.x)||0,Number(data.y)||0,Number(data.z)||0);
+  if(newSession||next.distanceTo(remote.group.position)>30)remote.group.position.copy(next);
+  remote.target.copy(next);remote.velocity.set(Number(data.vx)||0,Number(data.vy)||0,Number(data.vz)||0);
+  remote.targetYaw=Number(data.yaw)||0;remote.grounded=!!data.grounded;remote.sprint=!!data.sprint;remote.speed=Math.max(0,Number(data.speed)||0);
+  remote.serverUpdatedAt=updatedAt;remote.receivedAt=performance.now();remote.sessionId=String(data.sessionId||'');
+  const name=String(data.displayName||'Spieler').slice(0,50);
+  if(name&&name!==remote.name){remote.name=name;try{remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.()}catch{}remote.label?.removeFromParent?.();remote.label=makeEscapeRemoteLabel(name);remote.group.add(remote.label)}
+}
+function applyEscapePresenceRows(rows){
+  const seen=new Set(),now=Date.now();
+  for(const row of rows||[]){
+    const uid=String(row?.id||row?.uid||row?.data?.uid||''),data=typeof row?.data==='function'?row.data():row?.data||row;
+    if(!uid||uid===G.onlineUser?.uid)continue;
+    if(data?.online===true&&String(data.worldId||'')===String(G.world||'')&&now-Number(data.updatedAtMs||0)<=ESCAPE_ONLINE_STALE_MS){seen.add(uid);updateEscapeRemoteFromData(uid,data)}
+  }
+  for(const uid of [...G.remotePlayers.keys()])if(!seen.has(uid))removeEscapeRemotePlayer(uid);
+  setEscapeOnlineHud('online',1+G.remotePlayers.size,'Firebase Live · Positionen werden lokal weich interpoliert');
+}
+function stopEscapePresencePolling(){if(G.onlinePollTimer){clearInterval(G.onlinePollTimer);G.onlinePollTimer=0}}
+async function pollEscapePresenceOnce(){
+  if(!G.onlineFb?.presenceQueryRest||!G.onlineUser?.uid||!G.overlay)return false;
+  try{
+    const rows=await G.onlineFb.presenceQueryRest(ESCAPE_PRESENCE_COLLECTION,{field:'worldId',equals:G.world,limit:ESCAPE_ONLINE_LIMIT});
+    applyEscapePresenceRows(rows);return true;
+  }catch(error){G.onlineLastError=String(error?.message||error||'');setEscapeOnlineHud('offline',1+G.remotePlayers.size,'Firebase Live-Abfrage wird erneut versucht');return false}
+}
+function startEscapePresencePolling(){
+  if(G.onlinePollTimer||!G.overlay)return;pollEscapePresenceOnce();G.onlinePollTimer=setInterval(()=>pollEscapePresenceOnce(),ESCAPE_ONLINE_FALLBACK_POLL_MS);
+}
+function clearEscapeOnlineListener(){
+  try{G.onlineUnsub?.()}catch{}G.onlineUnsub=null;stopEscapePresencePolling();
+  if(G.onlineReconnectTimer){clearTimeout(G.onlineReconnectTimer);G.onlineReconnectTimer=0}
+}
+function subscribeEscapePresenceWorld(){
+  if(!G.overlay||!G.onlineFb||!G.onlineUser?.uid)return false;
+  clearEscapeOnlineListener();clearEscapeRemotePlayers();G.onlineWorld=String(G.world||'hub');
+  setEscapeOnlineHud('connecting',1,'Firebase-Spieler dieser Welt werden geladen …');
+  const fb=G.onlineFb;
+  try{
+    const q=fb.query(fb.collection(fb.db,ESCAPE_PRESENCE_COLLECTION),fb.where('worldId','==',G.onlineWorld),fb.limit(ESCAPE_ONLINE_LIMIT));
+    G.onlineUnsub=fb.onSnapshot(q,(snapshot)=>{
+      if(!G.overlay||String(G.world||'')!==G.onlineWorld)return;
+      applyEscapePresenceRows(snapshot.docs.map(doc=>({id:doc.id,data:doc.data()})));
+    },(error)=>{
+      if(!G.overlay)return;G.onlineLastError=String(error?.message||error||'');console.warn('Escape.kl Firebase Live-Listener · REST-Fallback aktiv',error);
+      try{G.onlineUnsub?.()}catch{}G.onlineUnsub=null;startEscapePresencePolling();
+      G.onlineReconnectTimer=setTimeout(()=>{G.onlineReconnectTimer=0;if(G.overlay&&G.onlineFb)subscribeEscapePresenceWorld()},12000);
+    });
+    return true;
+  }catch(error){
+    G.onlineLastError=String(error?.message||error||'');startEscapePresencePolling();return false;
+  }
+}
+async function connectEscapeMultiplayer(){
+  if(!G.overlay||G.onlineUser?.uid)return true;
+  const core=window.LifeBuilderFirebaseCore;if(!core?.load){setEscapeOnlineHud('offline',1,'Firebase Runtime fehlt');return false}
+  setEscapeOnlineHud('connecting',1,'Firebase-Anmeldung …');
+  try{
+    const fb=await core.load(),user=await core.waitForAuth?.(6500);
+    if(!G.overlay)return false;if(!fb||!user?.uid){setEscapeOnlineHud('offline',1,'Für Online-Multiplayer bitte mit JK.Games anmelden');return false}
+    G.onlineFb=fb;G.onlineUser=user;G.onlineSessionId=crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
+    await publishEscapePresence(true,true);subscribeEscapePresenceWorld();
+    if(G.onlineTickTimer)clearInterval(G.onlineTickTimer);
+    G.onlineTickTimer=setInterval(()=>publishEscapePresence(false,true),250);
+    setEscapeOnlineHud('online',1,'Firebase Online-Multiplayer verbunden');return true;
+  }catch(error){
+    G.onlineLastError=String(error?.message||error||'');console.warn('Escape.kl Multiplayer konnte nicht starten',error);setEscapeOnlineHud('offline',1,'Escape startet offline · Firebase wird beim nächsten Öffnen erneut versucht');return false;
+  }
+}
+function refreshEscapeMultiplayerWorld(){
+  if(!G.onlineUser?.uid||!G.onlineFb||!G.overlay)return;
+  G.onlineLastKey='';publishEscapePresence(true,true).finally(()=>{if(G.overlay&&G.onlineFb)subscribeEscapePresenceWorld()});
+}
+function stopEscapeMultiplayer(markOffline=true){
+  if(G.onlineTickTimer){clearInterval(G.onlineTickTimer);G.onlineTickTimer=0}clearEscapeOnlineListener();clearEscapeRemotePlayers();
+  const fb=G.onlineFb,path=escapeOnlinePresencePath();
+  if(markOffline&&fb&&path){
+    const payload=escapeOnlinePresencePayload(false);
+    // Normaler Exit löscht das eine Presence-Dokument vollständig. Nur falls der
+    // DELETE beim Browser-Schließen nicht mehr durchkommt, bleibt online:false als
+    // Fallback. So sammeln sich keine alten Offline-Dokumente in Firebase an.
+    fb.presenceDeleteRest?.(path,{timeoutMs:2500,keepalive:true}).catch(()=>fb.presenceSetRest?.(path,payload,{timeoutMs:2500,keepalive:true}).catch(()=>{}));
+  }
+  G.onlineFb=null;G.onlineUser=null;G.onlineWorld='';G.onlineLastKey='';G.onlineLastWriteAt=0;G.onlineWriteInFlight=false;G.onlineStatus='offline';
+}
+function updateEscapeRemotePlayers(dt,t){
+  const nowPerf=performance.now(),now=Date.now(),pred=new THREE.Vector3();
+  for(const [uid,remote] of [...G.remotePlayers]){
+    if(now-remote.serverUpdatedAt>ESCAPE_ONLINE_STALE_MS){removeEscapeRemotePlayer(uid);continue}
+    const age=Math.max(0,Math.min(1.0,(nowPerf-remote.receivedAt)/1000));pred.copy(remote.target).addScaledVector(remote.velocity,age*.72);
+    const distance=remote.group.position.distanceTo(pred),alpha=distance>12?1:1-Math.exp(-dt*9.5);
+    remote.group.position.lerp(pred,alpha);remote.character.root.rotation.y=onlineLerpAngle(remote.character.root.rotation.y,remote.targetYaw,1-Math.exp(-dt*12));
+    const planar=Math.hypot(remote.velocity.x,remote.velocity.z);
+    remote.character.update?.({grounded:remote.grounded,verticalVelocity:remote.velocity.y,planarSpeed:planar,sprint:remote.sprint,moving:planar>.12,treadmill:false,animationRate:1},dt,t);
+  }
+}
 
 function emptyWorldProgress(){return {xp:0,itemSpeedBonus:0,adminSpeedOverride:null};}
 function defaultProgress(){
@@ -921,7 +1114,7 @@ function setCharacterChoice(choice){
   if(choice==='special')return openCharacterStudio('special');
   if(!['male','female'].includes(choice)&&!G.state.ownedSpecialCharacters.includes(choice))return false;
   if(G.state.characterChoice===choice)return toast(`${choice==='female'?'Frau':choice==='male'?'Mann':activeCharacterDef(choice)?.name||'Charakter'} ist bereits aktiv.`,'good',1100);
-  G.state.characterChoice=choice;queuePersist(50);mountCharacter(choice,{toastReady:true});updateHud(true);soundBuy();toast(`${choice==='female'?'Frau':choice==='male'?'Mann':activeCharacterDef(choice)?.name||'Spezialcharakter'} ausgewählt.`,'good',1800);return true;
+  G.state.characterChoice=choice;queuePersist(50);mountCharacter(choice,{toastReady:true});updateHud(true);publishEscapePresence(true,true).catch(()=>{});soundBuy();toast(`${choice==='female'?'Frau':choice==='male'?'Mann':activeCharacterDef(choice)?.name||'Spezialcharakter'} ausgewählt.`,'good',1800);return true;
 }
 function spendJkCoins(cost,reason='Escape.kl'){
   const spend=window.JKCoinApp?.spend;
@@ -1048,7 +1241,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(0x1b0c08);G.scene.fog.color.setHex(0x1b0c08);
     toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2000);
   }
-  resetHazardsForWorld(id);applyWorldVisibility();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);
+  resetHazardsForWorld(id);applyWorldVisibility();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
 }
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
@@ -1782,20 +1975,20 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on,{passive:false});sprint.addEventListener('pointerup',off,{passive:false});sprint.addEventListener('pointercancel',off,{passive:false});}
 }
 function resize(){if(!G.renderer||!G.camera||!G.overlay)return;const r=G.overlay.getBoundingClientRect(),vv=window.visualViewport;const w=Math.max(1,Math.round(vv?.width||r.width)),h=Math.max(1,Math.round(vv?.height||r.height));G.overlay.style.setProperty('--ekl-vw',`${w}px`);G.overlay.style.setProperty('--ekl-vh',`${h}px`);G.overlay.classList.toggle('ekl-landscape',w>h);G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
   if(G.overlay)return;
   if(sourceDevice)G.sourceDevice=String(sourceDevice);else G.sourceDevice=window.JKGamesOwnedPhoneItem?.()||'';
   loadProgress();
   const el=document.createElement('div');el.className='escape-kl-overlay';
-  el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-statrow"><div class="ekl-stat speed"><small>SPEED</small><b data-ekl-speed>5 / 300</b></div><div class="ekl-stat level"><small>LEVEL</small><b data-ekl-level>0</b></div><div class="ekl-stat wins"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat rebirth"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div></div><div class="ekl-level-progress"><div><span>LEVEL</span><b data-ekl-level-next>NÄCHSTES LEVEL</b></div><i><span data-ekl-level-bar></span></i></div><div class="ekl-top-actions"><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-look-hint" aria-hidden="true"><span>↕</span>KAMERA<span>↔</span></div><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;
+  el.innerHTML=`<div class="ekl-stage"><div class="ekl-canvas"><canvas aria-label="Escape.kl 3D Jump and Run"></canvas></div><div class="ekl-vignette"></div><div class="ekl-hud"><div class="ekl-topbar"><div class="ekl-statrow"><div class="ekl-stat speed"><small>SPEED</small><b data-ekl-speed>5 / 300</b></div><div class="ekl-stat level"><small>LEVEL</small><b data-ekl-level>0</b></div><div class="ekl-stat wins"><small>WINS</small><b data-ekl-wins>0</b></div><div class="ekl-stat rebirth"><small>REBIRTH</small><b data-ekl-rebirths>0</b></div></div><div class="ekl-level-progress"><div><span>LEVEL</span><b data-ekl-level-next>NÄCHSTES LEVEL</b></div><i><span data-ekl-level-bar></span></i></div><div class="ekl-top-actions"><span data-ekl-online title="Escape Multiplayer" style="display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:30px;padding:0 8px;border:1px solid rgba(170,185,204,.24);border-radius:999px;background:rgba(5,14,24,.72);font:800 10px/1 system-ui;color:#a7b2c1;letter-spacing:.04em;white-space:nowrap">○ OFF</span><button data-ekl-help title="Hilfe">?</button><button data-ekl-pause title="Pause">Ⅱ</button><button data-ekl-close title="Top Games">×</button></div></div><div class="ekl-prompt" data-ekl-prompt></div><div class="ekl-toast" data-ekl-toast></div><div class="ekl-touch"><div class="ekl-look-hint" aria-hidden="true"><span>↕</span>KAMERA<span>↔</span></div><div class="ekl-stick" data-ekl-stick><i class="ekl-stick-knob"></i></div><div class="ekl-touch-actions"><button class="sprint" data-ekl-sprint>SPRINT</button><button class="jump" data-ekl-jump>SPRINGEN</button><button class="interact" data-ekl-interact>AKTION</button></div></div></div></div>`;
   document.body.append(el);document.body.classList.add('escape-kl-open');G.overlay=el;setupScene();bindInput();
   el.querySelector('[data-ekl-close]').onclick=returnToTopGames;el.querySelector('[data-ekl-pause]').onclick=showPause;el.querySelector('[data-ekl-help]').onclick=showHelp;
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
-  G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
+  G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petWrapper=null;G.petModel=null;G.petMixer=null;G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petWrapper=null;G.petModel=null;G.petMixer=null;G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){

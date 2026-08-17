@@ -651,6 +651,140 @@
       return out;
     }
 
+    // V472: Escape.kl-Live-Presence nutzt absichtlich die Firestore REST-Dokument-API
+    // statt des persistenten SDK-Write-Streams. Dadurch können schnelle, kleine
+    // Positionsupdates den bereits geschützten JK.Games-Save-Write-Stream nicht
+    // erneut mit "maximum allowed queued writes" überlasten.
+    function encodeFirestoreRestValue(value) {
+      if (value === null || value === undefined) return { nullValue: null };
+      if (typeof value === "boolean") return { booleanValue: value };
+      if (typeof value === "number") {
+        if (!Number.isFinite(value)) return { doubleValue: 0 };
+        if (Number.isInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER) return { integerValue: String(value) };
+        return { doubleValue: value };
+      }
+      if (typeof value === "string") return { stringValue: value };
+      if (Array.isArray(value)) return { arrayValue: { values: value.map(encodeFirestoreRestValue) } };
+      if (typeof value === "object") return { mapValue: { fields: encodeFirestoreRestFields(value) } };
+      return { stringValue: String(value) };
+    }
+
+    function encodeFirestoreRestFields(data) {
+      const fields = {};
+      for (const [key, value] of Object.entries(data || {})) fields[key] = encodeFirestoreRestValue(value);
+      return fields;
+    }
+
+    function firestoreRestDocumentUrl(path) {
+      const clean = String(path || "").split("/").filter(Boolean);
+      if (!clean.length) throw new Error("Firestore REST: Dokumentpfad fehlt.");
+      const encodedPath = clean.map((part) => encodeURIComponent(part)).join("/");
+      return `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(CONFIG.projectId)}/databases/${encodeURIComponent(DATABASE_ID)}/documents/${encodedPath}`;
+    }
+
+    async function firestorePresenceSetRest(path, data, options = {}) {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Escape-Presence: Keine Firebase-Anmeldung vorhanden.");
+      const timeoutMs = Math.max(2000, Number(options.timeoutMs) || 7000);
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
+        try {
+          const token = await authMod.getIdToken(user, attempt > 0);
+          const response = await fetch(firestoreRestDocumentUrl(path), {
+            method: "PATCH",
+            cache: "no-store",
+            keepalive: options.keepalive === true,
+            signal: controller?.signal,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ fields: encodeFirestoreRestFields(data) })
+          });
+          if (!response.ok) {
+            const body = await response.text().catch(() => "");
+            const error = new Error(`Escape-Presence REST ${response.status}: ${body.slice(0, 220)}`);
+            error.code = `escape-presence-rest-${response.status}`;
+            throw error;
+          }
+          return true;
+        } catch (error) {
+          lastError = error;
+          if (attempt === 0 && /401|unauthenticated|token/i.test(String(error?.message || error || ""))) continue;
+          break;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
+      throw lastError || new Error("Escape-Presence konnte nicht gespeichert werden.");
+    }
+
+    async function firestorePresenceDeleteRest(path, options = {}) {
+      const user = auth.currentUser;
+      if (!user) return false;
+      const timeoutMs = Math.max(1500, Number(options.timeoutMs) || 5000);
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
+      try {
+        const token = await authMod.getIdToken(user, false);
+        const response = await fetch(firestoreRestDocumentUrl(path), {
+          method: "DELETE",
+          cache: "no-store",
+          keepalive: options.keepalive === true,
+          signal: controller?.signal,
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.ok || response.status === 404;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+
+    async function firestorePresenceQueryRest(collectionId, options = {}) {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Escape-Presence: Keine Firebase-Anmeldung vorhanden.");
+      const field = String(options.field || "worldId");
+      const equals = options.equals;
+      const limit = Math.max(1, Math.min(24, Math.floor(Number(options.limit) || 16)));
+      const token = await authMod.getIdToken(user, false);
+      const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(CONFIG.projectId)}/databases/${encodeURIComponent(DATABASE_ID)}/documents:runQuery`;
+      const response = await fetch(url, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          structuredQuery: {
+            from: [{ collectionId: String(collectionId || "") }],
+            where: {
+              fieldFilter: {
+                field: { fieldPath: field },
+                op: "EQUAL",
+                value: encodeFirestoreRestValue(equals)
+              }
+            },
+            limit
+          }
+        })
+      });
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        throw new Error(`Escape-Presence Query REST ${response.status}: ${body.slice(0, 220)}`);
+      }
+      const rows = await response.json();
+      return (Array.isArray(rows) ? rows : []).map((row) => row?.document).filter(Boolean).map((document) => {
+        const name = String(document.name || "");
+        return {
+          id: name.split("/").pop() || "",
+          data: decodeFirestoreRestFields(document.fields || {})
+        };
+      });
+    }
+
     function makeRestDocumentSnapshot(ref, path, payload) {
       const exists = !!payload;
       const data = exists ? decodeFirestoreRestFields(payload.fields || {}) : undefined;
@@ -818,6 +952,9 @@
       writeBatch: gatedWriteBatch,
       getDocReliable: reliableGetDoc,
       getDocRest: firestoreRestGetDoc,
+      presenceSetRest: firestorePresenceSetRest,
+      presenceDeleteRest: firestorePresenceDeleteRest,
+      presenceQueryRest: firestorePresenceQueryRest,
       storage: storageMod.getStorage(app),
       functions: functionsMod.getFunctions(app, FUNCTIONS_REGION),
       databaseId: DATABASE_ID,
@@ -979,7 +1116,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-16-v470-write-stream-drain",
+    version: "2026-08-17-v472-escape-presence-rest",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -1018,5 +1155,5 @@
   window.JKFirestoreDiagnostics = printFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsPrevious = printPreviousFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsClear = clearFirestoreDiagnostics;
-  console.info("JK.Games Firebase Runtime V470 aktiv · SDK-Write-Drain + 1,2s Global-Gate + Named-DB REST-Recovery.");
+  console.info("JK.Games Firebase Runtime V472 aktiv · Save-Write-Drain + BigCards REST-Recovery + Escape Presence REST-Lane.");
 })();
