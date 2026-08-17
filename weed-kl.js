@@ -2,7 +2,7 @@
   "use strict";
 
   const WK_APP_ID = "weed-kl";
-  const WK_VERSION = "2026-07-28-weed-role-lock-v80";
+  const WK_VERSION = "2026-08-17-weed-jk-shop-seed-fix-v475";
   const WK_BACKUP_PREFIX = "lifebuilder-weedkl";
   const WK_BASE_CUSTOMERS = 4;
   const WK_MAX_CUSTOMERS = 14;
@@ -67,7 +67,8 @@
     { id: "jack-herer", name: "Jack Herer", seedPrice: 24, sellPrice: 52, tier: 7, accent: "#b7e66e", rarity: "Imperial" },
     { id: "sour-diesel", name: "Sour Diesel", seedPrice: 28, sellPrice: 58, tier: 8, accent: "#e2df65", rarity: "Legendär" },
     { id: "mimosa", name: "Mimosa", seedPrice: 30, sellPrice: 62, tier: 8, accent: "#ffb45e", rarity: "Legendär" },
-    { id: "lemon-cherry-gelato", name: "Lemon Cherry Gelato", seedPrice: 35, sellPrice: 68, tier: 8, accent: "#ff7f9f", rarity: "Legendär" }
+    { id: "lemon-cherry-gelato", name: "Lemon Cherry Gelato", seedPrice: 35, sellPrice: 68, tier: 8, accent: "#ff7f9f", rarity: "Legendär" },
+    { id: "growline", name: "Growline", seedPrice: 0, sellPrice: 75, tier: 9, accent: "#b56dff", rarity: "JK Exclusive", jkOnly: true }
   ];
 
   const WK_SUPPLY_ITEMS = [
@@ -83,7 +84,7 @@
     yield: { label: "Erntequalität", icon: "✦", max: 5, costs: [450, 850, 1400, 2150, 3200], text: (level) => `+${level * 5}% Ertrag bei jedem Schnitt.` },
     customers: { label: "Kundennetzwerk", icon: "●", max: 5, costs: [300, 650, 1100, 1750, 2600], text: (level) => `Neue Anfragen ungefähr alle ${Math.max(14, 36 - level * 4)} Sekunden.` },
     orders: { label: "Großbestellungen", icon: "▤", max: 3, costs: [550, 1100, 2000], text: (level) => `Kunden können bis zu ${Math.min(4, 1 + level)} Sorten gleichzeitig anfragen.` },
-    market: { label: "Sortenmarkt", icon: "◇", max: 4, costs: [650, 1300, 2200, 3500], text: (level) => `${WK_STRAINS.filter((strain) => strain.tier <= level).length} Basissorten im Shop freigeschaltet.` },
+    market: { label: "Sortenmarkt", icon: "◇", max: 4, costs: [650, 1300, 2200, 3500], text: (level) => `${WK_STRAINS.filter((strain) => !strain.jkOnly && strain.tier <= level).length} Basissorten im Shop freigeschaltet.` },
     discount: { label: "Einkaufsrabatt", icon: "%", max: 4, costs: [450, 900, 1650, 2750], text: (level) => `${level * 3}% Rabatt auf Shop-Einkäufe.` },
     autoWater: { label: "Gießanlage", icon: "⌁", max: 3, costs: [1200, 2400, 4200], text: (level) => level ? `Gießt automatisch alle ${[0, 30, 20, 12][level]} Sekunden eine bereite Pflanze.` : "Automatisches Gießen ist noch nicht aktiv." },
     reservoir: { label: "Wasserrecycling", icon: "♒", max: 4, costs: [400, 800, 1400, 2300], text: (level) => `${level * 8}% Chance, dass ein Gießvorgang kein Wasser verbraucht.` },
@@ -158,6 +159,7 @@
       supplies: { pot: 0, soil: 0, water: 0 },
       seeds: { basic: 0 },
       inventory: {},
+      jkCoin: { galaxyGrowLights: 0, premiumSupplyCrates: 0, largeSeedPacks: 0, seedVaultPacks: 0, growlineSeedsBought: 0, galaxyBusinessPacks: 0 },
       plants: [],
       customers: [],
       upgrades: { slots: 0, watering: 0, yield: 0, customers: 0, orders: 1, market: 0, discount: 0, autoWater: 0, reservoir: 0, recovery: 0, quality: 0, soilSaver: 0, storage: 0, security: 0, safety: 0, packaging: 0 },
@@ -181,6 +183,7 @@
       supplies: { ...base.supplies, ...(data.supplies || {}) },
       seeds: { ...base.seeds, ...(data.seeds || {}) },
       inventory: { ...(data.inventory || {}) },
+      jkCoin: { ...base.jkCoin, ...(data.jkCoin || {}) },
       upgrades: { ...base.upgrades, ...(data.upgrades || {}) },
       eliteUpgrades: { ...base.eliteUpgrades, ...(data.eliteUpgrades || {}) },
       stats: { ...base.stats, ...(data.stats || {}) },
@@ -198,6 +201,9 @@
     WK_STRAINS.forEach((strain) => {
       normalized.seeds[strain.id] = Math.max(0, Math.floor(Number(normalized.seeds[strain.id] || 0)));
       normalized.inventory[strain.id] = Math.max(0, Math.floor(Number(normalized.inventory[strain.id] || 0)));
+    });
+    ["galaxyGrowLights", "premiumSupplyCrates", "largeSeedPacks", "seedVaultPacks", "growlineSeedsBought", "galaxyBusinessPacks"].forEach((key) => {
+      normalized.jkCoin[key] = Math.max(0, Math.floor(Number(normalized.jkCoin[key] || 0)));
     });
     Object.entries(WK_UPGRADES).forEach(([id, upgrade]) => {
       normalized.upgrades[id] = Math.max(0, Math.min(upgrade.max, Math.floor(Number(normalized.upgrades[id] || 0))));
@@ -253,9 +259,6 @@
     const backup = wkReadBackup();
     const chosen = backup && Number(backup.updatedAtMs || 0) > Number(saveState.updatedAtMs || 0) ? backup : saveState;
     state.weedKL = chosen;
-    state.weedKL.jkCoin ||= { galaxyGrowLights:0, premiumSupplyCrates:0 };
-    state.weedKL.jkCoin.galaxyGrowLights=Math.max(0,Math.floor(Number(state.weedKL.jkCoin.galaxyGrowLights)||0));
-    state.weedKL.jkCoin.premiumSupplyCrates=Math.max(0,Math.floor(Number(state.weedKL.jkCoin.premiumSupplyCrates)||0));
     return state.weedKL;
   }
 
@@ -686,7 +689,13 @@
   }
 
   function wkRandomCustomer(data = wkState()) {
-    const unlocked = WK_STRAINS.filter((strain) => strain.tier <= wkMarketTier(data));
+    const regular = WK_STRAINS.filter((strain) => !strain.jkOnly && strain.tier <= wkMarketTier(data));
+    const exclusive = WK_STRAINS.filter((strain) => strain.jkOnly && (
+      Number(data?.seeds?.[strain.id] || 0) > 0 ||
+      Number(data?.inventory?.[strain.id] || 0) > 0 ||
+      data?.plants?.some((plant) => plant.strainId === strain.id)
+    ));
+    const unlocked = [...regular, ...exclusive];
     const maxLines = Math.min(wkMaxOrderLines(data), unlocked.length);
     const master = wkEliteUnlocked(data);
     const vip = master && Math.random() < .32;
@@ -959,6 +968,7 @@
     const master = wkEliteUnlocked(data);
     return `<div class="wk-page">
       <section class="wk-page-head"><div><small>SHOP</small><h2>Material & Samen</h2><p>Betriebskapital: <b>${wkEuro(wkCapital(data))}</b> · Bargeld: <b>${wkEuro(wkPlayerCash())}</b> · Einkaufsrabatt ${Math.round(wkDiscount(data) * 100)}%</p></div></section>
+      <section class="wk-jk-shop-entry"><div><small>JK.GAMES PREMIUM</small><h3>JK Shop</h3><p>Großes Samenpaket, exklusive Growline-Samen, Growlichter und Premium-Material.</p></div><button type="button" class="jkc-game-inline-button wk-jk-shop-button" data-wk-open-jk-shop title="Weed Business JK Shop öffnen">JK</button></section>
       <section class="wk-starter-card"><span>🌱</span><div><small>START OHNE GRATISGELD</small><h3>Business-Starter-Set</h3><p>1 Topf, 1 Erde, 50 Wasser und 2 Basic-Samen. Bezahlt aus deinem eingezahlten Bargeld.</p></div><strong>${wkEuro(wkShopPrice(75, data))}</strong><button data-wk-buy-starter>Starter-Set kaufen</button></section>
       <section class="wk-shop-section"><header><h3>Verbrauchsmaterial</h3><small>Alles wird aus dem eingezahlten Betriebskapital bezahlt.</small></header><div class="wk-material-stock-v77">
         <span><i>◉</i><small>Blumentöpfe</small><b>${Number(data.supplies.pot || 0)}</b></span>
@@ -968,9 +978,9 @@
       </div><div class="wk-shop-grid">
         ${WK_SUPPLY_ITEMS.map((item) => `<article><span>${item.icon}</span><div><b>${item.label}</b><em>Besitz: ${Number(data.supplies[item.id] || 0)}${item.id === "water" ? " Einheiten" : ""}</em><small>${item.text}</small></div><strong>${wkEuro(wkShopPrice(item.price, data))}</strong><button data-wk-buy-supply="${item.id}" data-wk-amount="${item.amount}" data-wk-price="${item.price}">Kaufen</button></article>`).join("")}
       </div></section>
-      ${master ? `<section class="wk-master-banner"><span>★</span><div><small>MASTER-SORTENMARKT</small><h3>Neue Premium-Samen freigeschaltet</h3><p>Zwölf zusätzliche Sorten werden stufenweise über den Master-Sortenmarkt verfügbar.</p></div><b>${WK_STRAINS.filter((strain) => strain.tier <= marketLevel).length}/24</b></section>` : ""}
+      ${master ? `<section class="wk-master-banner"><span>★</span><div><small>MASTER-SORTENMARKT</small><h3>Neue Premium-Samen freigeschaltet</h3><p>Zwölf zusätzliche Sorten werden stufenweise über den Master-Sortenmarkt verfügbar.</p></div><b>${WK_STRAINS.filter((strain) => !strain.jkOnly && strain.tier <= marketLevel).length}/24</b></section>` : ""}
       <section class="wk-shop-section"><header><h3>Samenkatalog</h3><small>${master ? "Basis- und Master-Sorten mit deutlich höheren Spielwerten." : "Startsorten plus weitere Freischaltungen über den Sortenmarkt."}</small></header><div class="wk-seed-grid">
-        ${WK_STRAINS.map((strain) => {
+        ${WK_STRAINS.filter((strain) => !strain.jkOnly).map((strain) => {
           const unlocked = strain.tier <= marketLevel;
           const lockName = strain.tier <= 4 ? `Markt ${strain.tier}` : `Master ${strain.tier - 4}`;
           return `<article class="${unlocked ? "" : "locked"} ${strain.tier > 4 ? "master-strain" : ""}" style="--wk-accent:${strain.accent}"><span></span><div><small>${strain.rarity}</small><b>${wkEscape(strain.name)}</b><em>Besitz: ${Number(data.seeds[strain.id] || 0)} Samen</em><i>Spielwert ${wkEuro(strain.sellPrice)}/g</i></div><strong>${unlocked ? wkEuro(wkShopPrice(strain.seedPrice, data)) : lockName}</strong><button data-wk-buy-seed="${strain.id}" ${unlocked ? "" : "disabled"}>${unlocked ? "Samen kaufen" : "Gesperrt"}</button></article>`;
@@ -1198,6 +1208,13 @@
     overlay.classList.add("show");
     document.body.classList.add("wk-open");
     wkStartTimers();
+    // V475: Bereits bezahlte JK-Shop-Inhalte sofort nachladen, sobald WeedKL wirklich bereit ist.
+    setTimeout(() => {
+      try {
+        window.JKCoinApp?.applyPendingGameEntitlements?.();
+        wkRepairLegacyJkSeedPurchases();
+      } catch (error) { console.warn("Weed Business JK-Entitlements", error); }
+    }, 0);
   }
 
   function wkClose() {
@@ -1233,6 +1250,11 @@
     if (target.matches("[data-wk-deposit]")) return wkDeposit(target.dataset.wkDeposit);
     if (target.matches("[data-wk-withdraw]")) return wkWithdraw(target.dataset.wkWithdraw);
     if (target.matches("[data-wk-danger]")) return wkReduceDanger(Number(target.dataset.wkDanger), Number(target.dataset.wkDangerCost));
+    if (target.matches("[data-wk-open-jk-shop]")) {
+      const opened = window.JKCoinApp?.openForGame?.("weed");
+      if (opened !== true) wkToast("JK Shop wird noch geladen. Bitte gleich noch einmal versuchen.");
+      return;
+    }
     if (target.matches("[data-wk-buy-starter]")) return wkBuyStarterSet();
     if (target.matches("[data-wk-buy-supply]")) return wkBuySupply(target.dataset.wkBuySupply, Number(target.dataset.wkAmount), Number(target.dataset.wkPrice));
     if (target.matches("[data-wk-buy-seed]")) return wkBuySeed(target.dataset.wkBuySeed);
@@ -1397,16 +1419,105 @@
     return { ok: true, message: "Weed-Business-Testaktion ausgeführt.", snapshot: wkAdminSnapshot() };
   }
 
+  function wkGrantLargeSeedPack(data, packs = 1) {
+    const count = Math.max(1, Math.floor(Number(packs) || 1));
+    const regularStrains = WK_STRAINS.filter((strain) => !strain.jkOnly);
+    regularStrains.forEach((strain) => {
+      data.seeds[strain.id] = Number(data.seeds[strain.id] || 0) + count * 6;
+    });
+    // Basic bekommt zusätzlich einen Startbonus, damit das große Paket auch direkt nutzbar ist.
+    data.seeds.basic = Number(data.seeds.basic || 0) + count * 20;
+    data.jkCoin.largeSeedPacks = Number(data.jkCoin.largeSeedPacks || 0) + count;
+  }
+
   function wkGrantJkCoinPurchase(kind, amount = 1) {
-    const data = wkState(); if (!data) return false; amount = Math.max(1, Math.floor(Number(amount) || 1));
-    if (kind === "growLight") { data.jkCoin.galaxyGrowLights += amount; data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), amount)); }
-    else if (kind === "supplyCrate") { data.jkCoin.premiumSupplyCrates += amount; data.seeds.basic = Number(data.seeds.basic || 0) + amount * 8; data.supplies.pot = Number(data.supplies.pot || 0) + amount * 5; data.supplies.soil = Number(data.supplies.soil || 0) + amount * 5; data.supplies.water = Number(data.supplies.water || 0) + amount * 20; }
-    else if (kind === "seedPack") { for (const key of Object.keys(data.seeds || {})) data.seeds[key] = Number(data.seeds[key] || 0) + amount * 6; data.seeds.basic = Number(data.seeds.basic || 0) + amount * 20; }
-    else if (kind === "waterPack") data.supplies.water = Number(data.supplies.water || 0) + amount;
-    else if (kind === "soilPack") { data.supplies.soil = Number(data.supplies.soil || 0) + amount; data.supplies.pot = Number(data.supplies.pot || 0) + amount; }
-    else if (kind === "galaxyBusinessPack") { data.jkCoin.galaxyGrowLights += amount; data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), 2)); data.seeds.basic = Number(data.seeds.basic || 0) + amount * 30; data.supplies.pot = Number(data.supplies.pot || 0) + amount * 20; data.supplies.soil = Number(data.supplies.soil || 0) + amount * 20; data.supplies.water = Number(data.supplies.water || 0) + amount * 100; }
-    else return false;
-    wkPersist(); if (wkRuntime.overlay?.classList.contains("show")) wkRender(); return true;
+    const data = wkState();
+    if (!data) return false;
+    amount = Math.max(1, Math.floor(Number(amount) || 1));
+    if (kind === "growLight") {
+      data.jkCoin.galaxyGrowLights += amount;
+      data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), amount));
+    } else if (kind === "supplyCrate") {
+      data.jkCoin.premiumSupplyCrates += amount;
+      data.seeds.basic = Number(data.seeds.basic || 0) + amount * 8;
+      data.supplies.pot = Number(data.supplies.pot || 0) + amount * 5;
+      data.supplies.soil = Number(data.supplies.soil || 0) + amount * 5;
+      data.supplies.water = Number(data.supplies.water || 0) + amount * 20;
+    } else if (kind === "seedPack") {
+      data.jkCoin.seedVaultPacks = Number(data.jkCoin.seedVaultPacks || 0) + amount;
+      wkGrantLargeSeedPack(data, amount);
+    } else if (kind === "growlineSeeds") {
+      data.seeds.growline = Number(data.seeds.growline || 0) + amount;
+      data.jkCoin.growlineSeedsBought = Number(data.jkCoin.growlineSeedsBought || 0) + amount;
+    } else if (kind === "waterPack") {
+      data.supplies.water = Number(data.supplies.water || 0) + amount;
+    } else if (kind === "soilPack") {
+      data.supplies.soil = Number(data.supplies.soil || 0) + amount;
+      data.supplies.pot = Number(data.supplies.pot || 0) + amount;
+    } else if (kind === "galaxyBusinessPack") {
+      data.jkCoin.galaxyBusinessPacks = Number(data.jkCoin.galaxyBusinessPacks || 0) + amount;
+      data.jkCoin.galaxyGrowLights += amount;
+      data.upgrades.autoWater = Math.min(WK_UPGRADES.autoWater.max, Math.max(Number(data.upgrades.autoWater || 0), 2));
+      // Das Paket verspricht einen Samentresor: deshalb wird jetzt wirklich ein großes Samenpaket je Kauf gutgeschrieben.
+      wkGrantLargeSeedPack(data, amount);
+      data.seeds.growline = Number(data.seeds.growline || 0) + amount * 3;
+      data.jkCoin.growlineSeedsBought = Number(data.jkCoin.growlineSeedsBought || 0) + amount * 3;
+      data.supplies.pot = Number(data.supplies.pot || 0) + amount * 20;
+      data.supplies.soil = Number(data.supplies.soil || 0) + amount * 20;
+      data.supplies.water = Number(data.supplies.water || 0) + amount * 100;
+    } else return false;
+    wkPersist();
+    if (wkRuntime.overlay?.classList.contains("show")) wkRender();
+    const label = kind === "seedPack" ? "Großes Samenpaket gutgeschrieben."
+      : kind === "growlineSeeds" ? `${amount} Growline-Samen gutgeschrieben.`
+      : kind === "galaxyBusinessPack" ? "Galaxy-Business-Paket vollständig gutgeschrieben."
+      : "JK-Shop-Inhalt gutgeschrieben.";
+    wkToast(label);
+    return true;
+  }
+
+  function wkRepairLegacyJkSeedPurchases() {
+    const coin = window.JKCoinApp?.coinState?.();
+    const data = wkState();
+    if (!coin || !data) return false;
+    let changed = false;
+    let repairedSeedPacks = 0;
+    let repairedStarterPacks = 0;
+
+    // V475: Käufe aus älteren Versionen waren im JK-Shop bereits als „angewendet“ markiert,
+    // obwohl der alte Weed-Grant das große Samenpaket nicht vollständig geliefert hat.
+    const vaultTotal = Math.max(0, Math.floor(Number(coin.entitlements?.["weed-seed-vault"] || 0)));
+    const vaultTracked = Math.max(0, Math.floor(Number(data.jkCoin.seedVaultPacks || 0)));
+    if (vaultTotal > vaultTracked) {
+      const missing = vaultTotal - vaultTracked;
+      data.jkCoin.seedVaultPacks = vaultTotal;
+      wkGrantLargeSeedPack(data, missing);
+      repairedSeedPacks += missing;
+      changed = true;
+    }
+
+    const starterTotal = Math.max(0, Math.floor(Number(coin.entitlements?.["weed-starter"] || 0)));
+    const starterTracked = Math.max(0, Math.floor(Number(data.jkCoin.galaxyBusinessPacks || 0)));
+    if (starterTotal > starterTracked) {
+      const missing = starterTotal - starterTracked;
+      // Alte Galaxy-Business-Pakete hatten Growlicht/Material bereits erhalten.
+      // Nachgeliefert werden nur die damals fehlenden versprochenen Sameninhalte.
+      data.jkCoin.galaxyBusinessPacks = starterTotal;
+      wkGrantLargeSeedPack(data, missing);
+      data.seeds.growline = Number(data.seeds.growline || 0) + missing * 3;
+      data.jkCoin.growlineSeedsBought = Number(data.jkCoin.growlineSeedsBought || 0) + missing * 3;
+      repairedStarterPacks += missing;
+      changed = true;
+    }
+
+    if (!changed) return false;
+    wkPersist();
+    if (wkRuntime.overlay?.classList.contains("show")) wkRender();
+    const parts = [];
+    if (repairedSeedPacks) parts.push(`${repairedSeedPacks} großes Samenpaket${repairedSeedPacks === 1 ? "" : "e"}`);
+    if (repairedStarterPacks) parts.push(`${repairedStarterPacks} Galaxy-Business-Paket${repairedStarterPacks === 1 ? "" : "e"}`);
+    wkToast(`JK-Shop-Reparatur: ${parts.join(" + ")} nachgeliefert.`);
+    return true;
   }
 
   window.WeedKL = {
@@ -1423,7 +1534,7 @@
         capital: wkCapital(data), danger: Number(data.danger || 0), plants: data.plants.length,
         slots: wkUnlockedSlots(data), grams: wkInventoryGrams(data), master: wkEliteUnlocked(data),
         wateringSeconds: wkWaterCooldownMs(data) / 1000, customerSeconds: wkCustomerIntervalMs(data) / 1000,
-        customerSlots: wkMaxCustomers(data), orderLines: wkMaxOrderLines(data), strains: WK_STRAINS.filter((strain) => strain.tier <= wkMarketTier(data)).length,
+        customerSlots: wkMaxCustomers(data), orderLines: wkMaxOrderLines(data), strains: WK_STRAINS.filter((strain) => !strain.jkOnly && strain.tier <= wkMarketTier(data)).length,
         discountPercent: Math.round(wkDiscount(data) * 100), yieldPercent: Math.round(wkYieldBonus(data) * 100),
         soilSavePercent: Math.round(wkSoilSaveChance(data) * 100), customerWaitSeconds: wkCustomerExtraWaitSeconds(data)
       } : null;
@@ -1443,6 +1554,14 @@
       open: wkOpen
     }
   };
+
+  // Falls der JK/Coin-Shop vor WeedKL geladen wurde, können ausstehende Käufe jetzt angewendet werden.
+  setTimeout(() => {
+    try {
+      window.JKCoinApp?.applyPendingGameEntitlements?.();
+      wkRepairLegacyJkSeedPurchases();
+    } catch (error) { console.warn("Weed Business JK-Entitlements Init", error); }
+  }, 250);
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && wkRuntime.overlay?.classList.contains("show")) wkClose();
