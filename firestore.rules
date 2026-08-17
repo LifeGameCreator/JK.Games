@@ -3359,13 +3359,13 @@ service cloud.firestore {
     }
 
 
-    // V472: Escape.kl Online-Multiplayer. Ein einziges kleines Presence-Dokument
-    // pro Account wird immer wieder überschrieben. Dadurch wächst Firebase nicht
-    // mit jeder Bewegung weiter an. Nur angemeldete Spieler dürfen lesen und jeder
-    // Spieler darf ausschließlich seine eigene Live-Position schreiben.
-    match /escapeKlPresenceV472/{uid} {
-      allow get, list: if jkSignedIn();
-      allow create, update: if jkSignedIn()
+    // V474: Escape.kl Online-Multiplayer Presence fuer die benannte Datenbank gamekl.
+    // Ein Spieler darf ausschliesslich sein eigenes kleines Presence-Dokument schreiben.
+    // Positionswerte sind absichtlich grosszuegiger als V472, damit hohe Speed-/Admin-Werte
+    // nicht versehentlich mit PERMISSION_DENIED abgewiesen werden.
+    match /escapeKlPresenceV474/{uid} {
+      allow get, list: if request.auth != null;
+      allow create, update: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
           "uid", "sessionId", "online", "worldId",
@@ -3374,56 +3374,56 @@ service cloud.firestore {
           "gender", "characterChoice", "displayName",
           "updatedAtMs", "version"
         ])
-        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid == uid
         && request.resource.data.sessionId is string
         && request.resource.data.sessionId.size() > 0
-        && request.resource.data.sessionId.size() <= 80
+        && request.resource.data.sessionId.size() <= 100
         && request.resource.data.online is bool
         && request.resource.data.worldId in [
           "hub", "keyboard-lab", "candy-keys", "toxic-keyboard", "only-up", "race"
         ]
         && request.resource.data.x is number
-        && request.resource.data.x >= -5000
-        && request.resource.data.x <= 5000
+        && request.resource.data.x >= -10000
+        && request.resource.data.x <= 10000
         && request.resource.data.y is number
-        && request.resource.data.y >= -100
-        && request.resource.data.y <= 1200
+        && request.resource.data.y >= -1000
+        && request.resource.data.y <= 5000
         && request.resource.data.z is number
-        && request.resource.data.z >= -3500
-        && request.resource.data.z <= 1000
+        && request.resource.data.z >= -10000
+        && request.resource.data.z <= 5000
         && request.resource.data.yaw is number
-        && request.resource.data.yaw >= -100
-        && request.resource.data.yaw <= 100
+        && request.resource.data.yaw >= -1000
+        && request.resource.data.yaw <= 1000
         && request.resource.data.vx is number
-        && request.resource.data.vx >= -100
-        && request.resource.data.vx <= 100
+        && request.resource.data.vx >= -5000
+        && request.resource.data.vx <= 5000
         && request.resource.data.vy is number
-        && request.resource.data.vy >= -100
-        && request.resource.data.vy <= 100
+        && request.resource.data.vy >= -5000
+        && request.resource.data.vy <= 5000
         && request.resource.data.vz is number
-        && request.resource.data.vz >= -100
-        && request.resource.data.vz <= 100
+        && request.resource.data.vz >= -5000
+        && request.resource.data.vz <= 5000
         && request.resource.data.grounded is bool
         && request.resource.data.sprint is bool
         && request.resource.data.speed is number
         && request.resource.data.speed >= 0
-        && request.resource.data.speed <= 10000
+        && request.resource.data.speed <= 50000
         && request.resource.data.stage is int
         && request.resource.data.stage >= 0
-        && request.resource.data.stage <= 500
+        && request.resource.data.stage <= 5000
         && request.resource.data.gender in ["male", "female"]
         && request.resource.data.characterChoice is string
         && request.resource.data.characterChoice.size() > 0
-        && request.resource.data.characterChoice.size() <= 40
+        && request.resource.data.characterChoice.size() <= 80
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
-        && request.resource.data.displayName.size() <= 50
+        && request.resource.data.displayName.size() <= 80
         && request.resource.data.updatedAtMs is int
         && request.resource.data.updatedAtMs > 0
         && request.resource.data.version is string
         && request.resource.data.version.size() > 0
-        && request.resource.data.version.size() <= 80;
-      allow delete: if jkSignedIn() && request.auth.uid == uid;
+        && request.resource.data.version.size() <= 100;
+      allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
     // ===== JK.GAMES JK/COIN REGELN END =====

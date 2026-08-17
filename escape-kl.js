@@ -7,7 +7,7 @@ import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escap
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* Escape.kl – JK.Games Top Game V473 · Instant Respawn + 20 JK/Coin Return */
-const VERSION = '2026-08-17-v473';
+const VERSION = '2026-08-17-v474';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -38,7 +38,7 @@ const DAY_NIGHT_CYCLE_SECONDS = 300;
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
 const SKYRUN_MILESTONE_REWARDS = Object.freeze([250,500,1000,2000,3500,5000,7500,10000,15000]);
-const ESCAPE_PRESENCE_COLLECTION = 'escapeKlPresenceV472';
+const ESCAPE_PRESENCE_COLLECTION = 'escapeKlPresenceV474';
 const ESCAPE_ONLINE_ACTIVE_WRITE_MS = 1200;
 const ESCAPE_ONLINE_SOLO_WRITE_MS = 5000;
 const ESCAPE_ONLINE_HEARTBEAT_MS = 10000;
@@ -180,8 +180,10 @@ function escapeOnlinePresenceKey(payload){
 }
 async function publishEscapePresence(force=false,online=true){
   if(!G.overlay||!G.onlineFb||!G.onlineUser?.uid||G.onlineWriteInFlight)return false;
+  const now=Date.now();
+  if(!force&&now<Number(G.onlinePermissionRetryAt||0))return false;
   const fb=G.onlineFb;if(typeof fb.presenceSetRest!=='function')return false;
-  const now=Date.now(),payload=escapeOnlinePresencePayload(online),key=escapeOnlinePresenceKey(payload),activePeers=G.remotePlayers.size>0;
+  const payload=escapeOnlinePresencePayload(online),key=escapeOnlinePresenceKey(payload),activePeers=G.remotePlayers.size>0;
   const minGap=activePeers?ESCAPE_ONLINE_ACTIVE_WRITE_MS:ESCAPE_ONLINE_SOLO_WRITE_MS;
   const changed=key!==G.onlineLastKey,heartbeat=now-G.onlineLastWriteAt>=ESCAPE_ONLINE_HEARTBEAT_MS;
   if(!force&&(!changed||now-G.onlineLastWriteAt<minGap)&&!heartbeat)return false;
@@ -192,7 +194,16 @@ async function publishEscapePresence(force=false,online=true){
     return true;
   }catch(error){
     G.onlineLastError=String(error?.message||error||'');
-    if(!/abort|offline|network/i.test(G.onlineLastError))console.warn('Escape.kl Presence schreiben',error);
+    const denied=/403|permission[_ -]?denied|missing or insufficient permissions/i.test(G.onlineLastError);
+    if(denied){
+      G.onlinePermissionRetryAt=Date.now()+30000;
+      const last=Number(G.onlinePermissionWarnAt||0);
+      if(Date.now()-last>28000){
+        G.onlinePermissionWarnAt=Date.now();
+        console.warn('Escape.kl Multiplayer: Firestore-Presence ist in Datenbank gamekl noch nicht freigeschaltet. Bitte V474 firestore.rules fuer gamekl veroeffentlichen.');
+      }
+      setEscapeOnlineHud('offline',1+G.remotePlayers.size,'Firebase-Regel fuer Escape Presence fehlt/ist noch nicht aktiv · neuer Versuch in 30 s');
+    }else if(!/abort|offline|network/i.test(G.onlineLastError))console.warn('Escape.kl Presence schreiben',error);
     return false;
   }finally{G.onlineWriteInFlight=false}
 }
