@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V477 · Dual-Pets + Follow-Animation */
-const VERSION = '2026-08-17-v477';
+/* Escape.kl – JK.Games Top Game V478 · Reliable JK/Coin Platform Revive */
+const VERSION = '2026-08-17-v478';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -33,7 +33,7 @@ const CAMERA_PITCH_MAX = .78;
 const TOUCH_LOOK_SENSITIVITY_X = .0062;
 const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
-const REVIVE_COSTS = Object.freeze({'keyboard-lab':20,'candy-keys':20,'toxic-keyboard':20});
+const REVIVE_COSTS = Object.freeze({'keyboard-lab':100,'candy-keys':200,'toxic-keyboard':300});
 const DAY_NIGHT_CYCLE_SECONDS = 300;
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
@@ -128,7 +128,7 @@ const G = {
   keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
   yaw:0, pitch:.32, camDistance:7.2, pointer:null,lookPointer:null,lookTouchId:null,
   keyDown:null,keyUp:null,resizeHandler:null,orientationHandler:null,pointerMove:null,pointerUp:null,stickMove:null,stickUp:null,stickTouchMove:null,stickTouchEnd:null,lookTouchMove:null,lookTouchEnd:null,
-  lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,revivePending:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
+  lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,reviveOfferWorld:'',reviveOfferPlatformUuid:'',revivePending:false,revivePurchaseBusy:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
   prompt:null, activeInteractable:null, toastTimer:0, paused:false, modalOpen:false,
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
@@ -1334,9 +1334,12 @@ function enterWorld(id){
 function teleport(x,y,z){G.pos.set(x,y,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.lastGroundedAt=0;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.lastGroundPos.copy(G.pos);G.trailPoints=[];G.trailEmitCarry=0;for(const tp of G.trailParticles||[]){tp.age=tp.life;tp.mesh.visible=false;}if(G.playerRoot)G.playerRoot.position.copy(G.pos);}
 function reviveCostForWorld(id=G.world){return Math.max(0,Number(REVIVE_COSTS[id])||0);}
 function clearReviveUi(){G.overlay?.querySelector('[data-ekl-revive]')?.remove();}
-function cancelReviveOffer(unpause=true){
+function clearReviveSnapshot(){
+  G.reviveOfferSupport=null;G.reviveOfferOffsetX=0;G.reviveOfferOffsetZ=0;G.reviveOfferStageClaims=null;G.reviveOfferWorld='';G.reviveOfferPlatformUuid='';G.revivePurchaseBusy=false;
+}
+function cancelReviveOffer(unpause=true,{keepSnapshot=false}={}){
   if(G.reviveTimer){clearTimeout(G.reviveTimer);G.reviveTimer=0;}if(G.reviveTicker){clearInterval(G.reviveTicker);G.reviveTicker=0;}
-  G.revivePending=false;clearReviveUi();if(unpause)G.paused=false;
+  G.revivePending=false;clearReviveUi();if(!keepSnapshot)clearReviveSnapshot();if(unpause)G.paused=false;
 }
 function resetEscapeRun({countDeath=true,showToast=true}={}){
   const w=currentWorldDef();if(!w)return;
@@ -1351,53 +1354,82 @@ function resetEscapeRun({countDeath=true,showToast=true}={}){
 function updateReviveCard(){
   const card=G.overlay?.querySelector('[data-ekl-revive]');if(!card||!G.revivePending)return;
   const left=Math.max(0,G.reviveDeadline-Date.now()),seconds=(left/1000).toFixed(1).replace('.',',');
-  const balance=Math.max(0,Math.floor(Number(window.JKCoinApp?.coinState?.()?.balance)||0)),cost=reviveCostForWorld();
+  const balance=Math.max(0,Math.floor(Number(window.JKCoinApp?.coinState?.()?.balance)||0)),cost=reviveCostForWorld(G.reviveOfferWorld||G.world);
   const time=card.querySelector('[data-ekl-revive-time]'),wallet=card.querySelector('[data-ekl-revive-wallet]'),button=card.querySelector('[data-ekl-revive-buy]');
   if(time)time.textContent=`${seconds}s`;
   if(wallet)wallet.textContent=`${balance.toLocaleString('de-DE')} JK/Coin verfügbar`;
-  if(button){button.disabled=balance<cost;button.textContent=balance>=cost?`${cost} JK/Coin · ZURÜCK`:`${cost} JK/Coin benötigt`;}
+  if(button){button.disabled=G.revivePurchaseBusy||balance<cost||left<=0;button.textContent=G.revivePurchaseBusy?'RÜCKKEHR …':balance>=cost?`${cost} JK/Coin · ZURÜCK`:`${cost} JK/Coin benötigt`;}
 }
 function finishReviveWindow(){
   if(!G.revivePending)return;
-  // V473: Der Spieler ist bereits sofort am Weltstart und darf weiterspielen.
-  // Nach 5 Sekunden verschwindet nur noch das optionale 20-JK/Coin-Rueckkehrangebot.
+  // Nach 5 Sekunden verschwindet nur das optionale JK/Coin-Rueckkehrangebot.
   cancelReviveOffer(false);G.paused=false;
 }
-function tryReviveWithJk(){
-  if(!G.revivePending||!isEscapeWorld())return false;
-  const cost=reviveCostForWorld(),w=currentWorldDef(),spend=window.JKCoinApp?.spend;
+function resolveReviveTarget(){
+  if(!G.revivePending||!isEscapeWorld())return null;
+  if(!G.reviveOfferWorld||G.reviveOfferWorld!==G.world)return null;
+  const anchor=G.reviveOfferAnchor.clone(),stage=Math.max(1,Number(G.reviveOfferStage)||1),yaw=Number(G.reviveOfferYaw)||0;
+  let support=G.reviveOfferSupport;
+  if(support&&(!G.platforms.includes(support)||support.scope!==G.world||!support.mesh))support=null;
+  if(support){
+    anchor.set(
+      support.mesh.position.x+Number(G.reviveOfferOffsetX||0),
+      support.mesh.position.y+support.h/2+PLAYER_HALF+.12,
+      support.mesh.position.z+Number(G.reviveOfferOffsetZ||0)
+    );
+  }
+  if(!Number.isFinite(anchor.x)||!Number.isFinite(anchor.y)||!Number.isFinite(anchor.z))return null;
+  return {anchor,support,stage,yaw,claims:G.reviveOfferStageClaims instanceof Set?new Set(G.reviveOfferStageClaims):new Set()};
+}
+function placePlayerOnReviveTarget(target){
+  if(!target)return false;
+  const {anchor,support,stage,yaw,claims}=target;
+  teleport(anchor.x,anchor.y,anchor.z);G.stage=stage;G.stageClaims=claims;G.runFurthestZ=Math.min(Number.isFinite(G.runFurthestZ)?G.runFurthestZ:anchor.z,anchor.z);
+  if(G.playerRoot){G.playerRoot.rotation.y=yaw;G.playerRoot.position.copy(G.pos);}
+  // V478: Ein bezahlter Revive landet nicht nur optisch an der Stelle, sondern wird
+  // fuer den naechsten Physik-Frame explizit als sicherer Plattformkontakt gesetzt.
+  G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;
+  G.grounded=!!support;G.support=support;G.lastSupport=support;G.lastGroundedAt=performance.now();G.coyoteAvailable=!!support;G.lastGroundPos.copy(G.pos);
+  G.reviveAnchor.copy(anchor);G.reviveSupport=support;G.reviveOffsetX=support?anchor.x-support.mesh.position.x:0;G.reviveOffsetZ=support?anchor.z-support.mesh.position.z:0;G.reviveStage=stage;G.reviveYaw=yaw;
+  if(support)support.lastContactAt=performance.now();
+  return true;
+}
+function tryReviveWithJk(event){
+  event?.preventDefault?.();event?.stopPropagation?.();
+  if(!G.revivePending||G.revivePurchaseBusy||!isEscapeWorld())return false;
+  if(Date.now()>Number(G.reviveDeadline||0)){finishReviveWindow();return toast('Die 5 Sekunden sind abgelaufen.','bad',1500),false;}
+  const target=resolveReviveTarget();
+  if(!target)return toast('Die letzte sichere Plattform konnte nicht mehr gefunden werden. Es wurden keine JK/Coin abgezogen.','bad',2200),false;
+  const worldId=G.reviveOfferWorld||G.world,w=escapeWorldById(worldId),cost=reviveCostForWorld(worldId),spend=window.JKCoinApp?.spend;
   if(typeof spend!=='function')return toast('JK/Coin-System ist noch nicht bereit.','bad',1600),false;
   const balance=Math.max(0,Math.floor(Number(window.JKCoinApp?.coinState?.()?.balance)||0));
   if(balance<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} JK/Coin.`,'bad',1600),false;
-  if(spend.call(window.JKCoinApp,cost,`Escape.kl · World ${w?.number||'?'} Rückkehr zur letzten Plattform`)!==true)return toast('Rückkehr konnte nicht bezahlt werden.','bad',1600),false;
-  // V476: Das bezahlte Rueckkehrziel wird beim Sturz separat eingefroren und kann nicht mehr
-  // durch die sofortige Weiterbewegung am Weltstart ueberschrieben werden.
-  const elapsed=Math.max(0,performance.now()-G.reviveStartedAt),anchor=G.reviveOfferAnchor.clone(),stage=Math.max(1,G.reviveOfferStage||1),yaw=G.reviveOfferYaw;
-  if(G.reviveOfferSupport?.scope===G.world&&G.reviveOfferSupport?.mesh){const p=G.reviveOfferSupport;anchor.set(p.mesh.position.x+G.reviveOfferOffsetX,p.mesh.position.y+p.h/2+PLAYER_HALF+.10,p.mesh.position.z+G.reviveOfferOffsetZ);}
-  const offerSupport=G.reviveOfferSupport,offerOffsetX=G.reviveOfferOffsetX,offerOffsetZ=G.reviveOfferOffsetZ;
-  const savedClaims=G.reviveOfferStageClaims instanceof Set?new Set(G.reviveOfferStageClaims):null;
-  cancelReviveOffer(false);G.paused=false;if(G.runStartedAt)G.runStartedAt+=elapsed;resetHazardsForWorld(G.world);
-  teleport(anchor.x,anchor.y+.08,anchor.z);G.stage=stage;if(savedClaims)G.stageClaims=savedClaims;if(G.playerRoot)G.playerRoot.rotation.y=yaw;
-  G.reviveAnchor.copy(anchor);G.reviveSupport=offerSupport;G.reviveOffsetX=offerOffsetX;G.reviveOffsetZ=offerOffsetZ;G.reviveStage=stage;G.reviveYaw=yaw;
-  soundFinish();toast(`◆ Zurück zur letzten Plattform · ${cost} JK/Coin · Stage ${stage}`,'good',1900);updateHud(true);return true;
+  G.revivePurchaseBusy=true;updateReviveCard();
+  if(spend.call(window.JKCoinApp,cost,`Escape.kl · World ${w?.number||'?'} Rückkehr zur letzten Plattform`)!==true){G.revivePurchaseBusy=false;updateReviveCard();return toast('Rückkehr konnte nicht bezahlt werden.','bad',1600),false;}
+  const elapsed=Math.max(0,performance.now()-G.reviveStartedAt);
+  cancelReviveOffer(false,{keepSnapshot:true});G.paused=false;if(G.runStartedAt)G.runStartedAt+=elapsed;resetHazardsForWorld(G.world);
+  placePlayerOnReviveTarget(target);clearReviveSnapshot();
+  // Den JK/Coin-Abzug sofort in Hauptspiel + Profil spiegeln. spend() speichert bereits,
+  // diese beiden Aufrufe machen den Revive auch bei schnellem Schliessen/Reload robust.
+  try{window.JKGamesPersistState?.();}catch{}
+  try{window.JKCoinApp?.syncProfileBalance?.().catch?.(()=>{});}catch{}
+  soundFinish();toast(`◆ Zurück zur letzten Plattform · ${cost} JK/Coin · Stage ${target.stage}`,'good',1900);updateHud(true);return true;
 }
 function beginReviveOffer(){
   if(!isEscapeWorld())return;
-  // Ein weiterer Sturz waehrend des kleinen 5-Sekunden-Angebots darf das Spiel nie festhaengen.
   if(G.revivePending)cancelReviveOffer(false);
   const w=currentWorldDef(),cost=reviveCostForWorld();if(!w||!cost)return resetEscapeRun();
-  // V473: letzte sichere Stelle zuerst sichern, dann SOFORT am Weltstart weiterspielen.
-  const savedAnchor=G.reviveAnchor.clone(),savedSupport=G.reviveSupport,savedOffsetX=G.reviveOffsetX,savedOffsetZ=G.reviveOffsetZ,savedStage=Math.max(1,G.reviveStage||G.stage||1),savedYaw=G.reviveYaw,savedClaims=new Set(G.stageClaims||[]);
-  soundFail();G.deaths++;resetRunTech();G.revivePending=true;G.paused=false;G.reviveStartedAt=performance.now();G.reviveDeadline=Date.now()+REVIVE_WINDOW_MS;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.mobileX=G.mobileY=0;G.mobileSprint=false;
+  // V478: Snapshot VOR jedem Reset. Er bleibt vom neuen Lauf am Weltstart komplett getrennt.
+  const savedAnchor=G.reviveAnchor.clone(),savedSupport=G.reviveSupport,savedOffsetX=G.reviveOffsetX,savedOffsetZ=G.reviveOffsetZ,savedStage=Math.max(1,G.reviveStage||G.stage||1),savedYaw=G.reviveYaw,savedClaims=new Set(G.stageClaims||[]),savedWorld=G.world;
+  soundFail();G.deaths++;resetRunTech();G.revivePending=true;G.revivePurchaseBusy=false;G.paused=false;G.reviveStartedAt=performance.now();G.reviveDeadline=Date.now()+REVIVE_WINDOW_MS;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.mobileX=G.mobileY=0;G.mobileSprint=false;
+  // Snapshot zuerst festschreiben, bevor am Start ein neuer Lauf beginnt.
+  G.reviveOfferAnchor.copy(savedAnchor);G.reviveOfferSupport=savedSupport;G.reviveOfferOffsetX=savedOffsetX;G.reviveOfferOffsetZ=savedOffsetZ;G.reviveOfferStage=savedStage;G.reviveOfferYaw=savedYaw;G.reviveOfferStageClaims=savedClaims;G.reviveOfferWorld=savedWorld;G.reviveOfferPlatformUuid=String(savedSupport?.mesh?.uuid||'');
   G.stage=1;G.stageClaims.clear();G.runStartedAt=performance.now();G.runFurthestZ=Number(w?.start?.z)||-70;resetHazardsForWorld(w.id);
   teleport(Number(w?.start?.x)||0,Number(w?.start?.y)||1.5,Number(w?.start?.z)||-70);
-  // V476: Das Angebot merkt sich die Plattform VOR dem Sturz separat.
-  G.reviveOfferAnchor.copy(savedAnchor);G.reviveOfferSupport=savedSupport;G.reviveOfferOffsetX=savedOffsetX;G.reviveOfferOffsetZ=savedOffsetZ;G.reviveOfferStage=savedStage;G.reviveOfferYaw=savedYaw;G.reviveOfferStageClaims=savedClaims;
-  // Der normale Anker gehoert ab jetzt wieder zum neuen Lauf am Weltstart.
   G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveOffsetX=0;G.reviveOffsetZ=0;G.reviveStage=1;G.reviveYaw=G.playerRoot?.rotation.y||0;G.reviveStageClaims=null;
   const card=document.createElement('div');card.className='ekl-revive ekl-revive-compact';card.dataset.eklRevive='1';
-  card.innerHTML=`<div class="ekl-revive-card"><div class="ekl-revive-main"><span><small>STAGE ${savedStage}</small><b>Zur letzten Plattform?</b></span><strong data-ekl-revive-time>5,0s</strong></div><div class="ekl-revive-actions"><span data-ekl-revive-wallet>JK/Coin wird geladen …</span><button data-ekl-revive-buy>${cost} JK/Coin · ZURÜCK</button></div></div>`;
-  G.overlay?.append(card);card.querySelector('[data-ekl-revive-buy]')?.addEventListener('click',tryReviveWithJk);
+  card.innerHTML=`<div class="ekl-revive-card"><div class="ekl-revive-main"><span><small>STAGE ${savedStage}</small><b>Zur letzten Plattform?</b></span><strong data-ekl-revive-time>5,0s</strong></div><div class="ekl-revive-actions"><span data-ekl-revive-wallet>JK/Coin wird geladen …</span><button type="button" data-ekl-revive-buy>${cost} JK/Coin · ZURÜCK</button></div></div>`;
+  G.overlay?.append(card);const buy=card.querySelector('[data-ekl-revive-buy]');buy?.addEventListener('pointerdown',e=>e.stopPropagation());buy?.addEventListener('click',tryReviveWithJk);
   updateReviveCard();G.reviveTicker=setInterval(updateReviveCard,100);G.reviveTimer=setTimeout(finishReviveWindow,REVIVE_WINDOW_MS+40);updateHud(true);
 }
 function respawn(){
