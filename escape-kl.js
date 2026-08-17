@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V476 · Respawn-Ziel + Multiplayer */
-const VERSION = '2026-08-17-v476';
+/* Escape.kl – JK.Games Top Game V477 · Dual-Pets + Follow-Animation */
+const VERSION = '2026-08-17-v477';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -71,8 +71,10 @@ const SPECIAL_CHARACTERS = Object.freeze([
   {id:'demon-transformation',name:'Dämonenverwandlung',cost:800,currency:'jk',baseGender:'male',color:0xbf6cff,desc:'Verwandelt dich in den gelieferten Dämonen-Charakter. Bonus: +1,5 % Speed und +1,5 % Wins.',speedBonus:.015,winsBonus:.015,asset:'./escape-demon-transformation.glb?v=20260816-escape-v452',galaxyAsset:'./escape-demon-transformation-galaxy.glb?v=20260816-escape-v454-red-galaxy',upgradeCost:1000,upgradeSpeedBonus:.025,upgradeWinsBonus:.025,upgradeName:'Galaxy-Skin-Upgrade'}
 ]);
 const PET_DEFS = Object.freeze([
-  {id:'none',name:'Kein Pet',cost:0,currency:'none',speedBonus:0,winsBonus:0,desc:'Kein aktives Pet.'},
-  {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins auf eingesammelte Belohnungen.'}
+  {id:'none',name:'Kein Pet',cost:0,currency:'none',category:'none',speedBonus:0,winsBonus:0,desc:'Kein aktives Pet.'},
+  {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',category:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',movement:'orbit',targetHeight:.80,desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins.'},
+  {id:'reptisect',name:'Reptisect',cost:600,currency:'jk',category:'jk',speedBonus:.015,winsBonus:.015,asset:'./escape-pet-reptisect.glb?v=20260817-escape-v477',movement:'ground-follow',targetHeight:.72,animationHint:/niet|basic|walk|run|move/i,desc:'Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung. +1,5 % Speed und +1,5 % Wins.'},
+  {id:'phoenix',name:'Phönix',cost:3000,currency:'jk',category:'jk',speedBonus:.03,winsBonus:.025,asset:'./escape-pet-phoenix.glb?v=20260817-escape-v477-optimized',movement:'fly-follow',targetHeight:1.02,animationHint:/fly|flight|take|wing/i,desc:'Premium-Flug-Pet. Fliegt dir weich hinterher und steigt beim Springen mit. +3,0 % Speed und +2,5 % Wins.'}
 ]);
 const AURAS = Object.freeze([
   {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1,speedPct:0},
@@ -119,7 +121,7 @@ const TREADMILLS = Object.freeze([
 const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
-  player:null, playerRoot:null, character:null, trail:null, trailPoints:[],trailParticles:[],trailEmitCarry:0,auraGroup:null, auraRings:[],specialFxGroup:null, petModel:null, petWrapper:null, petMixer:null, petLoadSeq:0, formModel:null, formWrapper:null, formMixer:null, formActions:null, formAction:null, formLoadSeq:0, gltfLoader:null,
+  player:null, playerRoot:null, character:null, trail:null, trailPoints:[],trailParticles:[],trailEmitCarry:0,auraGroup:null, auraRings:[],specialFxGroup:null, petVisuals:[], petLoadSeq:0, formModel:null, formWrapper:null, formMixer:null, formActions:null, formAction:null, formLoadSeq:0, gltfLoader:null,
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[], hazards:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
@@ -343,7 +345,7 @@ function defaultProgress(){
     worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress()},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
-    activePet:'none',ownedPets:['none'],
+    activePet:'none',activePets:[],ownedPets:['none'],
     trainingCoreTier:0,treadmillCoreTier:0,speedCoreTier:0,winCoreTier:0,
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
     lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,speedItems:{speed25:0,speed50:0,speed100:0},speedItemPurchases:{speed25:0,speed50:0,speed100:0},speedItemLevels:{speed25:0,speed50:0,speed100:0},lastPlayedAt:Date.now()
@@ -378,7 +380,10 @@ function normalizeProgress(raw){
   if(SPECIAL_CHARACTERS.some(c=>c.id===d.characterChoice)&&!d.ownedSpecialCharacters.includes(d.characterChoice))d.characterChoice=mainGender;
   d.ownedPets=Array.isArray(d.ownedPets)?[...new Set(d.ownedPets.filter(id=>PET_DEFS.some(p=>p.id===id)))]:['none'];
   if(!d.ownedPets.includes('none'))d.ownedPets.unshift('none');
-  d.activePet=d.ownedPets.includes(d.activePet)?d.activePet:'none';
+  const legacyPet=d.ownedPets.includes(d.activePet)&&d.activePet!=='none'?d.activePet:'';
+  const requestedPets=Array.isArray(d.activePets)?d.activePets:(legacyPet?[legacyPet]:[]);
+  d.activePets=[...new Set(requestedPets.filter(id=>id!=='none'&&d.ownedPets.includes(id)&&PET_DEFS.some(p=>p.id===id)))].slice(0,2);
+  d.activePet=d.activePets[0]||'none';
   d.ownedAuras=Array.isArray(d.ownedAuras)?[...new Set(d.ownedAuras.filter(id=>AURAS.some(a=>a.id===id)))]:['none'];
   if(!d.ownedAuras.includes('none'))d.ownedAuras.unshift('none');
   d.aura=d.ownedAuras.includes(d.aura)?d.aura:'none';
@@ -524,12 +529,19 @@ function specialCharacterState(choice=G.state?.characterChoice){
   const upgraded=def.id==='demon-transformation'&&!!G.state?.demonGalaxyUpgrade;
   return {def,upgraded,speedBonus:upgraded?(def.upgradeSpeedBonus||def.speedBonus||0):(def.speedBonus||0),winsBonus:upgraded?(def.upgradeWinsBonus||def.winsBonus||0):(def.winsBonus||0)};
 }
-function activePetDef(){return PET_DEFS.find(p=>p.id===G.state?.activePet)||PET_DEFS[0];}
+function activePetDefs(){
+  if(!G.state)return [];
+  const ids=Array.isArray(G.state.activePets)?G.state.activePets:(G.state.activePet&&G.state.activePet!=='none'?[G.state.activePet]:[]);
+  return ids.map(id=>PET_DEFS.find(p=>p.id===id)).filter(Boolean).slice(0,2);
+}
+function activePetDef(){return activePetDefs()[0]||PET_DEFS[0];}
+function syncLegacyActivePet(){if(G.state)G.state.activePet=G.state.activePets?.[0]||'none';}
+function petBonusTotals(){return activePetDefs().reduce((sum,p)=>({speed:sum.speed+Number(p.speedBonus||0),wins:sum.wins+Number(p.winsBonus||0)}),{speed:0,wins:0});}
 function speedItemBonusPct(){return SPEED_ITEMS.reduce((sum,item)=>sum+Math.max(0,Math.min(item.maxLevel||5,Number(G.state?.speedItemLevels?.[item.id])||0))*Number(item.pct||0),0);}
 function auraSpeedBonus(){return Number((AURAS.find(a=>a.id===G.state?.aura)||AURAS[0]).speedPct||0);}
 function speedCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.speedCoreTier)||0))]||0;}
-function totalSpeedBonus(){const special=specialCharacterState();const pet=activePetDef();return Number(special?.speedBonus||0)+Number(pet?.speedBonus||0)+auraSpeedBonus()+speedCoreBonus()+speedItemBonusPct();}
-function totalWinsBonus(){const special=specialCharacterState();const pet=activePetDef();return Number(special?.winsBonus||0)+Number(pet?.winsBonus||0);}
+function totalSpeedBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.speedBonus||0)+pets.speed+auraSpeedBonus()+speedCoreBonus()+speedItemBonusPct();}
+function totalWinsBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.winsBonus||0)+pets.wins;}
 function trainingCoreBonus(){return [0,.03,.06,.09][Math.max(0,Math.min(3,Number(G.state?.trainingCoreTier)||0))]||0;}
 function treadmillCoreBonus(){return [0,.05,.10,.15][Math.max(0,Math.min(3,Number(G.state?.treadmillCoreTier)||0))]||0;}
 function winCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.winCoreTier)||0))]||0;}
@@ -1005,11 +1017,16 @@ function removeNamedPlayerChildren(name){
   if(!G.playerRoot)return;
   for(const child of [...G.playerRoot.children])if(child?.name===name)child.removeFromParent?.();
 }
+function disposeExternalObject(root){
+  try{root?.traverse?.(o=>{if(!o?.isMesh)return;try{o.geometry?.dispose?.()}catch{}const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){if(!m)continue;try{m.map?.dispose?.();m.normalMap?.dispose?.();m.emissiveMap?.dispose?.();m.metalnessMap?.dispose?.();m.roughnessMap?.dispose?.();m.dispose?.()}catch{}}});}catch{}
+}
+function clearPetVisuals(){
+  G.petLoadSeq++;
+  for(const visual of G.petVisuals||[]){try{visual.mixer?.stopAllAction?.()}catch{}visual.wrapper?.removeFromParent?.();disposeExternalObject(visual.wrapper);}
+  G.petVisuals=[];
+}
 function clearCustomVisuals(){
-  G.petLoadSeq++;G.formLoadSeq++;
-  if(G.petMixer){try{G.petMixer.stopAllAction?.()}catch{}G.petMixer=null;}
-  removeNamedPlayerChildren('escape-pet-wrapper');
-  if(G.petWrapper){G.petWrapper.removeFromParent?.();G.petWrapper=null;}G.petModel=null;
+  clearPetVisuals();G.formLoadSeq++;
   if(G.formMixer){try{G.formMixer.stopAllAction?.()}catch{}G.formMixer=null;}
   G.formActions=null;G.formAction=null;
   removeNamedPlayerChildren('escape-form-wrapper');
@@ -1027,25 +1044,32 @@ function normalizeExternalModel(root,{targetHeight=1.65}={}){
 function tintGalaxyModel(root){
   root.traverse(o=>{if(!o.isMesh)return;const mats=Array.isArray(o.material)?o.material:[o.material];const list=mats.map(mat=>{const clone=mat?.clone?mat.clone():new THREE.MeshStandardMaterial({color:0xffffff});if(clone.color)clone.color.offsetHSL(.08,.18,.08);if(clone.emissive?.setHex)clone.emissive.setHex(0x5f2cff);else clone.emissive=new THREE.Color(0x5f2cff);clone.emissiveIntensity=.42;clone.roughness=Math.max(.18,Number(clone.roughness)||.45);clone.metalness=Math.max(.08,Number(clone.metalness)||0);return clone;});o.material=Array.isArray(o.material)?list:list[0];});
 }
-function loadPetVisual(){
-  if(!G.playerRoot||!G.state)return;
-  const seq=++G.petLoadSeq;
-  if(G.petMixer){try{G.petMixer.stopAllAction?.()}catch{}G.petMixer=null;}
-  removeNamedPlayerChildren('escape-pet-wrapper');
-  if(G.petWrapper){G.petWrapper.removeFromParent?.();G.petWrapper=null;}G.petModel=null;
-  const pet=activePetDef();if(!pet||pet.id==='none'||!pet.asset)return;
-  createSharedLoader().load(pet.asset,gltf=>{
-    if(seq!==G.petLoadSeq||!G.playerRoot||activePetDef().id!==pet.id)return;
-    // A second async request may have completed earlier. Enforce exactly one live pet.
-    removeNamedPlayerChildren('escape-pet-wrapper');
-    if(G.petMixer){try{G.petMixer.stopAllAction?.()}catch{}G.petMixer=null;}
-    const wrap=new THREE.Group();wrap.name='escape-pet-wrapper';
-    const model=normalizeExternalModel(gltf.scene,{targetHeight:.8});
-    model.position.set(.95,.35,-.95);model.rotation.y=Math.PI*.2;wrap.add(model);
-    G.playerRoot.add(wrap);G.petWrapper=wrap;G.petModel=model;
-    const clip=(gltf.animations||[]).find(a=>/fly/i.test(a.name||''))||(gltf.animations||[]).find(a=>/idle/i.test(a.name||''))||(gltf.animations||[])[0];
-    if(clip){G.petMixer=new THREE.AnimationMixer(gltf.scene);G.petMixer.clipAction(clip).reset().play();}
-  },undefined,err=>{if(seq===G.petLoadSeq)console.warn('Escape.kl: Pet-GLB konnte nicht geladen werden.',err)});
+function petTargetHeight(def){return Math.max(.35,Math.min(1.25,Number(def?.targetHeight)||.8));}
+function petAnimationClip(def,clips=[]){
+  const hint=def?.animationHint;if(hint){const byHint=clips.find(a=>{hint.lastIndex=0;return hint.test(String(a?.name||''));});if(byHint)return byHint;}
+  if(def?.movement==='fly-follow'||def?.movement==='orbit')return clips.find(a=>/fly|flight|wing|take/i.test(a.name||''))||clips.find(a=>/idle/i.test(a.name||''))||clips[0];
+  return clips.find(a=>/walk|run|move|basic|niet/i.test(a.name||''))||clips.find(a=>!/attack|hit|bite/i.test(a.name||''))||clips[0];
+}
+function loadPetVisuals(){
+  if(!G.scene||!G.playerRoot||!G.state)return;
+  clearPetVisuals();const seq=G.petLoadSeq,pets=activePetDefs();
+  pets.forEach((pet,slot)=>{
+    if(!pet?.asset)return;
+    createSharedLoader().load(pet.asset,gltf=>{
+      if(seq!==G.petLoadSeq||!G.scene||!activePetDefs().some(p=>p.id===pet.id))return;
+      const wrap=new THREE.Group();wrap.name=`escape-pet-wrapper-${pet.id}`;
+      const model=normalizeExternalModel(gltf.scene,{targetHeight:petTargetHeight(pet)});model.position.set(0,0,0);
+      if(pet.id==='cyclops-wing')model.rotation.y=Math.PI*.2;
+      wrap.add(model);G.scene.add(wrap);
+      const clips=gltf.animations||[],clip=petAnimationClip(pet,clips);let mixer=null,action=null;
+      if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);}
+      const visual={def:pet,slot,wrapper:wrap,model,mixer,action};G.petVisuals.push(visual);
+      const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),side=slot===0?-.72:.72,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
+      const back=pet.movement==='fly-follow'?2.25:pet.movement==='ground-follow'?1.65:1.05;
+      wrap.position.set(G.pos.x-forwardX*back+rightX*side,pet.movement==='fly-follow'?G.pos.y+.18:G.pos.y-PLAYER_HALF+.04,G.pos.z-forwardZ*back+rightZ*side);
+      if(pet.movement==='orbit')wrap.position.set(G.pos.x+Math.cos(slot*Math.PI)*1.0,G.pos.y+.18,G.pos.z-1.0);
+    },undefined,err=>{if(seq===G.petLoadSeq)console.warn(`Escape.kl: Pet-GLB ${pet.id} konnte nicht geladen werden.`,err)});
+  });
 }
 function loadCharacterFormVisual(choice=G.state?.characterChoice){
   const seq=++G.formLoadSeq;
@@ -1074,15 +1098,25 @@ function loadCharacterFormVisual(choice=G.state?.characterChoice){
   },undefined,err=>{if(seq===G.formLoadSeq){console.warn('Escape.kl: Spezialcharakter-GLB konnte nicht geladen werden.',err);if(G.character?.visualRoot)G.character.visualRoot.visible=true;}});
 }
 function refreshCompanionVisuals(){
-  loadPetVisual();
+  loadPetVisuals();
   const choice=G.state?.characterChoice,special=activeCharacterDef(choice);
   if(special?.asset)loadCharacterFormVisual(choice);else if(G.character?.visualRoot)G.character.visualRoot.visible=true;
 }
 function updateCustomVisuals(dt,t){
-  G.petMixer?.update?.(dt);
-  if(G.petWrapper){
-    G.petWrapper.position.y=Math.sin(t*2.4)*.08;G.petWrapper.rotation.y+=dt*.18;
-    if(G.petModel){G.petModel.position.x=.95+Math.sin(t*1.8)*.18;G.petModel.position.z=-.95+Math.cos(t*1.8)*.1;}
+  for(const visual of G.petVisuals||[]){
+    visual.mixer?.update?.(dt);const pet=visual.def,slot=visual.slot||0,wrap=visual.wrapper;if(!wrap||!G.playerRoot)continue;
+    const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),side=slot===0?-.72:.72;
+    let tx=G.pos.x,ty=G.pos.y,tz=G.pos.z;
+    if(pet.movement==='orbit'){
+      const a=t*1.12+slot*Math.PI;tx+=Math.cos(a)*(1.02+slot*.12);tz+=Math.sin(a)*(1.02+slot*.12);ty+=.16+Math.sin(t*2.4+slot)*.08;
+      wrap.rotation.y+=dt*.18;
+    }else{
+      const back=pet.movement==='fly-follow'?2.25:1.65;tx-=forwardX*back;tz-=forwardZ*back;tx+=rightX*side;tz+=rightZ*side;
+      if(pet.movement==='fly-follow')ty=G.pos.y+.18+(!G.grounded?.42:0)+Math.sin(t*4.2+slot)*.045;
+      else ty=G.grounded?G.pos.y-PLAYER_HALF+.035:wrap.position.y;
+      const dx=tx-wrap.position.x,dz=tz-wrap.position.z;if(Math.hypot(dx,dz)>.04){const wanted=Math.atan2(dx,dz);wrap.rotation.y=onlineLerpAngle(wrap.rotation.y,wanted,1-Math.exp(-dt*8));}
+    }
+    G.tmpV3.set(tx,ty,tz);const distance=wrap.position.distanceTo(G.tmpV3),follow=pet.movement==='fly-follow'?4.7:pet.movement==='ground-follow'?6.3:8.5,alpha=distance>10?1:1-Math.exp(-dt*follow);wrap.position.lerp(G.tmpV3,alpha);
   }
   if(G.formModel){
     const planar=Math.hypot(G.moveVel.x,G.moveVel.z),training=isOnTraining(),wanted=training?'run':planar>.15?(G.sprint||planar>9?'run':'walk'):'idle',next=G.formActions?.[wanted]||G.formActions?.walk||G.formActions?.idle||G.formActions?.run;
@@ -1155,30 +1189,58 @@ function upgradeDemonTransformation(){
   updateHud(true);toast('🌌 Dämonenverwandlung jetzt mit Galaxy-Skin · +2,5 % Speed und +2,5 % Wins.','good',2800);openCharacterStudio('special');return true;
 }
 function characterPriceLabel(c){return c.currency==='jk'?`${c.cost.toLocaleString('de-DE')} JK/Coin`:`${c.cost.toLocaleString('de-DE')} Wins`;}
+function petPercent(value){return `${(Number(value||0)*100).toFixed(1).replace('.',',')} %`;}
+function petEquipped(id){return Array.isArray(G.state?.activePets)&&G.state.activePets.includes(id);}
+function petSelectionSummary(){
+  const pets=activePetDefs(),tot=petBonusTotals();
+  return pets.length?`${pets.map(p=>p.name).join(' + ')} · +${petPercent(tot.speed)} Speed / +${petPercent(tot.wins)} Wins`:'Keine Pets ausgerüstet';
+}
+function petCardHtml(p){
+  const owned=G.state.ownedPets.includes(p.id),active=petEquipped(p.id),free=p.category==='free'||p.currency==='wins';
+  return `<article class="${owned?'owned':''} ${p.currency==='jk'?'jk':''}"><small>${free?'FREE PET':'JK/COIN PET'}</small><h3>${p.name}</h3><p>${p.desc}<br><b>+${petPercent(p.speedBonus)} Speed</b> · <b>+${petPercent(p.winsBonus)} Wins</b></p><button data-ekl-pet-pick="${p.id}">${active?'Ablegen':owned?'Ausrüsten':p.currency==='jk'?`${p.cost.toLocaleString('de-DE')} JK/Coin`:'Freischalten'}</button></article>`;
+}
+function refreshPetSelection({returnTo='menu'}={}){
+  syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
+  if(returnTo==='studio')openCharacterStudio('base');else if(returnTo==='shop')openShop('pets');else openPetEquipMenu();
+}
+function buyOrEquipPet(id,returnTo='menu'){
+  const pet=PET_DEFS.find(p=>p.id===id);if(!pet||id==='none')return false;
+  G.state.activePets=Array.isArray(G.state.activePets)?G.state.activePets:[];
+  if(petEquipped(id)){
+    G.state.activePets=G.state.activePets.filter(x=>x!==id);soundBuy();toast(`${pet.name} abgelegt.`,'good',1400);refreshPetSelection({returnTo});return true;
+  }
+  if(!G.state.ownedPets.includes(id)){
+    if(pet.currency==='jk'){
+      if(!spendJkCoins(pet.cost,`Escape.kl · ${pet.name}`))return false;
+      G.state.ownedPets.push(id);
+    }else return toast(`${pet.name} ist noch nicht freigeschaltet.`,'bad',1800),false;
+  }
+  if(G.state.activePets.length>=2)return toast('Du kannst maximal 2 Pets gleichzeitig benutzen. Lege zuerst ein Pet ab.','bad',2300),false;
+  G.state.activePets.push(id);G.state.activePets=[...new Set(G.state.activePets)].slice(0,2);soundBuy();
+  toast(`${pet.name} ausgerüstet · +${petPercent(pet.speedBonus)} Speed / +${petPercent(pet.winsBonus)} Wins.`,'good',2300);refreshPetSelection({returnTo});return true;
+}
+function unequipAllPets(){
+  G.state.activePets=[];syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);toast('Alle Pets abgelegt.','good',1400);openPetEquipMenu();
+}
+function equipBestPets(){
+  const owned=PET_DEFS.filter(p=>p.id!=='none'&&G.state.ownedPets.includes(p.id)).sort((a,b)=>((b.speedBonus+b.winsBonus)-(a.speedBonus+a.winsBonus))||(b.speedBonus-a.speedBonus)||(b.winsBonus-a.winsBonus));
+  G.state.activePets=owned.slice(0,2).map(p=>p.id);syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
+  toast(G.state.activePets.length?`Beste Pets ausgerüstet: ${activePetDefs().map(p=>p.name).join(' + ')}`:'Du besitzt noch kein Pet.','good',2200);openPetEquipMenu();
+}
+function openPetEquipMenu(){
+  const active=activePetDefs(),free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PETS</small><h2>🪽 Pets ausrüsten</h2><p>Maximal zwei Pets gleichzeitig. Lauf- und Flug-Pets folgen dir mit eigener Animation; ihre Speed- und Win-Boni werden addiert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>SLOTS</small><b>${active.length}/2</b></div><div><small>PET-SPEED</small><b>+${petPercent(petBonusTotals().speed)}</b></div><div><small>PET-WINS</small><b>+${petPercent(petBonusTotals().wins)}</b></div></div><div class="ekl-modal-actions"><button class="gold" data-ekl-best-pets>⭐ Beste Pets</button><button data-ekl-clear-pets>Alle ablegen</button><button class="jk" data-ekl-pets-jk-shop>◆ JK-Shop</button></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielte Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Noch keine Free Pets im aktuellen Katalog.</b><span>Die Kategorie ist vorbereitet; spätere kostenlose Pets erscheinen automatisch hier.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Premium-Pets · dauerhaft im Besitz</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div></div>`);
+  wrap.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'menu'));
+  wrap.querySelector('[data-ekl-best-pets]')?.addEventListener('click',equipBestPets);wrap.querySelector('[data-ekl-clear-pets]')?.addEventListener('click',unequipAllPets);wrap.querySelector('[data-ekl-pets-jk-shop]')?.addEventListener('click',openJkCoinShop);
+}
 function openCharacterStudio(tab='base'){
-  const active=G.state.characterChoice,specialActive=activeCharacterDef(active),pet=activePetDef();
-  const wrap=openModal(`<div class="ekl-modal ekl-character-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · CHARAKTER STUDIO</small><h2>🧍 Charakter wählen</h2><p>Mann und Frau sind jederzeit kostenlos wechselbar. Du kannst zusätzlich ein Pet ausrüsten. Die Dämonenverwandlung nutzt deine gelieferte GLB-Datei.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-character-choice"><button data-ekl-character="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>JK.Games Hauptskin + Mann-Animationen</span></button><button data-ekl-character="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>JK.Games Hauptskin + Frau-Animationen</span></button></div><div class="ekl-character-special-head"><b>✨ Spezialcharaktere</b><span>${specialActive?`Aktiv: ${specialActive.name}`:'Kein Spezialcharakter aktiv'}</span></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br>Galaxy-Upgrade: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin · danach +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div><div class="ekl-character-special-head"><b>🪽 Aktives Pet</b><span>${pet.id==='none'?'Kein Pet aktiv':`${pet.name} · +${(pet.speedBonus*100).toFixed(1).replace('.',',')} % Speed / +${(pet.winsBonus*100).toFixed(1).replace('.',',')} % Wins`}</span></div><div class="ekl-shop-grid">${PET_DEFS.filter(p=>p.id!=='none').map(p=>{const owned=G.state.ownedPets.includes(p.id),activePet=G.state.activePet===p.id;return `<article class="${owned?'owned':''}"><small>JK/COIN PET</small><h3>${p.name}</h3><p>${p.desc}</p><button data-ekl-pet="${p.id}" ${activePet?'disabled':''}>${activePet?'AKTIV':owned?'Ausrüsten':`${p.cost.toLocaleString('de-DE')} JK/Coin`}</button></article>`}).join('')}<article class="${G.state.activePet==='none'?'owned':''}"><small>PET SLOT</small><h3>Kein Pet</h3><p>Lege dein aktives Pet wieder ab.</p><button data-ekl-pet="none" ${G.state.activePet==='none'?'disabled':''}>${G.state.activePet==='none'?'AKTIV':'Pet entfernen'}</button></article></div><div class="ekl-character-trail-position"><b>Spur-Position</b><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div>`);
+  const active=G.state.characterChoice,specialActive=activeCharacterDef(active);
+  const wrap=openModal(`<div class="ekl-modal ekl-character-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · CHARAKTER STUDIO</small><h2>🧍 Charakter wählen</h2><p>Mann und Frau sind jederzeit kostenlos wechselbar. Spezialcharaktere und Pets sind getrennte Systeme; bis zu zwei Pets können gleichzeitig aktiv sein.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-character-choice"><button data-ekl-character="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>JK.Games Hauptskin + Mann-Animationen</span></button><button data-ekl-character="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>JK.Games Hauptskin + Frau-Animationen</span></button></div><div class="ekl-character-special-head"><b>✨ Spezialcharaktere</b><span>${specialActive?`Aktiv: ${specialActive.name}`:'Kein Spezialcharakter aktiv'}</span></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br>Galaxy-Upgrade: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin · danach +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div><div class="ekl-character-special-head"><b>🪽 Pets</b><span>${petSelectionSummary()}</span></div><div class="ekl-modal-actions"><button data-ekl-open-pets>Pets ausrüsten</button><button data-ekl-best-pets-studio>⭐ Beste Pets</button></div><div class="ekl-character-trail-position"><b>Spur-Position</b><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div>`);
   wrap.querySelectorAll('[data-ekl-character]').forEach(b=>b.onclick=()=>{setCharacterChoice(b.dataset.eklCharacter);openCharacterStudio('base')});
   wrap.querySelectorAll('[data-ekl-special]').forEach(b=>b.onclick=()=>buySpecialCharacter(b.dataset.eklSpecial));
   wrap.querySelectorAll('[data-ekl-special-upgrade]').forEach(b=>b.onclick=()=>upgradeDemonTransformation());
-  wrap.querySelectorAll('[data-ekl-pet]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPet,true));
+  wrap.querySelector('[data-ekl-open-pets]')?.addEventListener('click',openPetEquipMenu);wrap.querySelector('[data-ekl-best-pets-studio]')?.addEventListener('click',equipBestPets);
   wrap.querySelectorAll('[data-ekl-trail-pos]').forEach(b=>b.onclick=()=>{setTrailPlacement(b.dataset.eklTrailPos);openCharacterStudio(tab)});
-}
-function buyOrEquipPet(id,refreshStudio=false){
-  const pet=PET_DEFS.find(p=>p.id===id);if(!pet)return false;
-  if(id==='none'){
-    G.state.activePet='none';refreshCompanionVisuals();queuePersist(50);updateHud(true);toast('Pet abgelegt.','good',1500);
-    if(refreshStudio)openCharacterStudio('base');else openShop('pets');
-    return true;
-  }
-  if(!G.state.ownedPets.includes(id)){
-    if(!spendJkCoins(pet.cost,`Escape.kl · ${pet.name}`))return false;
-    G.state.ownedPets.push(id);
-  }
-  G.state.activePet=id;queuePersist(50);soundBuy();refreshCompanionVisuals();updateHud(true);
-  toast(`${pet.name} aktiviert · +${(pet.speedBonus*100).toFixed(1).replace('.',',')} % Speed / Wins.`,'good',2400);
-  if(refreshStudio)openCharacterStudio('base');else openShop('pets');
-  return true;
 }
 function createTrailPool(){
   if(G.trail){try{G.scene?.remove(G.trail)}catch{}G.trail=null;}
@@ -1713,9 +1775,9 @@ function renderShopBody(tab){
     body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente, bewusst kleine Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; Speed Core, Auren, Pets und Speed-Chips dürfen den effektiven Wert kontrolliert über 300 anheben.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const next=coreUpgradeDef(c.kind,c.tier+1);return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${next.cost.toLocaleString('de-DE')} Wins`:'MAXIMAL'}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-core]').forEach(b=>b.onclick=()=>buyCoreUpgrade(b.dataset.eklCore));
   }else if(tab==='pets'){
-    const activePet=activePetDef();
-    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP</b><span>Pets werden mit JK/Coin gekauft und bleiben zusätzlich zu deinem normalen oder speziellen Charakter aktiv. Sie erhöhen direkt deinen Speed und deine eingesammelten Wins.</span></div><div class="ekl-shop-grid">${PET_DEFS.map(p=>{const owned=G.state.ownedPets.includes(p.id),active=p.id===G.state.activePet;return `<article class="${owned?'owned':''} ${p.currency==='jk'?'jk':''}"><small>${p.id==='none'?'PET SLOT':'JK/COIN PET'}</small><h3>${p.name}</h3><p>${p.desc}${p.id!=='none'?`<br><b>+${(p.speedBonus*100).toFixed(1).replace('.',',')} % Speed</b> · <b>+${(p.winsBonus*100).toFixed(1).replace('.',',')} % Wins</b>`:''}</p><button data-ekl-pet-shop="${p.id}" ${active?'disabled':''}>${active?'AKTIV':owned?'Ausrüsten':p.id==='none'?'Aktivieren':`${p.cost.toLocaleString('de-DE')} JK/Coin`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${activePet.id==='none'?'Kein Pet ausgerüstet':`${activePet.name} · +${(activePet.speedBonus*100).toFixed(1).replace('.',',')} % Speed / +${(activePet.winsBonus*100).toFixed(1).replace('.',',')} % Wins`}</span></div>`;
-    body.querySelectorAll('[data-ekl-pet-shop]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetShop,false));
+    const free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
+    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP · ${activePetDefs().length}/2 AKTIV</b><span>Maximal zwei Pets gleichzeitig. Reptisect läuft dir animiert hinterher; der Phönix fliegt mit seiner Fluganimation weich und leicht verzögert hinter dir.</span><div class="ekl-trail-pos-inline"><button class="gold" data-ekl-best-pets-shop>⭐ Beste Pets</button><button data-ekl-pets-menu-shop>Pets ausrüsten</button></div></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielbare Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Aktuell keine Free Pets im Katalog.</b><span>Die Kategorie bleibt für zukünftige kostenlose Pets bestehen.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Dauerhafte Premium-Pets</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div>`;
+    body.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'shop'));body.querySelector('[data-ekl-best-pets-shop]')?.addEventListener('click',equipBestPets);body.querySelector('[data-ekl-pets-menu-shop]')?.addEventListener('click',openPetEquipMenu);
   }else if(tab==='characters'){
     const active=G.state.characterChoice;
     body.innerHTML=`<div class="ekl-progression-note"><b>🧍 CHARAKTER SHOP</b><span>Mann/Frau jederzeit kostenlos. Der Dämonen-Slot nutzt deine gelieferte GLB-Datei und kann nach dem Kauf per JK/Coin zum Galaxy-Skin aufgewertet werden.</span></div><div class="ekl-character-choice"><button data-ekl-character-shop="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>Hauptskin</span></button><button data-ekl-character-shop="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>Hauptskin</span></button></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''} ${c.currency==='jk'?'jk':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br><b>Galaxy-Upgrade</b>: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin → +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special-shop="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade-shop="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div>`;
@@ -1730,6 +1792,8 @@ function renderShopBody(tab){
       {name:'Diamond Speed-Treadmill ×4',price:850,owned:Number(G.state.jkTreadmillTier||0)>=2,desc:'Permanentes Diamond-Laufband mit ×4 Training.'},
       {name:'Galaxy Keyboard Trail +30 % Power',price:300,owned:G.state.ownedTrails.includes('galaxy'),desc:'Galaxy-Partikelspur mit +30 % additiver Level-Power.'},
       {name:'EYE Pet',price:500,owned:G.state.ownedPets.includes('cyclops-wing'),desc:'+2 % effektiver Speed und +2 % Wins · gleichzeitig mit Spezialcharakter nutzbar.'},
+      {name:'Reptisect Pet',price:600,owned:G.state.ownedPets.includes('reptisect'),desc:'+1,5 % Speed und +1,5 % Wins · animiertes Lauf-Pet mit Follow-Verhalten.'},
+      {name:'Phönix Pet',price:3000,owned:G.state.ownedPets.includes('phoenix'),desc:'+3,0 % Speed und +2,5 % Wins · Premium-Flug-Pet mit verzögertem Follow.'},
       {name:'Dämonenverwandlung',price:800,owned:G.state.ownedSpecialCharacters.includes('demon-transformation'),desc:'+1,5 % Speed/Wins · echte gelieferte GLB-Verwandlung.'},
       {name:'Dämon Galaxy-Upgrade',price:1000,owned:!!G.state.demonGalaxyUpgrade,desc:'Galaxy-Skin +2,5 % Speed/Wins statt +1,5 %.'},
       {name:'Power +50 % · 15 Min.',price:180,owned:false,desc:'Temporärer +50-%-Bonus auf Lauf- und Laufband-Power.'}
@@ -1762,13 +1826,15 @@ function buyOrEquipAura(id){
 }
 function openJkCoinShop(){closeModal();if(window.JKCoinApp?.openForGame?.('escape')!==true)toast('JK/Coin-Shop wird noch geladen.','bad',1800);}
 function canApplyJkPurchase(kind){
-  kind=String(kind||'');
+  if(!G.state)loadProgress();kind=String(kind||'');
   if(kind==='speedTreadmill:gold')return Number(G.state?.jkTreadmillTier||0)<1;
   if(kind==='speedTreadmill:diamond')return !G.state?.ownedTreadmills?.includes('diamond')&&Number(G.state?.jkTreadmillTier||0)<2;
   if(kind==='speedTreadmill:galaxy')return !G.state?.ownedTreadmills?.includes('galaxy');
   if(kind==='speedTreadmill:admin')return !G.state?.ownedTreadmills?.includes('admin');
   if(kind==='trail:galaxy')return !G.state?.ownedTrails?.includes('galaxy');
   if(kind==='pet:cyclops-wing')return !G.state?.ownedPets?.includes('cyclops-wing');
+  if(kind==='pet:reptisect')return !G.state?.ownedPets?.includes('reptisect');
+  if(kind==='pet:phoenix')return !G.state?.ownedPets?.includes('phoenix');
   if(kind==='character:demon-transformation')return !G.state?.ownedSpecialCharacters?.includes('demon-transformation');
   if(kind==='character:demon-galaxy')return G.state?.ownedSpecialCharacters?.includes('demon-transformation')&&!G.state?.demonGalaxyUpgrade;
   return true;
@@ -1781,7 +1847,7 @@ function grantJkCoinPurchase(kind,amount=1){
   else if(kind==='speedTreadmill:admin'){if(!G.state.ownedTreadmills.includes('admin'))G.state.ownedTreadmills.push('admin');}
   else if(kind==='trail:galaxy'){if(!G.state.ownedTrails.includes('galaxy'))G.state.ownedTrails.push('galaxy');}
   else if(kind==='speedBoost:2'){G.state.jkSpeedBoostUntil=Date.now()+15*60*1000;}
-  else if(kind==='pet:cyclops-wing'){if(!G.state.ownedPets.includes('cyclops-wing'))G.state.ownedPets.push('cyclops-wing');G.state.activePet='cyclops-wing';refreshCompanionVisuals();}
+  else if(kind==='pet:cyclops-wing'||kind==='pet:reptisect'||kind==='pet:phoenix'){const id=kind.split(':')[1];if(!G.state.ownedPets.includes(id))G.state.ownedPets.push(id);G.state.activePets=Array.isArray(G.state.activePets)?G.state.activePets:[];if(!G.state.activePets.includes(id)&&G.state.activePets.length<2)G.state.activePets.push(id);syncLegacyActivePet();refreshCompanionVisuals();}
   else if(kind==='character:demon-transformation'){if(!G.state.ownedSpecialCharacters.includes('demon-transformation'))G.state.ownedSpecialCharacters.push('demon-transformation');}
   else if(kind==='character:demon-galaxy'){if(!G.state.ownedSpecialCharacters.includes('demon-transformation'))return false;G.state.demonGalaxyUpgrade=true;if(G.state.characterChoice==='demon-transformation')mountCharacter('demon-transformation');}
   else return false;
@@ -1833,7 +1899,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>JK SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V476</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Das Eye-Pet gibt +2 % Speed/Wins. Die Dämonenverwandlung gibt +1,5 % und mit Galaxy-Upgrade +2,5 %. Pet und Verwandlung können gleichzeitig aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und JK SKYRUN wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V477</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und JK SKYRUN wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -1862,7 +1928,7 @@ function ownerSetActiveAura(id){
 }
 function ownerClearActivePerks({resetPowerTier=true}={}){
   if(!isEscapeOwner())return false;
-  G.state.trail='none';G.state.aura='none';G.state.activePet='none';if(SPECIAL_CHARACTERS.some(c=>c.id===G.state.characterChoice))G.state.characterChoice='male';G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;
+  G.state.trail='none';G.state.aura='none';G.state.activePets=[];G.state.activePet='none';if(SPECIAL_CHARACTERS.some(c=>c.id===G.state.characterChoice))G.state.characterChoice='male';G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;
   if(resetPowerTier)G.state.stepButtonTier=0;
   setTrailColor();setAuraStyle();mountCharacter(G.state.characterChoice);queuePersist(50);updateHud(true);return true;
 }
@@ -1912,9 +1978,9 @@ function openOwnerModMenu(){
 }
 function showPause(){
   G.paused=true;const owner=isEscapeOwner();
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.${owner?' · Owner-Mod-Menü verfügbar.':''}</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-treadmills>🏃 Laufband</button><button data-ekl-hub>Zum Hub</button>${owner?'<button class="owner" data-ekl-owner-mod>👑 Mod-Menü</button>':''}<button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.${owner?' · Owner-Mod-Menü verfügbar.':''}</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-treadmills>🏃 Laufband</button><button data-ekl-pets>🪽 Pets ausrüsten</button><button data-ekl-hub>Zum Hub</button>${owner?'<button class="owner" data-ekl-owner-mod>👑 Mod-Menü</button>':''}<button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);
   G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false});
-  G.overlay.querySelector('[data-ekl-treadmills]')?.addEventListener('click',openTreadmillSpawnMenu);
+  G.overlay.querySelector('[data-ekl-treadmills]')?.addEventListener('click',openTreadmillSpawnMenu);G.overlay.querySelector('[data-ekl-pets]')?.addEventListener('click',openPetEquipMenu);
   G.overlay.querySelector('[data-ekl-hub]').onclick=()=>{G.paused=false;setWorld('hub')};
   G.overlay.querySelector('[data-ekl-exit]').onclick=returnToTopGames;
   G.overlay.querySelector('[data-ekl-help]').onclick=showHelp;
@@ -2016,9 +2082,9 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petWrapper=null;G.petModel=null;G.petMixer=null;G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
-function getState(){loadProgress();return JSON.parse(JSON.stringify(G.state));}
+function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){
   if(!hasEscapeAdminRights())return false;
   const applied=directSpeedGrant(amount,{allowAdmin:true,worldId,countDaily:false});queuePersist(50);return applied;
