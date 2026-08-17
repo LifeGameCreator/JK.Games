@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Keyboard Lab V461.
+/* Escape.kl World 1 – Keyboard Lab V471.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
@@ -10,10 +10,10 @@ export function buildKeyboardLabWorld(api){
   const labels=['W','A','S','D','Q','E','R','F','SHIFT','CTRL','TAB','ALT','1','2','3','4','5','6','7','8','9','ENTER','SPACE','ESC'];
 
   // Giant desk / keyboard frame. The dark center stays open so missing a key is a real fail.
-  boxDeco(0,-8.5,-300,94,1.2,520,0x171b22);
-  boxDeco(-41,-2.8,-300,3,12,505,0x07111d);boxDeco(41,-2.8,-300,3,12,505,0x07111d);
-  boxDeco(-14.8,.15,-300,.12,.5,500,0x42dff5,0x0c7185);boxDeco(14.8,.15,-300,.12,.5,500,0x42dff5,0x0c7185);
-  for(let zz=-105,i=0;zz>-540;zz-=70,i++){
+  boxDeco(0,-8.5,-465,94,1.2,870,0x171b22);
+  boxDeco(-41,-2.8,-465,3,12,855,0x07111d);boxDeco(41,-2.8,-465,3,12,855,0x07111d);
+  boxDeco(-14.8,.15,-465,.12,.5,850,0x42dff5,0x0c7185);boxDeco(14.8,.15,-465,.12,.5,850,0x42dff5,0x0c7185);
+  for(let zz=-105,i=0;zz>-865;zz-=70,i++){
     boxDeco(-34,-1.0,zz,1.1,10,7,0x10283b,0x0a2438);boxDeco(34,-1.0,zz,1.1,10,7,0x10283b,0x0a2438);
     addGlowLight(i%2?-33:33,2.8,zz,i%2?0x4ddffc:0x7a8cff,.26,10);
   }
@@ -61,10 +61,11 @@ export function buildKeyboardLabWorld(api){
 
   z-=5.1;
   addPlatform({x:0,y:3.55,z,w:13,h:.6,d:7,color:0x1f526c,label:'FINAL',kind:'safe-zone',stage:15});
-  addPlatform({x:3.65,y:3.93,z,w:3.8,h:.20,d:2.6,color:0xe0ad2d,label:`WIN +${compact(rewards[14])}`,kind:'win-pad',winReward:rewards[14],winStage:15});
-  addPlatform({x:0,y:3.92,z:z-2.55,w:4.4,h:.18,d:1.25,color:0x31a7bf,label:'FINISH',kind:'finish-strip',finish:true,stage:15});
+  // V471: Kein separates gelbes End-Pad. Der Kreis selbst kassiert die letzten Wins.
+  addPlatform({x:0,y:3.92,z:z-2.55,w:4.4,h:.18,d:1.25,color:0x31a7bf,label:'FINISH',kind:'finish-strip',finish:true,stage:15,winReward:rewards[14],winStage:15});
   boxDeco(0,6.75,z-3.05,12,.38,.55,0xffca55,0x86580f);boxDeco(-5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);boxDeco(5.6,5.2,z-3.05,.42,4.8,.55,0xffca55,0x86580f);
   addRingDeco(0,5.55,z-2.9,2.1,.07,0xffd45e,0);addRingDeco(0,5.55,z-2.82,1.5,.05,0x6ee9ff,0);addGlowLight(0,5.7,z-2.5,0xffd05c,1.35,13);
-  addSign(`STAGE 15 · SPEED 280–300 ZIEL`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);addSign('WORLD 1 COMPLETE',{x:0,y:5.45,z:z+3.62},0x72eaff,.78);
+  addSign(`STAGE 15 · SPEED 280–300 ZIEL`,{x:0,y:6.55,z:z+3.6},0xffd35b,.60);addSign(`DURCH DEN KREIS · +${compact(rewards[14])} WINS`,{x:0,y:5.45,z:z+3.62},0x72eaff,.62);
+  addAutoTrigger('keyboard-lab-finish-circle',0,z-2.55,5.8,2.4,finishAndReturnHub);
   addInteractable('hub-return','Finish + Wins · Zum Hub',0,4.4,z-2.0,5,finishAndReturnHub);
 }

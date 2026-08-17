@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260816-escape-v461';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260816-escape-v461-speed-gaps';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260816-escape-v461-hard';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260816-escape-v461-overhaul';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260817-escape-v471-finish-circle-long-frame';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260817-escape-v471-finish-circle-long-frame';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260817-escape-v471-finish-circle-long-frame';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -1351,7 +1351,9 @@ function detectCheckpointAndFinish(){
   if(isEscapeWorld()){
     if(p.kind==='win-pad'&&claimStageWin(p))return;
     if(p.stage&&p.stage>G.stage)G.stage=Math.min(currentWorldDef()?.stageCount||p.stage,p.stage);
-    if(p.finish&&!G.runFinished)finishWorld();
+    // V471: Finish-Flaeche und Endkreis benutzen denselben Cash-out-Pfad.
+    // Dadurch werden die letzten Stage-Wins immer vor dem World-Finish vergeben.
+    if(p.finish&&!G.runFinished){finishWorldAndReturnHub();return;}
   }else if(G.world==='race'){
     if(p.checkpoint&&p.checkpoint>G.stage){G.stage=p.checkpoint;G.checkpoint={x:p.mesh.position.x,y:p.mesh.position.y+p.h/2+PLAYER_HALF+.10,z:p.mesh.position.z};soundCheckpoint();toast(`Race Checkpoint ${G.stage}/5`,'good',850);}
     if(p.finish&&!G.runFinished)finishRace();
@@ -1388,8 +1390,11 @@ function finishWorldAndReturnHub(){
   const finalStage=Math.max(1,Number(w.stageCount)||1),claimKey=`${w.id}:${finalStage}`;
   let stageReward=0;
   if(!G.stageClaims.has(claimKey)){
-    const finalPad=G.platforms.find(p=>p.scope===w.id&&p.kind==='win-pad'&&Number(p.winStage)===finalStage);
-    if(finalPad?.winReward){G.stageClaims.add(claimKey);stageReward=awardWins(finalPad.winReward,`${w.name} Stage ${finalStage}`,true);awardMainXp(Math.min(8,2+Math.floor(finalStage/3)),`Escape.kl · ${w.name} Stage ${finalStage}`,`escape-${w.id}-stage-${finalStage}-${Date.now()}`);}
+    // V471: Das letzte gelbe WIN-Pad existiert nicht mehr. Die finale Belohnung
+    // liegt direkt auf dem Finish-Marker, damit Kreis, Finish-Streifen und E-Fallback
+    // garantiert denselben Reward auszahlen.
+    const finalRewardSource=G.platforms.find(p=>p.scope===w.id&&Number(p.winStage)===finalStage&&Number(p.winReward)>0&&(p.finish||p.kind==='win-pad'));
+    if(finalRewardSource?.winReward){G.stageClaims.add(claimKey);stageReward=awardWins(finalRewardSource.winReward,`${w.name} Stage ${finalStage}`,true);awardMainXp(Math.min(8,2+Math.floor(finalStage/3)),`Escape.kl · ${w.name} Stage ${finalStage}`,`escape-${w.id}-stage-${finalStage}-${Date.now()}`);}
   }
   return finishWorld({autoHub:true,source:'end-interaction',stageReward});
 }

@@ -1,13 +1,13 @@
-/* Escape.kl World 2 – Candy Keys V461. Harder speed-gated route; final section expects ~Speed 280–300. */
+/* Escape.kl World 2 – Candy Keys V471. Harder speed-gated route; final section expects ~Speed 280–300. */
 export function buildCandyKeysWorld(api){
-  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,finishAndReturnHub=()=>{}}=api;
+  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},finishAndReturnHub=()=>{}}=api;
   // V461: World 2 economy deliberately reduced. The final cash-out is capped at 200,000 Wins.
   const rewards=[5000,10000,18000,30000,45000,65000,90000,120000,160000,200000];
   const recommended=[15,35,60,90,120,150,185,220,260,295];
   const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
   const startZ=-70;
-  boxDeco(0,-8.5,-300,94,1.1,510,0x301724);boxDeco(-40,-2.0,-300,2.6,10,495,0x5c203b);boxDeco(40,-2.0,-300,2.6,10,495,0x5c203b);
-  for(let zz=-105,i=0;zz>-520;zz-=55,i++){
+  boxDeco(0,-8.5,-410,94,1.1,780,0x301724);boxDeco(-40,-2.0,-410,2.6,10,765,0x5c203b);boxDeco(40,-2.0,-410,2.6,10,765,0x5c203b);
+  for(let zz=-105,i=0;zz>-765;zz-=55,i++){
     addCylinderDeco(-31,1.2,zz,1.3,1.3,4.8,i%2?0xf76bb4:0x70d9ff,0x6a2248,14);addCylinderDeco(31,1.2,zz,1.3,1.3,4.8,i%2?0x70d9ff:0xf76bb4,0x264c6b,14);
     addGlowLight(i%2?-30:30,3.2,zz,i%2?0xff73be:0x74dfff,.34,9);
   }
@@ -28,6 +28,6 @@ export function buildCandyKeysWorld(api){
   z-=2.8;title(8,'CANDY HIGH STAIRS');for(let i=0;i<8;i++)key(11.2,(i%2?2.25:-2.25),1.45+i*.16,3.25,2.4,String((i+1)%10),0xc867a2);win(8,rewards[7],3.0);
   z-=2.9;title(9,'SWEET FULL SPEED RUN');for(let i=0;i<7;i++)key(12.7,i%2?2.75:-2.75,2.4+(i%2)*.12,3.1,2.3,i%2?'SHIFT':'W',0xa94783);win(9,rewards[8],2.52);
   z-=3.0;title(10,'SPEED 295+ CANDY ESCAPE');for(let i=0;i<6;i++)key(14.35+i*.12,Math.sin(i*.95)*2.85,2.55+i*.12,3.0,2.25,i===5?'ESC':'C',0xce679f,{motion:i===2||i===4?{axis:'x',amp:1.9,speed:.76+i*.025,phase:.4+i}:null});
-  z-=5.4;addPlatform({x:0,y:3.15,z,w:12,h:.6,d:7,color:0x8d3e6d,label:'FINISH',kind:'safe-zone',stage:10});addPlatform({x:3.45,y:3.53,z,w:3.8,h:.2,d:2.55,color:0xe6b133,label:`WIN +${compact(rewards[9])}`,kind:'win-pad',winReward:rewards[9],winStage:10});addPlatform({x:0,y:3.52,z:z-2.55,w:4.2,h:.18,d:1.25,color:0xff75bd,label:'FINISH',kind:'finish-strip',finish:true,stage:10});
-  addRingDeco(0,5.2,z-2.7,2.0,.08,0xff87cc,0);addRingDeco(0,5.2,z-2.6,1.45,.05,0xffdc72,0);addGlowLight(0,5.3,z-2.4,0xff7fc6,1.25,12);addSign('CANDY KEYS COMPLETE',{x:0,y:5.9,z:z+3.5},0xff8dcc,.78);addSign('FINAL CASH-OUT · 200K WINS',{x:0,y:4.85,z:z+3.52},0xffd45f,.48);addInteractable('candy-hub-return','Finish + Wins · Zum Hub',0,3.95,z-2.0,5,finishAndReturnHub);
+  z-=5.4;addPlatform({x:0,y:3.15,z,w:12,h:.6,d:7,color:0x8d3e6d,label:'FINISH',kind:'safe-zone',stage:10});addPlatform({x:0,y:3.52,z:z-2.55,w:4.2,h:.18,d:1.25,color:0xff75bd,label:'FINISH',kind:'finish-strip',finish:true,stage:10,winReward:rewards[9],winStage:10});
+  addRingDeco(0,5.2,z-2.7,2.0,.08,0xff87cc,0);addRingDeco(0,5.2,z-2.6,1.45,.05,0xffdc72,0);addGlowLight(0,5.3,z-2.4,0xff7fc6,1.25,12);addSign('CANDY KEYS COMPLETE',{x:0,y:5.9,z:z+3.5},0xff8dcc,.78);addSign('DURCH DEN KREIS · +200K WINS',{x:0,y:4.85,z:z+3.52},0xffd45f,.48);addAutoTrigger('candy-keys-finish-circle',0,z-2.6,5.8,2.5,finishAndReturnHub);addInteractable('candy-hub-return','Finish + Wins · Zum Hub',0,3.95,z-2.0,5,finishAndReturnHub);
 }
