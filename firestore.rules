@@ -3359,7 +3359,7 @@ service cloud.firestore {
     }
 
 
-    // V474: Escape.kl Online-Multiplayer Presence fuer die benannte Datenbank gamekl.
+    // V488: Escape.kl Online-Multiplayer Presence + Owner Fly/Vanish + World 4 fuer gamekl.
     // Ein Spieler darf ausschliesslich sein eigenes kleines Presence-Dokument schreiben.
     // Positionswerte sind absichtlich grosszuegiger als V472, damit hohe Speed-/Admin-Werte
     // nicht versehentlich mit PERMISSION_DENIED abgewiesen werden.
@@ -3372,7 +3372,7 @@ service cloud.firestore {
           "x", "y", "z", "yaw", "vx", "vy", "vz",
           "grounded", "sprint", "speed", "stage",
           "gender", "characterChoice", "displayName",
-          "updatedAtMs", "version"
+          "vanish", "flight", "updatedAtMs", "version"
         ])
         && request.resource.data.uid == uid
         && request.resource.data.sessionId is string
@@ -3380,8 +3380,9 @@ service cloud.firestore {
         && request.resource.data.sessionId.size() <= 100
         && request.resource.data.online is bool
         && request.resource.data.worldId in [
-          "hub", "keyboard-lab", "candy-keys", "toxic-keyboard", "only-up", "race"
+          "hub", "keyboard-lab", "candy-keys", "toxic-keyboard", "world-4", "only-up", "race"
         ]
+        && (request.resource.data.worldId != "world-4" || jkIsOwner())
         && request.resource.data.x is number
         && request.resource.data.x >= -10000
         && request.resource.data.x <= 10000
@@ -3418,6 +3419,10 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 80
+        && request.resource.data.get("vanish", false) is bool
+        && request.resource.data.get("flight", false) is bool
+        && (!request.resource.data.get("vanish", false) || jkIsOwner())
+        && (!request.resource.data.get("flight", false) || jkIsOwner())
         && request.resource.data.updatedAtMs is int
         && request.resource.data.updatedAtMs > 0
         && request.resource.data.version is string

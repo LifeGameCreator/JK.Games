@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v486-world-shop-prep';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v488-world4-owner-test';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v486-start-return';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v486-start-return';
+import { buildWorld4Prototype } from './escape-kl-world4-prototype.js?v=20260818-escape-v488-owner-stage1';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V487 · utility houses + camera/shop cleanup */
-const VERSION = '2026-08-18-v486';
+/* Escape.kl – JK.Games Top Game V488 · Owner Phoenix Fly/Vanish + World 4 prototype */
+const VERSION = '2026-08-18-v488';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -121,7 +122,7 @@ const WORLD_SHOP_TIERS = Object.freeze({
   'keyboard-lab':Object.freeze({number:1,name:'Wind World Shop',costMult:1.5,maxStepTier:3,maxItemLevel:2,maxCoreTier:1,dailyMult:1,next:'Candy World'}),
   'candy-keys':Object.freeze({number:2,name:'Candy World Shop',costMult:3.5,maxStepTier:5,maxItemLevel:4,maxCoreTier:2,dailyMult:3,next:'Toxic World'}),
   'toxic-keyboard':Object.freeze({number:3,name:'Toxic World Shop',costMult:8,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:8,next:'World 4'}),
-  'cyber-city':Object.freeze({number:4,name:'World 4 Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:true})
+  'world-4':Object.freeze({number:4,name:'World 4 Prototype Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:true,ownerOnly:true})
 });
 function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
 function shopTier(worldId=shopWorldId()){return WORLD_SHOP_TIERS[worldId]||WORLD_SHOP_TIERS['keyboard-lab'];}
@@ -143,6 +144,7 @@ const G = {
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
   hitboxDebugEnabled:false,hitboxDebugGroup:null,hitboxDebugItems:[],hitboxDebugPlayer:null,
   summonedTreadmill:null,
+  ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,
   hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
@@ -183,11 +185,11 @@ function escapeOnlinePresencePayload(online=true){
     yaw:Number((G.playerRoot?.rotation?.y||0).toFixed(4)),
     vx:Number((G.moveVel?.x||0).toFixed(3)),vy:Number((G.vel?.y||0).toFixed(3)),vz:Number((G.moveVel?.z||0).toFixed(3)),
     grounded:!!G.grounded,sprint:!!G.sprint,speed:Number(speed.toFixed(2)),stage:Math.max(0,Math.min(500,Math.floor(Number(G.stage)||0))),
-    gender,characterChoice:choice,displayName:escapeOnlineDisplayName(),updatedAtMs:Date.now(),version:VERSION
+    gender,characterChoice:choice,displayName:escapeOnlineDisplayName(),vanish:!!G.ownerVanish,flight:!!G.ownerFlyActive,updatedAtMs:Date.now(),version:VERSION
   };
 }
 function escapeOnlinePresenceKey(payload){
-  return `${payload.worldId}|${Math.round(payload.x*20)}|${Math.round(payload.y*20)}|${Math.round(payload.z*20)}|${Math.round(payload.yaw*25)}|${payload.grounded?1:0}|${payload.sprint?1:0}|${payload.characterChoice}`;
+  return `${payload.worldId}|${Math.round(payload.x*20)}|${Math.round(payload.y*20)}|${Math.round(payload.z*20)}|${Math.round(payload.yaw*25)}|${payload.grounded?1:0}|${payload.sprint?1:0}|${payload.characterChoice}|${payload.vanish?1:0}|${payload.flight?1:0}`;
 }
 async function publishEscapePresence(force=false,online=true){
   if(!G.overlay||!G.onlineFb||!G.onlineUser?.uid||G.onlineWriteInFlight)return false;
@@ -218,8 +220,28 @@ async function publishEscapePresence(force=false,online=true){
     return false;
   }finally{G.onlineWriteInFlight=false}
 }
+function clearRemoteFlightPhoenix(remote){
+  if(!remote)return;remote.phoenixLoadSeq=(remote.phoenixLoadSeq||0)+1;
+  try{remote.phoenixMixer?.stopAllAction?.()}catch{}remote.phoenixMixer=null;remote.phoenixAction=null;
+  if(remote.phoenixWrapper){remote.phoenixWrapper.removeFromParent?.();disposeExternalObject(remote.phoenixWrapper);remote.phoenixWrapper=null;}
+}
+function ensureRemoteFlightPhoenix(remote){
+  if(!remote||remote.phoenixWrapper||remote.phoenixLoading)return;
+  const def=PET_DEFS.find(p=>p.id==='phoenix');if(!def?.asset)return;
+  const seq=(remote.phoenixLoadSeq||0)+1;remote.phoenixLoadSeq=seq;remote.phoenixLoading=true;
+  createSharedLoader().load(def.asset,gltf=>{
+    remote.phoenixLoading=false;if(!G.remotePlayers.has(remote.uid)||seq!==remote.phoenixLoadSeq||!remote.flight)return;
+    const wrap=new THREE.Group();wrap.name=`escape-remote-phoenix-${remote.uid}`;
+    const model=normalizeExternalModel(gltf.scene,{targetHeight:1.62});model.position.set(0,-PLAYER_HALF+.08,0);wrap.add(model);remote.group.add(wrap);remote.phoenixWrapper=wrap;
+    const clip=petAnimationClip(def,gltf.animations||[]);if(clip){remote.phoenixMixer=new THREE.AnimationMixer(gltf.scene);remote.phoenixAction=remote.phoenixMixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();remote.phoenixAction.setEffectiveTimeScale?.(1.05);}
+  },undefined,()=>{remote.phoenixLoading=false;});
+}
+function setRemoteFlightVisual(remote,enabled){
+  if(!remote)return;remote.flight=!!enabled;if(remote.character?.root)remote.character.root.visible=!remote.flight;if(remote.label)remote.label.position.y=remote.flight?1.85:1.38;
+  if(remote.flight)ensureRemoteFlightPhoenix(remote);else clearRemoteFlightPhoenix(remote);
+}
 function disposeRemotePlayer(remote){
-  if(!remote)return;try{remote.character?.dispose?.()}catch{}
+  if(!remote)return;clearRemoteFlightPhoenix(remote);try{remote.character?.dispose?.()}catch{}
   try{remote.label?.material?.map?.dispose?.()}catch{}try{remote.label?.material?.dispose?.()}catch{}
   try{remote.group?.removeFromParent?.()}catch{}
 }
@@ -239,11 +261,12 @@ function createEscapeRemotePlayer(uid,data){
   const group=new THREE.Group();group.name=`escape-remote-${uid}`;group.position.set(Number(data.x)||0,Number(data.y)||1,Number(data.z)||0);
   const gender=data.gender==='female'?'female':'male',character=createEscapeCharacter({gender,floorOffset:PLAYER_HALF});
   group.add(character.root);const label=makeEscapeRemoteLabel(data.displayName||'Spieler');group.add(label);G.scene?.add(group);
-  const remote={uid,group,character,label,gender,name:String(data.displayName||'Spieler'),target:new THREE.Vector3(group.position.x,group.position.y,group.position.z),velocity:new THREE.Vector3(),targetYaw:Number(data.yaw)||0,grounded:!!data.grounded,sprint:!!data.sprint,speed:Number(data.speed)||0,serverUpdatedAt:Number(data.updatedAtMs)||Date.now(),receivedAt:performance.now(),sessionId:String(data.sessionId||'')};
-  G.remotePlayers.set(uid,remote);return remote;
+  const remote={uid,group,character,label,gender,name:String(data.displayName||'Spieler'),target:new THREE.Vector3(group.position.x,group.position.y,group.position.z),velocity:new THREE.Vector3(),targetYaw:Number(data.yaw)||0,grounded:!!data.grounded,sprint:!!data.sprint,speed:Number(data.speed)||0,flight:false,phoenixWrapper:null,phoenixMixer:null,phoenixAction:null,phoenixLoadSeq:0,phoenixLoading:false,serverUpdatedAt:Number(data.updatedAtMs)||Date.now(),receivedAt:performance.now(),sessionId:String(data.sessionId||'')};
+  G.remotePlayers.set(uid,remote);setRemoteFlightVisual(remote,!!data.flight);return remote;
 }
 function updateEscapeRemoteFromData(uid,data){
   if(!uid||uid===G.onlineUser?.uid||!data||data.online!==true||String(data.worldId||'')!==String(G.world||''))return;
+  if(data.vanish===true){removeEscapeRemotePlayer(uid);return;}
   const updatedAt=Math.max(0,Number(data.updatedAtMs)||0);if(!updatedAt||Date.now()-updatedAt>ESCAPE_ONLINE_STALE_MS){removeEscapeRemotePlayer(uid);return}
   let remote=G.remotePlayers.get(uid),gender=data.gender==='female'?'female':'male';
   if(!remote)remote=createEscapeRemotePlayer(uid,data);
@@ -253,6 +276,7 @@ function updateEscapeRemoteFromData(uid,data){
   if(newSession||next.distanceTo(remote.group.position)>30)remote.group.position.copy(next);
   remote.target.copy(next);remote.velocity.set(Number(data.vx)||0,Number(data.vy)||0,Number(data.vz)||0);
   remote.targetYaw=Number(data.yaw)||0;remote.grounded=!!data.grounded;remote.sprint=!!data.sprint;remote.speed=Math.max(0,Number(data.speed)||0);
+  if(remote.flight!==!!data.flight)setRemoteFlightVisual(remote,!!data.flight);
   remote.serverUpdatedAt=updatedAt;remote.receivedAt=performance.now();remote.sessionId=String(data.sessionId||'');
   const name=String(data.displayName||'Spieler').slice(0,50);
   if(name&&name!==remote.name){remote.name=name;try{remote.label?.material?.map?.dispose?.();remote.label?.material?.dispose?.()}catch{}remote.label?.removeFromParent?.();remote.label=makeEscapeRemoteLabel(name);remote.group.add(remote.label)}
@@ -262,7 +286,7 @@ function applyEscapePresenceRows(rows){
   for(const row of rows||[]){
     const uid=String(row?.id||row?.uid||row?.data?.uid||''),data=typeof row?.data==='function'?row.data():row?.data||row;
     if(!uid||uid===G.onlineUser?.uid)continue;
-    if(data?.online===true&&String(data.worldId||'')===String(G.world||'')&&now-Number(data.updatedAtMs||0)<=ESCAPE_ONLINE_STALE_MS){seen.add(uid);updateEscapeRemoteFromData(uid,data)}
+    if(data?.online===true&&data?.vanish!==true&&String(data.worldId||'')===String(G.world||'')&&now-Number(data.updatedAtMs||0)<=ESCAPE_ONLINE_STALE_MS){seen.add(uid);updateEscapeRemoteFromData(uid,data)}
   }
   for(const uid of [...G.remotePlayers.keys()])if(!seen.has(uid))removeEscapeRemotePlayer(uid);
   setEscapeOnlineHud('online',1+G.remotePlayers.size,'Firebase Live · Positionen werden lokal weich interpoliert');
@@ -342,7 +366,8 @@ function updateEscapeRemotePlayers(dt,t){
     const distance=remote.group.position.distanceTo(pred),alpha=distance>12?1:1-Math.exp(-dt*9.5);
     remote.group.position.lerp(pred,alpha);remote.character.root.rotation.y=onlineLerpAngle(remote.character.root.rotation.y,remote.targetYaw,1-Math.exp(-dt*12));
     const planar=Math.hypot(remote.velocity.x,remote.velocity.z);
-    remote.character.update?.({grounded:remote.grounded,verticalVelocity:remote.velocity.y,planarSpeed:planar,sprint:remote.sprint,moving:planar>.12,treadmill:false,animationRate:1},dt,t);
+    if(remote.flight){remote.phoenixMixer?.update?.(dt);if(remote.phoenixWrapper)remote.phoenixWrapper.position.y=-PLAYER_HALF+.08+Math.sin(t*3.2+remote.uid.length)*.035;}
+    else remote.character.update?.({grounded:remote.grounded,verticalVelocity:remote.velocity.y,planarSpeed:planar,sprint:remote.sprint,moving:planar>.12,treadmill:false,animationRate:1},dt,t);
   }
 }
 
@@ -351,7 +376,7 @@ function defaultProgress(){
   return {
     version:12,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
-    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0},activeTrainingWorld:'keyboard-lab',
+    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
     activePet:'none',activePets:[],ownedPets:['none'],
@@ -374,7 +399,7 @@ function normalizeProgress(raw){
   d.rebirths=Math.max(0,Math.floor(Number(d.rebirths)||0));
   d.worldRebirths=d.worldRebirths&&typeof d.worldRebirths==='object'?d.worldRebirths:{};
   if(!Object.keys(d.worldRebirths).length&&d.rebirths>0)d.worldRebirths['keyboard-lab']=d.rebirths;
-  for(const wid of ['keyboard-lab','candy-keys','toxic-keyboard'])d.worldRebirths[wid]=Math.max(0,Math.floor(Number(d.worldRebirths[wid])||0));
+  for(const wid of ['keyboard-lab','candy-keys','toxic-keyboard','world-4'])d.worldRebirths[wid]=Math.max(0,Math.floor(Number(d.worldRebirths[wid])||0));
   const legacyTier=Math.max(0,Math.floor(Number(d.speedUpgrade)||0));
   d.stepButtonTier=Math.max(0,Math.min(STEP_BUTTONS.length-1,Math.floor(Number(d.stepButtonTier ?? legacyTier)||0)));
   delete d.speedUpgrade;
@@ -580,6 +605,44 @@ function isEscapeOwner(){
   try{return !!(window.LifeBuilderSettingsMenu?.isOwner?.()||escapeStaffRole()==='owner');}catch{return false;}
 }
 function hasEscapeAdminRights(){const role=escapeStaffRole();return isEscapeOwner()||role==='admin';}
+function ownerPhoenixDef(){return PET_DEFS.find(p=>p.id==='phoenix')||null;}
+function setGhostMaterialState(root,enabled,opacity=.22){
+  if(!root)return;root.traverse?.(o=>{if(!o?.isMesh)return;const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){if(!m)continue;m.userData=m.userData||{};if(enabled){if(!m.userData.escapeOwnerGhostOriginal)m.userData.escapeOwnerGhostOriginal={transparent:!!m.transparent,opacity:Number.isFinite(Number(m.opacity))?Number(m.opacity):1,depthWrite:m.depthWrite!==false};m.transparent=true;m.opacity=Math.min(opacity,m.userData.escapeOwnerGhostOriginal.opacity);m.depthWrite=false;m.needsUpdate=true;}else if(m.userData.escapeOwnerGhostOriginal){const old=m.userData.escapeOwnerGhostOriginal;m.transparent=old.transparent;m.opacity=old.opacity;m.depthWrite=old.depthWrite;delete m.userData.escapeOwnerGhostOriginal;m.needsUpdate=true;}}});
+}
+function clearOwnerFlightVisual(){
+  G.ownerFlyLoadSeq++;try{G.ownerFlyMixer?.stopAllAction?.()}catch{}G.ownerFlyMixer=null;G.ownerFlyAction=null;
+  if(G.ownerFlyWrapper){G.ownerFlyWrapper.removeFromParent?.();disposeExternalObject(G.ownerFlyWrapper);G.ownerFlyWrapper=null;}G.ownerFlyModel=null;
+}
+function setNormalOwnerVisibility(visible=true){
+  if(G.character?.visualRoot)G.character.visualRoot.visible=!!visible&&!activeCharacterDef(G.state?.characterChoice);
+  if(G.formWrapper)G.formWrapper.visible=!!visible;
+  if(G.auraGroup)G.auraGroup.visible=!!visible;if(G.specialFxGroup)G.specialFxGroup.visible=!!visible;if(G.trail)G.trail.visible=!!visible;
+}
+function applyOwnerVanishVisual(){
+  const ghost=!!G.ownerVanish;
+  if(G.ownerFlyActive){setGhostMaterialState(G.ownerFlyWrapper,ghost,.24);return;}
+  for(const root of [G.character?.visualRoot,G.formWrapper,G.auraGroup,G.specialFxGroup,G.trail,...(G.petVisuals||[]).map(v=>v.wrapper)])setGhostMaterialState(root,ghost,.22);
+}
+function loadOwnerFlightPhoenix(){
+  clearOwnerFlightVisual();if(!G.ownerFlyActive||!G.playerRoot)return;
+  const def=ownerPhoenixDef();if(!def?.asset)return toast('Phoenix-Asset für Owner-Fly fehlt.','bad',1800);
+  const seq=++G.ownerFlyLoadSeq;createSharedLoader().load(def.asset,gltf=>{
+    if(seq!==G.ownerFlyLoadSeq||!G.ownerFlyActive||!G.playerRoot)return;
+    const wrap=new THREE.Group();wrap.name='escape-owner-flight-phoenix';const model=normalizeExternalModel(gltf.scene,{targetHeight:1.72});model.position.set(0,-PLAYER_HALF+.10,0);wrap.add(model);G.playerRoot.add(wrap);G.ownerFlyWrapper=wrap;G.ownerFlyModel=model;
+    const clip=petAnimationClip(def,gltf.animations||[]);if(clip){G.ownerFlyMixer=new THREE.AnimationMixer(gltf.scene);G.ownerFlyAction=G.ownerFlyMixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();G.ownerFlyAction.setEffectiveTimeScale?.(1.08);}
+    applyOwnerVanishVisual();
+  },undefined,error=>{if(seq===G.ownerFlyLoadSeq)console.warn('Escape.kl Owner-Phoenix konnte nicht geladen werden.',error)});
+}
+function setOwnerFly(enabled){
+  if(!isEscapeOwner())return false;enabled=!!enabled;if(G.ownerFlyActive===enabled)return true;
+  G.ownerFlyActive=enabled;G.ownerFlyVertical=0;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.support=null;G.lastSupport=null;G.jumpQueuedUntil=0;G.jumpHeld=false;
+  if(enabled){clearPetVisuals();setNormalOwnerVisibility(false);loadOwnerFlightPhoenix();toast('🪽 OWNER FLY AN · Phoenix · WASD bewegen · SPACE hoch · STRG runter · SHIFT schneller','good',3200);}
+  else{clearOwnerFlightVisual();setNormalOwnerVisibility(true);refreshCompanionVisuals();applyOwnerVanishVisual();toast('🪽 OWNER FLY AUS · Charakter und Pets wiederhergestellt.','good',2200);}
+  G.onlineLastKey='';publishEscapePresence(true,true).catch(()=>{});return true;
+}
+function setOwnerVanish(enabled){
+  if(!isEscapeOwner())return false;G.ownerVanish=!!enabled;applyOwnerVanishVisual();G.onlineLastKey='';publishEscapePresence(true,true).catch(()=>{});toast(G.ownerVanish?'👻 VANISH AN · Andere Spieler sehen dich nicht. Du bleibst lokal durchsichtig sichtbar.':'👻 VANISH AUS · Du bist wieder sichtbar.','good',2400);return true;
+}
 function directSpeedGrant(amount,{allowAdmin=false,worldId=progressWorldId(),countDaily=true}={}){
   amount=Math.max(0,Number(amount)||0);if(!amount)return 0;
   const p=progressForWorld(worldId),before=rawSpeedStat(worldId);
@@ -640,6 +703,7 @@ function useSpeedItem(id){
 }
 function worldUnlockStatus(w){
   if(!w||w.locked)return {unlocked:false,locked:true,reason:'COMING SOON'};
+  if(w.ownerOnly)return isEscapeOwner()?{unlocked:true,ownerOnly:true,sourceId:w.unlockFrom||null,level:currentLevel(w.unlockFrom||'toxic-keyboard'),requiredLevel:0,completionReady:true}:{unlocked:false,locked:true,ownerOnly:true,reason:'OWNER TEST'};
   if(w.number===1)return {unlocked:true,sourceId:null,level:0,requiredLevel:0,completionReady:true};
   if(G.state?.worldsUnlocked?.includes(w.id))return {unlocked:true,sourceId:w.unlockFrom||null,level:currentLevel(w.unlockFrom||'keyboard-lab'),requiredLevel:Number(w.requiredLevel)||0,completionReady:true};
   const sourceId=w.unlockFrom||'keyboard-lab',level=currentLevel(sourceId),requiredLevel=Math.max(0,Number(w.requiredLevel)||0),requiredRuns=Math.max(0,Number(w.requiredCompletions)||0),runs=Math.max(0,Number(G.state?.completions?.[sourceId])||0);
@@ -650,7 +714,7 @@ function updateWorldUnlocks(){
   if(!G.state)return [];
   const unlocked=[];
   for(const w of WORLD_DEFS){
-    if(w.locked||w.number===1||G.state.worldsUnlocked.includes(w.id))continue;
+    if(w.locked||w.ownerOnly||w.number===1||G.state.worldsUnlocked.includes(w.id))continue;
     if(worldUnlockStatus(w).unlocked){G.state.worldsUnlocked.push(w.id);unlocked.push(w);}
   }
   if(unlocked.length)refreshHubWorldPortalStatus();
@@ -864,7 +928,7 @@ function setupScene(){
   G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
   const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
-  G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);
+  G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);G.buildScope='world-4';buildWorld4Prototype(worldApi);
   G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
 }
 function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();}
@@ -933,7 +997,7 @@ function buildHub(){
     {id:'keyboard-lab',number:1,name:'WIND WORLD',x:-45,w:11,d:7,h:6.1,wall:0xd8d0c4,roof:0x3e596b,accent:0x58ddff},
     {id:'candy-keys',number:2,name:'CANDY WORLD',x:-31,w:11,d:7,h:7.0,wall:0xcfc8bc,roof:0x4b535c,accent:0xff77bb},
     {id:'toxic-keyboard',number:3,name:'TOXIC WORLD',x:-15,w:12,d:7,h:6.5,wall:0xe0d8cb,roof:0x46525a,accent:0x75ff72},
-    {id:null,number:4,name:'COMING SOON',x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x858bff},
+    {id:'world-4',number:4,name:'OWNER TEST',ownerOnly:true,x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x858bff},
     {id:null,number:5,name:'COMING SOON',x:31,w:11,d:7,h:7.1,wall:0xd6cec0,roof:0x4b5057,accent:0x858bff},
     {id:null,number:6,name:'COMING SOON',x:45,w:11,d:7,h:6.1,wall:0xd9d1c4,roof:0x3f5361,accent:0x858bff}
   ];
@@ -941,7 +1005,7 @@ function buildHub(){
     const b=addHubBuilding({x:h.x,z:-50,w:h.w,d:h.d,h:h.h,wall:h.wall,roof:h.roof,accent:h.accent,label:`WORLD ${h.number} · ${h.name}`});
     addHousePath(b);
     addSign(`WORLD ${h.number} · ${h.name}`,{x:b.x,y:b.h+1.65,z:b.z+4.05},h.accent,.66);
-    if(h.id)buildingDoorTrigger(`world-house-${h.number}`,b,()=>{soundKey('ENTER');enterWorld(h.id)});
+    if(h.id)buildingDoorTrigger(`world-house-${h.number}`,b,()=>{if(h.ownerOnly&&!isEscapeOwner())return toast(`WORLD ${h.number} · aktuell nur für den Owner betretbar.`,'bad',2200);soundKey('ENTER');enterWorld(h.id)});
     else buildingDoorTrigger(`world-house-${h.number}`,b,()=>toast(`WORLD ${h.number} · COMING SOON`,'info',1500));
   }
 
@@ -1051,7 +1115,7 @@ function buildHub(){
     const back=boxDeco(x+dx,.90,z+dz,3.2,.76,.14,0x75614f);back.rotation.y=rot;
   };
   // Bänke stehen immer auf der Grasseite des Gehwegs, nie auf Asphalt.
-  for(const [x,z,rot] of [[-11.6,-12,0],[11.6,-12,Math.PI],[-11.6,12,0],[11.6,12,Math.PI],[-11.6,43,0],[11.6,43,Math.PI],[-30,-21.3,Math.PI/2],[30,-21.3,-Math.PI/2],[-30,39.0,Math.PI/2],[30,39.0,-Math.PI/2]])addBench(x,z,rot);
+  for(const [x,z,rot] of [[-11.6,-12,0],[11.6,-12,Math.PI],[-11.6,12,0],[11.6,12,Math.PI],[-11.6,43,0],[11.6,43,Math.PI],[-30,-21.3,Math.PI/2],[30,-21.3,-Math.PI/2],[-30,39.0,Math.PI/2],[30,39.0,-Math.PI/2]])addBench(x,z,rot+Math.PI/2);
   // Mehr Laternen entlang der Straßenränder, ebenfalls auf der Grasseite.
   for(const [x,z] of [[-11.2,-18],[11.2,-18],[-11.2,-8],[11.2,-8],[-11.2,8],[11.2,8],[-11.2,18],[11.2,18],[-11.2,42],[11.2,42],[-40,-21.5],[-22,-21.5],[22,-21.5],[40,-21.5],[-40,39],[ -22,39],[22,39],[40,39]])addHubStreetLamp(x,z);
 
@@ -1204,11 +1268,17 @@ function loadCharacterFormVisual(choice=G.state?.characterChoice){
   },undefined,err=>{if(seq===G.formLoadSeq){console.warn('Escape.kl: Spezialcharakter-GLB konnte nicht geladen werden.',err);if(G.character?.visualRoot)G.character.visualRoot.visible=true;}});
 }
 function refreshCompanionVisuals(){
+  if(G.ownerFlyActive){clearPetVisuals();setNormalOwnerVisibility(false);return;}
   loadPetVisuals();
   const choice=G.state?.characterChoice,special=activeCharacterDef(choice);
   if(special?.asset)loadCharacterFormVisual(choice);else if(G.character?.visualRoot)G.character.visualRoot.visible=true;
+  queueMicrotask(()=>applyOwnerVanishVisual());
 }
 function updateCustomVisuals(dt,t){
+  if(G.ownerFlyActive){
+    G.ownerFlyMixer?.update?.(dt);if(G.ownerFlyModel)G.ownerFlyModel.position.y=-PLAYER_HALF+.10+Math.sin(t*3.0)*.035;
+    setNormalOwnerVisibility(false);if((G.petVisuals||[]).length)clearPetVisuals();applyOwnerVanishVisual();return;
+  }
   const playerPlanarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);
   for(const visual of G.petVisuals||[]){
     const pet=visual.def,slot=visual.slot||0,wrap=visual.wrapper;if(!wrap||!G.playerRoot)continue;
@@ -1265,6 +1335,7 @@ function updateCustomVisuals(dt,t){
     G.formMixer?.update?.(dt);
     if(G.state?.characterChoice==='demon-transformation'&&G.state?.demonGalaxyUpgrade)G.formModel.position.y=-PLAYER_HALF+.025+Math.sin(t*2.1)*.03;
   }
+  if(G.ownerVanish)applyOwnerVanishVisual();
 }
 function clearCharacterOnly(){
   clearCustomVisuals();
@@ -1440,7 +1511,7 @@ function setWorld(id,initial=false){
     G.stage=0;G.deaths=0;G.runStartedAt=0;G.runFurthestZ=30;G.checkpoint={x:0,y:1.10,z:30};teleport(0,1.10,30);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=0;G.reviveStageClaims=new Set();
     G.scene.background.setHex(0x07111d);G.scene.fog.color.setHex(0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     if(initial)toast('Willkommen im neuen Escape.kl Hub · Training, Welten und Upgrades sind jetzt klar getrennt.','good',2500);
-  }else if(w&&!w.locked){
+  }else if(w&&!w.locked&&(!w.ownerOnly||isEscapeOwner())){
     G.state.activeTrainingWorld=w.id;queuePersist(700);
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=Number(w.start?.z)||-70;G.checkpoint=null;
     teleport(Number(w.start?.x)||0,Number(w.start?.y)||1.5,Number(w.start?.z)||-70);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;G.reviveStageClaims=new Set();
@@ -1459,6 +1530,7 @@ function setWorld(id,initial=false){
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
   if(w.locked)return toast(`${w.name} kommt in einem späteren Escape.kl-Update.`,'bad',2600);
+  if(w.ownerOnly&&!isEscapeOwner())return toast(`🔒 ${w.name}: aktuell nur für den Owner betretbar.`,'bad',2600);
   const status=worldUnlockStatus(w);
   if(!status.unlocked){
     const sourceName=escapeWorldById(status.sourceId)?.name||'Vorwelt';
@@ -1729,8 +1801,25 @@ function handlePlatformContact(p){
   rememberRevivePlatform(p);
   if(now-(p.lastContactAt||0)>150){p.lastContactAt=now;if(p.label||p.kind==='key'||p.kind==='hub-key'||p.kind==='start'||p.kind==='finish')soundKey(p.label||p.kind);}
 }
+function processOwnerFlight(dt,t){
+  if(!G.ownerFlyActive||!isEscapeOwner())return false;
+  const ix=Math.max(-1,Math.min(1,(G.keys.has('KeyD')?1:0)-(G.keys.has('KeyA')?1:0)+G.mobileX));
+  const iy=Math.max(-1,Math.min(1,(G.keys.has('KeyW')?1:0)-(G.keys.has('KeyS')?1:0)-G.mobileY));
+  G.sprint=G.keys.has('ShiftLeft')||G.keys.has('ShiftRight')||G.mobileSprint;
+  const len=Math.min(1,Math.hypot(ix,iy)),forward=G.tmpV.set(-Math.sin(G.yaw),0,-Math.cos(G.yaw)),right=G.tmpV2.set(Math.cos(G.yaw),0,-Math.sin(G.yaw));
+  const speed=G.sprint?30:18;let tx=0,tz=0;
+  if(len>.04){const d=Math.hypot(ix,iy)||1,nx=ix/d,ny=iy/d;tx=(right.x*nx+forward.x*ny)*speed*len;tz=(right.z*nx+forward.z*ny)*speed*len;}
+  const alpha=1-Math.exp(-dt*8.5);G.moveVel.x+=(tx-G.moveVel.x)*alpha;G.moveVel.z+=(tz-G.moveVel.z)*alpha;
+  const vertical=(G.keys.has('Space')?1:0)-((G.keys.has('ControlLeft')||G.keys.has('ControlRight'))?1:0),verticalTarget=vertical*(G.sprint?22:13);
+  G.ownerFlyVertical+=(verticalTarget-G.ownerFlyVertical)*(1-Math.exp(-dt*9));
+  G.pos.x+=G.moveVel.x*dt;G.pos.z+=G.moveVel.z*dt;G.pos.y=Math.max(-80,Math.min(2500,G.pos.y+G.ownerFlyVertical*dt));
+  G.vel.set(0,0,0);G.grounded=false;G.support=null;G.lastSupport=null;G.coyoteAvailable=false;G.moveIntensity=Math.min(1,Math.hypot(G.moveVel.x,G.moveVel.z)/Math.max(1,speed));
+  const planar=Math.hypot(G.moveVel.x,G.moveVel.z);if(planar>.08&&G.playerRoot){const wanted=Math.atan2(G.moveVel.x,G.moveVel.z),diff=Math.atan2(Math.sin(wanted-G.playerRoot.rotation.y),Math.cos(wanted-G.playerRoot.rotation.y));G.playerRoot.rotation.y+=diff*(1-Math.exp(-dt*9));}
+  if(G.playerRoot)G.playerRoot.position.copy(G.pos);G.lastGroundPos.copy(G.pos);return true;
+}
 function processMovement(dt,t){
   if(G.paused||G.modalOpen||G.runFinished)return;
+  if(G.ownerFlyActive&&isEscapeOwner()){processOwnerFlight(dt,t);return;}
   const ix=Math.max(-1,Math.min(1,(G.keys.has('KeyD')?1:0)-(G.keys.has('KeyA')?1:0)+G.mobileX));
   const iy=Math.max(-1,Math.min(1,(G.keys.has('KeyW')?1:0)-(G.keys.has('KeyS')?1:0)-G.mobileY));
   G.sprint=G.keys.has('ShiftLeft')||G.keys.has('ShiftRight')||G.mobileSprint;
@@ -1793,10 +1882,12 @@ function processMovement(dt,t){
   if(G.pos.y<(isEscapeWorld()||G.world==='race'||G.world==='only-up'?WORLD_FAIL_Y:MAX_FALL)){if(isEscapeWorld())beginReviveOffer();else respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
 }
 function performJump(){
+  if(G.ownerFlyActive)return false;
   if(G.paused||G.modalOpen||G.runFinished)return false;
   soundJump();G.vel.y=JUMP_VELOCITY;G.grounded=false;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.jumpQueuedUntil=0;return true;
 }
 function requestJump(){
+  if(G.ownerFlyActive)return false;
   if(G.paused||G.modalOpen||G.runFinished)return false;
   const now=performance.now();G.jumpQueuedUntil=now+230;
   // Coyote-Time: auch direkt nach dem Verlassen einer Keycap reagiert Space noch.
@@ -2136,7 +2227,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V487</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; World 4 ist bereits als nächste Shop-Stufe vorbereitet. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V488</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; World 4 ist bereits als nächste Shop-Stufe vorbereitet. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2176,7 +2267,7 @@ function openOwnerModMenu(){
   const powerOptions=STEP_BUTTONS.map(u=>`<option value="${u.tier}" ${Number(G.state.stepButtonTier||0)===u.tier?'selected':''}>Stufe ${u.tier} · +${u.gain} Power</option>`).join('');
   const trailOptions=TRAILS.map(t=>`<option value="${t.id}" ${G.state.trail===t.id?'selected':''}>${t.name}</option>`).join('');
   const auraOptions=AURAS.map(a=>`<option value="${a.id}" ${G.state.aura===a.id?'selected':''}>${a.name}</option>`).join('');
-  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${worldRebirthCount(worldId)}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${worldRebirthCount(worldId)}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-fly>🪽 Phoenix Fly ${G.ownerFlyActive?'AUS':'AN'}</button><button class="owner" data-mod-vanish>👻 Vanish ${G.ownerVanish?'AUS':'AN'}</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   // V460: X/Schließen im Owner-Menü führt sauber zurück ins Pause-Menü. So bleibt
   // kein unsichtbarer Pause-Zustand hängen.
   wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
@@ -2205,6 +2296,8 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-clear-aura]')?.addEventListener('click',()=>{ownerSetActiveAura('none');refresh();queuePersist(50);updateHud(true);toast('Aura abgelegt. Besitz bleibt erhalten.','good');});
   wrap.querySelector('[data-mod-clear-boosts]')?.addEventListener('click',()=>{G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;refresh();queuePersist(50);updateHud(true);toast('Temporäre Boosts und Admin-Event-Multiplikator entfernt.','good');});
   wrap.querySelector('[data-mod-clear-all]')?.addEventListener('click',()=>{ownerClearActivePerks({resetPowerTier:true});refresh();toast('Alle aktiven Perks, Spur, Aura und Boosts entfernt.','good',2200);});
+  wrap.querySelector('[data-mod-fly]')?.addEventListener('click',()=>{setOwnerFly(!G.ownerFlyActive);closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;});
+  wrap.querySelector('[data-mod-vanish]')?.addEventListener('click',()=>{setOwnerVanish(!G.ownerVanish);const b=wrap.querySelector('[data-mod-vanish]');if(b)b.textContent=`👻 Vanish ${G.ownerVanish?'AUS':'AN'}`;});
   wrap.querySelector('[data-mod-hitboxes]')?.addEventListener('click',()=>{
     setHitboxDebug(!G.hitboxDebugEnabled);
     // V460: Nach dem Umschalten direkt zurück ins Spiel. Das Pause-/Mod-Modal
@@ -2229,8 +2322,8 @@ function showRaceComplete(sec,reward,previous,record){const wrap=document.create
 
 
 function bindInput(){
-  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','KeyE','KeyR','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(e.code==='Space'){G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){respawn();return}G.keys.add(e.code)};
-  G.keyUp=e=>{if(e.code==='Space'){G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
+  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyE','KeyR','KeyF','KeyG','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyF'){setOwnerFly(!G.ownerFlyActive);return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyG'){setOwnerVanish(!G.ownerVanish);return}if(e.code==='Space'){if(G.ownerFlyActive){G.keys.add('Space');return}G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){if(!G.ownerFlyActive)respawn();return}G.keys.add(e.code)};
+  G.keyUp=e=>{if(e.code==='Space'){G.keys.delete('Space');G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
   const canvas=G.overlay.querySelector('canvas');
   const clampPitch=value=>Math.max(CAMERA_PITCH_MIN,Math.min(CAMERA_PITCH_MAX,value));
   const applyCameraLook=(dx,dy,touch=false)=>{
@@ -2306,7 +2399,7 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on,{passive:false});sprint.addEventListener('pointerup',off,{passive:false});sprint.addEventListener('pointercancel',off,{passive:false});}
 }
 function resize(){if(!G.renderer||!G.camera||!G.overlay)return;const r=G.overlay.getBoundingClientRect(),vv=window.visualViewport;const w=Math.max(1,Math.round(vv?.width||r.width)),h=Math.max(1,Math.round(vv?.height||r.height));G.overlay.style.setProperty('--ekl-vw',`${w}px`);G.overlay.style.setProperty('--ekl-vh',`${h}px`);G.overlay.classList.toggle('ekl-landscape',w>h);G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);updateTrail(dt);updateAura(t);updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);if(!G.ownerFlyActive)G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);if(!G.ownerFlyActive){updateTrail(dt);updateAura(t);}updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
   if(G.overlay)return;
@@ -2319,7 +2412,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){

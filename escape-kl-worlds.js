@@ -1,4 +1,4 @@
-/* Escape.kl world registry V484 – separate world progression, 300 regular-speed cap and rising difficulty. */
+/* Escape.kl world registry V488 – World 4 Owner-Prototyp freigeschaltet, Thema weiterhin offen. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -73,20 +73,30 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     description:'Welt 3 ist jetzt die echte Endgame-Skillwelt: Air-Control, vertikale Sprünge, bewegte/glitchende Keys, eine tödliche Chase-Wall und ein Speed-300-Finale. Freischaltung über Candy Keys Level 800 + World-2-Finish.'
   }),
   Object.freeze({
-    id:'cyber-city',
-    name:'World 4',
+    id:'world-4',
+    name:'World 4 Prototype',
     number:4,
-    stageCount:10,
-    requiredLevel:1200,
+    stageCount:1,
+    requiredLevel:0,
     unlockFrom:'toxic-keyboard',
-    requiredCompletions:1,
+    requiredCompletions:0,
     progressionFactor:75,
     maxPlayerSpeed:300,
-    finishBonusWins:500000000,
-    accent:0x6d74ff,
-    locked:true,
-    difficulty:'COMING SOON',
-    description:'Technisch vorbereitet für V487+: Thema, Map, Shop-Inhalte und Balancing werden erst mit der geplanten World 4 festgelegt.'
+    finishBonusWins:0,
+    accent:0x7d87ff,
+    background:0x101426,
+    fog:0x101426,
+    start:{x:0,y:1.50,z:-70},
+    laneHalfWidth:17,
+    backtrackAllowance:6,
+    time2:0,
+    time3:0,
+    speedRecommendations:Object.freeze([120]),
+    stageRewards:Object.freeze([0]),
+    ownerOnly:true,
+    locked:false,
+    difficulty:'OWNER TEST · PROTOTYP',
+    description:'V488 Owner-Testbereich. Nur Stage 1 ist provisorisch gebaut; Thema, Optik, Belohnungen und endgültiges Balancing bleiben bewusst offen für die gemeinsame World-4-Überarbeitung.'
   })
 ]);
 
