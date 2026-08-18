@@ -1,4 +1,4 @@
-/* Escape.kl world registry V488 – World 4 Owner-Prototyp freigeschaltet, Thema weiterhin offen. */
+/* Escape.kl world registry V489 – World 4 Water World Owner-Testbuild. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -74,29 +74,29 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
   }),
   Object.freeze({
     id:'world-4',
-    name:'World 4 Prototype',
+    name:'Water World',
     number:4,
-    stageCount:1,
+    stageCount:5,
     requiredLevel:0,
     unlockFrom:'toxic-keyboard',
     requiredCompletions:0,
     progressionFactor:75,
     maxPlayerSpeed:300,
     finishBonusWins:0,
-    accent:0x7d87ff,
-    background:0x101426,
-    fog:0x101426,
+    accent:0x4fd8ff,
+    background:0x9bdcff,
+    fog:0x7fc8e8,
     start:{x:0,y:1.50,z:-70},
-    laneHalfWidth:17,
+    laneHalfWidth:18,
     backtrackAllowance:6,
     time2:0,
     time3:0,
-    speedRecommendations:Object.freeze([120]),
-    stageRewards:Object.freeze([0]),
+    speedRecommendations:Object.freeze([60,100,160,200,230]),
+    stageRewards:Object.freeze([0,0,0,0,0]),
     ownerOnly:true,
     locked:false,
-    difficulty:'OWNER TEST · PROTOTYP',
-    description:'V488 Owner-Testbereich. Nur Stage 1 ist provisorisch gebaut; Thema, Optik, Belohnungen und endgültiges Balancing bleiben bewusst offen für die gemeinsame World-4-Überarbeitung.'
+    difficulty:'OWNER BUILD · WATER CHASE',
+    description:'V489 Water World Testbuild: normaler Einstieg, Wasserwellen-Chase ab Stage 2, steigende Flut in Stage 3, sechs Boost-Sprünge in Stage 4 und ein Speed-230-Wellenlauf in Stage 5. Der weitere Ausbau folgt danach.'
   })
 ]);
 
