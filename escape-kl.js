@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260816-escape-v461';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260817-escape-v471-finish-circle-long-frame';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260817-escape-v471-finish-circle-long-frame';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260817-escape-v471-finish-circle-long-frame';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v482-longer-route';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v482-stable-gl-longer-route';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V481 · Clean Hub Ground Layout */
-const VERSION = '2026-08-18-v481';
+/* Escape.kl – JK.Games Top Game V482 · Stable GL Platforms + Reliable Revive Checkpoints */
+const VERSION = '2026-08-18-v482';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -33,7 +33,7 @@ const CAMERA_PITCH_MAX = .78;
 const TOUCH_LOOK_SENSITIVITY_X = .0062;
 const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
-const REVIVE_COSTS = Object.freeze({'keyboard-lab':100,'candy-keys':200,'toxic-keyboard':300});
+const REVIVE_COSTS = Object.freeze({'keyboard-lab':10,'candy-keys':20,'toxic-keyboard':30});
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
 const SKYRUN_MILESTONE_REWARDS = Object.freeze([250,500,1000,2000,3500,5000,7500,10000,15000]);
@@ -1352,13 +1352,13 @@ function setWorld(id,initial=false){
   G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;G.stageClaims.clear();resetRunTech();G.trainingStreakSeconds=0;G.trainingStreakTier=0;
   const w=escapeWorldById(id);
   if(id==='hub'){
-    G.stage=0;G.deaths=0;G.runStartedAt=0;G.runFurthestZ=30;G.checkpoint={x:0,y:1.10,z:30};teleport(0,1.10,30);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=0;
+    G.stage=0;G.deaths=0;G.runStartedAt=0;G.runFurthestZ=30;G.checkpoint={x:0,y:1.10,z:30};teleport(0,1.10,30);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=0;G.reviveStageClaims=new Set();
     G.scene.background.setHex(0x07111d);G.scene.fog.color.setHex(0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     if(initial)toast('Willkommen im neuen Escape.kl Hub · Training, Welten und Upgrades sind jetzt klar getrennt.','good',2500);
   }else if(w&&!w.locked){
     G.state.activeTrainingWorld=w.id;queuePersist(700);
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=Number(w.start?.z)||-70;G.checkpoint=null;
-    teleport(Number(w.start?.x)||0,Number(w.start?.y)||1.5,Number(w.start?.z)||-70);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;
+    teleport(Number(w.start?.x)||0,Number(w.start?.y)||1.5,Number(w.start?.z)||-70);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;G.reviveStageClaims=new Set();
     G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     toast(`${w.name} · Speed ${Math.round(currentSpeedStat(w.id))}/300 · Bei einem Fall hast du 5 Sekunden für JK/Coin-Revive.`,'good',2400);
   }else if(id==='only-up'){
@@ -1402,7 +1402,7 @@ function resetEscapeRun({countDeath=true,showToast=true}={}){
   G.stage=1;G.stageClaims.clear();resetRunTech();G.runStartedAt=performance.now();G.runFurthestZ=Number(w?.start?.z)||-70;
   resetHazardsForWorld(w.id);
   teleport(Number(w?.start?.x)||0,Number(w?.start?.y)||1.5,Number(w?.start?.z)||-70);
-  G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;
+  G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;G.reviveStageClaims=new Set();
   if(showToast)toast(`Run verloren · ${w?.name||'Welt'} startet wieder bei Stage 1`,'bad',1750);
   updateHud(true);
 }
@@ -1426,6 +1426,18 @@ function resolveReviveTarget(){
   const anchor=G.reviveOfferAnchor.clone(),stage=Math.max(1,Number(G.reviveOfferStage)||1),yaw=Number(G.reviveOfferYaw)||0;
   let support=G.reviveOfferSupport;
   if(support&&(!G.platforms.includes(support)||support.scope!==G.world||!support.mesh))support=null;
+  if(!support&&G.reviveOfferPlatformUuid){support=G.platforms.find(p=>p.scope===G.world&&p.mesh?.uuid===G.reviveOfferPlatformUuid)||null;}
+  // Zweite Absicherung: Sollte eine Objekt-Referenz verloren gehen, wird die Plattform
+  // anhand des gespeicherten Weltpunkts rekonstruiert, bevor ein JK/Coin abgezogen wird.
+  if(!support){
+    let best=null,bestDist=Infinity;
+    for(const p of G.platforms){
+      if(p.scope!==G.world||!p.mesh||p.kind==='win-pad')continue;
+      const dx=Math.abs(anchor.x-p.mesh.position.x),dz=Math.abs(anchor.z-p.mesh.position.z),dy=Math.abs(anchor.y-(p.mesh.position.y+p.h/2+PLAYER_HALF+.12));
+      if(dx<=p.w/2+.5&&dz<=p.d/2+.5&&dy<1.5){const dist=dx+dz+dy;if(dist<bestDist){best=p;bestDist=dist;}}
+    }
+    support=best;
+  }
   if(support){
     anchor.set(
       support.mesh.position.x+Number(G.reviveOfferOffsetX||0),
@@ -1445,7 +1457,7 @@ function placePlayerOnReviveTarget(target){
   // fuer den naechsten Physik-Frame explizit als sicherer Plattformkontakt gesetzt.
   G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;
   G.grounded=!!support;G.support=support;G.lastSupport=support;G.lastGroundedAt=performance.now();G.coyoteAvailable=!!support;G.lastGroundPos.copy(G.pos);
-  G.reviveAnchor.copy(anchor);G.reviveSupport=support;G.reviveOffsetX=support?anchor.x-support.mesh.position.x:0;G.reviveOffsetZ=support?anchor.z-support.mesh.position.z:0;G.reviveStage=stage;G.reviveYaw=yaw;
+  G.reviveAnchor.copy(anchor);G.reviveSupport=support;G.reviveOffsetX=support?anchor.x-support.mesh.position.x:0;G.reviveOffsetZ=support?anchor.z-support.mesh.position.z:0;G.reviveStage=stage;G.reviveYaw=yaw;G.reviveStageClaims=new Set(claims||[]);
   if(support)support.lastContactAt=performance.now();
   return true;
 }
@@ -1475,7 +1487,7 @@ function beginReviveOffer(){
   if(G.revivePending)cancelReviveOffer(false);
   const w=currentWorldDef(),cost=reviveCostForWorld();if(!w||!cost)return resetEscapeRun();
   // V478: Snapshot VOR jedem Reset. Er bleibt vom neuen Lauf am Weltstart komplett getrennt.
-  const savedAnchor=G.reviveAnchor.clone(),savedSupport=G.reviveSupport,savedOffsetX=G.reviveOffsetX,savedOffsetZ=G.reviveOffsetZ,savedStage=Math.max(1,G.reviveStage||G.stage||1),savedYaw=G.reviveYaw,savedClaims=new Set(G.stageClaims||[]),savedWorld=G.world;
+  const savedAnchor=G.reviveAnchor.clone(),savedSupport=G.reviveSupport,savedOffsetX=G.reviveOffsetX,savedOffsetZ=G.reviveOffsetZ,savedStage=Math.max(1,G.reviveStage||G.stage||1),savedYaw=G.reviveYaw,savedClaims=G.reviveStageClaims instanceof Set?new Set(G.reviveStageClaims):new Set(G.stageClaims||[]),savedWorld=G.world;
   soundFail();G.deaths++;resetRunTech();G.revivePending=true;G.revivePurchaseBusy=false;G.paused=false;G.reviveStartedAt=performance.now();G.reviveDeadline=Date.now()+REVIVE_WINDOW_MS;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.mobileX=G.mobileY=0;G.mobileSprint=false;
   // Snapshot zuerst festschreiben, bevor am Start ein neuer Lauf beginnt.
   G.reviveOfferAnchor.copy(savedAnchor);G.reviveOfferSupport=savedSupport;G.reviveOfferOffsetX=savedOffsetX;G.reviveOfferOffsetZ=savedOffsetZ;G.reviveOfferStage=savedStage;G.reviveOfferYaw=savedYaw;G.reviveOfferStageClaims=savedClaims;G.reviveOfferWorld=savedWorld;G.reviveOfferPlatformUuid=String(savedSupport?.mesh?.uuid||'');
@@ -1505,7 +1517,13 @@ function updatePlatforms(t,dt=.016){
     p.lastPos.copy(p.mesh.position);p.mesh.position.copy(p.base);
     if(p.motion){const q=Math.sin(t*p.motion.speed+p.motion.phase)*p.motion.amp;p.mesh.position[p.motion.axis]=p.base[p.motion.axis]+q;}
     p.press=Math.max(0,(Number(p.press)||0)-dt*5.6);p.mesh.position.y-=Math.sin(Math.min(1,p.press)*Math.PI*.5)*.055;
-    if(p.blink){const phase=(t*.55+(Math.abs(p.base.z)%7)*.13)%1;p.active=phase<.72;p.mesh.visible=true;p.mesh.material.forEach?.(m=>{m.transparent=true;m.opacity=p.active?1:.16;});}else p.active=true;
+    if(p.blink){
+      // V482: GL/Glitch-Keycaps bleiben IMMER kollidierbar. Der alte Blink-Code
+      // schaltete die physische Plattform zeitweise ab und ließ Spieler zufällig
+      // hindurchfallen. Ab jetzt ist der Glitch ausschließlich ein Lichteffekt.
+      const phase=(t*.55+(Math.abs(p.base.z)%7)*.13)%1,pulse=.72+.28*(.5+.5*Math.sin(phase*Math.PI*2));
+      p.active=true;p.mesh.visible=true;p.mesh.material.forEach?.(m=>{m.transparent=true;m.opacity=pulse;});
+    }else p.active=true;
     p.delta.subVectors(p.mesh.position,p.lastPos);
   }
   for(const fx of G.portalFx){if((fx.userData?.escapeScope||'hub')!==G.world){fx.visible=false;continue;}fx.visible=true;fx.material.opacity=.12+Math.sin(t*2.2)*.05;fx.scale.setScalar(1+Math.sin(t*1.7)*.02);fx.rotation.z=Math.sin(t*.55)*.025;}
@@ -1607,8 +1625,23 @@ function openTreadmillStation(id){
   wrap.querySelector('[data-ekl-train-world-select]')?.addEventListener('click',openTrainingWorldSelector);
 }
 
+function rememberRevivePlatform(p){
+  if(!isEscapeWorld()||!p||p.scope!==G.world||p.kind==='win-pad'||!p.mesh)return false;
+  // V482: Der letzte sichere Punkt wird direkt an der realen Plattform festgemacht.
+  // So kann ein späterer Fall nicht versehentlich wieder die Welt-Startplatte benutzen.
+  // Immer die Plattformmitte verwenden: sicherer als eine gespeicherte Randposition,
+  // besonders wenn der Spieler direkt beim Absprung oder Abrutschen stirbt.
+  const x=p.mesh.position.x,z=p.mesh.position.z;
+  G.reviveAnchor.set(x,p.mesh.position.y+p.h/2+PLAYER_HALF+.12,z);
+  G.reviveSupport=p;G.reviveOffsetX=x-p.mesh.position.x;G.reviveOffsetZ=z-p.mesh.position.z;
+  G.reviveStage=Math.max(1,Number(G.stage)||1,Number(p.stage)||0);G.reviveYaw=G.playerRoot?.rotation.y||0;
+  G.reviveStageClaims=new Set(G.stageClaims||[]);
+  return true;
+}
 function handlePlatformContact(p){
   if(!p)return;const now=performance.now();p.press=1;
+  // Sofort beim Landen speichern, nicht erst irgendwann in einem späteren Frame.
+  rememberRevivePlatform(p);
   if(now-(p.lastContactAt||0)>150){p.lastContactAt=now;if(p.label||p.kind==='key'||p.kind==='hub-key'||p.kind==='start'||p.kind==='finish')soundKey(p.label||p.kind);}
 }
 function processMovement(dt,t){
@@ -1652,12 +1685,7 @@ function processMovement(dt,t){
     else if(rt.wasUsed&&G.grounded&&G.support){removeSummonedTreadmill();}
   }
   if(G.grounded&&G.support!==G.lastSupport){handlePlatformContact(G.support);registerRunLanding(G.support);G.lastSupport=G.support;}else if(!G.grounded)G.lastSupport=null;
-  if(G.grounded&&isEscapeWorld()&&G.support&&G.support.kind!=='win-pad'){
-    const p=G.support,margin=Math.min(.55,Math.max(.18,Math.min(p.w,p.d)*.14)),minX=p.mesh.position.x-p.w/2+margin,maxX=p.mesh.position.x+p.w/2-margin,minZ=p.mesh.position.z-p.d/2+margin,maxZ=p.mesh.position.z+p.d/2-margin;
-    G.reviveAnchor.set(Math.max(minX,Math.min(maxX,G.pos.x)),p.mesh.position.y+p.h/2+PLAYER_HALF+.10,Math.max(minZ,Math.min(maxZ,G.pos.z)));
-    G.reviveSupport=p;G.reviveOffsetX=G.reviveAnchor.x-p.mesh.position.x;G.reviveOffsetZ=G.reviveAnchor.z-p.mesh.position.z;
-    G.reviveStage=Math.max(1,G.stage,Number(p.stage)||0);G.reviveYaw=G.playerRoot?.rotation.y||0;
-  }
+  if(G.grounded&&isEscapeWorld()&&G.support&&G.support.kind!=='win-pad')rememberRevivePlatform(G.support);
   G.pos.y=nextY;if(G.playerRoot)G.playerRoot.position.copy(G.pos);
 
   if(G.grounded&&planarSpeed>.08){
@@ -1986,7 +2014,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>JK SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V481</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V482</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
