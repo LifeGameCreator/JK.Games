@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v484-world-names';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v484-candy-world';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v484-toxic-world';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v485-toxic-signs-wall';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V484 · Clean House Hub */
+/* Escape.kl – JK.Games Top Game V485 · Reptisect Idle + Toxic Stage Visibility */
 const VERSION = '2026-08-18-v484';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
@@ -1111,9 +1111,24 @@ function loadPetVisuals(){
       if(pet.id==='cyclops-wing')model.rotation.y=Math.PI*.2;
       if(pet.id==='reptisect')model.rotation.y+=Math.PI; // V480: geliefertes Modell blickt entgegengesetzt zur Laufrichtung.
       wrap.add(model);G.scene.add(wrap);
+      // V485: Für Reptisect wird die originale Bind-/Standpose gespeichert, bevor die Laufanimation
+      // irgendeinen Knochen verändert. So friert das Pet im Stand nie wieder mitten in einem Laufschritt ein.
+      let bindPose=null,idleRig=null;
+      if(pet.id==='reptisect'){
+        bindPose=[];const tails=[];let head=null;
+        model.traverse(node=>{
+          if(!node?.isBone)return;
+          bindPose.push({node,position:node.position.clone(),quaternion:node.quaternion.clone(),scale:node.scale.clone()});
+          const name=String(node.name||'');
+          if(/^head_/i.test(name))head=node;
+          if(/^tail \d+_/i.test(name))tails.push(node);
+        });
+        tails.sort((a,b)=>(parseInt(String(a.name).match(/^tail (\d+)_/i)?.[1]||'0',10)-parseInt(String(b.name).match(/^tail (\d+)_/i)?.[1]||'0',10)));
+        idleRig={head,tails,headBase:head?.rotation.clone?.()||null,tailBases:tails.map(node=>node.rotation.clone())};
+      }
       const clips=gltf.animations||[],clip=petAnimationClip(pet,clips);let mixer=null,action=null;
       if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);if(pet.movement==='ground-follow')action.paused=true;}
-      const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false};G.petVisuals.push(visual);
+      const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false,bindPose,idleRig};G.petVisuals.push(visual);
       const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),side=slot===0?-.72:.72,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
       const back=pet.movement==='fly-follow'?2.25:pet.movement==='ground-follow'?1.65:1.05;
       wrap.position.set(G.pos.x-forwardX*back+rightX*side,pet.movement==='fly-follow'?G.pos.y+.18:G.pos.y-PLAYER_HALF+.04,G.pos.z-forwardZ*back+rightZ*side);
@@ -1156,15 +1171,38 @@ function updateCustomVisuals(dt,t){
   const playerPlanarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);
   for(const visual of G.petVisuals||[]){
     const pet=visual.def,slot=visual.slot||0,wrap=visual.wrapper;if(!wrap||!G.playerRoot)continue;
-    // V480: Reptisect animiert ausschließlich bei echter horizontaler Spielerbewegung.
-    // Springen auf der Stelle startet die Laufanimation ausdrücklich nicht.
+    // V485: Reptisect läuft nur bei echter horizontaler Bewegung. Im Stand wird nicht der letzte
+    // Lauf-Frame eingefroren, sondern die gespeicherte natürliche Standpose hergestellt. Kopf und
+    // Schwanz bekommen darin nur eine sehr dezente Idle-Bewegung. Springen auf der Stelle bleibt Idle.
     if(pet.movement==='ground-follow'&&visual.action){
       const moving=playerPlanarSpeed>.16;
-      if(moving!==visual.groundMoving){
-        visual.groundMoving=moving;visual.action.paused=!moving;visual.action.enabled=true;
-        if(moving){visual.action.play?.();visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));}
-      }else if(moving){visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));}
-      visual.mixer?.update?.(moving?dt:0);
+      if(moving&&!visual.groundMoving){
+        visual.groundMoving=true;visual.action.enabled=true;visual.action.paused=false;visual.action.reset().play?.();
+        visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));
+      }else if(!moving&&visual.groundMoving){
+        visual.groundMoving=false;visual.action.paused=true;
+        for(const pose of visual.bindPose||[]){pose.node.position.copy(pose.position);pose.node.quaternion.copy(pose.quaternion);pose.node.scale.copy(pose.scale);}
+      }else if(moving){
+        visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));
+      }
+      if(moving){
+        visual.mixer?.update?.(dt);
+      }else{
+        const rig=visual.idleRig;
+        if(rig?.head&&rig.headBase){
+          rig.head.rotation.copy(rig.headBase);
+          rig.head.rotation.y+=Math.sin(t*.72+slot*.4)*.16;
+          rig.head.rotation.x+=Math.sin(t*.43+slot)*.035;
+        }
+        if(rig?.tails?.length){
+          rig.tails.forEach((bone,i)=>{
+            const base=rig.tailBases[i];if(!base)return;bone.rotation.copy(base);
+            const strength=.028+Math.min(.045,i*.004);
+            bone.rotation.y+=Math.sin(t*1.15+i*.38+slot)*strength;
+            bone.rotation.x+=Math.sin(t*.82+i*.27)*strength*.30;
+          });
+        }
+      }
     }else visual.mixer?.update?.(dt);
     const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),side=slot===0?-.72:.72;
     let tx=G.pos.x,ty=G.pos.y,tz=G.pos.z;
@@ -2020,7 +2058,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V484</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist jetzt ein begehbares Haus. Links innen stehen Daily Wheel und Daily Quests, rechts Rebirth, geradeaus der eigentliche Shop; über die Treppe ist eine offene zweite Etage erreichbar.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V485</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist jetzt ein begehbares Haus. Links innen stehen Daily Wheel und Daily Quests, rechts Rebirth, geradeaus der eigentliche Shop; über die Treppe ist eine offene zweite Etage erreichbar.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
