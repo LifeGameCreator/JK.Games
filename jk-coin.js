@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-17-jkcoin-v477-escape-pets";
+  const VERSION = "2026-08-18-jkcoin-v491-reptisect-price";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -279,7 +279,7 @@
     { game:"escape", id:"escape-treadmill-admin", name:"ADMIN Laufband ×10", cost:2000, text:"Spawnbares ADMIN-Laufband für Escape.kl.", grant:{kind:"speedTreadmill:admin",amount:1} },
     { game:"escape", id:"escape-trail-galaxy", name:"Galaxy Keyboard Trail", cost:300, text:"Galaxy-Partikelspur mit additivem Power-Bonus für Escape.kl.", grant:{kind:"trail:galaxy",amount:1} },
     { game:"escape", id:"escape-pet-eye", name:"EYE Pet", cost:500, text:"Fliegendes Escape-Pet mit +2 % Speed und +2 % Wins.", grant:{kind:"pet:cyclops-wing",amount:1} },
-    { game:"escape", id:"escape-pet-reptisect", name:"Reptisect Pet", cost:600, text:"Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung und gibt +1,5 % Speed sowie +1,5 % Wins.", grant:{kind:"pet:reptisect",amount:1} },
+    { game:"escape", id:"escape-pet-reptisect", name:"Reptisect Pet", cost:400, text:"Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung und gibt +1,5 % Speed sowie +1,5 % Wins.", grant:{kind:"pet:reptisect",amount:1} },
     { game:"escape", id:"escape-pet-phoenix", name:"Phönix Pet", cost:3000, text:"Teuerstes Escape-Pet: animierter Flug-Follower mit +3,0 % Speed und +2,5 % Wins.", grant:{kind:"pet:phoenix",amount:1} },
     { game:"escape", id:"escape-demon", name:"Dämonenverwandlung", cost:800, text:"Permanente Escape-Verwandlung mit +1,5 % Speed und +1,5 % Wins.", grant:{kind:"character:demon-transformation",amount:1} },
     { game:"escape", id:"escape-demon-galaxy", name:"Dämon Galaxy-Upgrade", cost:1000, text:"Galaxy-Upgrade für die Dämonenverwandlung auf +2,5 % Speed und +2,5 % Wins.", grant:{kind:"character:demon-galaxy",amount:1} },
