@@ -1,6 +1,6 @@
 /* Escape.kl World 2 – Candy World V484. Longer route with the existing difficulty curve and stable finish flow. */
 export function buildCandyKeysWorld(api){
-  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},finishAndReturnHub=()=>{}}=api;
+  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},returnHub=()=>{},finishAndReturnHub=()=>{}}=api;
   // V461: World 2 economy deliberately reduced. The final cash-out is capped at 200,000 Wins.
   const rewards=[5000,10000,18000,30000,45000,65000,90000,120000,160000,200000];
   const recommended=[15,35,60,90,120,150,185,220,260,295];
@@ -13,6 +13,8 @@ export function buildCandyKeysWorld(api){
   }
   addPlatform({x:0,y:.3,z:startZ,w:14,h:.6,d:11,color:0x9d4778,label:'CANDY',stage:1,kind:'start'});
   addSign('WORLD 2 · CANDY WORLD',{x:0,y:5.25,z:startZ+4.5},0xff80c7,1.03);addSign('LETZTE STAGES BRAUCHEN SPEED 280–300',{x:0,y:4.05,z:startZ+4.52},0xffd26b,.43);
+  // V486: Wer von der allerersten Spawn-Plattform rückwärts hinausläuft, kehrt automatisch in den Hub zurück.
+  addSign('↩ ZURÜCK ZUM HUB',{x:0,y:2.15,z:startZ+5.7},0xdfffe2,.32);addAutoTrigger('world-start-return-hub',0,startZ+5.35,8.5,1.7,returnHub);
   let z=startZ-9;
   const title=(n,t)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y:3.45,z:z+2.0},0xff8ccb,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:2.62,z:z+2.02},0xffd36a,.35);};
   const key=(gap,x,y,w,d,label,color,extra={})=>{z-=gap;return addPlatform({x,y,z,w,h:.48,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});};

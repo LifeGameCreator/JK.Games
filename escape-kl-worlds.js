@@ -74,7 +74,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
   }),
   Object.freeze({
     id:'cyber-city',
-    name:'Cyber City',
+    name:'World 4',
     number:4,
     stageCount:10,
     requiredLevel:1200,
@@ -86,7 +86,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     accent:0x6d74ff,
     locked:true,
     difficulty:'COMING SOON',
-    description:'Vorbereitet für ein späteres Update: Neon-Keyboards, Laser und Server-Plattformen.'
+    description:'Technisch vorbereitet für V487+: Thema, Map, Shop-Inhalte und Balancing werden erst mit der geplanten World 4 festgelegt.'
   })
 ]);
 

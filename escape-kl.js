@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v484-world-names';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v486-world-shop-prep';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v484-candy-world';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v485-toxic-signs-wall';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v486-start-return';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v486-start-return';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V485 · Reptisect Idle + Toxic Stage Visibility */
-const VERSION = '2026-08-18-v484';
+/* Escape.kl – JK.Games Top Game V486 · World shops + hub/shop polish */
+const VERSION = '2026-08-18-v486';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -116,6 +116,16 @@ const TREADMILLS = Object.freeze([
   {id:'galaxy',name:'GALAXY',mult:6.00,color:0xa85cff,access:'jk',jkCost:1200,desc:'Kosmisches Spawn-Laufband · nur über Pause → Laufband erzeugbar',portableOnly:true},
   {id:'admin',name:'ADMIN',mult:10.00,color:0xff496d,access:'jk',jkCost:2000,desc:'Maximales Spawn-Laufband · nur über Pause → Laufband erzeugbar',portableOnly:true}
 ]);
+
+const WORLD_SHOP_TIERS = Object.freeze({
+  'keyboard-lab':Object.freeze({number:1,name:'Wind World Shop',costMult:1.5,maxStepTier:3,maxItemLevel:2,maxCoreTier:1,dailyMult:1,next:'Candy World'}),
+  'candy-keys':Object.freeze({number:2,name:'Candy World Shop',costMult:3.5,maxStepTier:5,maxItemLevel:4,maxCoreTier:2,dailyMult:3,next:'Toxic World'}),
+  'toxic-keyboard':Object.freeze({number:3,name:'Toxic World Shop',costMult:8,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:8,next:'World 4'}),
+  'cyber-city':Object.freeze({number:4,name:'World 4 Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:true})
+});
+function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
+function shopTier(worldId=shopWorldId()){return WORLD_SHOP_TIERS[worldId]||WORLD_SHOP_TIERS['keyboard-lab'];}
+function shopScaledCost(cost,worldId=shopWorldId()){return Math.max(1,Math.round((Number(cost)||0)*shopTier(worldId).costMult));}
 
 const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
@@ -341,7 +351,7 @@ function defaultProgress(){
   return {
     version:12,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
-    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress()},activeTrainingWorld:'keyboard-lab',
+    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
     activePet:'none',activePets:[],ownedPets:['none'],
@@ -362,6 +372,9 @@ function normalizeProgress(raw){
   d.runPoints=Math.max(0,Math.floor(Number(d.runPoints)||0));
   d.bestRunCombo=Math.max(0,Math.floor(Number(d.bestRunCombo)||0));
   d.rebirths=Math.max(0,Math.floor(Number(d.rebirths)||0));
+  d.worldRebirths=d.worldRebirths&&typeof d.worldRebirths==='object'?d.worldRebirths:{};
+  if(!Object.keys(d.worldRebirths).length&&d.rebirths>0)d.worldRebirths['keyboard-lab']=d.rebirths;
+  for(const wid of ['keyboard-lab','candy-keys','toxic-keyboard'])d.worldRebirths[wid]=Math.max(0,Math.floor(Number(d.worldRebirths[wid])||0));
   const legacyTier=Math.max(0,Math.floor(Number(d.speedUpgrade)||0));
   d.stepButtonTier=Math.max(0,Math.min(STEP_BUTTONS.length-1,Math.floor(Number(d.stepButtonTier ?? legacyTier)||0)));
   delete d.speedUpgrade;
@@ -577,14 +590,16 @@ function directSpeedGrant(amount,{allowAdmin=false,worldId=progressWorldId(),cou
   // Dieser kommt ausschließlich vom Level; normale Grants werden zu Training-Power.
   addLevelPower(amount*2500,countDaily,worldId);queuePersist(80);updateHud(true);return 0;
 }
-function nextRebirthDef(){
-  const r=Math.max(0,Math.floor(Number(G.state?.rebirths)||0));
+function worldRebirthCount(worldId=progressWorldId()){return Math.max(0,Math.floor(Number(G.state?.worldRebirths?.[worldId])||0));}
+function setWorldRebirthCount(worldId,value){G.state.worldRebirths=G.state.worldRebirths&&typeof G.state.worldRebirths==='object'?G.state.worldRebirths:{};G.state.worldRebirths[worldId]=Math.max(0,Math.floor(Number(value)||0));G.state.rebirths=Object.values(G.state.worldRebirths).reduce((a,b)=>a+Math.max(0,Number(b)||0),0);}
+function nextRebirthDef(worldId=progressWorldId()){
+  const r=worldRebirthCount(worldId);
   if(r<REBIRTH_TABLE.length)return REBIRTH_TABLE[r];
   const extra=r-REBIRTH_TABLE.length+1,last=REBIRTH_TABLE[REBIRTH_TABLE.length-1];
   return {level:last.level+extra*350,mult:last.mult+extra*.45};
 }
-function rebirthMultiplier(){
-  const r=Math.max(0,Math.floor(Number(G.state?.rebirths)||0));if(r<=0)return 1;
+function rebirthMultiplier(worldId=progressWorldId()){
+  const r=worldRebirthCount(worldId);if(r<=0)return 1;
   if(r<=REBIRTH_TABLE.length)return REBIRTH_TABLE[r-1]?.mult||1;
   const extra=r-REBIRTH_TABLE.length,last=REBIRTH_TABLE[REBIRTH_TABLE.length-1];return last.mult+extra*.45;
 }
@@ -603,21 +618,21 @@ function speedPerRunPoint(){return levelPowerPerRunPoint();} // legacy internal 
 function gainMultiplier(){return levelPowerPerRunPoint();}
 function speedItemCost(item){
   const bought=Math.max(0,Math.floor(Number(G.state?.speedItemPurchases?.[item.id])||0));
-  return Math.max(1,Math.round(item.baseCost*Math.pow(item.scale,bought)));
+  return shopScaledCost(item.baseCost*Math.pow(item.scale,bought));
 }
 function speedItemLevel(item){return Math.max(0,Math.min(item?.maxLevel||5,Math.floor(Number(G.state?.speedItemLevels?.[item?.id])||0)));}
 function buySpeedItem(id){
   const item=SPEED_ITEMS.find(x=>x.id===id);if(!item)return false;
-  if(speedItemLevel(item)>=item.maxLevel)return toast(`${item.name} ist bereits maximal ausgebaut.`,'good',1600);
+  const allowed=Math.min(item.maxLevel,shopTier().maxItemLevel);if(speedItemLevel(item)>=allowed)return toast(`${item.name}: Maximum für ${shopTier().name} erreicht. Öffne ${shopTier().next}, um weiter auszubauen.`,'good',2200);
   const cost=speedItemCost(item);if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins.`,'bad',1700);
   G.state.wins-=cost;G.state.speedItems[item.id]=(Number(G.state.speedItems[item.id])||0)+1;G.state.speedItemPurchases[item.id]=(Number(G.state.speedItemPurchases[item.id])||0)+1;
   soundBuy();queuePersist(50);updateHud(true);toast(`${item.icon} ${item.name} ins Inventar gelegt.`,'good',1900);openShop('items');return true;
 }
 function useSpeedItem(id){
   const item=SPEED_ITEMS.find(x=>x.id===id);if(!item)return false;
-  const count=Math.max(0,Math.floor(Number(G.state.speedItems?.[id])||0)),level=speedItemLevel(item);
+  const count=Math.max(0,Math.floor(Number(G.state.speedItems?.[id])||0)),level=speedItemLevel(item),allowed=Math.min(item.maxLevel,shopTier().maxItemLevel);
   if(count<=0)return toast('Dieses Speed-Item ist nicht im Inventar.','bad');
-  if(level>=item.maxLevel)return toast(`${item.name} ist bereits Stufe ${item.maxLevel}/${item.maxLevel}.`,'good',1600);
+  if(level>=allowed)return toast(`${item.name}: Maximum ${allowed}/${item.maxLevel} in ${shopTier().name}. Nächste Welt für weitere Stufen nötig.`,'good',2200);
   G.state.speedItems[id]=count-1;G.state.speedItemLevels[id]=level+1;
   soundBuy();queuePersist(50);updateHud(true);
   toast(`${item.icon} ${item.name} Stufe ${level+1}/${item.maxLevel} · dauerhaft +${(item.pct*100).toFixed(1).replace('.',',')} % effektiver Speed`,'good',2600);
@@ -658,7 +673,7 @@ function ensureDailyQuest(){if(!G.state)return null;const key=dayKey();if(!G.sta
 function flashRunPoints(){/* V451: Laufpunkte bleiben absichtlich vollständig intern. */}
 function onLevelChanged(before,after,worldId=progressWorldId()){
   if(after<=before)return;const unlocks=updateWorldUnlocks(),nextRb=nextRebirthDef();soundCheckpoint();
-  const worldName=escapeWorldById(worldId)?.name||'Welt';const msg=after>=Number(nextRb?.level||Infinity)&&before<Number(nextRb?.level||Infinity)?`⬆ ${worldName} LEVEL ${after} · REBIRTH ${G.state.rebirths+1} BEREIT!`:`⬆ ${worldName} LEVEL ${after}`;toast(msg,'good',1900);
+  const worldName=escapeWorldById(worldId)?.name||'Welt';const msg=after>=Number(nextRb?.level||Infinity)&&before<Number(nextRb?.level||Infinity)?`⬆ ${worldName} LEVEL ${after} · REBIRTH ${worldRebirthCount(worldId)+1} BEREIT!`:`⬆ ${worldName} LEVEL ${after}`;toast(msg,'good',1900);
   for(const w of unlocks)setTimeout(()=>toast(`🌍 ${w.name} freigeschaltet!`,'good',3200),450);
 }
 function addLevelPower(amount,countDaily=true,worldId=progressWorldId()){
@@ -925,13 +940,13 @@ function buildHub(){
   for(const h of worldHouses){
     const b=addHubBuilding({x:h.x,z:-50,w:h.w,d:h.d,h:h.h,wall:h.wall,roof:h.roof,accent:h.accent,label:`WORLD ${h.number} · ${h.name}`});
     addHousePath(b);
+    addSign(`WORLD ${h.number} · ${h.name}`,{x:b.x,y:b.h+1.65,z:b.z+4.05},h.accent,.66);
     if(h.id)buildingDoorTrigger(`world-house-${h.number}`,b,()=>{soundKey('ENTER');enterWorld(h.id)});
     else buildingDoorTrigger(`world-house-${h.number}`,b,()=>toast(`WORLD ${h.number} · COMING SOON`,'info',1500));
   }
 
   // --- SOUTH STREET: alle übrigen großen Außenwände werden echte Funktionshäuser --
   const utilityHouses=[
-    {id:'character-house',label:'CHARACTER STUDIO',x:-47,w:9,d:7,h:5.8,wall:0xdccfc3,roof:0x5a514b,accent:0x80dcff,onEnter:()=>openCharacterStudio()},
     {id:'records-house',label:'RECORDS',x:-35,w:10,d:7,h:6.8,wall:0xd8d0c5,roof:0x46535a,accent:0x72eaff,onEnter:()=>openRecords()},
     {id:'race-house',label:'SPEED RACE',x:35,w:10,d:7,h:6.8,wall:0xd7d1c8,roof:0x4a525a,accent:0xff9064,onEnter:()=>setWorld('race')},
     {id:'skyrun-house',label:'SKYRUN',x:47,w:9,d:7,h:5.8,wall:0xdccfc3,roof:0x5a514b,accent:0x9aa7ff,onEnter:()=>setWorld('only-up')}
@@ -975,8 +990,8 @@ function buildHub(){
   boxDeco(leftX+frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(leftX+frontPart/2,frontZ,frontPart,.38);
   boxDeco(rightX-frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(rightX-frontPart/2,frontZ,frontPart,.38);
   boxDeco(sx,sh+.35,sz,sw+.6,.42,sd+.6,0x46525a);
-  // Schwarzer Eingang und Gebäudeschilder.
-  boxDeco(sx,1.70,frontZ-.08,doorW,2.75,.08,0x05080a);addSign('ESCAPE SHOP',{x:sx,y:sh+1.15,z:frontZ+.05},0xffd06c,.66);addSign('DAILY · SHOP · REBIRTH',{x:sx,y:sh+.25,z:frontZ+.04},0x9ee8ff,.27);
+  // V486: Eingang vollständig offen – keine schwarze Scheinwand mehr.
+  addSign('ESCAPE SHOP',{x:sx,y:sh+1.15,z:frontZ+.05},0xffd06c,.66);addSign('DAILY · SHOP · REBIRTH',{x:sx,y:sh+.25,z:frontZ+.04},0x9ee8ff,.27);
   // Weg vom Straßengehweg bis zur Eingangstür.
   addPlatform({x:22.5,y:.366,z:frontZ,w:25,h:.075,d:2.5,color:walkColor,kind:'hub-path',hub:true});
   // Fenster außen.
@@ -984,20 +999,20 @@ function buildHub(){
   for(const z of[-10,-5,0,5]){boxDeco(leftX-.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);boxDeco(rightX+.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);}
   addGlowLight(sx,4.7,2.5,0xffe7b0,.85,18);addGlowLight(sx,4.7,-9,0xbbeeff,.72,16);
 
-  // Daily links innen.
-  addRingDeco(29.0,2.15,-1.3,1.75,.14,0xf0b85b,0);addRingDeco(29.0,2.15,-1.38,1.02,.06,0x69e4ff,0);addSign('DAILY',{x:29.0,y:4.55,z:-.95},0xffc65a,.42);
-  addInteractable('daily-wheel','Daily Wheel drehen',29.0,1.0,-1.0,3.0,()=>openDailyWheel());addInteractable('daily-quests','Daily Quests ansehen',29.0,1.0,-4.4,2.4,()=>openDailyQuests());addSign('QUESTS',{x:29.0,y:2.25,z:-4.1},0x9ee8ff,.23);
-  // Rebirth rechts innen.
-  addRingDeco(42.5,2.05,-2.2,1.65,.11,0xc998ff,0);addSign('REBIRTH',{x:42.5,y:4.45,z:-1.95},0xc998ff,.42);addInteractable('rebirth','Rebirth öffnen',42.5,1.0,-2.0,3.2,()=>openRebirth());
-  // Shop geradeaus am hinteren Ende.
-  boxDeco(sx,1.48,-12.4,11.5,2.15,.62,0x0b1825,0x102d45);addSign('SHOP',{x:sx,y:3.45,z:-12.02},0xffd36a,.48);addSign('UPGRADES · ITEMS · PETS',{x:sx,y:2.65,z:-12.0},0x9ee8ff,.24);addInteractable('shop','Escape Shop öffnen',sx,1.0,-10.7,4.2,()=>openShop());
+  // Daily + Rebirth gemeinsam links an der Wand, als echte Stationen statt Kreise auf dem Boden.
+  boxDeco(22.45,2.35,-.7,.18,3.9,6.4,0x3f4848);boxDeco(23.0,1.05,-2.3,1.0,1.45,2.2,0x6d7470);boxDeco(23.35,2.30,-2.3,.18,2.05,2.15,0xf0b85b);
+  addSign('DAILY WHEEL',{x:23.42,y:4.25,z:-2.3},0xffc65a,.34);addSign('AKTIVE WELT',{x:23.43,y:3.60,z:-2.3},0x9ee8ff,.20);
+  addInteractable('daily-wheel','Daily Wheel drehen',24.0,1.0,-2.3,2.8,()=>openDailyWheel());addInteractable('daily-quests','Daily Quests ansehen',24.0,1.0,-5.0,2.5,()=>openDailyQuests());
+  boxDeco(23.0,1.05,3.15,1.0,1.45,2.4,0x6d6874);boxDeco(23.35,2.30,3.15,.18,2.05,2.25,0xa66ddd);addSign('REBIRTH',{x:23.42,y:4.25,z:3.15},0xc998ff,.36);addInteractable('rebirth','Rebirth öffnen',24.0,1.0,3.15,2.8,()=>openRebirth());
+  // Richtiger Shop-Tresen hinten: Theke, Regale und beleuchtetes Schild.
+  boxDeco(sx,1.05,-12.15,13.2,1.28,1.45,0x715b46);boxDeco(sx,1.72,-12.0,13.6,.18,1.55,0xc39b64);for(const x of[31.2,36,40.8]){boxDeco(x,3.1,-14.1,3.4,3.2,.45,0x32434a);for(const y of[2.15,3.05,3.95])boxDeco(x,y,-13.82,3.0,.10,.34,0x8ea3aa);}addSign('WORLD SHOP',{x:sx,y:5.25,z:-13.65},0xffd36a,.58);addSign('UPGRADES · ITEMS · PETS',{x:sx,y:4.35,z:-13.63},0x9ee8ff,.26);addInteractable('shop','World Shop öffnen',sx,1.0,-10.2,4.6,()=>openShop());
 
-  // Offene Treppe zur zweiten Etage; kleine Stufen sind physisch begehbar.
-  const stairX=47.2,stairStartZ=2.5;
-  for(let i=0;i<13;i++){const top=.56+i*.20;addPlatform({x:stairX,y:top-.09,z:stairStartZ-i*.55,w:2.25,h:.18,d:.66,color:0x8d8a82,kind:'shop-stair',hub:true});}
-  addPlatform({x:38.5,y:2.91,z:-9.0,w:20.0,h:.18,d:9.0,color:0x777d78,kind:'shop-floor-2',hub:true});
-  boxDeco(38.5,3.78,-4.45,20,.10,.10,0x30383d);for(const x of[29,33,37,41,45,48])addCylinderDeco(x,3.42,-4.45,.035,.045,.72,0x30383d,0,8);
-  addSign('2. ETAGE',{x:38.5,y:4.60,z:-4.28},0xdfe8ee,.27);
+  // V486: breitere, flachere Treppe mit freier Laufkante. Etage 2 liegt höher und hat sicheren Abschluss.
+  const stairX=47.0,stairStartZ=4.4;
+  for(let i=0;i<16;i++){const top=.56+i*.22;addPlatform({x:stairX,y:top-.10,z:stairStartZ-i*.62,w:3.25,h:.20,d:.78,color:0x918e85,kind:'shop-stair',hub:true});}
+  addPlatform({x:38.0,y:4.02,z:-8.3,w:21.0,h:.20,d:10.2,color:0x777d78,kind:'shop-floor-2',hub:true});
+  boxDeco(27.55,5.10,-8.3,.12,2.05,10.1,0x30383d);boxDeco(38.0,5.10,-3.25,21,.12,.12,0x30383d);for(const x of[28,32,36,40,44,48])addCylinderDeco(x,4.72,-3.25,.04,.05,1.35,0x30383d,0,8);
+  addSign('2. ETAGE',{x:38.0,y:5.65,z:-3.05},0xdfe8ee,.30);
 
   // --- PARK / STADTMÖBLIERUNG ----------------------------------------------------
   // Bäume bleiben auf Gras. Die kleinen Baumplatten sind die einzigen Platten direkt darunter.
@@ -1012,8 +1027,6 @@ function buildHub(){
   // Mehr Laternen entlang der Straßenränder, ebenfalls auf der Grasseite.
   for(const [x,z] of [[-11.2,-18],[11.2,-18],[-11.2,-8],[11.2,-8],[-11.2,8],[11.2,8],[-11.2,18],[11.2,18],[-11.2,42],[11.2,42],[-40,-21.5],[-22,-21.5],[22,-21.5],[40,-21.5],[-40,39],[ -22,39],[22,39],[40,39]])addHubStreetLamp(x,z);
 
-  // Kleines, sauberes Willkommen statt eines großen Mittelportals.
-  addSign('ESCAPE.KL',{x:0,y:2.65,z:19.8},0x5ce6ff,.42);
 }
 
 function buildRaceCourse(){
@@ -1880,9 +1893,9 @@ function interact(){if(G.modalOpen){closeModal();return}if(G.activeInteractable?
 function updateHud(force=false){
   if(!G.overlay||!G.state)return;G.hudClock+=force?999:0;const set=(q,v)=>{const e=G.overlay.querySelector(q);if(e&&e.textContent!==String(v))e.textContent=String(v)};
   const worldId=progressWorldId(),lp=levelProgress(worldId),nextRb=nextRebirthDef(),speed=currentSpeedStat(worldId),displaySpeedCap=G.world==='only-up'?SKYRUN_SPEED_STAT:REGULAR_SPEED_CAP;
-  set('[data-ekl-speed]',`${Math.round(speed)} / ${displaySpeedCap}`);set('[data-ekl-level]',lp.level);set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',G.state.rebirths);
+  set('[data-ekl-speed]',`${Math.round(speed)} / ${displaySpeedCap}`);set('[data-ekl-level]',lp.level);set('[data-ekl-wins]',fmt(G.state.wins));set('[data-ekl-rebirths]',worldRebirthCount(worldId));
   const worldName=escapeWorldById(worldId)?.name||'Welt';
-  set('[data-ekl-level-next]',lp.level>=Number(nextRb?.level||Infinity)?`REBIRTH ${G.state.rebirths+1} BEREIT · ${worldName}`:`NÄCHSTES LEVEL: noch ${fmt(lp.to-lp.xp)} POWER`);
+  set('[data-ekl-level-next]',lp.level>=Number(nextRb?.level||Infinity)?`REBIRTH ${worldRebirthCount(worldId)+1} BEREIT · ${worldName}`:`NÄCHSTES LEVEL: noch ${fmt(lp.to-lp.xp)} POWER`);
   const levelBar=G.overlay.querySelector('[data-ekl-level-bar]');if(levelBar)levelBar.style.width=`${Math.round(lp.ratio*100)}%`;
 }
 
@@ -1894,27 +1907,27 @@ function coreTierValue(kind){return Math.max(0,Math.min(3,Number(G.state?.[`${ki
 function coreUpgradeDef(kind,tier){return CORE_UPGRADES[kind]?.find(x=>x.tier===tier)||null;}
 function buyCoreUpgrade(kind){
   if(!CORE_UPGRADES[kind])return false;
-  const next=coreTierValue(kind)+1,def=coreUpgradeDef(kind,next);if(!def)return toast('Dieses Upgrade ist bereits maximal.','good',1500);
-  if(G.state.wins<def.cost)return toast(`Du brauchst ${def.cost.toLocaleString('de-DE')} Wins.`,'bad',1700);
-  G.state.wins-=def.cost;G.state[`${kind}CoreTier`]=next;soundBuy();queuePersist(50);updateHud(true);toast(`${def.name} freigeschaltet.`,'good',1900);openShop('upgrades');return true;
+  const next=coreTierValue(kind)+1,def=coreUpgradeDef(kind,next),tier=shopTier();if(next>tier.maxCoreTier)return toast(`Core-Limit in ${tier.name}: Stufe ${tier.maxCoreTier}/3. Für mehr brauchst du ${tier.next}.`,'bad',2300);if(!def)return toast('Dieses Upgrade ist bereits maximal.','good',1500);
+  const cost=shopScaledCost(def.cost);if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins.`,'bad',1700);
+  G.state.wins-=cost;G.state[`${kind}CoreTier`]=next;soundBuy();queuePersist(50);updateHud(true);toast(`${def.name} freigeschaltet.`,'good',1900);openShop('upgrades');return true;
 }
 function openShop(tab='speed'){
-  const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),trail=TRAILS.find(t=>t.id===G.state.trail)||TRAILS[0],aura=AURAS.find(a=>a.id===G.state.aura)||AURAS[0];
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · SHOP</small><h2>🏪 Escape Shop</h2><p>Level erzeugt deinen Basis-Speed bis 300. Alles darüber kommt nur aus kleinen additiven Prozent-Boni von Items, Auren, Pets und Upgrades. Power-Boni stacken ebenfalls kontrolliert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>EXTRA SPEED</small><b>+${(totalSpeedBonus()*100).toFixed(1).replace('.',',')}%</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
+  const worldId=shopWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),tier=shopTier(worldId),trail=TRAILS.find(t=>t.id===G.state.trail)||TRAILS[0],aura=AURAS.find(a=>a.id===G.state.aura)||AURAS[0];
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>WORLD ${tier.number} · SHOP</small><h2>🏪 ${tier.name}</h2><p>Jede Welt besitzt ihre eigene Shop-Stufe. Preise und Upgrade-Limits steigen mit der Welt. In World ${tier.number} sind Speed-Items bis Stufe ${tier.maxItemLevel}/5 und Cores bis Stufe ${tier.maxCoreTier}/3 möglich. Danach brauchst du ${tier.next}.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>EXTRA SPEED</small><b>+${(totalSpeedBonus()*100).toFixed(1).replace('.',',')}%</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
   wrap.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.onclick=()=>renderShopBody(b.dataset.eklShopTab));renderShopBody(tab);
 }
 function renderShopBody(tab){
   const body=G.overlay?.querySelector('[data-ekl-shop-body]');if(!body)return;
-  const worldId=progressWorldId(),speed=currentSpeedStat(worldId);
+  const worldId=shopWorldId(),speed=currentSpeedStat(worldId),tier=shopTier(worldId);
   G.overlay.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.classList.toggle('active',b.dataset.eklShopTab===tab));
   if(tab==='speed'){
-    body.innerHTML=`<div class="ekl-progression-note"><b>⚡ LEVEL-POWER</b><span>Normales Laufen erzeugt aktuell <strong>+${fmt(levelPowerPerRunPoint())} Power pro Bewegungseinheit</strong>. Diese Power erhöht dein Welt-Level. Der physische Speed bleibt ein eigener 0–300-Wert.</span></div><div class="ekl-shop-grid">${STEP_BUTTONS.slice(1).map(u=>{const owned=G.state.stepButtonTier>=u.tier,available=G.state.stepButtonTier===u.tier-1;return `<article class="${owned?'owned':''}"><small>POWER STUFE ${u.tier}</small><h3>${u.name}</h3><p>Erhöht die Level-Power beim Laufen und auf dem Laufband.</p><button data-ekl-buy-step="${u.tier}" ${owned||!available?'disabled':''}>${owned?'GEKAUFT':available?`${u.cost.toLocaleString('de-DE')} Wins`:'Vorherige Stufe benötigt'}</button></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>⚡ ${tier.name.toUpperCase()}</b><span>Shop-Limit: Power-Stufe ${tier.maxStepTier}/7 · Speed-Items ${tier.maxItemLevel}/5 · Cores ${tier.maxCoreTier}/3. Preise ×${String(tier.costMult).replace('.',',')}. Danach: <strong>${tier.next}</strong>.</span></div><div class="ekl-shop-grid">${STEP_BUTTONS.slice(1).map(u=>{const owned=G.state.stepButtonTier>=u.tier,lockedWorld=u.tier>tier.maxStepTier,available=!lockedWorld&&G.state.stepButtonTier===u.tier-1,cost=shopScaledCost(u.cost,worldId);return `<article class="${owned?'owned':''}"><small>POWER STUFE ${u.tier}</small><h3>${u.name}</h3><p>${lockedWorld?`🔒 Erst ab ${tier.next}.`:'Erhöht die Level-Power beim Laufen und auf dem Laufband.'}</p><button data-ekl-buy-step="${u.tier}" ${owned||!available?'disabled':''}>${owned?'GEKAUFT':lockedWorld?'NÄCHSTE WELT':available?`${cost.toLocaleString('de-DE')} Wins`:'Vorherige Stufe benötigt'}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-buy-step]').forEach(b=>b.onclick=()=>buyStepButton(Number(b.dataset.eklBuyStep),false));
   }else if(tab==='treadmills'){
     body.innerHTML=`<div class="ekl-progression-note"><b>🏃 SPORTPLATZ</b><span>Die Laufbänder sind stärker als normales Laufen. FREE+ wird über Level freigeschaltet, Silber mit Wins, Gold/Diamond über JK/Coin. Aktive Trainingswelt: <strong>${escapeWorldById(G.state.activeTrainingWorld)?.name||'Keyboard Lab'}</strong>.</span></div><div class="ekl-shop-grid">${TREADMILLS.map(t=>{const unlocked=treadmillUnlocked(t),req=treadmillRequirement(t);return `<article class="${unlocked?'owned':''}"><small>${unlocked?'FREIGESCHALTET':'TRAININGSSTUFE'}</small><h3>${t.name} · ×${t.mult}</h3><p>${t.desc}<br>${unlocked?'Bereit zum Benutzen.':`Benötigt: ${req}`}</p><button data-ekl-treadmill="${t.id}">${unlocked?'Details':t.access==='wins'?`${t.cost.toLocaleString('de-DE')} Wins`:t.access==='jk'?'JK/Coin ansehen':'Details'}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-treadmill]').forEach(b=>b.onclick=()=>openTreadmillStation(b.dataset.eklTreadmill));
   }else if(tab==='items'){
-    body.innerHTML=`<div class="ekl-progression-note"><b>🎒 SPEED-INVENTAR · Basis ${Math.round(rawSpeedStat(worldId))}/300 · Effektiv ${Math.round(speed)}</b><span>V462-Balance: Speed-Items geben nur noch kleine <strong>permanente Prozent-Boni</strong>. Alle normalen Speed-Boni addieren sich statt sich gegenseitig zu multiplizieren. Maximaler Item-Bonus: +10,5 %.</span></div><div class="ekl-shop-grid">${SPEED_ITEMS.map(item=>{const count=Math.max(0,Number(G.state.speedItems?.[item.id])||0),cost=speedItemCost(item),level=speedItemLevel(item),max=item.maxLevel||5,total=level*item.pct,canUse=count>0&&level<max;return `<article class="${level?'owned':''}"><small>${item.icon} SPEED ITEM · STUFE ${level}/${max} · ${count}× INVENTAR</small><h3>${item.name}</h3><p>${item.desc}.<br><b>Aktuell: +${(total*100).toFixed(1).replace('.',',')} % effektiver Speed</b> · maximal +${(item.pct*max*100).toFixed(1).replace('.',',')} %.</p><div class="ekl-item-actions"><button data-ekl-buy-item="${item.id}" ${level>=max?'disabled':''}>${level>=max?'MAXIMAL':`Kaufen · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-ekl-use-item="${item.id}" ${canUse?'':'disabled'}>Erweitern (${count})</button></div></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🎒 SPEED-INVENTAR · Basis ${Math.round(rawSpeedStat(worldId))}/300 · Effektiv ${Math.round(speed)}</b><span>V462-Balance: Speed-Items geben nur noch kleine <strong>permanente Prozent-Boni</strong>. Alle normalen Speed-Boni addieren sich statt sich gegenseitig zu multiplizieren. Maximaler Item-Bonus: +10,5 %.</span></div><div class="ekl-shop-grid">${SPEED_ITEMS.map(item=>{const count=Math.max(0,Number(G.state.speedItems?.[item.id])||0),cost=speedItemCost(item),level=speedItemLevel(item),max=item.maxLevel||5,allowed=Math.min(max,tier.maxItemLevel),total=level*item.pct,canUse=count>0&&level<allowed;return `<article class="${level?'owned':''}"><small>${item.icon} SPEED ITEM · STUFE ${level}/${max} · ${count}× INVENTAR</small><h3>${item.name}</h3><p>${item.desc}.<br><b>Aktuell: +${(total*100).toFixed(1).replace('.',',')} % effektiver Speed</b> · maximal +${(item.pct*max*100).toFixed(1).replace('.',',')} %.</p><div class="ekl-item-actions"><button data-ekl-buy-item="${item.id}" ${level>=allowed?'disabled':''}>${level>=allowed?(allowed<max?`WORLD ${tier.number} LIMIT`:'MAXIMAL'):`Kaufen · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-ekl-use-item="${item.id}" ${canUse?'':'disabled'}>Erweitern (${count})</button></div></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-buy-item]').forEach(b=>b.onclick=()=>buySpeedItem(b.dataset.eklBuyItem));
     body.querySelectorAll('[data-ekl-use-item]').forEach(b=>b.onclick=()=>useSpeedItem(b.dataset.eklUseItem));
   }else if(tab==='trails'){
@@ -1931,7 +1944,7 @@ function renderShopBody(tab){
       {kind:'speed',icon:'💨',title:'Speed Core',tier:coreTierValue('speed'),bonus:[0,1,2,3][coreTierValue('speed')],desc:'Erhöht deinen effektiven Speed prozentual und darf dadurch auch über Basis-Speed 300 hinausgehen.'},
       {kind:'win',icon:'🏆',title:'Win Core',tier:coreTierValue('win'),bonus:[0,1,2,3][coreTierValue('win')],desc:'Erhöht jede eingesammelte Win-Belohnung und stackt mit Pet/Verwandlung.'}
     ];
-    body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente, bewusst kleine Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; Speed Core, Auren, Pets und Speed-Chips dürfen den effektiven Wert kontrolliert über 300 anheben.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const next=coreUpgradeDef(c.kind,c.tier+1);return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${next.cost.toLocaleString('de-DE')} Wins`:'MAXIMAL'}</button></article>`}).join('')}</div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente, bewusst kleine Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; Speed Core, Auren, Pets und Speed-Chips dürfen den effektiven Wert kontrolliert über 300 anheben.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const nextRaw=coreUpgradeDef(c.kind,c.tier+1),next=c.tier+1<=tier.maxCoreTier?nextRaw:null;return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${shopScaledCost(next.cost,worldId).toLocaleString('de-DE')} Wins`:c.tier>=3?'MAXIMAL':`WORLD ${tier.number} LIMIT`}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-core]').forEach(b=>b.onclick=()=>buyCoreUpgrade(b.dataset.eklCore));
   }else if(tab==='pets'){
     const free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
@@ -1964,9 +1977,10 @@ function renderShopBody(tab){
 function buyStepButton(tier,fromPad=false){
   const u=STEP_BUTTONS.find(x=>x.tier===tier);if(!u)return false;
   if(G.state.stepButtonTier>=tier){if(fromPad)toast(`${u.name} ist bereits aktiv.`,'good',1200);return false;}
+  const st=shopTier();if(tier>st.maxStepTier){toast(`Power-Stufe ${tier} ist erst in ${st.next} verfügbar.`,'bad',2000);return false;}
   if(G.state.stepButtonTier!==tier-1){toast(`Erst Number Button ${G.state.stepButtonTier+1} freischalten.`,'bad',1600);return false;}
-  if(G.state.wins<u.cost){toast(`Du brauchst ${u.cost.toLocaleString('de-DE')} Wins.`,'bad',1600);return false;}
-  G.state.wins-=u.cost;G.state.stepButtonTier=tier;soundBuy();queuePersist(50);updateHud(true);toast(`⚡ ${u.name} gekauft!`,'good',2200);if(!fromPad)openShop('speed');return true;
+  const cost=shopScaledCost(u.cost);if(G.state.wins<cost){toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins.`,'bad',1600);return false;}
+  G.state.wins-=cost;G.state.stepButtonTier=tier;soundBuy();queuePersist(50);updateHud(true);toast(`⚡ ${u.name} gekauft!`,'good',2200);if(!fromPad)openShop('speed');return true;
 }
 function buyOrEquipTrail(id){
   const t=TRAILS.find(x=>x.id===id);if(!t)return;
@@ -2013,30 +2027,30 @@ function grantJkCoinPurchase(kind,amount=1){
   queuePersist(50);updateHud(true);toast('◆ JK/Coin-Inhalt für Escape.kl aktiviert.','good',2400);return true;
 }
 function openRebirth(){
-  const worldId=progressWorldId(),w=escapeWorldById(worldId),next=nextRebirthDef(),level=currentLevel(worldId),ready=level>=Number(next.level||Infinity),currentMult=rebirthMultiplier(),afterMult=Number(next.mult||currentMult),speed=currentSpeedStat(worldId);
-  const wrap=openModal(`<div class="ekl-modal ekl-rebirth-modal"><div class="ekl-modal-head"><div><small>${w?.name||'WELT'} · LANGZEIT-PROGRESSION</small><h2>🔄 Rebirth ${G.state.rebirths+1}</h2><p>Rebirth ist absichtlich langsam. Er setzt nur die aktive Trainingswelt zurück und gibt einen kontrollierten permanenten Power-Bonus. Wins, Gear und andere Weltfortschritte bleiben erhalten.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-rebirth-requirements"><article class="${ready?'ready':''}"><small>AKTUELLES LEVEL</small><b>${level} / ${next.level}</b><span>${ready?'✓ Rebirth bereit':`Noch ${Math.max(0,next.level-level)} Level`}</span></article><article><small>SPEED</small><b>${Math.round(speed)} / 300</b><span>aktive Welt wird auf Start-Speed zurückgesetzt</span></article><article class="bonus"><small>PERMANENTER POWER-BONUS</small><b>×${currentMult.toFixed(2).replace('.',',')} → ×${afterMult.toFixed(2).replace('.',',')}</b><span>gilt auf Laufen und Laufband-Training</span></article></div><div class="ekl-modal-actions"><button data-ekl-rebirth-confirm class="gold" ${!ready?'disabled':''}>Rebirth ${G.state.rebirths+1} durchführen</button><button data-ekl-modal-close>Abbrechen</button></div></div>`);
+  const worldId=shopWorldId(),w=escapeWorldById(worldId),count=worldRebirthCount(worldId),next=nextRebirthDef(worldId),level=currentLevel(worldId),ready=level>=Number(next.level||Infinity),currentMult=rebirthMultiplier(worldId),afterMult=Number(next.mult||currentMult),speed=currentSpeedStat(worldId);
+  const wrap=openModal(`<div class="ekl-modal ekl-rebirth-modal"><div class="ekl-modal-head"><div><small>${w?.name||'WELT'} · LANGZEIT-PROGRESSION</small><h2>🔄 ${w?.name||'Welt'} · Rebirth ${count+1}</h2><p>Rebirth ist absichtlich langsam. Er setzt nur die aktive Trainingswelt zurück und gibt einen kontrollierten permanenten Power-Bonus. Wins, Gear und andere Weltfortschritte bleiben erhalten.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-rebirth-requirements"><article class="${ready?'ready':''}"><small>AKTUELLES LEVEL</small><b>${level} / ${next.level}</b><span>${ready?'✓ Rebirth bereit':`Noch ${Math.max(0,next.level-level)} Level`}</span></article><article><small>SPEED</small><b>${Math.round(speed)} / 300</b><span>aktive Welt wird auf Start-Speed zurückgesetzt</span></article><article class="bonus"><small>PERMANENTER POWER-BONUS</small><b>×${currentMult.toFixed(2).replace('.',',')} → ×${afterMult.toFixed(2).replace('.',',')}</b><span>gilt auf Laufen und Laufband-Training</span></article></div><div class="ekl-modal-actions"><button data-ekl-rebirth-confirm class="gold" ${!ready?'disabled':''}>Rebirth ${count+1} durchführen</button><button data-ekl-modal-close>Abbrechen</button></div></div>`);
   wrap.querySelector('[data-ekl-rebirth-confirm]')?.addEventListener('click',()=>{
     if(currentLevel(worldId)<next.level)return;
-    const p=progressForWorld(worldId);p.xp=0;p.itemSpeedBonus=0;p.adminSpeedOverride=null;G.state.rebirths++;G.speedDistanceCarry=0;G.trainingCarry=0;
-    queuePersist(50);closeModal();updateHud(true);toast(`Rebirth ${G.state.rebirths} · Power jetzt ×${rebirthMultiplier().toFixed(2).replace('.',',')}!`,'good',2800);awardMainXp(15,'Escape.kl Rebirth',`escape-rebirth-${G.state.rebirths}`);
+    const p=progressForWorld(worldId);p.xp=0;p.itemSpeedBonus=0;p.adminSpeedOverride=null;setWorldRebirthCount(worldId,count+1);G.speedDistanceCarry=0;G.trainingCarry=0;
+    queuePersist(50);closeModal();updateHud(true);toast(`${w?.name||'Welt'} Rebirth ${count+1} · Power jetzt ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}!`,'good',2800);awardMainXp(15,'Escape.kl Rebirth',`escape-rebirth-${worldId}-${count+1}`);
   });
 }
 function wheelRemaining(){return Math.max(0,24*60*60*1000-(Date.now()-(Number(G.state.lastWheelAt)||0)));}
 function durationShort(ms){ms=Math.max(0,ms);const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h>0?`${h} Std ${m} Min`:`${Math.max(1,m)} Min`;}
 function openDailyWheel(){
-  const remaining=wheelRemaining(),ready=remaining<=0;const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>TÄGLICHE BELOHNUNG · ESCAPE HUB</small><h2>🎡 Daily Wheel</h2><p>Ein kostenloser Dreh alle 24 Stunden. Der Gewinn wird sofort in Escape.kl gespeichert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Power · Wins · selten ein Trail</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const remaining=wheelRemaining(),ready=remaining<=0,tier=shopTier();const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>WORLD ${tier.number} · TÄGLICHE BELOHNUNG</small><h2>🎡 Daily Wheel · ${tier.name}</h2><p>Ein kostenloser Dreh alle 24 Stunden. Belohnungen skalieren mit deiner aktuell ausgewählten Welt (×${tier.dailyMult}).</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-wheel-zone"><div class="ekl-wheel" data-ekl-wheel><span style="--i:0">⚡</span><span style="--i:1">🏆</span><span style="--i:2">×2</span><span style="--i:3">⚡</span><span style="--i:4">🏆</span><span style="--i:5">★</span><i>▼</i></div><div class="ekl-wheel-info"><small>${ready?'BEREIT':'NÄCHSTER DREH'}</small><b data-ekl-wheel-status>${ready?'Jetzt drehen':durationShort(remaining)}</b><p>Power · Wins · selten ein Trail</p></div></div><div class="ekl-modal-actions"><button data-ekl-spin class="gold" ${ready?'':'disabled'}>${ready?'KOSTENLOS DREHEN':'MORGEN WIEDER'}</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   wrap.querySelector('[data-ekl-spin]')?.addEventListener('click',()=>spinDailyWheel(wrap));
 }
 function spinDailyWheel(wrap){
   if(wheelRemaining()>0)return;const button=wrap.querySelector('[data-ekl-spin]'),wheel=wrap.querySelector('[data-ekl-wheel]'),status=wrap.querySelector('[data-ekl-wheel-status]');if(button)button.disabled=true;
   const roll=Math.random();let text='';
-  if(roll<.24){const a=directSpeedGrant(5,{countDaily:false});text=a?`+${a.toFixed(0)} Speed`:'+Power-Bonus';}
-  else if(roll<.46){awardWins(250,'Daily Wheel');text='+250 Wins';}
-  else if(roll<.64){const a=directSpeedGrant(12,{countDaily:false});text=a?`+${a.toFixed(0)} Speed`:'+Power-Bonus';}
-  else if(roll<.80){awardWins(750,'Daily Wheel');text='+750 Wins';}
-  else if(roll<.94){addLevelPower(18000,false);text='+18.000 Level-Power';}
+  const dm=shopTier().dailyMult;if(roll<.24){addLevelPower(12500*dm,false,shopWorldId());text=`+${(12500*dm).toLocaleString('de-DE')} Level-Power`;}
+  else if(roll<.46){awardWins(250*dm,'Daily Wheel');text=`+${(250*dm).toLocaleString('de-DE')} Wins`;}
+  else if(roll<.64){addLevelPower(30000*dm,false,shopWorldId());text=`+${(30000*dm).toLocaleString('de-DE')} Level-Power`;}
+  else if(roll<.80){awardWins(750*dm,'Daily Wheel');text=`+${(750*dm).toLocaleString('de-DE')} Wins`;}
+  else if(roll<.94){addLevelPower(18000*dm,false,shopWorldId());text=`+${(18000*dm).toLocaleString('de-DE')} Level-Power`;}
   else if(!G.state.ownedTrails.includes('green')){G.state.ownedTrails.push('green');text='Green Energy Trail';}
-  else{awardWins(5000,'Daily Wheel');text='+5.000 Wins · Jackpot';}
+  else{awardWins(5000*dm,'Daily Wheel');text=`+${(5000*dm).toLocaleString('de-DE')} Wins · Jackpot`;}
   G.state.lastWheelAt=Date.now();queuePersist(50);soundFinish();if(wheel){wheel.style.setProperty('--spin',`${1260+Math.floor(Math.random()*360)}deg`);wheel.classList.add('spinning');}if(status)status.textContent='Dreht …';setTimeout(()=>{if(status)status.textContent=text;toast(`Daily Wheel: ${text}`,'good',2600);updateHud(true);},1150);
 }
 function dailyQuestRows(){
@@ -2055,10 +2069,10 @@ function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().fin
 function openRecords(){
   const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0),onlyBest=Number(G.state.bestTimes?.['jk-skyrun']||0),onlyRuns=Number(G.state.completions?.['jk-skyrun']||0);
   const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V485</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist jetzt ein begehbares Haus. Links innen stehen Daily Wheel und Daily Quests, rechts Rebirth, geradeaus der eigentliche Shop; über die Treppe ist eine offene zweite Etage erreichbar.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V486</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares Haus. Links an der Wand stehen Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; World 4 ist bereits als nächste Shop-Stufe vorbereitet. Die Treppe führt auf eine höhere zweite Etage.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2098,7 +2112,7 @@ function openOwnerModMenu(){
   const powerOptions=STEP_BUTTONS.map(u=>`<option value="${u.tier}" ${Number(G.state.stepButtonTier||0)===u.tier?'selected':''}>Stufe ${u.tier} · +${u.gain} Power</option>`).join('');
   const trailOptions=TRAILS.map(t=>`<option value="${t.id}" ${G.state.trail===t.id?'selected':''}>${t.name}</option>`).join('');
   const auraOptions=AURAS.map(a=>`<option value="${a.id}" ${G.state.aura===a.id?'selected':''}>${a.name}</option>`).join('');
-  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${G.state.rebirths}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${worldRebirthCount(worldId)}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   // V460: X/Schließen im Owner-Menü führt sauber zurück ins Pause-Menü. So bleibt
   // kein unsichtbarer Pause-Zustand hängen.
   wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
@@ -2113,7 +2127,7 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-world]')?.addEventListener('change',refresh);
   wrap.querySelector('[data-mod-apply]')?.addEventListener('click',()=>{
     const id=selected();ownerSetExactLevel(id,wrap.querySelector('[data-mod-level]').value);ownerSetExactSpeed(id,wrap.querySelector('[data-mod-speed]').value);
-    G.state.wins=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-wins]').value)||0));G.state.rebirths=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-rebirth]').value)||0));G.state.ownerEventMultiplier=Math.max(1,Number(wrap.querySelector('[data-mod-event]').value)||1);G.state.activeTrainingWorld=id;
+    G.state.wins=Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-wins]').value)||0));setWorldRebirthCount(id,Math.max(0,Math.floor(Number(wrap.querySelector('[data-mod-rebirth]').value)||0)));G.state.ownerEventMultiplier=Math.max(1,Number(wrap.querySelector('[data-mod-event]').value)||1);G.state.activeTrainingWorld=id;
     ownerSetPowerTier(wrap.querySelector('[data-mod-power-tier]').value);ownerSetActiveTrail(wrap.querySelector('[data-mod-trail]').value);ownerSetActiveAura(wrap.querySelector('[data-mod-aura]').value);
     updateWorldUnlocks();queuePersist(50);updateHud(true);soundBuy();toast('👑 Owner-Werte & aktive Perks übernommen.','good',1900);closeModal();setTimeout(showPause,0);
   });
@@ -2122,7 +2136,7 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-speed-max]')?.addEventListener('click',()=>{ownerSetExactSpeed(selected(),300);refresh();});
   wrap.querySelector('[data-mod-unlock]')?.addEventListener('click',()=>{G.state.worldsUnlocked=[...new Set(WORLD_DEFS.filter(w=>!w.locked).map(w=>w.id))];queuePersist(50);toast('Alle vorhandenen Escape-Welten freigeschaltet.','good');});
   wrap.querySelector('[data-mod-reset-world]')?.addEventListener('click',()=>{const id=selected();G.state.worldProgress[id]=emptyWorldProgress();refresh();queuePersist(50);updateHud(true);toast('Weltfortschritt zurückgesetzt.','good');});
-  wrap.querySelector('[data-mod-reset-rebirth]')?.addEventListener('click',()=>{G.state.rebirths=0;wrap.querySelector('[data-mod-rebirth]').value=0;queuePersist(50);updateHud(true);toast('Rebirths auf 0 gesetzt.','good');});
+  wrap.querySelector('[data-mod-reset-rebirth]')?.addEventListener('click',()=>{setWorldRebirthCount(wrap.querySelector('[data-mod-world]')?.value||worldId,0);wrap.querySelector('[data-mod-rebirth]').value=0;queuePersist(50);updateHud(true);toast('Rebirths dieser Welt auf 0 gesetzt.','good');});
   wrap.querySelector('[data-mod-clear-trail]')?.addEventListener('click',()=>{ownerSetActiveTrail('none');refresh();queuePersist(50);updateHud(true);toast('Spur abgelegt. Besitz bleibt erhalten.','good');});
   wrap.querySelector('[data-mod-clear-aura]')?.addEventListener('click',()=>{ownerSetActiveAura('none');refresh();queuePersist(50);updateHud(true);toast('Aura abgelegt. Besitz bleibt erhalten.','good');});
   wrap.querySelector('[data-mod-clear-boosts]')?.addEventListener('click',()=>{G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;refresh();queuePersist(50);updateHud(true);toast('Temporäre Boosts und Admin-Event-Multiplikator entfernt.','good');});

@@ -1,6 +1,6 @@
 /* Escape.kl World 3 – Toxic World V485. Stage signs lifted above gameplay; blocking chase wall relocated out of the jump line. */
 export function buildToxicKeyboardWorld(api){
-  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},addChaseWall=()=>{},finishAndReturnHub=()=>{}}=api;
+  const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},addChaseWall=()=>{},returnHub=()=>{},finishAndReturnHub=()=>{}}=api;
   const rewards=[5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000];
   const recommended=[30,60,90,120,150,180,210,240,270,300];
   const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
@@ -8,6 +8,8 @@ export function buildToxicKeyboardWorld(api){
   boxDeco(0,-9.0,-560,92,1.2,1080,0x061109);boxDeco(-38,-2.0,-560,2.7,12,1065,0x14321a);boxDeco(38,-2.0,-560,2.7,12,1065,0x14321a);
   for(let zz=-100,i=0;zz>-1055;zz-=48,i++){addCylinderDeco(-31,-1.5,zz,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addCylinderDeco(31,-1.5,zz,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addGlowLight(i%2?-30:30,2.3,zz,0x64ff6d,.42,9);}
   addPlatform({x:0,y:.3,z:startZ,w:13,h:.6,d:10,color:0x245d2c,label:'TOXIC',stage:1,kind:'start'});addSign('WORLD 3 · TOXIC WORLD',{x:0,y:5.25,z:startZ+4.4},0x7bff79,1.0);addSign('AIR CONTROL · TOXIC SPRINT · SPEED 300 FINALE',{x:0,y:4.05,z:startZ+4.42},0xffd16b,.40);
+  // V486: Wer von der allerersten Spawn-Plattform rückwärts hinausläuft, kehrt automatisch in den Hub zurück.
+  addSign('↩ ZURÜCK ZUM HUB',{x:0,y:2.15,z:startZ+5.7},0xdfffe2,.32);addAutoTrigger('world-start-return-hub',0,startZ+5.35,8.5,1.7,returnHub);
   let z=startZ-9;
   // V485: Jede Stage-Beschriftung sitzt sichtbar oberhalb der jeweiligen Sprunghöhe.
   const title=(n,t,y=4.3)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y,z:z+2.0},0x7cff7a,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:y-.85,z:z+2.02},0xffd36a,.35);};
