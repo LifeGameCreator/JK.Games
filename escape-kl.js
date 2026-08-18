@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V493 · Water Wave Placement Fix */
-const VERSION = '2026-08-18-v495';
+/* Escape.kl – JK.Games Top Game V496 · Paid Revive Stabilization Fix */
+const VERSION = '2026-08-18-v496';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -34,6 +34,8 @@ const CAMERA_PITCH_MAX = .78;
 const TOUCH_LOOK_SENSITIVITY_X = .0062;
 const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
+const REVIVE_POST_TELEPORT_GRACE_MS = 1800;
+const REVIVE_GROUND_STABILIZE_MS = 420;
 const REVIVE_COSTS = Object.freeze({'keyboard-lab':10,'candy-keys':20,'toxic-keyboard':30,'world-4':40});
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
@@ -168,7 +170,7 @@ const G = {
   keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
   yaw:0, pitch:.32, camDistance:7.2, pointer:null,lookPointer:null,lookTouchId:null,
   keyDown:null,keyUp:null,resizeHandler:null,orientationHandler:null,pointerMove:null,pointerUp:null,stickMove:null,stickUp:null,stickTouchMove:null,stickTouchEnd:null,lookTouchMove:null,lookTouchEnd:null,
-  lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,reviveOfferWorld:'',reviveOfferPlatformUuid:'',revivePending:false,revivePurchaseBusy:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
+  lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,reviveOfferWorld:'',reviveOfferPlatformUuid:'',revivePending:false,revivePurchaseBusy:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0,reviveGraceUntil:0,reviveStabilizeUntil:0,reviveStabilizeSupport:null, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
   prompt:null, activeInteractable:null, toastTimer:0, paused:false, modalOpen:false,shopActiveTab:'',shopScrollMemory:Object.create(null),
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
@@ -896,12 +898,16 @@ function hazardTouchesPlayer(h){
   return Math.abs(G.pos.x-h.mesh.position.x)<=h.w/2+r&&Math.abs(G.pos.z-h.mesh.position.z)<=h.d/2+r&&Math.abs(G.pos.y-h.mesh.position.y)<=h.h/2+PLAYER_HALF;
 }
 function updateHazards(dt){
-  const now=performance.now();
+  const now=performance.now(),reviveProtected=isEscapeWorld()&&now<Number(G.reviveGraceUntil||0);
   for(const h of G.hazards){
     if(h.scope!==G.world){h.mesh.visible=false;continue;}h.mesh.visible=true;
     if(h.chase){
       if(h.clearZ!==null&&G.pos.z<=h.clearZ){h.active=false;h.mesh.visible=false;continue;}
-      if(!h.started&&G.pos.z<=h.triggerZ){
+      // V496: Direkt nach einem bezahlten Revive bleiben noch nicht gestartete
+      // Chase-Hazards kurz ruhig. Sonst kann derselbe Hazard im Folge-Frame erneut
+      // spawnen und sofort einen zweiten Respawn auslösen.
+      if(!h.started&&reviveProtected){if(h.hiddenUntilStart)h.mesh.visible=false;}
+      else if(!h.started&&G.pos.z<=h.triggerZ){
         h.started=true;
         if(h.spawnBehind>0)h.mesh.position.z=G.pos.z+h.spawnBehind;
         h.mesh.visible=true;
@@ -909,7 +915,7 @@ function updateHazards(dt){
       }else if(!h.started&&h.hiddenUntilStart){h.mesh.visible=false;}
       if(h.started&&h.active){h.mesh.position.z-=h.speed*dt;if(h.mesh.position.z<=h.endZ){h.active=false;h.mesh.visible=false;}}
     }else if(h.risingWater){
-      if(!h.started&&!h.completed&&G.pos.z<=h.triggerZ){h.started=true;h.phase='rising';toast(h.triggerText||'🌊 FLUT STEIGT!','bad',1700);tone(120,.18,'sawtooth',.02,80);}
+      if(!h.started&&!h.completed&&!reviveProtected&&G.pos.z<=h.triggerZ){h.started=true;h.phase='rising';toast(h.triggerText||'🌊 FLUT STEIGT!','bad',1700);tone(120,.18,'sawtooth',.02,80);}
       if(h.started&&h.active){
         if(h.phase==='rising'){
           h.mesh.position.y=Math.min(h.endY,h.mesh.position.y+h.riseSpeed*dt);
@@ -922,7 +928,7 @@ function updateHazards(dt){
         }
       }
     }else if(h.motion){const t=now/1000,q=Math.sin(t*h.motion.speed+(h.motion.phase||0))*h.motion.amp;h.mesh.position[h.motion.axis]=h.base[h.motion.axis]+q;}
-    if(hazardTouchesPlayer(h)){if(isEscapeWorld())beginReviveOffer();else respawn();return true;}
+    if(!reviveProtected&&hazardTouchesPlayer(h)){if(isEscapeWorld())beginReviveOffer();else respawn();return true;}
   }return false;
 }
 function resolveHubColliders(prevX,prevZ){
@@ -1628,7 +1634,7 @@ function registerRunLanding(p){
   if(perfect&&!G.perfectLandingClaims.has(key)){G.perfectLandingClaims.add(key);const bonus=Math.max(1,Math.round(levelPowerPerRunPoint()*(.20+Math.min(10,G.runCombo)*.05)));addLevelPower(bonus,true,G.world);toast(`🎯 PERFECT LANDING · COMBO ×${G.runCombo} · +${fmt(bonus)} Power`,'good',1050);}
 }
 function setWorld(id,initial=false){
-  cancelReviveOffer(true);removeSummonedTreadmill();removeSummonedVending();
+  cancelReviveOffer(true);G.reviveGraceUntil=0;G.reviveStabilizeUntil=0;G.reviveStabilizeSupport=null;removeSummonedTreadmill();removeSummonedVending();
   G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;G.stageClaims.clear();resetRunTech();G.trainingStreakSeconds=0;G.trainingStreakTier=0;
   const w=escapeWorldById(id);
   if(id==='hub'){
@@ -1684,6 +1690,7 @@ function cancelReviveOffer(unpause=true,{keepSnapshot=false}={}){
 }
 function resetEscapeRun({countDeath=true,showToast=true}={}){
   const w=currentWorldDef();if(!w)return;
+  G.reviveGraceUntil=0;G.reviveStabilizeUntil=0;G.reviveStabilizeSupport=null;
   if(countDeath)G.deaths++;
   G.stage=1;G.stageClaims.clear();resetRunTech();G.runStartedAt=performance.now();G.runFurthestZ=Number(w?.start?.z)||-70;
   resetHazardsForWorld(w.id);
@@ -1745,6 +1752,14 @@ function placePlayerOnReviveTarget(target){
   G.grounded=!!support;G.support=support;G.lastSupport=support;G.lastGroundedAt=performance.now();G.coyoteAvailable=!!support;G.lastGroundPos.copy(G.pos);
   G.reviveAnchor.copy(anchor);G.reviveSupport=support;G.reviveOffsetX=support?anchor.x-support.mesh.position.x:0;G.reviveOffsetZ=support?anchor.z-support.mesh.position.z:0;G.reviveStage=stage;G.reviveYaw=yaw;G.reviveStageClaims=new Set(claims||[]);
   if(support)support.lastContactAt=performance.now();
+  // V496: Nach einem bezahlten JK/Coin-Revive bekommt der Spieler kurz Schutz vor
+  // demselben Hazard/Fall-Trigger. Zusätzlich wird der erste Physik-Kontakt mit
+  // der gespeicherten Plattform stabilisiert, damit kein Folge-Frame den Spieler
+  // sofort wieder zum Weltstart schickt.
+  const reviveNow=performance.now();
+  G.reviveGraceUntil=reviveNow+REVIVE_POST_TELEPORT_GRACE_MS;
+  G.reviveStabilizeUntil=reviveNow+REVIVE_GROUND_STABILIZE_MS;
+  G.reviveStabilizeSupport=support||null;
   return true;
 }
 function tryReviveWithJk(event){
@@ -1770,6 +1785,9 @@ function tryReviveWithJk(event){
 }
 function beginReviveOffer(){
   if(!isEscapeWorld())return;
+  // V496: Ein gerade bezahlter Revive darf nicht im direkt folgenden Frame
+  // erneut denselben Tod auslösen und dadurch wieder am Weltstart landen.
+  if(performance.now()<Number(G.reviveGraceUntil||0))return;
   if(G.revivePending)cancelReviveOffer(false);
   const w=currentWorldDef(),cost=reviveCostForWorld();if(!w||!cost)return resetEscapeRun();
   // V478: Snapshot VOR jedem Reset. Er bleibt vom neuen Lauf am Weltstart komplett getrennt.
@@ -2068,6 +2086,16 @@ function processMovement(dt,t){
   const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.moveIntensity=movementSpeed()>0?Math.min(1,planarSpeed/movementSpeed()):0;
   if(planarSpeed>.08&&G.playerRoot){const wanted=Math.atan2(G.moveVel.x,G.moveVel.z),diff=Math.atan2(Math.sin(wanted-G.playerRoot.rotation.y),Math.cos(wanted-G.playerRoot.rotation.y)),turn=1-Math.exp(-dt*(G.sprint?13:10));G.playerRoot.rotation.y+=diff*turn;}
 
+  // V496: Die ersten Millisekunden nach einem bezahlten Revive werden auf der
+  // gespeicherten Plattform physikalisch stabilisiert. X/Z bleiben frei beweglich;
+  // nur solange der Spieler noch ueber der Plattform steht, wird der Bodenkontakt
+  // sicher gehalten.
+  const reviveNow=performance.now(),stabilize=G.reviveStabilizeSupport;
+  if(reviveNow<Number(G.reviveStabilizeUntil||0)&&stabilize&&stabilize.scope===G.world&&stabilize.mesh&&G.platforms.includes(stabilize)){
+    const inside=Math.abs(G.pos.x-stabilize.mesh.position.x)<=stabilize.w/2+currentPlayerRadius()*.12&&Math.abs(G.pos.z-stabilize.mesh.position.z)<=stabilize.d/2+currentPlayerRadius()*.12;
+    if(inside&&!G.jumpHeld&&G.vel.y<=.15){G.pos.y=stabilize.mesh.position.y+stabilize.h/2+PLAYER_HALF+.12;G.vel.y=0;G.grounded=true;G.support=stabilize;G.lastSupport=stabilize;}
+  }else if(reviveNow>=Number(G.reviveStabilizeUntil||0)){G.reviveStabilizeSupport=null;}
+
   const wasGrounded=G.grounded,prevBottom=G.pos.y-PLAYER_HALF;G.vel.y=Math.max(-22,G.vel.y-GRAVITY*dt);let nextY=G.pos.y+G.vel.y*dt;const nextBottom=nextY-PLAYER_HALF;let landed=null;if(G.vel.y<=0)landed=platformUnder(G.pos.x,G.pos.z,prevBottom,nextBottom);
   if(landed){nextY=landed.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=landed.p;}else{const hold=G.grounded?platformUnder(G.pos.x,G.pos.z,prevBottom,prevBottom-.08):null;if(hold&&Math.abs(prevBottom-hold.top)<.28){nextY=hold.top+PLAYER_HALF;G.vel.y=0;G.grounded=true;G.support=hold.p;}else{G.grounded=false;G.support=null;}}
   if(G.grounded){G.lastGroundedAt=performance.now();G.coyoteAvailable=true;}if(!wasGrounded&&G.grounded)G.landingPulse=1;G.landingPulse=Math.max(0,G.landingPulse-dt*7);
@@ -2101,7 +2129,15 @@ function processMovement(dt,t){
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
   if(updateHazards(dt))return;
-  if(G.pos.y<(isEscapeWorld()||G.world==='race'||G.world==='only-up'?WORLD_FAIL_Y:MAX_FALL)){if(isEscapeWorld())beginReviveOffer();else respawn();return;}detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
+  const failY=isEscapeWorld()||G.world==='race'||G.world==='only-up'?WORLD_FAIL_Y:MAX_FALL;
+  if(G.pos.y<failY){
+    // V496: Ein bezahlter Port darf nicht durch einen noch laufenden Fall-/Hazard-
+    // Frame sofort wieder auf Stage 1 zurueckgesetzt werden. Nach Ablauf der kurzen
+    // Schutzphase greift die normale Todeslogik wieder unveraendert.
+    if(isEscapeWorld()&&performance.now()<Number(G.reviveGraceUntil||0))return;
+    if(isEscapeWorld())beginReviveOffer();else respawn();return;
+  }
+  detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
 }
 function performJump(){
   if(G.ownerFlyActive)return false;
