@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V504 · input-resume fix + completed Water World */
-const VERSION = '2026-08-18-v504';
+/* Escape.kl – JK.Games Top Game V505 · Vending placement / facing / collision fix */
+const VERSION = '2026-08-18-v505';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -2360,6 +2360,9 @@ function vendingDurationText(ms){const m=Math.max(0,Math.ceil(ms/60000));return 
 function removeSummonedVending(){
   const vm=G.summonedVending;if(!vm)return false;G.vendingLoadSeq++;
   if(vm.interactable){const i=G.interactables.indexOf(vm.interactable);if(i>=0)G.interactables.splice(i,1);}
+  // V505: Die platzierte Maschine ist ein echtes Hindernis. Beim Entfernen muss
+  // deshalb auch ihre dynamische Kollisionsbox wieder sauber verschwinden.
+  if(vm.collider){const i=G.colliders.indexOf(vm.collider);if(i>=0)G.colliders.splice(i,1);vm.collider=null;}
   if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
   if(vm.wrapper){vm.wrapper.removeFromParent?.();disposeExternalObject(vm.wrapper);}
   G.summonedVending=null;return true;
@@ -2378,7 +2381,7 @@ function loadSummonedVendingAsset(vm=G.summonedVending){
   if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
   createSharedLoader().load(asset,gltf=>{
     if(seq!==G.vendingLoadSeq||G.summonedVending!==vm||!vm.wrapper)return;
-    const model=normalizeExternalModel(gltf.scene,{targetHeight:2.65});model.position.set(0,.12,0);model.rotation.y=Math.PI*1.5; // V501: GLB-Front um +90° korrigiert, damit die Maschine beim Platzieren zum Spieler zeigt.
+    const model=normalizeExternalModel(gltf.scene,{targetHeight:2.65});model.position.set(0,.12,0);model.rotation.y=Math.PI*.5; // V505: gegenüber V504 nochmals +180° gedreht; die sichtbare Front zeigt jetzt zum Spieler.
     vm.wrapper.add(model);vm.model=model;
   },undefined,error=>{if(seq===G.vendingLoadSeq)console.warn('Escape.kl Vending-GLB konnte nicht geladen werden.',error)});
 }
@@ -2387,12 +2390,17 @@ function spawnVendingMachine(){
   removeSummonedVending();
   const yaw=G.playerRoot?.rotation.y||0,frontX=Math.sin(yaw),frontZ=Math.cos(yaw);
   const floorY=G.grounded&&G.support?(G.support.mesh.position.y+G.support.h/2):(G.pos.y-PLAYER_HALF);
-  const x=G.pos.x+frontX*2.55,z=G.pos.z+frontZ*2.55;
+  // V505: Nicht mehr praktisch auf/in den Spieler setzen. Die Maschine steht
+  // deutlich vor ihm, damit ihre Front von außen betrachtet und bedient wird.
+  const x=G.pos.x+frontX*3.20,z=G.pos.z+frontZ*3.20;
   const wrapper=new THREE.Group();wrapper.name='escape-player-vending-machine';wrapper.position.set(x,floorY,z);wrapper.rotation.y=yaw+Math.PI;tagScope(wrapper,G.world);G.scene.add(wrapper);
   const baseMat=new THREE.MeshStandardMaterial({color:0x27323a,roughness:.72,metalness:.16});const base=new THREE.Mesh(new THREE.BoxGeometry(1.9,.16,1.5),baseMat);base.position.y=.08;base.receiveShadow=true;wrapper.add(base);
-  const interactable=addInteractable('player-vending','Eigene Vending Machine öffnen',x,floorY+1.2,z,2.7,openVendingMachine);
-  const vm={scope:G.world,wrapper,model:null,interactable,x,z,floorY,level:vendingLevel()};G.summonedVending=vm;loadSummonedVendingAsset(vm);
-  soundBuy();toast(`🥤 Vending Machine Stufe ${vendingLevel()} platziert · mit E öffnen.`,'good',2300);return true;
+  const interactable={id:'player-vending',label:'Eigene Vending Machine öffnen',pos:new THREE.Vector3(x,floorY+1.2,z),radius:2.7,onUse:openVendingMachine,scope:G.world};G.interactables.push(interactable);
+  // Die Kollisionsbox ist bewusst etwas kleiner als der sichtbare Sockel. So kann
+  // man dicht vor der Scheibe stehen, aber niemals durch die Maschine laufen.
+  const collider={x,z,w:1.72,d:1.42,scope:G.world};G.colliders.push(collider);
+  const vm={scope:G.world,wrapper,model:null,interactable,collider,x,z,floorY,level:vendingLevel()};G.summonedVending=vm;loadSummonedVendingAsset(vm);
+  soundBuy();toast(`🥤 Vending Machine Stufe ${vendingLevel()} vor dir platziert · hingehen und mit E öffnen.`,'good',2600);return true;
 }
 function buyVendingMachine(){
   if(G.state.vendingOwned)return false;
@@ -2422,6 +2430,12 @@ function buyJkWinsPotion(bonus,cost){
 }
 function openVendingMachine(){
   if(!G.state?.vendingOwned)return openVendingManagement('pause');
+  // V505: Getränke existieren nur an einer real platzierten Maschine. Kein
+  // Direktzugriff mehr aus Pause/Verwaltung und kein Öffnen aus der Entfernung.
+  const vm=G.summonedVending;
+  if(!vm||vm.scope!==G.world)return toast('🥤 Erst die Vending Machine platzieren. Danach direkt an der Maschine mit E öffnen.','bad',2600),false;
+  const dx=G.pos.x-Number(vm.x||0),dz=G.pos.z-Number(vm.z||0);
+  if(Math.hypot(dx,dz)>3.0)return toast('🥤 Geh zur platzierten Vending Machine und drücke dort E.','bad',2100),false;
   const level=vendingLevel(),pct=vendingPotionPct(),now=Date.now(),jk=Number(G.state.vendingJkWinsBonus)||0,charge=Number(G.state.vendingJkWinsCharges)||0;
   const modelName=level<=5?'Vending Machine 1–5':'Vending Machine 6–10';
   const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · DEINE VENDING MACHINE</small><h2>🥤 Stufe ${level}/10 · ${modelName}</h2><p>Nur du kannst diese platzierte Maschine bedienen. Normale Getränke laufen 15 Minuten. Ihre Stärke steigt exakt von +0,2 % pro Maschinenstufe auf +1,0 % bei Stufe 5 und +2,0 % bei Stufe 10.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRANK-STÄRKE</small><b>+${(pct*100).toFixed(1).replace('.',',')} %</b></div><div><small>SPEED</small><b>${vendingDurationText((Number(G.state.vendingPotionSpeedUntil)||0)-now)}</b></div><div><small>WINS</small><b>${vendingDurationText((Number(G.state.vendingPotionWinsUntil)||0)-now)}</b></div><div><small>LAUFBAND</small><b>${vendingDurationText((Number(G.state.vendingPotionTreadmillUntil)||0)-now)}</b></div></div><div class="ekl-shop-grid"><article><small>WINS-GETRÄNK</small><h3>🏆 Win Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % auf normale Win-Payouts.</p><button data-vending-potion="Wins">Kaufen & trinken · ${vendingNormalCost('wins').toLocaleString('de-DE')} Wins</button></article><article><small>SPEED-GETRÄNK</small><h3>💨 Speed Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % effektiver Speed.</p><button data-vending-potion="Speed">Kaufen & trinken · ${vendingNormalCost('speed').toLocaleString('de-DE')} Wins</button></article><article><small>TRAINING-GETRÄNK</small><h3>🏃 Treadmill Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % zusätzliche Laufband-Power.</p><button data-vending-potion="Treadmill">Kaufen & trinken · ${vendingNormalCost('treadmill').toLocaleString('de-DE')} Wins</button></article></div><div class="ekl-character-special-head"><b>◆ JK/Coin Win Potions</b><span>Einmaliger Bonus auf den nächsten Stage-/Finish-Win-Payout · stärkster Trank erst ab Stufe 10.</span></div><div class="ekl-shop-grid"><article class="jk"><small>100 JK/COIN</small><h3>◆ +100 % Wins</h3><p>Der nächste passende Win-Payout wird verdoppelt. Beispiel: 8 Mio → 16 Mio.</p><button class="jk" data-vending-jk="1" data-cost="100">100 JK/Coin</button></article><article class="jk"><small>300 JK/COIN</small><h3>◆ +200 % Wins</h3><p>Der nächste passende Win-Payout erhält +200 %.</p><button class="jk" data-vending-jk="2" data-cost="300">300 JK/Coin</button></article><article class="jk ${level>=10?'':'locked'}"><small>${level>=10?'500 JK/COIN':'STUFE 10 BENÖTIGT'}</small><h3>◆ +400 % Wins</h3><p>Extremer Einmal-Trank. Nur mit Vending Machine Stufe 10.</p><button class="jk" data-vending-jk="4" data-cost="500" ${level<10?'disabled':''}>${level<10?'🔒 STUFE 10':'500 JK/Coin'}</button></article></div><div class="ekl-world-economy-note"><b>Geladener JK-Trank:</b><span>${charge&&jk?`+${jk*100}% auf den nächsten Stage-/Finish-Payout`:'Keiner'}</span></div><div class="ekl-modal-actions"><button data-vending-manage>Maschine verwalten</button><button data-ekl-modal-close>Schließen</button></div></div>`);
@@ -2431,13 +2445,12 @@ function openVendingMachine(){
 }
 function openVendingManagement(returnTo='pause'){
   const owned=!!G.state?.vendingOwned,level=vendingLevel(),next=level+1,cost=owned&&level<10?vendingUpgradeCost(next):0,placed=!!G.summonedVending;
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PLATZIERBARE MASCHINE</small><h2>🥤 Vending Machine</h2><p>Die Maschine gehört nur dir und wird bewusst nur lokal dargestellt – das spart Multiplayer-/Firestore-Last. Andere Spieler können sie nicht benutzen. Sobald du dich mehr als 5 Meter entfernst, verschwindet die platzierte Maschine automatisch. Ab Stufe 6 wechselt sie automatisch auf dein zweites GLB-Modell.</p></div><button data-vending-back>×</button></div><div class="ekl-big-stat"><div><small>BESITZ</small><b>${owned?'JA':'NEIN'}</b></div><div><small>STUFE</small><b>${level}/10</b></div><div><small>MODELL</small><b>${level>=6?'6–10':'1–5'}</b></div><div><small>PLATZIERT</small><b>${placed?'JA':'NEIN'}</b></div></div><div class="ekl-progression-note"><b>${owned?'UPGRADE-PROGRESSION':'KAUF'}</b><span>${owned?(level>=10?'Maximalstufe erreicht. Alle normalen Tränke haben +2,0 %; +400-% JK Win Potion ist frei.':`Nächste Stufe ${next}: ${cost.toLocaleString('de-DE')} Wins.`):`Einmaliger Kauf: ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach jederzeit über Pause platzierbar.`}</span></div><div class="ekl-modal-actions">${!owned?`<button class="gold" data-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>Kaufen · ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button class="gold" data-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAX STUFE 10':`Upgrade auf ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-vending-place>${placed?'Neu platzieren':'Hier platzieren'}</button><button data-vending-open>Getränke ansehen</button>${placed?'<button data-vending-remove>Maschine entfernen</button>':''}`}<button data-vending-back>Zurück</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PLATZIERBARE MASCHINE</small><h2>🥤 Vending Machine</h2><p>Die Maschine gehört nur dir und wird bewusst nur lokal dargestellt – das spart Multiplayer-/Firestore-Last. Andere Spieler können sie nicht benutzen. Sobald du dich mehr als 5 Meter entfernst, verschwindet die platzierte Maschine automatisch. Ab Stufe 6 wechselt sie automatisch auf dein zweites GLB-Modell.</p></div><button data-vending-back>×</button></div><div class="ekl-big-stat"><div><small>BESITZ</small><b>${owned?'JA':'NEIN'}</b></div><div><small>STUFE</small><b>${level}/10</b></div><div><small>MODELL</small><b>${level>=6?'6–10':'1–5'}</b></div><div><small>PLATZIERT</small><b>${placed?'JA':'NEIN'}</b></div></div><div class="ekl-progression-note"><b>${owned?'UPGRADE-PROGRESSION':'KAUF'}</b><span>${owned?(level>=10?'Maximalstufe erreicht. Alle normalen Tränke haben +2,0 %; +400-% JK Win Potion ist frei.':`Nächste Stufe ${next}: ${cost.toLocaleString('de-DE')} Wins.`):`Einmaliger Kauf: ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach jederzeit über Pause platzierbar.`}</span></div><div class="ekl-modal-actions">${!owned?`<button class="gold" data-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>Kaufen · ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button class="gold" data-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAX STUFE 10':`Upgrade auf ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-vending-place>${placed?'Neu platzieren':'Hier platzieren'}</button>${placed?'<button disabled>Getränke: direkt an der Maschine mit E</button><button data-vending-remove>Maschine entfernen</button>':'<button disabled>Erst platzieren → dann mit E öffnen</button>'}`}<button data-vending-back>Zurück</button></div></div>`);
   const back=()=>{closeModal();if(returnTo==='pause')setTimeout(showPause,0);else if(returnTo==='shop')setTimeout(()=>openShop('vending'),0);};
   wrap.querySelectorAll('[data-vending-back]').forEach(b=>b.onclick=back);
   wrap.querySelector('[data-vending-buy]')?.addEventListener('click',()=>{if(buyVendingMachine())openVendingManagement(returnTo);});
   wrap.querySelector('[data-vending-upgrade]')?.addEventListener('click',()=>{if(upgradeVendingMachine())openVendingManagement(returnTo);});
   wrap.querySelector('[data-vending-place]')?.addEventListener('click',()=>{if(spawnVendingMachine()){closeModal();G.paused=false;}});
-  wrap.querySelector('[data-vending-open]')?.addEventListener('click',openVendingMachine);
   wrap.querySelector('[data-vending-remove]')?.addEventListener('click',()=>{removeSummonedVending();toast('Vending Machine entfernt.','good',1500);openVendingManagement(returnTo);});
 }
 
