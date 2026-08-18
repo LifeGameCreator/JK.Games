@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V489 · Water World Stages 1–5 */
-const VERSION = '2026-08-18-v489';
+/* Escape.kl – JK.Games Top Game V490 · Free Cat + platzierbare Vending Machine */
+const VERSION = '2026-08-18-v490';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -72,10 +72,31 @@ const SPECIAL_CHARACTERS = Object.freeze([
 ]);
 const PET_DEFS = Object.freeze([
   {id:'none',name:'Kein Pet',cost:0,currency:'none',category:'none',speedBonus:0,winsBonus:0,desc:'Kein aktives Pet.'},
+  {id:'free-cat',name:'Free Pet Cat',cost:20000,currency:'wins',category:'free',speedBonus:.001,winsBonus:.001,asset:'./escape-pet-free-cat.glb?v=20260818-escape-v490',movement:'ground-rock',targetHeight:.68,desc:'Kostenlos erspielbares Katzen-Pet. Startet bei +0,1 % Speed/Wins und wächst über World-Upgrades bis +1,6 %.'},
   {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',category:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',movement:'orbit',targetHeight:.80,desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins.'},
   {id:'reptisect',name:'Reptisect',cost:600,currency:'jk',category:'jk',speedBonus:.015,winsBonus:.015,asset:'./escape-pet-reptisect.glb?v=20260817-escape-v477',movement:'ground-follow',targetHeight:.72,animationHint:/niet|basic|walk|run|move/i,desc:'Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung. +1,5 % Speed und +1,5 % Wins.'},
   {id:'phoenix',name:'Phönix',cost:3000,currency:'jk',category:'jk',speedBonus:.03,winsBonus:.025,asset:'./escape-pet-phoenix.glb?v=20260817-escape-v477-optimized',movement:'fly-follow',targetHeight:1.02,animationHint:/fly|flight|take|wing/i,desc:'Premium-Flug-Pet. Fliegt dir weich hinterher und steigt beim Springen mit. +3,0 % Speed und +2,5 % Wins.'}
 ]);
+const FREE_CAT_MAX_LEVEL = 16;
+const FREE_CAT_WORLD_CAPS = Object.freeze({1:5,2:9,3:13,4:16});
+const FREE_CAT_LEVEL_COSTS = Object.freeze([
+  0,20000,60000,150000,350000,800000,
+  1500000,3000000,6000000,12000000,
+  30000000,80000000,220000000,550000000,
+  1200000000,2800000000,6000000000
+]);
+const VENDING_UNLOCK_COST = 100000;
+const VENDING_UPGRADE_COSTS = Object.freeze({
+  2:250000,3:600000,4:1500000,5:4000000,
+  6:12000000,7:35000000,8:100000000,9:300000000,10:900000000
+});
+const VENDING_ASSETS = Object.freeze({
+  low:'./escape-vending-machine-1-5.glb?v=20260818-escape-v490',
+  high:'./escape-vending-machine-6-10.glb?v=20260818-escape-v490'
+});
+const VENDING_POTION_DURATION_MS = 15*60*1000;
+const VENDING_WORLD_COST_MULT = Object.freeze({1:1,2:12,3:1000,4:2500});
+
 const AURAS = Object.freeze([
   {id:'none',name:'Keine Aura',cost:0,color:0xffffff,mult:1,speedPct:0},
   {id:'medal',name:'Medal Aura',cost:0,color:0xffd45e,mult:1.08,speedPct:.005,questRunPoints:2500},
@@ -143,7 +164,7 @@ const G = {
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
   hitboxDebugEnabled:false,hitboxDebugGroup:null,hitboxDebugItems:[],hitboxDebugPlayer:null,
-  summonedTreadmill:null,
+  summonedTreadmill:null,summonedVending:null,vendingLoadSeq:0,
   ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,
   hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
@@ -374,12 +395,13 @@ function updateEscapeRemotePlayers(dt,t){
 function emptyWorldProgress(){return {xp:0,itemSpeedBonus:0,adminSpeedOverride:null};}
 function defaultProgress(){
   return {
-    version:12,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
+    version:13,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
     worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
-    activePet:'none',activePets:[],ownedPets:['none'],
+    activePet:'none',activePets:[],ownedPets:['none'],freeCatLevel:0,
+    vendingOwned:false,vendingLevel:0,vendingPotionSpeedUntil:0,vendingPotionSpeedPct:0,vendingPotionWinsUntil:0,vendingPotionWinsPct:0,vendingPotionTreadmillUntil:0,vendingPotionTreadmillPct:0,vendingJkWinsBonus:0,vendingJkWinsCharges:0,
     trainingCoreTier:0,treadmillCoreTier:0,speedCoreTier:0,winCoreTier:0,
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
     lastWheelAt:0,dailyQuest:null,jkTreadmillTier:0,jkSpeedBoostUntil:0,speedItems:{speed25:0,speed50:0,speed100:0},speedItemPurchases:{speed25:0,speed50:0,speed100:0},speedItemLevels:{speed25:0,speed50:0,speed100:0},lastPlayedAt:Date.now()
@@ -421,6 +443,15 @@ function normalizeProgress(raw){
   const requestedPets=Array.isArray(d.activePets)?d.activePets:(legacyPet?[legacyPet]:[]);
   d.activePets=[...new Set(requestedPets.filter(id=>id!=='none'&&d.ownedPets.includes(id)&&PET_DEFS.some(p=>p.id===id)))].slice(0,2);
   d.activePet=d.activePets[0]||'none';
+  d.freeCatLevel=Math.max(0,Math.min(FREE_CAT_MAX_LEVEL,Math.floor(Number(d.freeCatLevel)||0)));
+  if(d.freeCatLevel>0&&!d.ownedPets.includes('free-cat'))d.ownedPets.push('free-cat');
+  if(d.ownedPets.includes('free-cat')&&d.freeCatLevel<1)d.freeCatLevel=1;
+  d.vendingOwned=!!d.vendingOwned||Number(d.vendingLevel)>0;
+  d.vendingLevel=d.vendingOwned?Math.max(1,Math.min(10,Math.floor(Number(d.vendingLevel)||1))):0;
+  for(const k of ['vendingPotionSpeedUntil','vendingPotionWinsUntil','vendingPotionTreadmillUntil'])d[k]=Math.max(0,Number(d[k])||0);
+  for(const k of ['vendingPotionSpeedPct','vendingPotionWinsPct','vendingPotionTreadmillPct'])d[k]=Math.max(0,Math.min(.02,Number(d[k])||0));
+  d.vendingJkWinsBonus=[1,2,4].includes(Number(d.vendingJkWinsBonus))?Number(d.vendingJkWinsBonus):0;
+  d.vendingJkWinsCharges=Math.max(0,Math.min(1,Math.floor(Number(d.vendingJkWinsCharges)||0)));
   d.ownedAuras=Array.isArray(d.ownedAuras)?[...new Set(d.ownedAuras.filter(id=>AURAS.some(a=>a.id===id)))]:['none'];
   if(!d.ownedAuras.includes('none'))d.ownedAuras.unshift('none');
   d.aura=d.ownedAuras.includes(d.aura)?d.aura:'none';
@@ -573,12 +604,23 @@ function activePetDefs(){
 }
 function activePetDef(){return activePetDefs()[0]||PET_DEFS[0];}
 function syncLegacyActivePet(){if(G.state)G.state.activePet=G.state.activePets?.[0]||'none';}
-function petBonusTotals(){return activePetDefs().reduce((sum,p)=>({speed:sum.speed+Number(p.speedBonus||0),wins:sum.wins+Number(p.winsBonus||0)}),{speed:0,wins:0});}
+function freeCatLevel(){return G.state?.ownedPets?.includes('free-cat')?Math.max(1,Math.min(FREE_CAT_MAX_LEVEL,Math.floor(Number(G.state?.freeCatLevel)||1))):0;}
+function freeCatWorldCap(worldId=shopWorldId()){const n=Math.max(1,Math.min(4,Number(shopTier(worldId)?.number)||1));return FREE_CAT_WORLD_CAPS[n]||5;}
+function freeCatBonus(){return freeCatLevel()*.001;}
+function petEffectiveBonuses(p){if(p?.id==='free-cat'){const b=Math.max(.001,freeCatBonus());return {speed:b,wins:b};}return {speed:Number(p?.speedBonus||0),wins:Number(p?.winsBonus||0)};}
+function petBonusTotals(){return activePetDefs().reduce((sum,p)=>{const b=petEffectiveBonuses(p);return {speed:sum.speed+b.speed,wins:sum.wins+b.wins};},{speed:0,wins:0});}
+function activeVendingPotionPct(kind){
+  const until=Number(G.state?.[`vendingPotion${kind}Until`])||0,pct=Number(G.state?.[`vendingPotion${kind}Pct`])||0;
+  return Date.now()<until?Math.max(0,Math.min(.02,pct)):0;
+}
+function vendingSpeedBonus(){return activeVendingPotionPct('Speed');}
+function vendingWinsBonus(){return activeVendingPotionPct('Wins');}
+function vendingTreadmillBonus(){return activeVendingPotionPct('Treadmill');}
 function speedItemBonusPct(){return SPEED_ITEMS.reduce((sum,item)=>sum+Math.max(0,Math.min(item.maxLevel||5,Number(G.state?.speedItemLevels?.[item.id])||0))*Number(item.pct||0),0);}
 function auraSpeedBonus(){return Number((AURAS.find(a=>a.id===G.state?.aura)||AURAS[0]).speedPct||0);}
 function speedCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.speedCoreTier)||0))]||0;}
-function totalSpeedBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.speedBonus||0)+pets.speed+auraSpeedBonus()+speedCoreBonus()+speedItemBonusPct();}
-function totalWinsBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.winsBonus||0)+pets.wins;}
+function totalSpeedBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.speedBonus||0)+pets.speed+auraSpeedBonus()+speedCoreBonus()+speedItemBonusPct()+vendingSpeedBonus();}
+function totalWinsBonus(){const special=specialCharacterState(),pets=petBonusTotals();return Number(special?.winsBonus||0)+pets.wins+vendingWinsBonus();}
 function trainingCoreBonus(){return [0,.03,.06,.09][Math.max(0,Math.min(3,Number(G.state?.trainingCoreTier)||0))]||0;}
 function treadmillCoreBonus(){return [0,.05,.10,.15][Math.max(0,Math.min(3,Number(G.state?.treadmillCoreTier)||0))]||0;}
 function winCoreBonus(){return [0,.01,.02,.03][Math.max(0,Math.min(3,Number(G.state?.winCoreTier)||0))]||0;}
@@ -722,7 +764,13 @@ function updateWorldUnlocks(){
 }
 function awardWins(amount,source='Wins',stageWin=false){
   amount=Math.max(0,Math.floor(Number(amount)||0));if(!amount)return 0;
-  const finalAmount=Math.max(0,Math.round(amount*(1+totalWinsBonus()+winCoreBonus())));
+  let finalAmount=Math.max(0,Math.round(amount*(1+totalWinsBonus()+winCoreBonus())));
+  const jkBonus=Math.max(0,Number(G.state?.vendingJkWinsBonus)||0),eligibleJkPotion=stageWin||/stage|finish|cash.?out/i.test(String(source||''));
+  if(eligibleJkPotion&&jkBonus>0&&Number(G.state?.vendingJkWinsCharges||0)>0){
+    finalAmount=Math.max(0,Math.round(finalAmount*(1+jkBonus)));
+    G.state.vendingJkWinsCharges=0;G.state.vendingJkWinsBonus=0;
+    toast(`🥤 JK Win Potion verbraucht · +${jkBonus*100}% auf diesen Win-Payout!`,'good',2200);
+  }
   G.state.wins+=finalAmount;G.state.lifetimeWins+=finalAmount;if(stageWin)G.state.stageWinsCollected+=finalAmount;queuePersist(80);updateHud(true);return finalAmount;
 }
 function awardFixedWins(amount,source='SKYRUN'){
@@ -1237,6 +1285,7 @@ function loadPetVisuals(){
       const model=normalizeExternalModel(gltf.scene,{targetHeight:petTargetHeight(pet)});model.position.set(0,0,0);
       if(pet.id==='cyclops-wing')model.rotation.y=Math.PI*.2;
       if(pet.id==='reptisect')model.rotation.y+=Math.PI; // V480: geliefertes Modell blickt entgegengesetzt zur Laufrichtung.
+      const rockBase=pet.id==='free-cat'?model.rotation.clone():null;
       wrap.add(model);G.scene.add(wrap);
       // V485: Für Reptisect wird die originale Bind-/Standpose gespeichert, bevor die Laufanimation
       // irgendeinen Knochen verändert. So friert das Pet im Stand nie wieder mitten in einem Laufschritt ein.
@@ -1255,9 +1304,9 @@ function loadPetVisuals(){
       }
       const clips=gltf.animations||[],clip=petAnimationClip(pet,clips);let mixer=null,action=null;
       if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);if(pet.movement==='ground-follow')action.paused=true;}
-      const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false,bindPose,idleRig};G.petVisuals.push(visual);
+      const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false,bindPose,idleRig,rockBase};G.petVisuals.push(visual);
       const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),side=slot===0?-.72:.72,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
-      const back=pet.movement==='fly-follow'?2.25:pet.movement==='ground-follow'?1.65:1.05;
+      const back=pet.movement==='fly-follow'?2.25:(pet.movement==='ground-follow'||pet.movement==='ground-rock')?1.65:1.05;
       wrap.position.set(G.pos.x-forwardX*back+rightX*side,pet.movement==='fly-follow'?G.pos.y+.18:G.pos.y-PLAYER_HALF+.04,G.pos.z-forwardZ*back+rightZ*side);
       if(pet.movement==='orbit')wrap.position.set(G.pos.x+Math.cos(slot*Math.PI)*1.0,G.pos.y+.18,G.pos.z-1.0);
     },undefined,err=>{if(seq===G.petLoadSeq)console.warn(`Escape.kl: Pet-GLB ${pet.id} konnte nicht geladen werden.`,err)});
@@ -1337,6 +1386,13 @@ function updateCustomVisuals(dt,t){
         }
       }
     }else visual.mixer?.update?.(dt);
+    if(pet.movement==='ground-rock'&&visual.model&&visual.rockBase){
+      const moving=playerPlanarSpeed>.16;visual.model.rotation.copy(visual.rockBase);
+      if(moving){
+        visual.model.rotation.x+=Math.sin(t*8.5+slot*.8)*.075;
+        visual.model.rotation.z+=Math.sin(t*4.25+slot*.6)*.035;
+      }
+    }
     const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),side=slot===0?-.72:.72;
     let tx=G.pos.x,ty=G.pos.y,tz=G.pos.z;
     if(pet.movement==='orbit'){
@@ -1428,9 +1484,23 @@ function petSelectionSummary(){
   const pets=activePetDefs(),tot=petBonusTotals();
   return pets.length?`${pets.map(p=>p.name).join(' + ')} · +${petPercent(tot.speed)} Speed / +${petPercent(tot.wins)} Wins`:'Keine Pets ausgerüstet';
 }
+function freeCatNextCost(){const next=freeCatLevel()+1;return next<=FREE_CAT_MAX_LEVEL?Number(FREE_CAT_LEVEL_COSTS[next]||0):0;}
+function upgradeFreeCat(returnTo='shop'){
+  if(!G.state.ownedPets.includes('free-cat'))return toast('Kaufe das Free Pet Cat zuerst mit Wins.','bad',1800),false;
+  const level=freeCatLevel(),cap=freeCatWorldCap();if(level>=FREE_CAT_MAX_LEVEL)return toast('Free Pet Cat ist bereits maximal: +1,6 % Speed/Wins.','good',1900),false;
+  if(level>=cap)return toast(`Free Pet Cat Limit in ${shopTier().name}: +${(cap*.1).toFixed(1).replace('.',',')} %. Für mehr brauchst du ${shopTier().next}.`,'bad',2500),false;
+  const cost=freeCatNextCost();if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins für Cat Level ${level+1}.`,'bad',1900),false;
+  G.state.wins-=cost;G.state.freeCatLevel=level+1;soundBuy();queuePersist(50);updateHud(true);
+  toast(`🐱 Free Pet Cat Level ${level+1} · +${((level+1)*.1).toFixed(1).replace('.',',')} % Speed / Wins`,'good',2400);
+  if(returnTo==='menu')openPetEquipMenu();else if(returnTo==='studio')openCharacterStudio('base');else openShop('pets');return true;
+}
 function petCardHtml(p){
-  const owned=G.state.ownedPets.includes(p.id),active=petEquipped(p.id),free=p.category==='free'||p.currency==='wins';
-  return `<article class="${owned?'owned':''} ${p.currency==='jk'?'jk':''}"><small>${free?'FREE PET':'JK/COIN PET'}</small><h3>${p.name}</h3><p>${p.desc}<br><b>+${petPercent(p.speedBonus)} Speed</b> · <b>+${petPercent(p.winsBonus)} Wins</b></p><button data-ekl-pet-pick="${p.id}">${active?'Ablegen':owned?'Ausrüsten':p.currency==='jk'?`${p.cost.toLocaleString('de-DE')} JK/Coin`:'Freischalten'}</button></article>`;
+  const owned=G.state.ownedPets.includes(p.id),active=petEquipped(p.id),free=p.category==='free'||p.currency==='wins',bonus=petEffectiveBonuses(p);
+  if(p.id==='free-cat'){
+    const level=freeCatLevel(),cap=freeCatWorldCap(),nextCost=freeCatNextCost(),atWorldCap=owned&&level>=cap&&level<FREE_CAT_MAX_LEVEL;
+    return `<article class="${owned?'owned':''}"><small>🆓 FREE PET · LEVEL ${level}/${FREE_CAT_MAX_LEVEL}</small><h3>${p.name}</h3><p>${p.desc}<br><b>+${petPercent(bonus.speed)} Speed</b> · <b>+${petPercent(bonus.wins)} Wins</b><br>Aktuelles Welt-Limit: <b>+${(cap*.1).toFixed(1).replace('.',',')} %</b>.</p><div class="ekl-item-actions"><button data-ekl-pet-pick="${p.id}">${active?'Ablegen':owned?'Ausrüsten':`${p.cost.toLocaleString('de-DE')} Wins`}</button>${owned?`<button data-ekl-pet-upgrade="${p.id}" ${level>=FREE_CAT_MAX_LEVEL||atWorldCap?'disabled':''}>${level>=FREE_CAT_MAX_LEVEL?'MAX 1,6 %':atWorldCap?`NÄCHSTE WELT`:`Upgrade · ${nextCost.toLocaleString('de-DE')} Wins`}</button>`:''}</div></article>`;
+  }
+  return `<article class="${owned?'owned':''} ${p.currency==='jk'?'jk':''}"><small>${free?'FREE PET':'JK/COIN PET'}</small><h3>${p.name}</h3><p>${p.desc}<br><b>+${petPercent(bonus.speed)} Speed</b> · <b>+${petPercent(bonus.wins)} Wins</b></p><button data-ekl-pet-pick="${p.id}">${active?'Ablegen':owned?'Ausrüsten':p.currency==='jk'?`${p.cost.toLocaleString('de-DE')} JK/Coin`: `${p.cost.toLocaleString('de-DE')} Wins`}</button></article>`;
 }
 function refreshPetSelection({returnTo='menu'}={}){
   syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
@@ -1446,17 +1516,20 @@ function buyOrEquipPet(id,returnTo='menu'){
     if(pet.currency==='jk'){
       if(!spendJkCoins(pet.cost,`Escape.kl · ${pet.name}`))return false;
       G.state.ownedPets.push(id);
+    }else if(pet.currency==='wins'){
+      if(G.state.wins<pet.cost)return toast(`Du brauchst ${pet.cost.toLocaleString('de-DE')} Wins für ${pet.name}.`,'bad',1900),false;
+      G.state.wins-=pet.cost;G.state.ownedPets.push(id);if(id==='free-cat')G.state.freeCatLevel=Math.max(1,Number(G.state.freeCatLevel)||0);
     }else return toast(`${pet.name} ist noch nicht freigeschaltet.`,'bad',1800),false;
   }
   if(G.state.activePets.length>=2)return toast('Du kannst maximal 2 Pets gleichzeitig benutzen. Lege zuerst ein Pet ab.','bad',2300),false;
   G.state.activePets.push(id);G.state.activePets=[...new Set(G.state.activePets)].slice(0,2);soundBuy();
-  toast(`${pet.name} ausgerüstet · +${petPercent(pet.speedBonus)} Speed / +${petPercent(pet.winsBonus)} Wins.`,'good',2300);refreshPetSelection({returnTo});return true;
+  const bonus=petEffectiveBonuses(pet);toast(`${pet.name} ausgerüstet · +${petPercent(bonus.speed)} Speed / +${petPercent(bonus.wins)} Wins.`,'good',2300);refreshPetSelection({returnTo});return true;
 }
 function unequipAllPets(){
   G.state.activePets=[];syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);toast('Alle Pets abgelegt.','good',1400);openPetEquipMenu();
 }
 function equipBestPets(){
-  const owned=PET_DEFS.filter(p=>p.id!=='none'&&G.state.ownedPets.includes(p.id)).sort((a,b)=>((b.speedBonus+b.winsBonus)-(a.speedBonus+a.winsBonus))||(b.speedBonus-a.speedBonus)||(b.winsBonus-a.winsBonus));
+  const owned=PET_DEFS.filter(p=>p.id!=='none'&&G.state.ownedPets.includes(p.id)).sort((a,b)=>{const A=petEffectiveBonuses(a),B=petEffectiveBonuses(b);return ((B.speed+B.wins)-(A.speed+A.wins))||(B.speed-A.speed)||(B.wins-A.wins);});
   G.state.activePets=owned.slice(0,2).map(p=>p.id);syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
   toast(G.state.activePets.length?`Beste Pets ausgerüstet: ${activePetDefs().map(p=>p.name).join(' + ')}`:'Du besitzt noch kein Pet.','good',2200);openPetEquipMenu();
 }
@@ -1464,6 +1537,7 @@ function openPetEquipMenu(){
   const active=activePetDefs(),free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
   const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PETS</small><h2>🪽 Pets ausrüsten</h2><p>Maximal zwei Pets gleichzeitig. Lauf- und Flug-Pets folgen dir mit eigener Animation; ihre Speed- und Win-Boni werden addiert.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>SLOTS</small><b>${active.length}/2</b></div><div><small>PET-SPEED</small><b>+${petPercent(petBonusTotals().speed)}</b></div><div><small>PET-WINS</small><b>+${petPercent(petBonusTotals().wins)}</b></div></div><div class="ekl-modal-actions"><button class="gold" data-ekl-best-pets>⭐ Beste Pets</button><button data-ekl-clear-pets>Alle ablegen</button><button class="jk" data-ekl-pets-jk-shop>◆ JK-Shop</button></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielte Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Noch keine Free Pets im aktuellen Katalog.</b><span>Die Kategorie ist vorbereitet; spätere kostenlose Pets erscheinen automatisch hier.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Premium-Pets · dauerhaft im Besitz</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div></div>`);
   wrap.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'menu'));
+  wrap.querySelectorAll('[data-ekl-pet-upgrade]').forEach(b=>b.onclick=()=>upgradeFreeCat('menu'));
   wrap.querySelector('[data-ekl-best-pets]')?.addEventListener('click',equipBestPets);wrap.querySelector('[data-ekl-clear-pets]')?.addEventListener('click',unequipAllPets);wrap.querySelector('[data-ekl-pets-jk-shop]')?.addEventListener('click',openJkCoinShop);
 }
 function openCharacterStudio(tab='base'){
@@ -1526,7 +1600,7 @@ function registerRunLanding(p){
   if(perfect&&!G.perfectLandingClaims.has(key)){G.perfectLandingClaims.add(key);const bonus=Math.max(1,Math.round(levelPowerPerRunPoint()*(.20+Math.min(10,G.runCombo)*.05)));addLevelPower(bonus,true,G.world);toast(`🎯 PERFECT LANDING · COMBO ×${G.runCombo} · +${fmt(bonus)} Power`,'good',1050);}
 }
 function setWorld(id,initial=false){
-  cancelReviveOffer(true);removeSummonedTreadmill();
+  cancelReviveOffer(true);removeSummonedTreadmill();removeSummonedVending();
   G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;G.stageClaims.clear();resetRunTech();G.trainingStreakSeconds=0;G.trainingStreakTier=0;
   const w=escapeWorldById(id);
   if(id==='hub'){
@@ -1772,7 +1846,7 @@ function spawnSummonedTreadmill(id){
   queuePersist(500);updateHud(true);soundBuy();toast(`🏃 ${def.name} ×${String(def.mult).replace('.',',')} erzeugt · einfach herunterlaufen zum Verlassen.`,'good',2300);return true;
 }
 function openTreadmillSpawnMenu(){
-  const worldId=progressWorldId(),cards=TREADMILLS.map(def=>{const unlocked=treadmillUnlocked(def,worldId),active=G.summonedTreadmill?.id===def.id&&G.summonedTreadmill?.scope===G.world;const req=treadmillRequirement(def,worldId);const power=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus())));return `<button class="ekl-training-world-card ${active?'active':''}" data-ekl-summon-treadmill="${def.id}" ${unlocked?'':'data-locked="1"'}><b>${def.name} · ×${String(def.mult).replace('.',',')}</b><span>${active?'AKTUELL ERZEUGT':unlocked?`FREI · ca. +${fmt(power)} Power/s`:`🔒 ${req}`}</span></button>`;}).join('');
+  const worldId=progressWorldId(),cards=TREADMILLS.map(def=>{const unlocked=treadmillUnlocked(def,worldId),active=G.summonedTreadmill?.id===def.id&&G.summonedTreadmill?.scope===G.world;const req=treadmillRequirement(def,worldId);const power=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus())));return `<button class="ekl-training-world-card ${active?'active':''}" data-ekl-summon-treadmill="${def.id}" ${unlocked?'':'data-locked="1"'}><b>${def.name} · ×${String(def.mult).replace('.',',')}</b><span>${active?'AKTUELL ERZEUGT':unlocked?`FREI · ca. +${fmt(power)} Power/s`:`🔒 ${req}`}</span></button>`;}).join('');
   const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>PAUSE · LAUFBAND ERZEUGEN</small><h2>🏃 Laufband auswählen</h2><p>Erzeuge genau ein Laufband direkt unter deinem Charakter. FREE bis DIAMOND können hier ebenfalls benutzt werden. GALAXY ×6 und ADMIN ×10 existieren ausschließlich als erzeugbare Premium-Laufbänder und stehen nicht dauerhaft am Sportplatz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-training-world-grid">${cards}</div><div class="ekl-progression-note"><b>TRAININGSWELT</b><span>${escapeWorldById(worldId)?.name||worldId} · Level ${currentLevel(worldId)} · Speed ${Math.round(currentSpeedStat(worldId))}/300</span></div><div class="ekl-modal-actions"><button data-ekl-remove-summoned ${G.summonedTreadmill?'':'disabled'}>Erzeugtes Laufband entfernen</button><button class="jk" data-ekl-open-jk>JK/Coin-Shop</button><button data-ekl-back-pause>Zurück</button></div></div>`);
   wrap.querySelectorAll('[data-ekl-modal-close],[data-ekl-back-pause]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
   wrap.querySelectorAll('[data-ekl-summon-treadmill]').forEach(b=>b.onclick=()=>{const def=treadmillDef(b.dataset.eklSummonTreadmill);if(!treadmillUnlocked(def,worldId)){if(def.access==='jk')return openJkCoinShop();return toast(`🔒 ${treadmillRequirement(def,worldId)}`,'bad',1800);}if(spawnSummonedTreadmill(def.id)){closeModal();G.paused=false;}});
@@ -1790,9 +1864,93 @@ function openTrainingWorldSelector(){
     toast(`${escapeWorldById(G.state.activeTrainingWorld)?.name||'Welt'} ist jetzt deine Trainingswelt.`,'good',1900);
   });
 }
+
+function vendingLevel(){return G.state?.vendingOwned?Math.max(1,Math.min(10,Math.floor(Number(G.state?.vendingLevel)||1))):0;}
+function vendingPotionPct(){return vendingLevel()*.002;}
+function vendingUpgradeCost(next=vendingLevel()+1){return Math.max(0,Number(VENDING_UPGRADE_COSTS[next])||0);}
+function vendingNormalCost(kind){
+  const level=Math.max(1,vendingLevel()),tierNumber=Math.max(1,Math.min(4,Number(shopTier(progressWorldId())?.number)||1));
+  const base=kind==='wins'?20000:kind==='speed'?15000:12000;
+  return Math.max(1000,Math.round(base*(VENDING_WORLD_COST_MULT[tierNumber]||1)*(1+(level-1)*.25)));
+}
+function vendingDurationText(ms){const m=Math.max(0,Math.ceil(ms/60000));return m>0?`${m} Min`:'inaktiv';}
+function removeSummonedVending(){
+  const vm=G.summonedVending;if(!vm)return false;G.vendingLoadSeq++;
+  if(vm.interactable){const i=G.interactables.indexOf(vm.interactable);if(i>=0)G.interactables.splice(i,1);}
+  if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
+  if(vm.wrapper){vm.wrapper.removeFromParent?.();disposeExternalObject(vm.wrapper);}
+  G.summonedVending=null;return true;
+}
+function loadSummonedVendingAsset(vm=G.summonedVending){
+  if(!vm||!G.scene)return;const level=vendingLevel(),asset=level>=6?VENDING_ASSETS.high:VENDING_ASSETS.low,seq=++G.vendingLoadSeq;vm.asset=asset;
+  if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
+  createSharedLoader().load(asset,gltf=>{
+    if(seq!==G.vendingLoadSeq||G.summonedVending!==vm||!vm.wrapper)return;
+    const model=normalizeExternalModel(gltf.scene,{targetHeight:2.65});model.position.set(0,.12,0);model.rotation.y=Math.PI;vm.wrapper.add(model);vm.model=model;
+  },undefined,error=>{if(seq===G.vendingLoadSeq)console.warn('Escape.kl Vending-GLB konnte nicht geladen werden.',error)});
+}
+function spawnVendingMachine(){
+  if(!G.state?.vendingOwned)return openVendingManagement('pause');
+  removeSummonedVending();
+  const yaw=G.playerRoot?.rotation.y||0,frontX=Math.sin(yaw),frontZ=Math.cos(yaw);
+  const floorY=G.grounded&&G.support?(G.support.mesh.position.y+G.support.h/2):(G.pos.y-PLAYER_HALF);
+  const x=G.pos.x+frontX*2.55,z=G.pos.z+frontZ*2.55;
+  const wrapper=new THREE.Group();wrapper.name='escape-player-vending-machine';wrapper.position.set(x,floorY,z);wrapper.rotation.y=yaw+Math.PI;tagScope(wrapper,G.world);G.scene.add(wrapper);
+  const baseMat=new THREE.MeshStandardMaterial({color:0x27323a,roughness:.72,metalness:.16});const base=new THREE.Mesh(new THREE.BoxGeometry(1.9,.16,1.5),baseMat);base.position.y=.08;base.receiveShadow=true;wrapper.add(base);
+  const interactable=addInteractable('player-vending','Eigene Vending Machine öffnen',x,floorY+1.2,z,2.7,openVendingMachine);
+  const vm={scope:G.world,wrapper,model:null,interactable,x,z,floorY,level:vendingLevel()};G.summonedVending=vm;loadSummonedVendingAsset(vm);
+  soundBuy();toast(`🥤 Vending Machine Stufe ${vendingLevel()} platziert · mit E öffnen.`,'good',2300);return true;
+}
+function buyVendingMachine(){
+  if(G.state.vendingOwned)return false;
+  if(G.state.wins<VENDING_UNLOCK_COST)return toast(`Du brauchst ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins für die Vending Machine.`,'bad',2000),false;
+  G.state.wins-=VENDING_UNLOCK_COST;G.state.vendingOwned=true;G.state.vendingLevel=1;soundBuy();queuePersist(50);updateHud(true);toast('🥤 Vending Machine Stufe 1 gekauft. Du kannst sie jetzt über Pause platzieren.','good',2600);return true;
+}
+function upgradeVendingMachine(){
+  if(!G.state.vendingOwned)return buyVendingMachine();
+  const level=vendingLevel();if(level>=10)return toast('Vending Machine ist bereits Stufe 10.','good',1500),false;
+  const next=level+1,cost=vendingUpgradeCost(next);if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins für Vending Stufe ${next}.`,'bad',2100),false;
+  G.state.wins-=cost;G.state.vendingLevel=next;soundBuy();queuePersist(50);updateHud(true);
+  if(G.summonedVending){G.summonedVending.level=next;loadSummonedVendingAsset(G.summonedVending);}
+  toast(`🥤 Vending Machine Stufe ${next}/10${next===6?' · neues Maschinenmodell freigeschaltet!':''}`,'good',2600);return true;
+}
+function activateVendingPotion(kind){
+  if(!G.state.vendingOwned)return false;kind=String(kind||'');if(!['Speed','Wins','Treadmill'].includes(kind))return false;
+  const cost=vendingNormalCost(kind.toLowerCase()),pct=vendingPotionPct();if(G.state.wins<cost)return toast(`Du brauchst ${cost.toLocaleString('de-DE')} Wins für diesen Trank.`,'bad',1900),false;
+  G.state.wins-=cost;G.state[`vendingPotion${kind}Pct`]=pct;G.state[`vendingPotion${kind}Until`]=Date.now()+VENDING_POTION_DURATION_MS;
+  soundBuy();queuePersist(50);updateHud(true);toast(`🥤 ${kind}-Trank aktiv · +${(pct*100).toFixed(1).replace('.',',')} % · 15 Minuten.`,'good',2500);openVendingMachine();return true;
+}
+function buyJkWinsPotion(bonus,cost){
+  bonus=Number(bonus)||0;cost=Math.max(0,Number(cost)||0);if(![1,2,4].includes(bonus))return false;
+  if(bonus===4&&vendingLevel()<10)return toast('Der +400-% JK Win Potion ist erst ab Vending Machine Stufe 10 verfügbar.','bad',2200),false;
+  if(!spendJkCoins(cost,`Escape.kl · Vending JK Win Potion +${bonus*100}%`))return false;
+  G.state.vendingJkWinsBonus=bonus;G.state.vendingJkWinsCharges=1;queuePersist(50);
+  toast(`◆ JK Win Potion geladen · nächster Stage-/Finish-Payout +${bonus*100}%${bonus===1?' (z. B. 8 Mio → 16 Mio)':''}.`,'good',3000);openVendingMachine();return true;
+}
+function openVendingMachine(){
+  if(!G.state?.vendingOwned)return openVendingManagement('pause');
+  const level=vendingLevel(),pct=vendingPotionPct(),now=Date.now(),jk=Number(G.state.vendingJkWinsBonus)||0,charge=Number(G.state.vendingJkWinsCharges)||0;
+  const modelName=level<=5?'Vending Machine 1–5':'Vending Machine 6–10';
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · DEINE VENDING MACHINE</small><h2>🥤 Stufe ${level}/10 · ${modelName}</h2><p>Nur du kannst diese platzierte Maschine bedienen. Normale Getränke laufen 15 Minuten. Ihre Stärke steigt exakt von +0,2 % pro Maschinenstufe auf +1,0 % bei Stufe 5 und +2,0 % bei Stufe 10.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRANK-STÄRKE</small><b>+${(pct*100).toFixed(1).replace('.',',')} %</b></div><div><small>SPEED</small><b>${vendingDurationText((Number(G.state.vendingPotionSpeedUntil)||0)-now)}</b></div><div><small>WINS</small><b>${vendingDurationText((Number(G.state.vendingPotionWinsUntil)||0)-now)}</b></div><div><small>LAUFBAND</small><b>${vendingDurationText((Number(G.state.vendingPotionTreadmillUntil)||0)-now)}</b></div></div><div class="ekl-shop-grid"><article><small>WINS-GETRÄNK</small><h3>🏆 Win Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % auf normale Win-Payouts.</p><button data-vending-potion="Wins">Kaufen & trinken · ${vendingNormalCost('wins').toLocaleString('de-DE')} Wins</button></article><article><small>SPEED-GETRÄNK</small><h3>💨 Speed Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % effektiver Speed.</p><button data-vending-potion="Speed">Kaufen & trinken · ${vendingNormalCost('speed').toLocaleString('de-DE')} Wins</button></article><article><small>TRAINING-GETRÄNK</small><h3>🏃 Treadmill Potion</h3><p>Für 15 Minuten +${(pct*100).toFixed(1).replace('.',',')} % zusätzliche Laufband-Power.</p><button data-vending-potion="Treadmill">Kaufen & trinken · ${vendingNormalCost('treadmill').toLocaleString('de-DE')} Wins</button></article></div><div class="ekl-character-special-head"><b>◆ JK/Coin Win Potions</b><span>Einmaliger Bonus auf den nächsten Stage-/Finish-Win-Payout · stärkster Trank erst ab Stufe 10.</span></div><div class="ekl-shop-grid"><article class="jk"><small>100 JK/COIN</small><h3>◆ +100 % Wins</h3><p>Der nächste passende Win-Payout wird verdoppelt. Beispiel: 8 Mio → 16 Mio.</p><button class="jk" data-vending-jk="1" data-cost="100">100 JK/Coin</button></article><article class="jk"><small>300 JK/COIN</small><h3>◆ +200 % Wins</h3><p>Der nächste passende Win-Payout erhält +200 %.</p><button class="jk" data-vending-jk="2" data-cost="300">300 JK/Coin</button></article><article class="jk ${level>=10?'':'locked'}"><small>${level>=10?'500 JK/COIN':'STUFE 10 BENÖTIGT'}</small><h3>◆ +400 % Wins</h3><p>Extremer Einmal-Trank. Nur mit Vending Machine Stufe 10.</p><button class="jk" data-vending-jk="4" data-cost="500" ${level<10?'disabled':''}>${level<10?'🔒 STUFE 10':'500 JK/Coin'}</button></article></div><div class="ekl-world-economy-note"><b>Geladener JK-Trank:</b><span>${charge&&jk?`+${jk*100}% auf den nächsten Stage-/Finish-Payout`:'Keiner'}</span></div><div class="ekl-modal-actions"><button data-vending-manage>Maschine verwalten</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  wrap.querySelectorAll('[data-vending-potion]').forEach(b=>b.onclick=()=>activateVendingPotion(b.dataset.vendingPotion));
+  wrap.querySelectorAll('[data-vending-jk]').forEach(b=>b.onclick=()=>buyJkWinsPotion(Number(b.dataset.vendingJk),Number(b.dataset.cost)));
+  wrap.querySelector('[data-vending-manage]')?.addEventListener('click',()=>openVendingManagement('game'));
+}
+function openVendingManagement(returnTo='pause'){
+  const owned=!!G.state?.vendingOwned,level=vendingLevel(),next=level+1,cost=owned&&level<10?vendingUpgradeCost(next):0,placed=!!G.summonedVending;
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PLATZIERBARE MASCHINE</small><h2>🥤 Vending Machine</h2><p>Die Maschine gehört nur dir und wird bewusst nur lokal dargestellt – das spart Multiplayer-/Firestore-Last. Andere Spieler können sie nicht benutzen. Ab Stufe 6 wechselt sie automatisch auf dein zweites GLB-Modell.</p></div><button data-vending-back>×</button></div><div class="ekl-big-stat"><div><small>BESITZ</small><b>${owned?'JA':'NEIN'}</b></div><div><small>STUFE</small><b>${level}/10</b></div><div><small>MODELL</small><b>${level>=6?'6–10':'1–5'}</b></div><div><small>PLATZIERT</small><b>${placed?'JA':'NEIN'}</b></div></div><div class="ekl-progression-note"><b>${owned?'UPGRADE-PROGRESSION':'KAUF'}</b><span>${owned?(level>=10?'Maximalstufe erreicht. Alle normalen Tränke haben +2,0 %; +400-% JK Win Potion ist frei.':`Nächste Stufe ${next}: ${cost.toLocaleString('de-DE')} Wins.`):`Einmaliger Kauf: ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach jederzeit über Pause platzierbar.`}</span></div><div class="ekl-modal-actions">${!owned?`<button class="gold" data-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>Kaufen · ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button class="gold" data-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAX STUFE 10':`Upgrade auf ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-vending-place>${placed?'Neu platzieren':'Hier platzieren'}</button><button data-vending-open>Getränke ansehen</button>${placed?'<button data-vending-remove>Maschine entfernen</button>':''}`}<button data-vending-back>Zurück</button></div></div>`);
+  const back=()=>{closeModal();if(returnTo==='pause')setTimeout(showPause,0);else if(returnTo==='shop')setTimeout(()=>openShop('vending'),0);};
+  wrap.querySelectorAll('[data-vending-back]').forEach(b=>b.onclick=back);
+  wrap.querySelector('[data-vending-buy]')?.addEventListener('click',()=>{if(buyVendingMachine())openVendingManagement(returnTo);});
+  wrap.querySelector('[data-vending-upgrade]')?.addEventListener('click',()=>{if(upgradeVendingMachine())openVendingManagement(returnTo);});
+  wrap.querySelector('[data-vending-place]')?.addEventListener('click',()=>{if(spawnVendingMachine()){closeModal();G.paused=false;}});
+  wrap.querySelector('[data-vending-open]')?.addEventListener('click',openVendingMachine);
+  wrap.querySelector('[data-vending-remove]')?.addEventListener('click',()=>{removeSummonedVending();toast('Vending Machine entfernt.','good',1500);openVendingManagement(returnTo);});
+}
+
 function openTreadmillStation(id){
   const def=treadmillDef(id),worldId=G.state.activeTrainingWorld||'keyboard-lab',unlocked=treadmillUnlocked(def,worldId);
-  const currentPower=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus())));
+  const currentPower=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus())));
   const requirement=treadmillRequirement(def,worldId);
   const canBuy=def.access==='wins'&&!unlocked&&G.state.wins>=Number(def.cost||0);
   const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>SPORTPLATZ · ${def.name}</small><h2>🏃 ${def.name} Laufband</h2><p>${def.desc}. Laufband-Training ist bewusst stärker als normales Laufen und erhöht Level-Power, nicht direkt deinen physischen Speed über das 300er-Limit.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${currentLevel(worldId)}</b></div><div><small>SPEED</small><b>${Math.round(currentSpeedStat(worldId))}/300</b></div><div><small>POWER / SEK.</small><b>+${fmt(currentPower)}</b></div></div><div class="ekl-progression-note"><b>${unlocked?'✓ FREIGESCHALTET':'🔒 GESPERRT'}</b><span>${requirement}</span></div><div class="ekl-modal-actions">${def.access==='wins'&&!unlocked?`<button class="gold" data-ekl-buy-treadmill ${canBuy?'':'disabled'}>Silber kaufen · ${Number(def.cost||0).toLocaleString('de-DE')} Wins</button>`:''}${def.access==='jk'&&!unlocked?`<button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button>`:''}<button data-ekl-train-world-select>Trainingswelt ändern</button><button data-ekl-modal-close>Schließen</button></div></div>`);
@@ -1896,7 +2054,7 @@ function processMovement(dt,t){
   if(isOnTraining()){
     const tr=trainingInfo(),worldId=G.state.activeTrainingWorld||'keyboard-lab';G.trainingStreakSeconds+=dt;
     const tier=G.trainingStreakSeconds>=60?3:G.trainingStreakSeconds>=30?2:G.trainingStreakSeconds>=10?1:0;if(tier>G.trainingStreakTier){G.trainingStreakTier=tier;toast(`🔥 TRAINING-STREAK · +${Math.round(trainingStreakBonus()*100)} % Power`,'good',1400);}
-    G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(tr?.mult||1)*(1+treadmillCoreBonus()+trainingStreakBonus());
+    G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(tr?.mult||1)*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus());
     if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addLevelPower(add,true,worldId);queuePersist(1800);}
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
@@ -2062,7 +2220,7 @@ function detectInteraction(){
   if(best){p.innerHTML=`<kbd>${matchMedia('(pointer:coarse)').matches?'AKTION':'E'}</kbd>${best.label}`;p.classList.add('show')}
   else if(tr){
     const worldId=G.state.activeTrainingWorld||'keyboard-lab';
-    if(tr.unlocked)p.textContent=`${tr.name} · Auto-Run · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus()+trainingStreakBonus()))} Power/s · Streak ${Math.floor(G.trainingStreakSeconds)}s${trainingStreakBonus()?` (+${Math.round(trainingStreakBonus()*100)}%)`:''} · ${escapeWorldById(worldId)?.name||'Welt'}`;
+    if(tr.unlocked)p.textContent=`${tr.name} · Auto-Run · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus()))} Power/s · Streak ${Math.floor(G.trainingStreakSeconds)}s${trainingStreakBonus()?` (+${Math.round(trainingStreakBonus()*100)}%)`:''} · ${escapeWorldById(worldId)?.name||'Welt'}`;
     else p.textContent=`🔒 ${tr.name} · ${treadmillRequirement(tr.def,worldId)}`;
     p.classList.add('show');
   }else p.classList.remove('show');
@@ -2091,7 +2249,7 @@ function buyCoreUpgrade(kind){
 }
 function openShop(tab='speed'){
   const worldId=shopWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),tier=shopTier(worldId),trail=TRAILS.find(t=>t.id===G.state.trail)||TRAILS[0],aura=AURAS.find(a=>a.id===G.state.aura)||AURAS[0];
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>WORLD ${tier.number} · SHOP</small><h2>🏪 ${tier.name}</h2><p>Jede Welt besitzt ihre eigene Shop-Stufe. Preise und Upgrade-Limits steigen mit der Welt. In World ${tier.number} sind Speed-Items bis Stufe ${tier.maxItemLevel}/5 und Cores bis Stufe ${tier.maxCoreTier}/3 möglich. Danach brauchst du ${tier.next}.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>EXTRA SPEED</small><b>+${(totalSpeedBonus()*100).toFixed(1).replace('.',',')}%</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>WORLD ${tier.number} · SHOP</small><h2>🏪 ${tier.name}</h2><p>Jede Welt besitzt ihre eigene Shop-Stufe. Preise und Upgrade-Limits steigen mit der Welt. In World ${tier.number} sind Speed-Items bis Stufe ${tier.maxItemLevel}/5 und Cores bis Stufe ${tier.maxCoreTier}/3 möglich. Danach brauchst du ${tier.next}.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${level}</b></div><div><small>SPEED</small><b>${Math.round(speed)}/300</b></div><div><small>POWER / BEWEGUNG</small><b>+${fmt(levelPowerPerRunPoint())}</b></div><div><small>WINS</small><b>${fmt(G.state.wins)}</b></div><div><small>EXTRA SPEED</small><b>+${(totalSpeedBonus()*100).toFixed(1).replace('.',',')}%</b></div></div><div class="ekl-tabs"><button data-ekl-shop-tab="speed">Power</button><button data-ekl-shop-tab="treadmills">Laufbänder</button><button data-ekl-shop-tab="items">Speed-Items</button><button data-ekl-shop-tab="trails">Trails</button><button data-ekl-shop-tab="auras">Auren</button><button data-ekl-shop-tab="upgrades">Upgrades</button><button data-ekl-shop-tab="vending">Vending</button><button data-ekl-shop-tab="pets">Pets</button><button data-ekl-shop-tab="characters">Charaktere</button><button data-ekl-shop-tab="worlds">Welten</button><button data-ekl-shop-tab="jk">◆ JK/Coin</button></div><div data-ekl-shop-body></div></div>`);
   wrap.querySelectorAll('[data-ekl-shop-tab]').forEach(b=>b.onclick=()=>renderShopBody(b.dataset.eklShopTab));renderShopBody(tab);
 }
 function renderShopBody(tab){
@@ -2124,10 +2282,16 @@ function renderShopBody(tab){
     ];
     body.innerHTML=`<div class="ekl-progression-note"><b>🧩 ESCAPE UPGRADES</b><span>Permanente, bewusst kleine Upgrades. Die 0–300 Level-Speed-Kurve bleibt unverändert; Speed Core, Auren, Pets und Speed-Chips dürfen den effektiven Wert kontrolliert über 300 anheben.</span></div><div class="ekl-shop-grid">${cards.map(c=>{const nextRaw=coreUpgradeDef(c.kind,c.tier+1),next=c.tier+1<=tier.maxCoreTier?nextRaw:null;return `<article class="${c.tier>=3?'owned':''}"><small>${c.icon} STUFE ${c.tier}/3</small><h3>${c.title}</h3><p>${c.desc}<br><b>Aktuell: +${c.bonus}%</b>${next?` · Nächste Stufe: +${Math.round(next.bonus*100)}%`:''}</p><button data-ekl-core="${c.kind}" ${next?'':'disabled'}>${next?`${shopScaledCost(next.cost,worldId).toLocaleString('de-DE')} Wins`:c.tier>=3?'MAXIMAL':`WORLD ${tier.number} LIMIT`}</button></article>`}).join('')}</div>`;
     body.querySelectorAll('[data-ekl-core]').forEach(b=>b.onclick=()=>buyCoreUpgrade(b.dataset.eklCore));
+  }else if(tab==='vending'){
+    const owned=!!G.state.vendingOwned,level=vendingLevel(),next=level+1,cost=level<10?vendingUpgradeCost(next):0;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🥤 PLATZIERBARE VENDING MACHINE</b><span>${owned?`Stufe ${level}/10 · Trankstärke +${(vendingPotionPct()*100).toFixed(1).replace('.',',')} %. Ab Stufe 6 wird automatisch dein zweites Maschinenmodell benutzt.`:`Kaufe die Maschine einmalig für ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach kannst du sie über Pause überall auf deiner aktuellen Map platzieren.`}</span></div><div class="ekl-shop-grid"><article class="${owned?'owned':''}"><small>${owned?'IM BESITZ':'FREISCHALTUNG'}</small><h3>Vending Machine ${owned?`Stufe ${level}`:'1–10'}</h3><p>Wins-, Speed- und Laufband-Tränke. Normale Stärke: +0,2 % je Maschinenstufe → +1,0 % auf Stufe 5 → +2,0 % auf Stufe 10.</p><div class="ekl-item-actions">${!owned?`<button data-ekl-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button data-ekl-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAXIMAL':`Stufe ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-ekl-vending-manage>Platzieren / Getränke</button>`}</div></article></div>`;
+    body.querySelector('[data-ekl-vending-buy]')?.addEventListener('click',()=>{if(buyVendingMachine())openShop('vending')});
+    body.querySelector('[data-ekl-vending-upgrade]')?.addEventListener('click',()=>{if(upgradeVendingMachine())openShop('vending')});
+    body.querySelector('[data-ekl-vending-manage]')?.addEventListener('click',()=>openVendingManagement('shop'));
   }else if(tab==='pets'){
     const free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
-    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP · ${activePetDefs().length}/2 AKTIV</b><span>Maximal zwei Pets gleichzeitig. Reptisect läuft dir animiert hinterher; der Phönix fliegt mit seiner Fluganimation weich und leicht verzögert hinter dir.</span><div class="ekl-trail-pos-inline"><button class="gold" data-ekl-best-pets-shop>⭐ Beste Pets</button><button data-ekl-pets-menu-shop>Pets ausrüsten</button></div></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielbare Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Aktuell keine Free Pets im Katalog.</b><span>Die Kategorie bleibt für zukünftige kostenlose Pets bestehen.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Dauerhafte Premium-Pets</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div>`;
-    body.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'shop'));body.querySelector('[data-ekl-best-pets-shop]')?.addEventListener('click',equipBestPets);body.querySelector('[data-ekl-pets-menu-shop]')?.addEventListener('click',openPetEquipMenu);
+    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP · ${activePetDefs().length}/2 AKTIV</b><span>Maximal zwei Pets gleichzeitig. Free Pet Cat ist mit Wins erspielbar und weltweise levelbar; beim Laufen wackelt es leicht vor/zurück. Reptisect läuft animiert hinterher; der Phönix fliegt weich und verzögert hinter dir.</span><div class="ekl-trail-pos-inline"><button class="gold" data-ekl-best-pets-shop>⭐ Beste Pets</button><button data-ekl-pets-menu-shop>Pets ausrüsten</button></div></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielbare Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Aktuell keine Free Pets im Katalog.</b><span>Die Kategorie bleibt für zukünftige kostenlose Pets bestehen.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Dauerhafte Premium-Pets</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div>`;
+    body.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'shop'));body.querySelectorAll('[data-ekl-pet-upgrade]').forEach(b=>b.onclick=()=>upgradeFreeCat('shop'));body.querySelector('[data-ekl-best-pets-shop]')?.addEventListener('click',equipBestPets);body.querySelector('[data-ekl-pets-menu-shop]')?.addEventListener('click',openPetEquipMenu);
   }else if(tab==='characters'){
     const active=G.state.characterChoice;
     body.innerHTML=`<div class="ekl-progression-note"><b>🧍 CHARAKTER SHOP</b><span>Mann/Frau jederzeit kostenlos. Der Dämonen-Slot nutzt deine gelieferte GLB-Datei und kann nach dem Kauf per JK/Coin zum Galaxy-Skin aufgewertet werden.</span></div><div class="ekl-character-choice"><button data-ekl-character-shop="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>Hauptskin</span></button><button data-ekl-character-shop="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>Hauptskin</span></button></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''} ${c.currency==='jk'?'jk':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br><b>Galaxy-Upgrade</b>: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin → +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special-shop="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade-shop="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div>`;
@@ -2250,7 +2414,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V489</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V490</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2331,9 +2495,9 @@ function openOwnerModMenu(){
 }
 function showPause(){
   G.paused=true;const owner=isEscapeOwner();
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.${owner?' · Owner-Mod-Menü verfügbar.':''}</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-treadmills>🏃 Laufband</button><button data-ekl-pets>🪽 Pets ausrüsten</button><button data-ekl-hub>Zum Hub</button>${owner?'<button class="owner" data-ekl-owner-mod>👑 Mod-Menü</button>':''}<button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.${owner?' · Owner-Mod-Menü verfügbar.':''}</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-treadmills>🏃 Laufband</button><button data-ekl-vending>🥤 Vending Machine</button><button data-ekl-pets>🪽 Pets ausrüsten</button><button data-ekl-hub>Zum Hub</button>${owner?'<button class="owner" data-ekl-owner-mod>👑 Mod-Menü</button>':''}<button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);
   G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false});
-  G.overlay.querySelector('[data-ekl-treadmills]')?.addEventListener('click',openTreadmillSpawnMenu);G.overlay.querySelector('[data-ekl-pets]')?.addEventListener('click',openPetEquipMenu);
+  G.overlay.querySelector('[data-ekl-treadmills]')?.addEventListener('click',openTreadmillSpawnMenu);G.overlay.querySelector('[data-ekl-vending]')?.addEventListener('click',()=>openVendingManagement('pause'));G.overlay.querySelector('[data-ekl-pets]')?.addEventListener('click',openPetEquipMenu);
   G.overlay.querySelector('[data-ekl-hub]').onclick=()=>{G.paused=false;setWorld('hub')};
   G.overlay.querySelector('[data-ekl-exit]').onclick=returnToTopGames;
   G.overlay.querySelector('[data-ekl-help]').onclick=showHelp;
@@ -2435,7 +2599,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){
