@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V499 · Level-800 Gates + Wind Overdrive + Water Stages 6–7 */
-const VERSION = '2026-08-18-v499';
+/* Escape.kl – JK.Games Top Game V500 · Treadmill 5-Minute Anti-AFK */
+const VERSION = '2026-08-18-v500';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -29,6 +29,9 @@ const SPRINT_SPEED_STAT_BONUS = 18;
 const LEVEL_XP_SCALE = 60;
 const LEVEL_XP_POWER = 2.15;
 const TREADMILL_TICKS_PER_SECOND = 24;
+const TREADMILL_AFK_LIMIT_MS = 5*60*1000;
+const TREADMILL_AFK_WARNING_MS = 30*1000;
+const TREADMILL_AFK_ACTIVITY_DISTANCE = .28; // echte Bewegung auf dem Pad, nicht Maus-/UI-Aktivität
 const CAMERA_PITCH_MIN = -.18;
 const CAMERA_PITCH_MAX = .78;
 const TOUCH_LOOK_SENSITIVITY_X = .0062;
@@ -173,7 +176,7 @@ const G = {
   lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,reviveOfferWorld:'',reviveOfferPlatformUuid:'',revivePending:false,revivePurchaseBusy:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0,reviveGraceUntil:0,reviveStabilizeUntil:0,reviveStabilizeSupport:null, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
   prompt:null, activeInteractable:null, toastTimer:0, paused:false, modalOpen:false,shopActiveTab:'',shopScrollMemory:Object.create(null),
   particleClock:0, movingClock:0, hudClock:0, trailClock:0,footstepClock:0,landingPulse:0,
-  runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,
+  runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,trainingAfkPlatformKey:'',trainingAfkLastMoveAt:0,trainingAfkMoveCarry:0,trainingAfkLocked:false,trainingAfkWarned:false,
   hitboxDebugEnabled:false,hitboxDebugGroup:null,hitboxDebugItems:[],hitboxDebugPlayer:null,
   summonedTreadmill:null,summonedVending:null,vendingLoadSeq:0,
   ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,
@@ -1881,6 +1884,44 @@ function trainingInfo(){
   return {platform:G.support,def,unlocked:treadmillUnlocked(def),mult:def.mult,name:def.name};
 }
 function isOnTraining(){return !!trainingInfo()?.unlocked;}
+function trainingAfkPlatformKey(tr){
+  const p=tr?.platform;if(!p)return '';
+  return String(p.mesh?.uuid||p.uuid||p.trainingId||tr.def?.id||'training');
+}
+function ensureTrainingAfkSession(tr){
+  const key=trainingAfkPlatformKey(tr),now=performance.now();
+  if(!key)return;
+  if(G.trainingAfkPlatformKey!==key){
+    G.trainingAfkPlatformKey=key;G.trainingAfkLastMoveAt=now;G.trainingAfkMoveCarry=0;G.trainingAfkLocked=false;G.trainingAfkWarned=false;
+  }else if(!Number.isFinite(G.trainingAfkLastMoveAt)||G.trainingAfkLastMoveAt<=0){G.trainingAfkLastMoveAt=now;}
+}
+function registerTrainingAfkMovement(tr,distance,directionalInput){
+  if(!tr?.unlocked||!directionalInput)return false;
+  ensureTrainingAfkSession(tr);
+  const d=Math.max(0,Number(distance)||0);if(d<=.002)return false;
+  G.trainingAfkMoveCarry+=d;
+  if(G.trainingAfkMoveCarry<TREADMILL_AFK_ACTIVITY_DISTANCE)return false;
+  const wasLocked=G.trainingAfkLocked;
+  G.trainingAfkMoveCarry=0;G.trainingAfkLastMoveAt=performance.now();G.trainingAfkLocked=false;G.trainingAfkWarned=false;
+  if(wasLocked){toast('✅ LAUFBAND WIEDER AKTIV · echte Bewegung erkannt.','good',1900);tone(420,.08,'triangle',.012,80);}
+  return true;
+}
+function updateTrainingAfkState(tr){
+  if(!tr?.unlocked)return {locked:false,idleMs:0,remainingMs:TREADMILL_AFK_LIMIT_MS};
+  ensureTrainingAfkSession(tr);
+  const now=performance.now(),idleMs=Math.max(0,now-G.trainingAfkLastMoveAt),remainingMs=Math.max(0,TREADMILL_AFK_LIMIT_MS-idleMs);
+  if(!G.trainingAfkWarned&&!G.trainingAfkLocked&&remainingMs<=TREADMILL_AFK_WARNING_MS&&remainingMs>0){
+    G.trainingAfkWarned=true;toast('⚠️ LAUFBAND-AFK · Noch 30 Sek. · bewege dich mit WASD auf dem Pad!','bad',2600);tone(170,.10,'square',.010,-30);
+  }
+  if(!G.trainingAfkLocked&&idleMs>=TREADMILL_AFK_LIMIT_MS){
+    G.trainingAfkLocked=true;G.trainingCarry=0;G.trainingStreakSeconds=0;G.trainingStreakTier=0;
+    toast('⛔ LAUFBAND GESTOPPT · 5 Min. ohne echte WASD-Bewegung. Beweg dich auf dem Pad, um weiterzutrainieren.','bad',4200);tone(105,.16,'sawtooth',.015,-55);
+  }
+  return {locked:!!G.trainingAfkLocked,idleMs,remainingMs};
+}
+function trainingAfkClockText(ms){
+  ms=Math.max(0,Number(ms)||0);const total=Math.ceil(ms/1000),m=Math.floor(total/60),sec=total%60;return `${m}:${String(sec).padStart(2,'0')}`;
+}
 function removeSummonedTreadmill(){
   const rt=G.summonedTreadmill;if(!rt)return false;
   if(G.support&&rt.platforms?.includes(G.support)){G.support=null;G.grounded=false;}
@@ -1917,7 +1958,7 @@ function spawnSummonedTreadmill(id){
 }
 function openTreadmillSpawnMenu(){
   const worldId=progressWorldId(),cards=TREADMILLS.map(def=>{const unlocked=treadmillUnlocked(def,worldId),active=G.summonedTreadmill?.id===def.id&&G.summonedTreadmill?.scope===G.world;const req=treadmillRequirement(def,worldId);const power=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus())));return `<button class="ekl-training-world-card ${active?'active':''}" data-ekl-summon-treadmill="${def.id}" ${unlocked?'':'data-locked="1"'}><b>${def.name} · ×${String(def.mult).replace('.',',')}</b><span>${active?'AKTUELL ERZEUGT':unlocked?`FREI · ca. +${fmt(power)} Power/s`:`🔒 ${req}`}</span></button>`;}).join('');
-  const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>PAUSE · LAUFBAND ERZEUGEN</small><h2>🏃 Laufband auswählen</h2><p>Erzeuge genau ein Laufband direkt unter deinem Charakter. FREE bis DIAMOND können hier ebenfalls benutzt werden. GALAXY ×6 und ADMIN ×10 existieren ausschließlich als erzeugbare Premium-Laufbänder und stehen nicht dauerhaft am Sportplatz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-training-world-grid">${cards}</div><div class="ekl-progression-note"><b>TRAININGSWELT</b><span>${escapeWorldById(worldId)?.name||worldId} · Level ${currentLevel(worldId)} · Speed ${Math.round(currentSpeedStat(worldId))}/300</span></div><div class="ekl-modal-actions"><button data-ekl-remove-summoned ${G.summonedTreadmill?'':'disabled'}>Erzeugtes Laufband entfernen</button><button class="jk" data-ekl-open-jk>JK/Coin-Shop</button><button data-ekl-back-pause>Zurück</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>PAUSE · LAUFBAND ERZEUGEN</small><h2>🏃 Laufband auswählen</h2><p>Erzeuge genau ein Laufband direkt unter deinem Charakter. FREE bis DIAMOND können hier ebenfalls benutzt werden. GALAXY ×6 und ADMIN ×10 existieren ausschließlich als erzeugbare Premium-Laufbänder. <b>Anti-AFK:</b> spätestens alle 5 Minuten musst du dich auf dem Pad wirklich mit WASD (mobil: Stick) bewegen.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-training-world-grid">${cards}</div><div class="ekl-progression-note"><b>TRAININGSWELT</b><span>${escapeWorldById(worldId)?.name||worldId} · Level ${currentLevel(worldId)} · Speed ${Math.round(currentSpeedStat(worldId))}/300</span></div><div class="ekl-modal-actions"><button data-ekl-remove-summoned ${G.summonedTreadmill?'':'disabled'}>Erzeugtes Laufband entfernen</button><button class="jk" data-ekl-open-jk>JK/Coin-Shop</button><button data-ekl-back-pause>Zurück</button></div></div>`);
   wrap.querySelectorAll('[data-ekl-modal-close],[data-ekl-back-pause]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
   wrap.querySelectorAll('[data-ekl-summon-treadmill]').forEach(b=>b.onclick=()=>{const def=treadmillDef(b.dataset.eklSummonTreadmill);if(!treadmillUnlocked(def,worldId)){if(def.access==='jk')return openJkCoinShop();return toast(`🔒 ${treadmillRequirement(def,worldId)}`,'bad',1800);}if(spawnSummonedTreadmill(def.id)){closeModal();G.paused=false;}});
   wrap.querySelector('[data-ekl-remove-summoned]')?.addEventListener('click',()=>{removeSummonedTreadmill();closeModal();G.paused=false;toast('Erzeugtes Laufband entfernt.','good',1500);});
@@ -2032,7 +2073,7 @@ function openTreadmillStation(id){
   const currentPower=Math.max(1,Math.round(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*def.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus())));
   const requirement=treadmillRequirement(def,worldId);
   const canBuy=def.access==='wins'&&!unlocked&&G.state.wins>=Number(def.cost||0);
-  const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>SPORTPLATZ · ${def.name}</small><h2>🏃 ${def.name} Laufband</h2><p>${def.desc}. Laufband-Training ist bewusst stärker als normales Laufen und erhöht Level-Power, nicht direkt deinen physischen Speed über das 300er-Limit.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${currentLevel(worldId)}</b></div><div><small>SPEED</small><b>${Math.round(currentSpeedStat(worldId))}/300</b></div><div><small>POWER / SEK.</small><b>+${fmt(currentPower)}</b></div></div><div class="ekl-progression-note"><b>${unlocked?'✓ FREIGESCHALTET':'🔒 GESPERRT'}</b><span>${requirement}</span></div><div class="ekl-modal-actions">${def.access==='wins'&&!unlocked?`<button class="gold" data-ekl-buy-treadmill ${canBuy?'':'disabled'}>Silber kaufen · ${Number(def.cost||0).toLocaleString('de-DE')} Wins</button>`:''}${def.access==='jk'&&!unlocked?`<button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button>`:''}<button data-ekl-train-world-select>Trainingswelt ändern</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-treadmill-modal"><div class="ekl-modal-head"><div><small>SPORTPLATZ · ${def.name}</small><h2>🏃 ${def.name} Laufband</h2><p>${def.desc}. Laufband-Training ist bewusst stärker als normales Laufen und erhöht Level-Power. <b>AFK-Schutz:</b> Nach 5 Minuten ohne echte WASD-Bewegung auf dem Pad stoppt die Power. Mausbewegung, Klicks und Autoklicker zählen nicht.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>TRAININGSWELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b></div><div><small>LEVEL</small><b>${currentLevel(worldId)}</b></div><div><small>SPEED</small><b>${Math.round(currentSpeedStat(worldId))}/300</b></div><div><small>POWER / SEK.</small><b>+${fmt(currentPower)}</b></div></div><div class="ekl-progression-note"><b>${unlocked?'✓ FREIGESCHALTET':'🔒 GESPERRT'}</b><span>${requirement}</span></div><div class="ekl-modal-actions">${def.access==='wins'&&!unlocked?`<button class="gold" data-ekl-buy-treadmill ${canBuy?'':'disabled'}>Silber kaufen · ${Number(def.cost||0).toLocaleString('de-DE')} Wins</button>`:''}${def.access==='jk'&&!unlocked?`<button class="jk" data-ekl-open-jk>JK/Coin-Shop öffnen</button>`:''}<button data-ekl-train-world-select>Trainingswelt ändern</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   wrap.querySelector('[data-ekl-buy-treadmill]')?.addEventListener('click',()=>{
     if(G.state.wins<Number(def.cost||0))return toast('Nicht genug Wins.','bad');
     G.state.wins-=Number(def.cost||0);if(!G.state.ownedTreadmills.includes(def.id))G.state.ownedTreadmills.push(def.id);soundBuy();queuePersist(50);closeModal();toast('🥈 Silber-Laufband dauerhaft freigeschaltet.','good',2200);updateHud(true);
@@ -2142,11 +2183,22 @@ function processMovement(dt,t){
     }
     G.lastGroundPos.copy(G.pos);
   }else if(G.grounded)G.lastGroundPos.copy(G.pos);
-  if(isOnTraining()){
-    const tr=trainingInfo(),worldId=G.state.activeTrainingWorld||'keyboard-lab';G.trainingStreakSeconds+=dt;
-    const tier=G.trainingStreakSeconds>=60?3:G.trainingStreakSeconds>=30?2:G.trainingStreakSeconds>=10?1:0;if(tier>G.trainingStreakTier){G.trainingStreakTier=tier;toast(`🔥 TRAINING-STREAK · +${Math.round(trainingStreakBonus()*100)} % Power`,'good',1400);}
-    G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(tr?.mult||1)*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus());
-    if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addLevelPower(add,true,worldId);queuePersist(1800);}
+  const activeTraining=trainingInfo();
+  if(activeTraining?.unlocked){
+    // V500 Anti-AFK: Nur echte Richtungs-Eingabe PLUS tatsächliche Bewegung auf dem
+    // Laufband setzt den 5-Minuten-Timer zurück. Maus, Klicks, UI, Sprint-Taste,
+    // Springen auf der Stelle oder reine Laufband-Animation zählen ausdrücklich nicht.
+    const keyboardDirectional=G.keys.has('KeyW')||G.keys.has('KeyA')||G.keys.has('KeyS')||G.keys.has('KeyD');
+    const mobileDirectional=Math.hypot(G.mobileX,G.mobileY)>.16;
+    const realTrainingStep=Math.hypot(G.pos.x-prevX,G.pos.z-prevZ);
+    registerTrainingAfkMovement(activeTraining,realTrainingStep,keyboardDirectional||mobileDirectional);
+    const afk=updateTrainingAfkState(activeTraining),worldId=G.state.activeTrainingWorld||'keyboard-lab';
+    if(!afk.locked){
+      G.trainingStreakSeconds+=dt;
+      const tier=G.trainingStreakSeconds>=60?3:G.trainingStreakSeconds>=30?2:G.trainingStreakSeconds>=10?1:0;if(tier>G.trainingStreakTier){G.trainingStreakTier=tier;toast(`🔥 TRAINING-STREAK · +${Math.round(trainingStreakBonus()*100)} % Power`,'good',1400);}
+      G.trainingCarry+=dt*TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*(activeTraining?.mult||1)*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus());
+      if(G.trainingCarry>=1){const add=Math.floor(G.trainingCarry);G.trainingCarry-=add;addLevelPower(add,true,worldId);queuePersist(1800);}
+    }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;G.trainingCarry=0;}
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
   if(updateHazards(dt))return;
@@ -2324,7 +2376,7 @@ function detectInteraction(){
   if(best){p.innerHTML=`<kbd>${matchMedia('(pointer:coarse)').matches?'AKTION':'E'}</kbd>${best.label}`;p.classList.add('show')}
   else if(tr){
     const worldId=G.state.activeTrainingWorld||'keyboard-lab';
-    if(tr.unlocked)p.textContent=`${tr.name} · Auto-Run · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus()))} Power/s · Streak ${Math.floor(G.trainingStreakSeconds)}s${trainingStreakBonus()?` (+${Math.round(trainingStreakBonus()*100)}%)`:''} · ${escapeWorldById(worldId)?.name||'Welt'}`;
+    if(tr.unlocked){const afk=updateTrainingAfkState(tr);p.textContent=afk.locked?`⛔ ${tr.name} · AFK-STOP · bewege dich mit WASD auf dem Pad, um Training fortzusetzen`:`${tr.name} · +${fmt(TREADMILL_TICKS_PER_SECOND*levelPowerPerRunPoint()*tr.mult*(1+treadmillCoreBonus()+vendingTreadmillBonus()+trainingStreakBonus()))} Power/s · AFK-Stop in ${trainingAfkClockText(afk.remainingMs)} · WASD-Bewegung erforderlich · ${escapeWorldById(worldId)?.name||'Welt'}`;}
     else p.textContent=`🔒 ${tr.name} · ${treadmillRequirement(tr.def,worldId)}`;
     p.classList.add('show');
   }else p.classList.remove('show');
