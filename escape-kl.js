@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v489-water-world';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v486-start-return';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v486-start-return';
-import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v493-wave-placement-fix';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
+import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v494-stage-wins';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 

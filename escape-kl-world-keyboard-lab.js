@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Wind World V484.
+/* Escape.kl World 1 – Wind World V494.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
@@ -37,8 +37,8 @@ export function buildKeyboardLabWorld(api){
   const winPad=(stage,reward,y=.7)=>{
     z-=4.2;
     addPlatform({x:0,y:y-.16,z,w:12,h:.40,d:5.8,color:0x18344c,label:'',kind:'safe-zone',stage:Math.min(15,stage+1)});
-    addPlatform({x:3.55,y:y+.15,z,w:3.6,h:.20,d:2.25,color:0xd9a62b,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});
-    addSign(`CASH OUT · +${compact(reward)} WINS`,{x:3.55,y:y+2.05,z:z+.12},0xffd35b,.40);
+    addPlatform({x:4.55,y:y+.15,z,w:2.55,h:.18,d:1.78,color:0xd9a62b,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});
+    addSign(`+${compact(reward)} WINS`,{x:4.55,y:y+1.72,z:z+.12},0xffd35b,.31);
   };
 
   stageTitle(1,'WASD START');for(let i=0;i<6;i++)key(3.25,(i%2?.25:-.25),.48,5.4,3.05,labels[i],0x285a78);winPad(1,rewards[0]);

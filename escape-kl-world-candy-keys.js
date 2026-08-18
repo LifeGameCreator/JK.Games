@@ -1,4 +1,4 @@
-/* Escape.kl World 2 – Candy World V484. Longer route with the existing difficulty curve and stable finish flow. */
+/* Escape.kl World 2 – Candy World V494. Longer route with the existing difficulty curve and stable finish flow. */
 export function buildCandyKeysWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},returnHub=()=>{},finishAndReturnHub=()=>{}}=api;
   // V461: World 2 economy deliberately reduced. The final cash-out is capped at 200,000 Wins.
@@ -18,7 +18,7 @@ export function buildCandyKeysWorld(api){
   let z=startZ-9;
   const title=(n,t)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y:3.45,z:z+2.0},0xff8ccb,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:2.62,z:z+2.02},0xffd36a,.35);};
   const key=(gap,x,y,w,d,label,color,extra={})=>{z-=gap;return addPlatform({x,y,z,w,h:.48,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});};
-  const win=(stage,reward,y=.75)=>{z-=4.5;addPlatform({x:0,y:y-.16,z,w:11,h:.4,d:5.6,color:0x522740,label:'',kind:'safe-zone',stage:Math.min(10,stage+1)});addPlatform({x:3.25,y:y+.15,z,w:3.6,h:.2,d:2.25,color:0xe4ad31,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});addSign(`CASH OUT · +${compact(reward)} WINS`,{x:3.25,y:y+2.0,z:z+.1},0xffd45f,.40);};
+  const win=(stage,reward,y=.75)=>{z-=4.5;addPlatform({x:0,y:y-.16,z,w:11,h:.4,d:5.6,color:0x522740,label:'',kind:'safe-zone',stage:Math.min(10,stage+1)});addPlatform({x:4.18,y:y+.15,z,w:2.45,h:.18,d:1.75,color:0xe4ad31,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});addSign(`+${compact(reward)} WINS`,{x:4.18,y:y+1.70,z:z+.1},0xffd45f,.31);};
 
   title(1,'CHOCOLATE START');for(let i=0;i<7;i++)key(4.0,i%2?1.2:-1.2,.55,4.25,2.95,i%2?'CHOCO':'CANDY',i%2?0x7a3d45:0xd05f9c);win(1,rewards[0]);
   z-=2.6;title(2,'LOLLIPOP ROW');for(let i=0;i<8;i++){key(4.8,(i%3-1)*1.65,.72,3.9,2.8,String(i+1),0xc95694);if(i%2===0)addCylinderDeco((i%3-1)*1.65,1.75,z,.22,.22,1.5,0xf7c8e2,0x9d3f73,10);}win(2,rewards[1],.85);

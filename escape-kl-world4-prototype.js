@@ -1,5 +1,5 @@
-/* Escape.kl World 4 – V493 WATER WORLD.
-   Water-Wave Spawn-/Stage-Übergänge korrigiert; Stages 1–5 bleiben spielbar. */
+/* Escape.kl World 4 – V494 WATER WORLD.
+   Kleine rechtsliegende WIN-Pads an jeder Stage; Belohnungen steigen proportional zur Schwierigkeit. */
 export function buildWaterWorld(api){
   const {
     addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},
@@ -7,6 +7,13 @@ export function buildWaterWorld(api){
   }=api;
   const startZ=-70;
   const water=0x2bbcf0,deep=0x087fae,foam=0xbdf4ff,rock=0x174657,platform=0x2f8fb0,safe=0x47b9d2,boost=0x52d7ff;
+  const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
+  // V494: rund +33–38 % pro Stage; World 4 setzt oberhalb des Toxic-Finales (500M) an.
+  const rewards=[600000000,800000000,1100000000,1500000000,2000000000];
+  const addStageWin=(stage,reward,x,y,z)=>{
+    addPlatform({x,y,z,w:2.55,h:.18,d:1.75,color:0xe0ad32,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});
+    addSign(`+${compact(reward)} WINS`,{x,y:y+1.55,z:z+.08},0xffd45f,.31);
+  };
 
   // Sichtbares Wasser unter der gesamten Map statt schwarzem Void. Die leichte Y-Bewegung
   // sorgt dafür, dass die Wasserfläche auch ohne Textur sichtbar "lebt".
@@ -32,6 +39,7 @@ export function buildWaterWorld(api){
     [-124,-3.3,1.20,4.1,3.5,'WAVE'],[-134,1.7,1.35,4.2,3.6,'SEA'],[-144,0,1.48,6.6,4.6,'STAGE 1']
   ];
   for(const [z,x,y,w,d,label] of s1)addPlatform({x,y,z,w,h:.48,d,color:platform,label,stage:1,kind:'water-key'});
+  addStageWin(1,rewards[0],4.55,1.87,-156.0);
 
   // STAGE 2 – horizontale Wasserwelle. Ab der ersten Stage-2-Plattform startet sie hinter dem Spieler.
   addPlatform({x:0,y:1.52,z:-156,w:12,h:.58,d:7,color:safe,label:'STAGE 2',stage:2,kind:'safe-zone'});
@@ -43,6 +51,7 @@ export function buildWaterWorld(api){
     [-218,-2.2,2.02,5.8,4.1,'RUN'],[-230,3.0,2.12,5.8,4.1,'FASTER'],[-242,-3.0,2.24,6.0,4.2,'WATER'],[-254,0,2.34,8.8,5.0,'SAFE'],[-262,0,2.34,7.2,5.0,'STAGE 2 END']
   ];
   for(const [z,x,y,w,d,label] of s2)addPlatform({x,y,z,w,h:.5,d,color:iColor(label),label,stage:2,kind:'water-key'});
+  addStageWin(2,rewards[1],4.55,2.70,-270.0);
 
   // STAGE 3 – umlaufender Aufstieg. Viele kleine, überlappende Stufen erlauben echtes Hochlaufen
   // statt erzwungener Sprünge. Von unten steigt gleichzeitig Wasser nach oben.
@@ -74,6 +83,7 @@ export function buildWaterWorld(api){
   }
   addPlatform({x:-8,y:13.48,z:-324,w:10,h:.58,d:8,color:safe,label:'TOP SAFE',stage:3,kind:'safe-zone'});
   addRingDeco(-8,15.18,-324,2.0,.07,foam,0);
+  addStageWin(3,rewards[2],-4.35,13.83,-324.0);
 
   // STAGE 4 – sechs große Boost-Sprünge, abwechselnd links / rechts.
   addPlatform({x:0,y:13.48,z:-338,w:10,h:.60,d:7,color:boost,label:'BOOST START',stage:4,kind:'water-boost-pad',jumpBoost:11.8});
@@ -84,6 +94,7 @@ export function buildWaterWorld(api){
     addPlatform({x,y:13.48,z,w:5.2,h:.56,d:5.2,color:i%2?0x3bcbe9:0x55e6ff,label:`BOOST ${i+1}`,stage:4,kind:'water-boost-pad',jumpBoost:11.8});
     addRingDeco(x,15.03,z,1.25,.055,foam,Math.PI/2);
   });
+  addStageWin(4,rewards[3],4.20,13.83,-416.0);
   addPlatform({x:0,y:13.48,z:-416,w:11,h:.60,d:7,color:safe,label:'STAGE 5',stage:5,kind:'safe-zone'});
 
   // STAGE 5 – reine Gerade. Beim Verlassen des Startfelds startet erneut eine Welle.
@@ -96,8 +107,9 @@ export function buildWaterWorld(api){
     if(n%2===0)boxDeco(5.55,13.73,z,.12,.05,9.0,0xdaf8ff);
   }
   addWaterWave({x:0,y:16.35,startZ:-409,triggerZ:-419.6,endZ:-551,w:31,h:7.2,d:2.3,speed:16.5,spawnBehind:10,clearZ:-548,color:0x22bce9,triggerText:'🌊 FINAL WAVE · VOLLGAS!'});
-  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'V493 TEST END',stage:5,kind:'safe-zone'});
-  addSign('WATER WORLD · V493 TESTSTRECKE ENDE',{x:0,y:18.35,z:-565},0x8cecff,.62);
+  addStageWin(5,rewards[4],6.05,13.83,-565.0);
+  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'V494 TEST END',stage:5,kind:'safe-zone'});
+  addSign('WATER WORLD · V494 TESTSTRECKE ENDE',{x:0,y:18.35,z:-565},0x8cecff,.62);
   addSign('WEITERE STAGES BAUEN WIR ALS NÄCHSTES',{x:0,y:17.32,z:-565.02},0xffffff,.30);
   addInteractable('water-world-test-return','Water World Test verlassen · Zum Hub',0,14.45,-565,6.5,returnHub);
 

@@ -1,4 +1,4 @@
-/* Escape.kl World 3 – Toxic World V485. Stage signs lifted above gameplay; blocking chase wall relocated out of the jump line. */
+/* Escape.kl World 3 – Toxic World V494. Stage signs lifted above gameplay; blocking chase wall relocated out of the jump line. */
 export function buildToxicKeyboardWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},addChaseWall=()=>{},returnHub=()=>{},finishAndReturnHub=()=>{}}=api;
   const rewards=[5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000];
@@ -14,7 +14,7 @@ export function buildToxicKeyboardWorld(api){
   // V485: Jede Stage-Beschriftung sitzt sichtbar oberhalb der jeweiligen Sprunghöhe.
   const title=(n,t,y=4.3)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y,z:z+2.0},0x7cff7a,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:y-.85,z:z+2.02},0xffd36a,.35);};
   const key=(gap,x,y,w,d,label,color=0x286d35,extra={})=>{z-=gap;return addPlatform({x,y,z,w,h:.46,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});};
-  const win=(stage,reward,y=.8)=>{z-=4.7;addPlatform({x:0,y:y-.16,z,w:11.8,h:.38,d:6.0,color:0x16361d,label:'',kind:'safe-zone',stage:Math.min(10,stage+1)});addPlatform({x:3.0,y:y+.15,z,w:3.35,h:.2,d:2.15,color:0xdfaa2d,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});addSign(`CASH OUT · +${compact(reward)} WINS`,{x:3.0,y:y+2.0,z:z+.1},0xffd35b,.40);};
+  const win=(stage,reward,y=.8)=>{z-=4.7;addPlatform({x:0,y:y-.16,z,w:11.8,h:.38,d:6.0,color:0x16361d,label:'',kind:'safe-zone',stage:Math.min(10,stage+1)});addPlatform({x:4.55,y:y+.15,z,w:2.50,h:.18,d:1.72,color:0xdfaa2d,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});addSign(`+${compact(reward)} WINS`,{x:4.55,y:y+1.70,z:z+.1},0xffd35b,.31);};
 
   title(1,'ACID WARMUP',4.3);for(let i=0;i<8;i++)key(4.4+i*.08,i%2?2.1:-2.1,.65,3.45,2.75,i%2?'A':'D');win(1,rewards[0]);
 
