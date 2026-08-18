@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V478 · Reliable JK/Coin Platform Revive */
-const VERSION = '2026-08-17-v478';
+/* Escape.kl – JK.Games Top Game V480 · Daylight Hub + Reptisect Motion Sync */
+const VERSION = '2026-08-18-v480';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -34,7 +34,6 @@ const TOUCH_LOOK_SENSITIVITY_X = .0062;
 const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
 const REVIVE_COSTS = Object.freeze({'keyboard-lab':100,'candy-keys':200,'toxic-keyboard':300});
-const DAY_NIGHT_CYCLE_SECONDS = 300;
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
 const SKYRUN_MILESTONE_REWARDS = Object.freeze([250,500,1000,2000,3500,5000,7500,10000,15000]);
@@ -768,33 +767,55 @@ function soundBuy(){tone(520,.055,'triangle',.02,130);setTimeout(()=>tone(760,.0
 function soundFinish(){[0,100,210,330].forEach((ms,i)=>setTimeout(()=>tone([392,523,659,784][i],.16,'triangle',.025,45),ms))}
 
 function buildHubSky(){
-  const skyMat=new THREE.MeshBasicMaterial({color:0x132a46,side:THREE.BackSide,fog:false});G.materials.set('hub-sky-mat',skyMat);
-  const dome=tagScope(new THREE.Mesh(geo('hub-sky-dome',()=>new THREE.SphereGeometry(165,24,14)),skyMat),'hub');dome.position.set(0,30,0);G.scene.add(dome);G.decorative.push(dome);G.hubSkyDome=dome;
-  const positions=[];for(let i=0;i<290;i++){const a=Math.random()*Math.PI*2,r=58+Math.random()*92,y=12+Math.random()*75;positions.push(Math.cos(a)*r,y,Math.sin(a)*r);}
-  const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));G.geometries.set('hub-stars-geo',starGeo);
-  const starMat=new THREE.PointsMaterial({color:0xd7ecff,size:.34,transparent:true,opacity:.78,sizeAttenuation:true,fog:false});G.materials.set('hub-stars-mat',starMat);
-  const stars=tagScope(new THREE.Points(starGeo,starMat),'hub');G.scene.add(stars);G.decorative.push(stars);G.hubStars=stars;
-  const moonMat=new THREE.MeshBasicMaterial({color:0xc7e8ff,transparent:true,opacity:.42,fog:false});G.materials.set('hub-moon-mat',moonMat);
-  const moon=tagScope(new THREE.Mesh(geo('hub-moon',()=>new THREE.SphereGeometry(7.5,18,12)),moonMat),'hub');moon.position.set(-58,52,-74);G.scene.add(moon);G.decorative.push(moon);G.hubMoon=moon;
-  const sunMat=new THREE.MeshBasicMaterial({color:0xffefb1,transparent:true,opacity:0,fog:false});G.materials.set('hub-sun-disc-mat',sunMat);
-  const sunDisc=tagScope(new THREE.Mesh(geo('hub-sun-disc',()=>new THREE.SphereGeometry(6.2,18,12)),sunMat),'hub');sunDisc.position.set(60,45,-80);G.scene.add(sunDisc);G.decorative.push(sunDisc);G.hubSun=sunDisc;
-  // Lightweight aurora ribbons: strong at night, nearly invisible during the day.
-  [[0x4ee6ff,-10,34,-82,-.08],[0x8d73ff,18,41,-91,.10],[0x55ffb0,-28,27,-88,.18]].forEach(([color,x,y,z,rot],i)=>{
-    const m=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.055,side:THREE.DoubleSide,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});m.userData.escapeAurora=true;G.hubAuroraMats.push(m);G.materials.set(`hub-aurora-${i}`,m);
-    const band=tagScope(new THREE.Mesh(geo(`hub-aurora-geo-${i}`,()=>new THREE.PlaneGeometry(94-i*9,8+i*2)),m),'hub');band.position.set(x,y,z);band.rotation.z=rot;G.scene.add(band);G.decorative.push(band);
-  });
+  // V480: Escape.KL hat bewusst keinen Tag-/Nacht-Zyklus mehr. Der Himmel bleibt dauerhaft hell.
+  const skyMat=new THREE.MeshBasicMaterial({color:0xb9e3ff,side:THREE.BackSide,fog:false});G.materials.set('hub-sky-mat',skyMat);
+  const dome=tagScope(new THREE.Mesh(geo('hub-sky-dome-v480',()=>new THREE.SphereGeometry(175,28,16)),skyMat),'hub');dome.position.set(0,32,0);G.scene.add(dome);G.decorative.push(dome);G.hubSkyDome=dome;
+  const sunMat=new THREE.MeshBasicMaterial({color:0xfff2b8,transparent:true,opacity:.92,fog:false});G.materials.set('hub-sun-disc-mat',sunMat);
+  const sunDisc=tagScope(new THREE.Mesh(geo('hub-sun-disc-v480',()=>new THREE.SphereGeometry(6.8,20,14)),sunMat),'hub');sunDisc.position.set(-64,58,-92);G.scene.add(sunDisc);G.decorative.push(sunDisc);G.hubSun=sunDisc;
+  G.hubStars=null;G.hubMoon=null;G.hubAuroraMats=[];
 }
-function updateDayNight(t){
-  const dynamic=G.world==='hub'||G.world==='only-up';
-  if(!dynamic){if(G.lastDayNightMode!=='fixed'){G.lastDayNightMode='fixed';if(G.sunLight)G.sunLight.intensity=2.0;if(G.hemiLight)G.hemiLight.intensity=1.5;}return;}
-  G.lastDayNightMode='dynamic';const phase=((t/DAY_NIGHT_CYCLE_SECONDS)+.24)%1,ang=phase*Math.PI*2-Math.PI/2,sunHeight=Math.sin(ang),day=Math.max(0,Math.min(1,(sunHeight+.16)/.68)),twilight=Math.max(0,1-Math.abs(sunHeight)*3.1);
-  const night=new THREE.Color(0x142a47),dawn=new THREE.Color(0x8a4f7c),dayColor=new THREE.Color(0xa8dcff);let sky=night.clone().lerp(dawn,twilight*.62).lerp(dayColor,day*.96);
-  if(G.world==='hub'&&G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);G.scene.background.copy(sky);G.scene.fog.color.copy(sky.clone().multiplyScalar(.78));
-  if(G.sunLight){G.sunLight.intensity=.72+day*2.95;G.sunLight.color.set(day>.2?0xfff0cf:0xffa68f);G.sunLight.position.set(Math.cos(ang)*58,10+Math.max(-.2,sunHeight)*58,Math.sin(ang)*44);}
-  if(G.hemiLight){G.hemiLight.intensity=1.05+day*1.55;G.hemiLight.color.set(day>.35?0xeaf6ff:0xaab9ee);}
-  if(G.hubStars?.material)G.hubStars.material.opacity=.78*(1-day*.95);if(G.hubMoon){G.hubMoon.material.opacity=.48*(1-day);G.hubMoon.position.set(-Math.cos(ang)*62,18+Math.max(0,-sunHeight)*48,-66);}
-  if(G.hubSun){G.hubSun.material.opacity=Math.max(0,day*.92);G.hubSun.position.set(Math.cos(ang)*70,18+Math.max(0,sunHeight)*53,-78+Math.sin(ang)*18);}
-  for(const m of G.hubAuroraMats)m.opacity=.07*(1-day*.88);if(G.renderer)G.renderer.toneMappingExposure=1.14+day*.18;
+function updateDayNight(){
+  // V480: dauerhaft klarer Tag in Hub, Welten, Race und JK SKYRUN.
+  const sky=new THREE.Color(0xb9e3ff);
+  G.lastDayNightMode='daylight-v480';
+  if(G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);
+  if(G.scene){G.scene.background.copy(sky);if(G.scene.fog)G.scene.fog.color.set(0xa7cfe6);}
+  if(G.sunLight){G.sunLight.intensity=2.85;G.sunLight.color.set(0xfff3d5);G.sunLight.position.set(-36,62,28);}
+  if(G.hemiLight){G.hemiLight.intensity=2.15;G.hemiLight.color.set(0xf1fbff);G.hemiLight.groundColor?.set?.(0x73835d);}
+  if(G.hubSun?.material)G.hubSun.material.opacity=.92;
+  if(G.renderer)G.renderer.toneMappingExposure=1.28;
+}
+
+function addHubBuilding({x,z,w=10,d=7,h=6,wall=0xd8d1c5,trim=0xffffff,roof=0x46515a,accent=0x4d97c7,label=''}){
+  const base=.32;
+  boxDeco(x,base+h/2,z,w,h,d,wall);addCollider(x,z,w,d);
+  boxDeco(x,base+h+.20,z,w+.55,.34,d+.55,roof);
+  boxDeco(x,base+.23,z,w+.28,.18,d+.28,trim);
+  const frontSign=z>0?-1:1,frontZ=z+frontSign*(d/2+.045),backZ=z-frontSign*(d/2+.045);
+  boxDeco(x,1.55,frontZ,1.8,2.45,.10,0x29323a);
+  boxDeco(x,2.82,frontZ,2.2,.12,.14,accent,accent);
+  const windowXs=w>=11?[-w*.31,0,w*.31]:[-w*.27,w*.27];
+  for(const wx of windowXs){
+    boxDeco(x+wx,2.25,frontZ,1.55,1.15,.08,0x86c9e8,0x244b61);
+    boxDeco(x+wx,4.35,frontZ,1.55,1.20,.08,0xa6ddf2,0x244b61);
+    boxDeco(x+wx,3.28,backZ,1.45,1.05,.08,0x8ac8df,0x1d4357);
+  }
+  for(const side of[-1,1]){
+    const sx=x+side*(w/2+.045);
+    for(const dz of[-d*.23,d*.23])boxDeco(sx,3.15,z+dz,.08,1.25,1.40,0x91cfe8,0x1d4357);
+  }
+  if(label)addSign(label,{x,y:h+.95,z:frontZ+frontSign*.02},accent,.28);
+  return {x,z,w,d,h};
+}
+function addHubTree(x,z,scale=1){
+  addCylinderDeco(x,1.1*scale,z,.16*scale,.22*scale,2.15*scale,0x6e4f32,0,10);
+  const crownMat=mat(`hub-tree-crown-${scale}`,{color:0x5f9b58,roughness:.88,metalness:0});
+  const crown=tagScope(new THREE.Mesh(geo(`hub-tree-crown-geo-${scale}`,()=>new THREE.SphereGeometry(1.18*scale,10,8)),crownMat),'hub');
+  crown.position.set(x,2.55*scale,z);crown.scale.y=1.15;G.scene.add(crown);G.decorative.push(crown);
+  boxDeco(x,.38,z,2.7*scale,.16,2.7*scale,0xc9c1b2);
+}
+function addHubStreetLamp(x,z){
+  addCylinderDeco(x,1.85,z,.08,.11,3.55,0x424b52,0,10);boxDeco(x,3.63,z,.55,.12,.55,0xf3e6b1,0xf3d98a);addGlowLight(x,3.45,z,0xffefc7,.38,7);
 }
 
 function prewarmEscapeScenes(){
@@ -822,10 +843,10 @@ function refreshHubWorldPortalStatus(){
 function setupScene(){
   const canvas=G.overlay.querySelector('canvas');
   G.renderer=new THREE.WebGLRenderer({canvas,antialias:(window.devicePixelRatio||1)<2,powerPreference:'high-performance'});
-  G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.14;
+  G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.28;
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
-  G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0x13283f);G.scene.fog=new THREE.Fog(0x13283f,42,220);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
-  G.hemiLight=new THREE.HemisphereLight(0xd8ecff,0x283526,1.65);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xffedcf,2.35);G.sunLight.position.set(-28,46,18);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
+  G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
+  G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
   const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);
@@ -846,30 +867,41 @@ function checkAutoTriggers(){
   }
 }
 function buildHub(){
-  // V451 HUB: clean futuristic campus. Upgrades live only inside the Escape Shop.
-  // No giant center circle, no brown Speed-Lab floor, no walk-over purchase buttons.
-  addPlatform({x:0,y:0,z:0,w:110,h:.55,d:110,color:0x091725,kind:'hub',hub:true});
+  // V480 HUB: geordneter, heller Escape-Campus mit echten Straßen, Gehwegen, Grünflächen und Gebäuden.
+  // Die funktionalen Stationen und insbesondere alle Laufbänder behalten ihre bisherigen Positionen.
+  addPlatform({x:0,y:0,z:0,w:110,h:.55,d:110,color:0x6f8f62,kind:'hub',hub:true});
 
-  // Subtle architectural floor: dark stone + thin illuminated navigation paths.
-  addPlatform({x:0,y:.292,z:4,w:12,h:.075,d:92,color:0x10283b,kind:'hub-lane',hub:true});
-  addPlatform({x:0,y:.296,z:-31,w:78,h:.075,d:10,color:0x10283b,kind:'hub-lane',hub:true});
-  addPlatform({x:0,y:.297,z:30,w:92,h:.075,d:11,color:0x0f2537,kind:'hub-lane',hub:true});
-  // V461: giant JK.GAMES landmark – readable from the main plaza without blocking movement.
+  // Asphalt-Hauptachsen statt einer zufälligen dunklen Fläche.
+  addPlatform({x:0,y:.292,z:4,w:14,h:.075,d:100,color:0x343b40,kind:'hub-road',hub:true});
+  addPlatform({x:0,y:.296,z:-31,w:96,h:.075,d:12,color:0x343b40,kind:'hub-road',hub:true});
+  addPlatform({x:0,y:.297,z:30,w:104,h:.075,d:12,color:0x343b40,kind:'hub-road',hub:true});
+  // Gehwege und zentraler Stadtplatz.
+  addPlatform({x:-8.4,y:.301,z:4,w:2.1,h:.082,d:100,color:0xc5c2b8,kind:'hub-sidewalk',hub:true});
+  addPlatform({x:8.4,y:.301,z:4,w:2.1,h:.082,d:100,color:0xc5c2b8,kind:'hub-sidewalk',hub:true});
+  addPlatform({x:0,y:.303,z:8,w:27,h:.086,d:27,color:0xb8b6ac,kind:'hub-plaza',hub:true});
+  for(let z=-43;z<=45;z+=8)boxDeco(0,.352,z,.18,.025,3.4,0xe9e2b4);
+  for(let x=-42;x<=42;x+=8){boxDeco(x,.354,-31,.18,.025,3.0,0xe9e2b4);boxDeco(x,.354,30,.18,.025,3.0,0xe9e2b4);}
+  // V461 landmark bleibt als klarer Orientierungspunkt erhalten.
   boxDeco(0,13.6,-8.0,28,.38,.55,0x0b2033,0x1e5f86);boxDeco(-13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);boxDeco(13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);
   addSign('JK.GAMES',{x:0,y:14.65,z:-7.68},0xffffff,1.72);addSign('ESCAPE.KL',{x:0,y:12.95,z:-7.66},0x6ee7ff,.58);
   for(const x of[-5.9,5.9])boxDeco(x,.355,4,.055,.035,92,0x53def7,0x143f55);
   for(const z of[-35.9,-26.1])boxDeco(0,.356,z,78,.035,.055,0x53def7,0x143f55);
   for(const z of[24.6,35.4])boxDeco(0,.356,z,92,.035,.055,0x3b91ad,0x143f55);
 
-  // Outer safety wall and stylized skyline.
-  for(const z of[-54.55,54.55]){boxDeco(0,1.0,z,109.2,1.35,.32,0x102a3d,0x071b29);boxDeco(0,1.83,z,109.2,.08,.36,0x4cdcf5,0x123f51);}
-  for(const x of[-54.55,54.55]){boxDeco(x,1.0,0,.32,1.35,109.2,0x102a3d,0x071b29);boxDeco(x,1.83,0,.36,.08,109.2,0x4cdcf5,0x123f51);}
-  for(let i=0;i<14;i++){
-    const x=-50+i*7.7,h=4.5+(i%5)*1.65,shade=i%2?0x0a2032:0x0c2639;
-    boxDeco(x,h/2-1,-51.7,4.8,h,3.2,shade,i%3===0?0x071d2d:0);
-    boxDeco(x,h/2-1,51.7,4.8,h,3.2,shade,i%4===0?0x071d2d:0);
-    if(i%2===0){boxDeco(x,1.2,-49.95,1.8,.06,.08,0x5ce6ff,0x17475a);boxDeco(x,1.2,49.95,1.8,.06,.08,0x5ce6ff,0x17475a);}
-  }
+  // Niedrige Sicherheitsmauer; dahinter stehen jetzt echte, klar erkennbare Häuserzeilen.
+  for(const z of[-54.55,54.55]){boxDeco(0,.72,z,109.2,.78,.32,0x9ba39f);boxDeco(0,1.13,z,109.2,.07,.36,0xd9ddd9);}
+  for(const x of[-54.55,54.55]){boxDeco(x,.72,0,.32,.78,109.2,0x9ba39f);boxDeco(x,1.13,0,.36,.07,109.2,0xd9ddd9);}
+  const northBuildings=[
+    [-45,11,7,6.1,0xd8d0c4,0x3e596b,0x4388b6,'RUNNER HOUSE'],[-31,11,7,7.0,0xcfc8bc,0x4b535c,0x5b9ac2,'SPEED OFFICE'],
+    [-15,12,7,6.5,0xe0d8cb,0x46525a,0x63a6c9,'ESCAPE ACADEMY'],[15,12,7,6.5,0xd8d4c8,0x425866,0x4aa19d,'WORLD CENTER'],
+    [31,11,7,7.1,0xd6cec0,0x4b5057,0xa88448,'WIN HOUSE'],[45,11,7,6.1,0xd9d1c4,0x3f5361,0x7587c8,'CYBER OFFICE']
+  ];
+  for(const [x,w,d,h,wall,roof,accent,label] of northBuildings)addHubBuilding({x,z:-50,w,d,h,wall,roof,accent,label});
+  const southBuildings=[
+    [-47,9,7,5.8,0xdccfc3,0x5a514b,0xb88163,'CAFE'],[-35,10,7,6.8,0xd8d0c5,0x46535a,0x5d9fc7,'TRAINER'],
+    [35,10,7,6.8,0xd7d1c8,0x4a525a,0xd1a44b,'GEAR LAB'],[47,9,7,5.8,0xdccfc3,0x5a514b,0x7b9ac7,'LOUNGE']
+  ];
+  for(const [x,w,d,h,wall,roof,accent,label] of southBuildings)addHubBuilding({x,z:50,w,d,h,wall,roof,accent,label});
 
   // Arrival deck: deliberately flat/open instead of the old giant blue circle.
   boxDeco(-7.2,2.4,42,.36,4.8,.55,0x183b52,0x0b2d43);boxDeco(7.2,2.4,42,.36,4.8,.55,0x183b52,0x0b2d43);
@@ -960,11 +992,15 @@ function buildHub(){
   addPlatform({x:45,y:.38,z:12.0,w:10,h:.22,d:5.2,color:0x27345c,kind:'only-up-gate',hub:true});
   addInteractable('only-up','JK SKYRUN starten',45,1.0,12.0,5.2,()=>setWorld('only-up'));
 
-  // Atmospheric light columns and low decorative benches keep the plaza alive without clutter.
-  for(const [x,z,c] of [[-14,14,0x5ce6ff],[14,14,0x7a91ff],[-14,-22,0x67e7dc],[14,-22,0xffcf69]]){
-    addCylinderDeco(x,1.55,z,.22,.32,2.5,0x173248,c,12);addGlowLight(x,2.6,z,c,.55,7);
-    boxDeco(x+2.2,.58,z,3.2,.32,1.0,0x102332);
+  // V480 Stadtmöblierung: Bäume, Lampen, Sitzbänke und saubere Grüninseln entlang der Wege.
+  for(const [x,z,scale] of [[-15,16,1],[15,16,1],[-14,-20,.9],[14,-20,.9],[-18,43,.9],[18,43,.9],[-48,8,.82],[48,8,.82]])addHubTree(x,z,scale);
+  for(const [x,z] of [[-10,20],[10,20],[-10,-17],[10,-17],[-10,40],[10,40],[-28,-25],[28,-25]])addHubStreetLamp(x,z);
+  for(const [x,z,rot] of [[-15,10,0],[15,10,0],[-16,24,0],[16,24,0],[-12,-23,0],[12,-23,0]]){
+    const bench=boxDeco(x,.58,z,3.2,.34,1.0,0x7b6654);bench.rotation.y=rot;boxDeco(x,.88,z+.36,3.2,.72,.14,0x75614f);
   }
+  // Gepflasterte Vorplätze markieren eindeutig die beiden Hauptfunktionsgebäude.
+  addPlatform({x:-36,y:.312,z:-10,w:30,h:.08,d:5,color:0xb7b5ad,kind:'training-entry',hub:true});
+  addPlatform({x:36,y:.312,z:-10,w:30,h:.08,d:5,color:0xb7b5ad,kind:'shop-entry',hub:true});
 }
 
 function buildRaceCourse(){
@@ -1060,10 +1096,11 @@ function loadPetVisuals(){
       const wrap=new THREE.Group();wrap.name=`escape-pet-wrapper-${pet.id}`;
       const model=normalizeExternalModel(gltf.scene,{targetHeight:petTargetHeight(pet)});model.position.set(0,0,0);
       if(pet.id==='cyclops-wing')model.rotation.y=Math.PI*.2;
+      if(pet.id==='reptisect')model.rotation.y+=Math.PI; // V480: geliefertes Modell blickt entgegengesetzt zur Laufrichtung.
       wrap.add(model);G.scene.add(wrap);
       const clips=gltf.animations||[],clip=petAnimationClip(pet,clips);let mixer=null,action=null;
-      if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);}
-      const visual={def:pet,slot,wrapper:wrap,model,mixer,action};G.petVisuals.push(visual);
+      if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);if(pet.movement==='ground-follow')action.paused=true;}
+      const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false};G.petVisuals.push(visual);
       const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),side=slot===0?-.72:.72,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
       const back=pet.movement==='fly-follow'?2.25:pet.movement==='ground-follow'?1.65:1.05;
       wrap.position.set(G.pos.x-forwardX*back+rightX*side,pet.movement==='fly-follow'?G.pos.y+.18:G.pos.y-PLAYER_HALF+.04,G.pos.z-forwardZ*back+rightZ*side);
@@ -1103,8 +1140,19 @@ function refreshCompanionVisuals(){
   if(special?.asset)loadCharacterFormVisual(choice);else if(G.character?.visualRoot)G.character.visualRoot.visible=true;
 }
 function updateCustomVisuals(dt,t){
+  const playerPlanarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);
   for(const visual of G.petVisuals||[]){
-    visual.mixer?.update?.(dt);const pet=visual.def,slot=visual.slot||0,wrap=visual.wrapper;if(!wrap||!G.playerRoot)continue;
+    const pet=visual.def,slot=visual.slot||0,wrap=visual.wrapper;if(!wrap||!G.playerRoot)continue;
+    // V480: Reptisect animiert ausschließlich bei echter horizontaler Spielerbewegung.
+    // Springen auf der Stelle startet die Laufanimation ausdrücklich nicht.
+    if(pet.movement==='ground-follow'&&visual.action){
+      const moving=playerPlanarSpeed>.16;
+      if(moving!==visual.groundMoving){
+        visual.groundMoving=moving;visual.action.paused=!moving;visual.action.enabled=true;
+        if(moving){visual.action.play?.();visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));}
+      }else if(moving){visual.action.setEffectiveTimeScale?.(Math.max(.78,Math.min(1.55,.82+playerPlanarSpeed*.035)));}
+      visual.mixer?.update?.(moving?dt:0);
+    }else visual.mixer?.update?.(dt);
     const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),side=slot===0?-.72:.72;
     let tx=G.pos.x,ty=G.pos.y,tz=G.pos.z;
     if(pet.movement==='orbit'){
@@ -1931,7 +1979,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>JK SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V477</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>🌅 Tag / Nacht</b><p>Der Hub und JK SKYRUN wechseln automatisch zwischen Nacht, Sonnenaufgang, Tag und Sonnenuntergang.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V480</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt ab V480 dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
