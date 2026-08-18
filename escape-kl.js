@@ -6,8 +6,8 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V480 · Daylight Hub + Reptisect Motion Sync */
-const VERSION = '2026-08-18-v480';
+/* Escape.kl – JK.Games Top Game V481 · Clean Hub Ground Layout */
+const VERSION = '2026-08-18-v481';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -867,26 +867,30 @@ function checkAutoTriggers(){
   }
 }
 function buildHub(){
-  // V480 HUB: geordneter, heller Escape-Campus mit echten Straßen, Gehwegen, Grünflächen und Gebäuden.
-  // Die funktionalen Stationen und insbesondere alle Laufbänder behalten ihre bisherigen Positionen.
-  addPlatform({x:0,y:0,z:0,w:110,h:.55,d:110,color:0x6f8f62,kind:'hub',hub:true});
+  // V481 HUB: saubere, getrennte Bodenebenen. Keine große Platte liegt mehr über einer Straße.
+  // Funktionale Stationen und alle Laufbänder behalten ihre bisherigen Positionen.
+  addPlatform({x:0,y:0,z:0,w:110,h:.55,d:110,color:0x769866,kind:'hub',hub:true});
 
-  // Asphalt-Hauptachsen statt einer zufälligen dunklen Fläche.
-  addPlatform({x:0,y:.292,z:4,w:14,h:.075,d:100,color:0x343b40,kind:'hub-road',hub:true});
-  addPlatform({x:0,y:.296,z:-31,w:96,h:.075,d:12,color:0x343b40,kind:'hub-road',hub:true});
-  addPlatform({x:0,y:.297,z:30,w:104,h:.075,d:12,color:0x343b40,kind:'hub-road',hub:true});
-  // Gehwege und zentraler Stadtplatz.
-  addPlatform({x:-8.4,y:.301,z:4,w:2.1,h:.082,d:100,color:0xc5c2b8,kind:'hub-sidewalk',hub:true});
-  addPlatform({x:8.4,y:.301,z:4,w:2.1,h:.082,d:100,color:0xc5c2b8,kind:'hub-sidewalk',hub:true});
-  addPlatform({x:0,y:.303,z:8,w:27,h:.086,d:27,color:0xb8b6ac,kind:'hub-plaza',hub:true});
-  for(let z=-43;z<=45;z+=8)boxDeco(0,.352,z,.18,.025,3.4,0xe9e2b4);
-  for(let x=-42;x<=42;x+=8){boxDeco(x,.354,-31,.18,.025,3.0,0xe9e2b4);boxDeco(x,.354,30,.18,.025,3.0,0xe9e2b4);}
-  // V461 landmark bleibt als klarer Orientierungspunkt erhalten.
-  boxDeco(0,13.6,-8.0,28,.38,.55,0x0b2033,0x1e5f86);boxDeco(-13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);boxDeco(13.2,8.0,-8.0,.42,11.2,.55,0x14344d,0x175a7a);
-  addSign('JK.GAMES',{x:0,y:14.65,z:-7.68},0xffffff,1.72);addSign('ESCAPE.KL',{x:0,y:12.95,z:-7.66},0x6ee7ff,.58);
-  for(const x of[-5.9,5.9])boxDeco(x,.355,4,.055,.035,92,0x53def7,0x143f55);
-  for(const z of[-35.9,-26.1])boxDeco(0,.356,z,78,.035,.055,0x53def7,0x143f55);
-  for(const z of[24.6,35.4])boxDeco(0,.356,z,92,.035,.055,0x3b91ad,0x143f55);
+  // Straßennetz: eine klar sichtbare Ebene oberhalb des Rasens.
+  const roadY=.315,roadH=.08,roadTop=roadY+roadH/2;
+  addPlatform({x:0,y:roadY,z:4,w:14,h:roadH,d:100,color:0x30383d,kind:'hub-road',hub:true});
+  addPlatform({x:0,y:roadY,z:-31,w:96,h:roadH,d:12,color:0x30383d,kind:'hub-road',hub:true});
+  addPlatform({x:0,y:roadY,z:30,w:104,h:roadH,d:12,color:0x30383d,kind:'hub-road',hub:true});
+
+  // Gehwege liegen sichtbar höher, berühren die Straße aber nicht flächig.
+  const walkY=.365,walkH=.10;
+  addPlatform({x:-8.45,y:walkY,z:4,w:2.5,h:walkH,d:100,color:0xc9c6bc,kind:'hub-sidewalk',hub:true});
+  addPlatform({x:8.45,y:walkY,z:4,w:2.5,h:walkH,d:100,color:0xc9c6bc,kind:'hub-sidewalk',hub:true});
+  // Zwei seitliche Aufenthaltsflächen statt einer großen Platte über der Mittelstraße.
+  addPlatform({x:-17,y:.335,z:8,w:13,h:.09,d:24,color:0xbdbab0,kind:'hub-plaza',hub:true});
+  addPlatform({x:17,y:.335,z:8,w:13,h:.09,d:24,color:0xbdbab0,kind:'hub-plaza',hub:true});
+
+  // Echte Straßenmarkierung: längs zur jeweiligen Fahrtrichtung und mit ausreichend Höhenabstand.
+  const markY=roadTop+.012;
+  for(let z=-43;z<=45;z+=8)boxDeco(0,markY,z,.16,.018,3.2,0xeee6b8);
+  for(let x=-42;x<=42;x+=8){boxDeco(x,markY,-31,3.2,.018,.16,0xeee6b8);boxDeco(x,markY,30,3.2,.018,.16,0xeee6b8);}
+
+  // Das alte große JK.GAMES-Mittelportal aus V480 ist vollständig entfernt.
 
   // Niedrige Sicherheitsmauer; dahinter stehen jetzt echte, klar erkennbare Häuserzeilen.
   for(const z of[-54.55,54.55]){boxDeco(0,.72,z,109.2,.78,.32,0x9ba39f);boxDeco(0,1.13,z,109.2,.07,.36,0xd9ddd9);}
@@ -928,7 +932,7 @@ function buildHub(){
   boxDeco(42,3.0,-45.1,9.6,5.3,.48,0x151c35,0x232857);addSign('WORLD 4  ·  CYBER CITY',{x:42,y:5.65,z:-44.82},0x858bff,.45);addSign('COMING SOON',{x:42,y:4.35,z:-44.80},0xffd36a,.28);
 
   // Training Hall – the only place where treadmills physically live.
-  addPlatform({x:-36,y:.31,z:-3,w:30,h:.13,d:29,color:0x0c252b,kind:'hub-zone',hub:true});
+  addPlatform({x:-36,y:.31,z:-3,w:30,h:.07,d:29,color:0x64736f,kind:'hub-zone',hub:true});
   boxDeco(-36,3.35,-17.0,28.5,5.8,.38,0x0b2028,0x0a3f48);addCollider(-36,-17.0,28.5,.38);
   addSign('TRAINING HALL',{x:-36,y:5.7,z:-16.78},0x72f0de,.58);addSign('LAUFBÄNDER',{x:-36,y:4.55,z:-16.76},0xd7f9ff,.28);
   const xs=[-47,-41.5,-36,-30.5,-25];
@@ -946,7 +950,7 @@ function buildHub(){
   addSign('TRAININGSWELT',{x:-36,y:2.7,z:13.05},0x8af9ee,.33);addInteractable('training-world','Trainingswelt auswählen',-36,1.0,10.4,5.0,()=>openTrainingWorldSelector());
 
   // Escape Shop – all Gear, Items and Power upgrades exist here and nowhere else in the hub.
-  addPlatform({x:36,y:.31,z:-3,w:30,h:.13,d:29,color:0x0d2132,kind:'hub-zone',hub:true});
+  addPlatform({x:36,y:.31,z:-3,w:30,h:.07,d:29,color:0x64717a,kind:'hub-zone',hub:true});
   boxDeco(36,2.7,-13.3,24,4.9,.52,0x0b1c2b,0x0b2b43);addCollider(36,-13.3,24,.52);
   boxDeco(25.0,2.0,-3,.42,3.7,18,0x132f44,0x0a2537);boxDeco(47.0,2.0,-3,.42,3.7,18,0x132f44,0x0a2537);
   addSign('ESCAPE SHOP',{x:36,y:5.35,z:-13.0},0xffd06c,.67);addSign('UPGRADES  ·  ITEMS  ·  TRAILS  ·  AUREN',{x:36,y:4.15,z:-12.98},0x9ee8ff,.28);
@@ -955,7 +959,10 @@ function buildHub(){
   addInteractable('shop','Escape Shop öffnen',36,1.0,1.0,6.0,()=>openShop());
 
   // Lower plaza: each utility has its own small building, with clean spacing.
-  addPlatform({x:0,y:.31,z:31,w:94,h:.13,d:22,color:0x0b1e2c,kind:'hub-zone',hub:true});
+  // V481: Utility-Flächen beginnen erst hinter der Straße und sind links/rechts getrennt.
+  // Dadurch bleibt die komplette Querstraße bei z=30 sichtbar und kollisionsfrei lesbar.
+  addPlatform({x:-29,y:.33,z:42,w:44,h:.09,d:12,color:0x777d78,kind:'hub-zone',hub:true});
+  addPlatform({x:29,y:.33,z:42,w:44,h:.09,d:12,color:0x777d78,kind:'hub-zone',hub:true});
 
   // Rebirth.
   boxDeco(-43,2.7,36.4,13.5,4.8,.38,0x17152a,0x2f1b54);addCollider(-43,36.4,13.5,.38);
@@ -1979,7 +1986,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>JK SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V480</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt ab V480 dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V481</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional für feste 20 JK/Coin an die letzte sichere Plattform zurückspringen. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
