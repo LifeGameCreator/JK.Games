@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V491 · Free Pets + Pet-Shop Scroll Fix */
-const VERSION = '2026-08-18-v491';
+/* Escape.kl – JK.Games Top Game V492 · Vending 5m Auto-Remove Fix */
+const VERSION = '2026-08-18-v492';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -103,6 +103,7 @@ const VENDING_ASSETS = Object.freeze({
   high:'./escape-vending-machine-6-10.glb?v=20260818-escape-v490'
 });
 const VENDING_POTION_DURATION_MS = 15*60*1000;
+const VENDING_AUTO_REMOVE_DISTANCE = 5; // Meter/World-Units: weiter weg = automatisch abbauen
 const VENDING_WORLD_COST_MULT = Object.freeze({1:1,2:12,3:1000,4:2500});
 
 const AURAS = Object.freeze([
@@ -1898,6 +1899,15 @@ function removeSummonedVending(){
   if(vm.wrapper){vm.wrapper.removeFromParent?.();disposeExternalObject(vm.wrapper);}
   G.summonedVending=null;return true;
 }
+function updateSummonedVendingDistance(){
+  const vm=G.summonedVending;if(!vm)return false;
+  if(vm.scope!==G.world){removeSummonedVending();return true;}
+  const dx=G.pos.x-Number(vm.x||0),dy=(G.pos.y-PLAYER_HALF)-Number(vm.floorY||0),dz=G.pos.z-Number(vm.z||0);
+  if(Math.hypot(dx,dy,dz)<=VENDING_AUTO_REMOVE_DISTANCE)return false;
+  removeSummonedVending();
+  toast('🥤 Vending Machine automatisch entfernt · du bist mehr als 5 m entfernt.','good',1900);
+  return true;
+}
 function loadSummonedVendingAsset(vm=G.summonedVending){
   if(!vm||!G.scene)return;const level=vendingLevel(),asset=level>=6?VENDING_ASSETS.high:VENDING_ASSETS.low,seq=++G.vendingLoadSeq;vm.asset=asset;
   if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
@@ -1955,7 +1965,7 @@ function openVendingMachine(){
 }
 function openVendingManagement(returnTo='pause'){
   const owned=!!G.state?.vendingOwned,level=vendingLevel(),next=level+1,cost=owned&&level<10?vendingUpgradeCost(next):0,placed=!!G.summonedVending;
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PLATZIERBARE MASCHINE</small><h2>🥤 Vending Machine</h2><p>Die Maschine gehört nur dir und wird bewusst nur lokal dargestellt – das spart Multiplayer-/Firestore-Last. Andere Spieler können sie nicht benutzen. Ab Stufe 6 wechselt sie automatisch auf dein zweites GLB-Modell.</p></div><button data-vending-back>×</button></div><div class="ekl-big-stat"><div><small>BESITZ</small><b>${owned?'JA':'NEIN'}</b></div><div><small>STUFE</small><b>${level}/10</b></div><div><small>MODELL</small><b>${level>=6?'6–10':'1–5'}</b></div><div><small>PLATZIERT</small><b>${placed?'JA':'NEIN'}</b></div></div><div class="ekl-progression-note"><b>${owned?'UPGRADE-PROGRESSION':'KAUF'}</b><span>${owned?(level>=10?'Maximalstufe erreicht. Alle normalen Tränke haben +2,0 %; +400-% JK Win Potion ist frei.':`Nächste Stufe ${next}: ${cost.toLocaleString('de-DE')} Wins.`):`Einmaliger Kauf: ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach jederzeit über Pause platzierbar.`}</span></div><div class="ekl-modal-actions">${!owned?`<button class="gold" data-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>Kaufen · ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button class="gold" data-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAX STUFE 10':`Upgrade auf ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-vending-place>${placed?'Neu platzieren':'Hier platzieren'}</button><button data-vending-open>Getränke ansehen</button>${placed?'<button data-vending-remove>Maschine entfernen</button>':''}`}<button data-vending-back>Zurück</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PLATZIERBARE MASCHINE</small><h2>🥤 Vending Machine</h2><p>Die Maschine gehört nur dir und wird bewusst nur lokal dargestellt – das spart Multiplayer-/Firestore-Last. Andere Spieler können sie nicht benutzen. Sobald du dich mehr als 5 Meter entfernst, verschwindet die platzierte Maschine automatisch. Ab Stufe 6 wechselt sie automatisch auf dein zweites GLB-Modell.</p></div><button data-vending-back>×</button></div><div class="ekl-big-stat"><div><small>BESITZ</small><b>${owned?'JA':'NEIN'}</b></div><div><small>STUFE</small><b>${level}/10</b></div><div><small>MODELL</small><b>${level>=6?'6–10':'1–5'}</b></div><div><small>PLATZIERT</small><b>${placed?'JA':'NEIN'}</b></div></div><div class="ekl-progression-note"><b>${owned?'UPGRADE-PROGRESSION':'KAUF'}</b><span>${owned?(level>=10?'Maximalstufe erreicht. Alle normalen Tränke haben +2,0 %; +400-% JK Win Potion ist frei.':`Nächste Stufe ${next}: ${cost.toLocaleString('de-DE')} Wins.`):`Einmaliger Kauf: ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins. Danach jederzeit über Pause platzierbar.`}</span></div><div class="ekl-modal-actions">${!owned?`<button class="gold" data-vending-buy ${G.state.wins>=VENDING_UNLOCK_COST?'':'disabled'}>Kaufen · ${VENDING_UNLOCK_COST.toLocaleString('de-DE')} Wins</button>`:`<button class="gold" data-vending-upgrade ${level>=10?'disabled':''}>${level>=10?'MAX STUFE 10':`Upgrade auf ${next} · ${cost.toLocaleString('de-DE')} Wins`}</button><button data-vending-place>${placed?'Neu platzieren':'Hier platzieren'}</button><button data-vending-open>Getränke ansehen</button>${placed?'<button data-vending-remove>Maschine entfernen</button>':''}`}<button data-vending-back>Zurück</button></div></div>`);
   const back=()=>{closeModal();if(returnTo==='pause')setTimeout(showPause,0);else if(returnTo==='shop')setTimeout(()=>openShop('vending'),0);};
   wrap.querySelectorAll('[data-vending-back]').forEach(b=>b.onclick=back);
   wrap.querySelector('[data-vending-buy]')?.addEventListener('click',()=>{if(buyVendingMachine())openVendingManagement(returnTo);});
@@ -2616,7 +2626,7 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on,{passive:false});sprint.addEventListener('pointerup',off,{passive:false});sprint.addEventListener('pointercancel',off,{passive:false});}
 }
 function resize(){if(!G.renderer||!G.camera||!G.overlay)return;const r=G.overlay.getBoundingClientRect(),vv=window.visualViewport;const w=Math.max(1,Math.round(vv?.width||r.width)),h=Math.max(1,Math.round(vv?.height||r.height));G.overlay.style.setProperty('--ekl-vw',`${w}px`);G.overlay.style.setProperty('--ekl-vh',`${h}px`);G.overlay.classList.toggle('ekl-landscape',w>h);G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);if(!G.ownerFlyActive)G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);if(!G.ownerFlyActive){updateTrail(dt);updateAura(t);}updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);updateSummonedVendingDistance();const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);if(!G.ownerFlyActive)G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);if(!G.ownerFlyActive){updateTrail(dt);updateAura(t);}updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
   if(G.overlay)return;
