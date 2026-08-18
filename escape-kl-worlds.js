@@ -1,4 +1,4 @@
-/* Escape.kl world registry V499 – Level-800 world gates + Water World stages 1–7. */
+/* Escape.kl world registry – Level-800 world gates + completed Water World stages 1–9. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -76,7 +76,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     id:'world-4',
     name:'Water World',
     number:4,
-    stageCount:7,
+    stageCount:9,
     requiredLevel:800,
     unlockFrom:'toxic-keyboard',
     requiredCompletions:1,
@@ -91,12 +91,12 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:6,
     time2:0,
     time3:0,
-    speedRecommendations:Object.freeze([60,100,160,200,230,280,280]),
-    stageRewards:Object.freeze([600000000,800000000,1100000000,1500000000,2000000000,2700000000,3600000000]),
-    ownerOnly:true,
+    speedRecommendations:Object.freeze([60,100,160,200,230,280,280,290,300]),
+    stageRewards:Object.freeze([600000000,800000000,1100000000,1500000000,2000000000,2700000000,3600000000,4800000000,6400000000]),
+    ownerOnly:false,
     locked:false,
-    difficulty:'OWNER BUILD · WATER CHASE · FLIGHT',
-    description:'V499 Water World: Stage 1–5 bleiben erhalten. Stage 6 ist ein Speed-280-Flugboost-Zickzack mit langen Anläufen; Stage 7 verlangt ebenfalls Speed 280 und lässt jede betretene Plattform nach 1,5 Sekunden verschwinden und kurz danach wieder erscheinen. Eintritt setzt Toxic World Level 800 + Finish voraus; die Welt bleibt vorerst Owner-Testbuild.'
+    difficulty:'ENDGAME · WATER CHASE · MAZE · COLOR STORM',
+    description:'Water World ist jetzt vollständig: Stage 6 nutzt Speed-280-Flugboosts, Stage 7 zerfallende 2-Sekunden-Plattformen, Stage 8 ein Speed-290-Labyrinth mit verfolgendem Kraken-Boss und Stage 9 eine lange Color-Storm-Finalfläche mit wechselnden Gefahrenpunkten. Eintritt setzt Toxic World Level 800 + Finish voraus.'
   })
 ]);
 

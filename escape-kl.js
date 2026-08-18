@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v499-level800-water7';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v503-water-complete';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
-import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v499-water-stages-6-7';
+import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V502 · Third Pet Slot + Owner Pet Lab */
-const VERSION = '2026-08-18-v502';
+/* Escape.kl – JK.Games Top Game V503 · input-resume fix + completed Water World */
+const VERSION = '2026-08-18-v503';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -180,7 +180,7 @@ const WORLD_SHOP_TIERS = Object.freeze({
   'keyboard-lab':Object.freeze({number:1,name:'Wind World Shop',costMult:1.5,maxStepTier:3,maxItemLevel:2,maxCoreTier:1,dailyMult:1,next:'Candy World'}),
   'candy-keys':Object.freeze({number:2,name:'Candy World Shop',costMult:3.5,maxStepTier:5,maxItemLevel:4,maxCoreTier:2,dailyMult:3,next:'Toxic World'}),
   'toxic-keyboard':Object.freeze({number:3,name:'Toxic World Shop',costMult:8,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:8,next:'World 4'}),
-  'world-4':Object.freeze({number:4,name:'Water World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:false,ownerOnly:true})
+  'world-4':Object.freeze({number:4,name:'Water World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:false,ownerOnly:false})
 });
 function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
 function shopTier(worldId=shopWorldId()){return WORLD_SHOP_TIERS[worldId]||WORLD_SHOP_TIERS['keyboard-lab'];}
@@ -929,6 +929,39 @@ function addHazardBox({x=0,y=2,z=0,w=4,h=4,d=1,color=0xff345f,emissive=0xff123d,
   const mesh=tagScope(new THREE.Mesh(geo(`hazard-box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),m));mesh.position.set(x,y,z);mesh.castShadow=false;mesh.receiveShadow=false;G.scene.add(mesh);G.decorative.push(mesh);
   const hz={mesh,scope:G.buildScope,kind,w,h,d,base:new THREE.Vector3(x,y,z),motion,active:true,chase:false,started:false,startZ:z,endZ:z,triggerZ:z,speed:0};G.hazards.push(hz);return hz;
 }
+
+function addMazeBoss({x=0,y=2.7,z=0,triggerZ=-5,clearZ=-60,requiredSpeed=290,slowSpeed=23,fastSpeed=18.4,color=0x17333e,accent=0xff5c66,triggerText='BOSS LOS!'}){
+  const root=tagScope(new THREE.Group());root.position.set(x,y,z);root.visible=false;G.scene.add(root);G.decorative.push(root);
+  const bodyMat=new THREE.MeshStandardMaterial({color,roughness:.54,metalness:.18});
+  const accentMat=new THREE.MeshStandardMaterial({color:accent,emissive:accent,emissiveIntensity:.88,roughness:.28,metalness:.22});
+  G.materials.set(`maze-boss-body-${G.hazards.length}`,bodyMat);G.materials.set(`maze-boss-accent-${G.hazards.length}`,accentMat);
+  const body=new THREE.Mesh(geo('maze-boss-body-geo',()=>new THREE.SphereGeometry(1.35,14,10)),bodyMat);body.scale.set(1.0,.82,.92);root.add(body);
+  const head=new THREE.Mesh(geo('maze-boss-head-geo',()=>new THREE.SphereGeometry(.92,14,10)),bodyMat);head.position.set(0,1.18,-.08);root.add(head);
+  for(const sx of[-1,1]){
+    const eye=new THREE.Mesh(geo('maze-boss-eye-geo',()=>new THREE.SphereGeometry(.16,10,8)),accentMat);eye.position.set(sx*.34,1.30,-.78);root.add(eye);
+    const horn=new THREE.Mesh(geo('maze-boss-horn-geo',()=>new THREE.ConeGeometry(.18,.78,8)),accentMat);horn.position.set(sx*.62,1.78,-.05);horn.rotation.z=sx*.42;root.add(horn);
+  }
+  for(let i=0;i<6;i++){
+    const tentacle=new THREE.Mesh(geo(`maze-boss-tentacle-${i%2}`,()=>new THREE.CylinderGeometry(.10,.18,1.55,8)),i%2?accentMat:bodyMat);
+    const a=(i/6)*Math.PI*2;tentacle.position.set(Math.cos(a)*.82,-1.0,Math.sin(a)*.55);tentacle.rotation.z=Math.cos(a)*.48;tentacle.rotation.x=Math.sin(a)*.42;root.add(tentacle);
+  }
+  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=false;}});
+  const hz={mesh:root,scope:G.buildScope,kind:'maze-boss',w:2.2,h:3.2,d:2.2,base:new THREE.Vector3(x,y,z),active:true,started:false,mazeBoss:true,triggerZ,clearZ,requiredSpeed,slowSpeed,fastSpeed,triggerText,path:[],pathIndex:0,lastTrailPoint:null,bobPhase:Math.random()*Math.PI*2};
+  G.hazards.push(hz);return hz;
+}
+function pulseRand(h){h.seed=((Number(h.seed)||1)*1664525+1013904223)>>>0;return h.seed/4294967296;}
+function schedulePulseHazard(h,now=performance.now(),first=false){
+  const rx=pulseRand(h),rz=pulseRand(h);h.mesh.position.x=h.centerX+(rx-.5)*h.areaW;h.mesh.position.z=h.centerZ+(rz-.5)*h.areaD;h.mesh.position.y=h.baseY;
+  h.greenMs=480+pulseRand(h)*930;h.yellowMs=260+pulseRand(h)*480;h.redMs=360+pulseRand(h)*700;h.gapMs=180+pulseRand(h)*650;
+  h.pulseStartAt=now+(first?pulseRand(h)*1300:h.gapMs);h.mesh.visible=false;h.active=false;
+}
+function addPulseHazard({centerX=0,centerZ=0,areaW=20,areaD=100,y=1,radius=1.1,seed=1,triggerZ=0}){
+  const material=new THREE.MeshStandardMaterial({color:0x49ee72,emissive:0x49ee72,emissiveIntensity:.85,roughness:.34,metalness:.16,transparent:true,opacity:.88});
+  G.materials.set(`pulse-hazard-${seed}-${G.hazards.length}`,material);
+  const mesh=tagScope(new THREE.Mesh(geo(`pulse-disc-${radius.toFixed(2)}`,()=>new THREE.CylinderGeometry(radius,radius,.12,24)),material));mesh.position.set(centerX,y,centerZ);mesh.castShadow=false;mesh.receiveShadow=false;mesh.visible=false;G.scene.add(mesh);G.decorative.push(mesh);
+  const hz={mesh,scope:G.buildScope,kind:'pulse-point',w:radius*2,h:.16,d:radius*2,base:new THREE.Vector3(centerX,y,centerZ),active:false,started:false,pulseHazard:true,centerX,centerZ,areaW,areaD,baseY:y,radius,seed:Number(seed)||1,triggerZ:Number(triggerZ)||0,pulseStartAt:0,greenMs:0,yellowMs:0,redMs:0,gapMs:0};
+  schedulePulseHazard(hz,performance.now(),true);G.hazards.push(hz);return hz;
+}
 function addChaseWall({x=0,y=2.7,startZ=0,triggerZ=-5,endZ=-45,w=22,h=6,d=1.2,speed=12.5,color=0x7dff58,kind='chase-wall',triggerText='☣ TOXIC WALL · LAUF!',spawnBehind=0,clearZ=null,hiddenUntilStart=false}){
   const hz=addHazardBox({x,y,z:startZ,w,h,d,color,emissive:color,kind});
   hz.chase=true;hz.started=false;hz.startZ=startZ;hz.triggerZ=triggerZ;hz.endZ=endZ;hz.speed=Math.max(1,Number(speed)||12.5);hz.triggerText=String(triggerText||'LAUF!');
@@ -941,7 +974,19 @@ function addRisingWater({x=0,z=0,w=24,d=28,startY=-1.2,endY=12,h=.45,triggerZ=-5
   const hz=addHazardBox({x,y:startY,z,w,h,d,color,emissive:color,kind:'rising-water'});
   hz.risingWater=true;hz.started=false;hz.completed=false;hz.phase='idle';hz.startY=startY;hz.endY=endY;hz.triggerZ=triggerZ;hz.riseSpeed=Math.max(.1,Number(riseSpeed)||.75);hz.fallSpeed=Math.max(.1,Number(fallSpeed)||2.2);hz.holdSeconds=Math.max(0,Number(holdSeconds)||0);hz.holdUntil=0;hz.triggerText=String(triggerText||'🌊 FLUT STEIGT!');return hz;
 }
-function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;if(h.risingWater)h.mesh.position.y=h.startY;h.mesh.visible=h.scope===G.world&&!h.hiddenUntilStart;}for(const p of G.platforms){if(p.scope!==scope||!p.collapseDelayMs)continue;p.collapseAt=0;p.collapsedUntil=0;p.active=true;p.mesh.visible=p.scope===G.world;p.mesh.position.copy(p.base);}}
+function resetHazardsForWorld(scope=G.world){
+  const now=performance.now();
+  for(const h of G.hazards){
+    if(h.scope!==scope)continue;
+    h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);
+    if(h.chase)h.mesh.position.z=h.startZ;
+    if(h.risingWater)h.mesh.position.y=h.startY;
+    if(h.mazeBoss){h.path=[];h.pathIndex=0;h.lastTrailPoint=null;h.mesh.position.copy(h.base);h.mesh.visible=false;h.active=true;}
+    if(h.pulseHazard){schedulePulseHazard(h,now,true);h.started=false;h.mesh.visible=false;h.active=false;}
+    if(!h.mazeBoss&&!h.pulseHazard)h.mesh.visible=h.scope===G.world&&!h.hiddenUntilStart;
+  }
+  for(const p of G.platforms){if(p.scope!==scope||!p.collapseDelayMs)continue;p.collapseAt=0;p.collapsedUntil=0;p.active=true;p.mesh.visible=p.scope===G.world;p.mesh.position.copy(p.base);}
+}
 function hazardTouchesPlayer(h){
   if(!h?.mesh?.visible||!h.active)return false;const r=currentPlayerRadius();
   return Math.abs(G.pos.x-h.mesh.position.x)<=h.w/2+r&&Math.abs(G.pos.z-h.mesh.position.z)<=h.d/2+r&&Math.abs(G.pos.y-h.mesh.position.y)<=h.h/2+PLAYER_HALF;
@@ -949,41 +994,84 @@ function hazardTouchesPlayer(h){
 function updateHazards(dt){
   const now=performance.now(),reviveProtected=isEscapeWorld()&&now<Number(G.reviveGraceUntil||0);
   for(const h of G.hazards){
-    if(h.scope!==G.world){h.mesh.visible=false;continue;}h.mesh.visible=true;
-    if(h.chase){
-      if(h.clearZ!==null&&G.pos.z<=h.clearZ){h.active=false;h.mesh.visible=false;continue;}
-      // V496: Direkt nach einem bezahlten Revive bleiben noch nicht gestartete
-      // Chase-Hazards kurz ruhig. Sonst kann derselbe Hazard im Folge-Frame erneut
-      // spawnen und sofort einen zweiten Respawn auslösen.
-      if(!h.started&&reviveProtected){if(h.hiddenUntilStart)h.mesh.visible=false;}
-      else if(!h.started&&G.pos.z<=h.triggerZ){
-        h.started=true;
-        if(h.spawnBehind>0)h.mesh.position.z=G.pos.z+h.spawnBehind;
-        h.mesh.visible=true;
-        toast(h.triggerText||'LAUF!','bad',1500);tone(h.kind==='water-wave'?125:95,.16,'sawtooth',.022,h.kind==='water-wave'?65:35);
-      }else if(!h.started&&h.hiddenUntilStart){h.mesh.visible=false;}
-      if(h.started&&h.active){h.mesh.position.z-=h.speed*dt;if(h.mesh.position.z<=h.endZ){h.active=false;h.mesh.visible=false;}}
-    }else if(h.risingWater){
-      if(!h.started&&!h.completed&&!reviveProtected&&G.pos.z<=h.triggerZ){h.started=true;h.phase='rising';toast(h.triggerText||'🌊 FLUT STEIGT!','bad',1700);tone(120,.18,'sawtooth',.02,80);}
-      if(h.started&&h.active){
-        if(h.phase==='rising'){
-          h.mesh.position.y=Math.min(h.endY,h.mesh.position.y+h.riseSpeed*dt);
-          if(h.mesh.position.y>=h.endY-.01){h.phase='hold';h.holdUntil=now+h.holdSeconds*1000;}
-        }else if(h.phase==='hold'){
-          if(now>=h.holdUntil)h.phase='falling';
-        }else if(h.phase==='falling'){
-          h.mesh.position.y=Math.max(h.startY,h.mesh.position.y-h.fallSpeed*dt);
-          if(h.mesh.position.y<=h.startY+.01){h.mesh.position.y=h.startY;h.started=false;h.completed=true;h.active=false;h.mesh.visible=false;}
-        }
+    if(h.scope!==G.world){h.mesh.visible=false;continue;}
+
+    if(h.mazeBoss){
+      if(!h.started&&!reviveProtected&&G.pos.z<=h.triggerZ){
+        h.started=true;h.active=true;h.mesh.visible=true;h.path=[new THREE.Vector3(G.pos.x,h.base.y,G.pos.z)];h.pathIndex=0;h.lastTrailPoint=new THREE.Vector3(G.pos.x,h.base.y,G.pos.z);
+        toast(h.triggerText||'BOSS LOS!','bad',2200);tone(82,.22,'sawtooth',.028,75);
       }
-    }else if(h.motion){const t=now/1000,q=Math.sin(t*h.motion.speed+(h.motion.phase||0))*h.motion.amp;h.mesh.position[h.motion.axis]=h.base[h.motion.axis]+q;}
-    if(!reviveProtected&&hazardTouchesPlayer(h)){if(isEscapeWorld())beginReviveOffer();else respawn();return true;}
+      if(h.started&&h.active){
+        if(G.pos.z<=h.clearZ){h.active=false;h.mesh.visible=false;continue;}
+        h.mesh.visible=true;
+        const last=h.lastTrailPoint;
+        if(!last||Math.hypot(G.pos.x-last.x,G.pos.z-last.z)>.42){const pt=new THREE.Vector3(G.pos.x,h.base.y,G.pos.z);h.path.push(pt);h.lastTrailPoint=pt;if(h.path.length>900){h.path.splice(0,250);h.pathIndex=Math.max(0,h.pathIndex-250);}}
+        const speed=currentSpeedStat(G.world)+1e-6<h.requiredSpeed?h.slowSpeed:h.fastSpeed;
+        let remaining=Math.max(0,speed*dt),guard=0;
+        while(remaining>0&&h.pathIndex<h.path.length&&guard++<8){
+          const target=h.path[h.pathIndex],dx=target.x-h.mesh.position.x,dz=target.z-h.mesh.position.z,dist=Math.hypot(dx,dz);
+          if(dist<.12){h.pathIndex++;continue;}
+          const step=Math.min(remaining,dist);h.mesh.position.x+=dx/dist*step;h.mesh.position.z+=dz/dist*step;remaining-=step;
+          if(step>=dist-.001)h.pathIndex++;
+        }
+        h.mesh.position.y=h.base.y+Math.sin(now*.006+h.bobPhase)*.10;
+        if(h.pathIndex<h.path.length){const t=h.path[Math.min(h.path.length-1,h.pathIndex)],dx=t.x-h.mesh.position.x,dz=t.z-h.mesh.position.z;if(Math.hypot(dx,dz)>.02)h.mesh.rotation.y=Math.atan2(dx,dz);}
+      }
+    }else if(h.pulseHazard){
+      if(!h.started){
+        if(G.pos.z<=h.triggerZ&&!reviveProtected){h.started=true;schedulePulseHazard(h,now,true);}else{h.mesh.visible=false;h.active=false;continue;}
+      }
+      if(now<h.pulseStartAt){h.mesh.visible=false;h.active=false;continue;}
+      const elapsed=now-h.pulseStartAt,total=h.greenMs+h.yellowMs+h.redMs;
+      if(elapsed>=total){schedulePulseHazard(h,now,false);continue;}
+      h.mesh.visible=true;h.active=true;
+      let color,emissiveIntensity,scale=1;
+      if(elapsed<h.greenMs){color=0x48ef72;emissiveIntensity=.72;scale=.92+Math.sin(now*.012)*.04;}
+      else if(elapsed<h.greenMs+h.yellowMs){color=0xffd84b;emissiveIntensity=.95;scale=1.02+Math.sin(now*.020)*.07;}
+      else{color=0xff3f4e;emissiveIntensity=1.35;scale=1.12+Math.sin(now*.030)*.10;}
+      const m=h.mesh.material;m.color.setHex(color);m.emissive.setHex(color);m.emissiveIntensity=emissiveIntensity;h.mesh.scale.set(scale,1,scale);
+    }else{
+      h.mesh.visible=true;
+      if(h.chase){
+        if(h.clearZ!==null&&G.pos.z<=h.clearZ){h.active=false;h.mesh.visible=false;continue;}
+        if(!h.started&&reviveProtected){if(h.hiddenUntilStart)h.mesh.visible=false;}
+        else if(!h.started&&G.pos.z<=h.triggerZ){
+          h.started=true;
+          if(h.spawnBehind>0)h.mesh.position.z=G.pos.z+h.spawnBehind;
+          h.mesh.visible=true;
+          toast(h.triggerText||'LAUF!','bad',1500);tone(h.kind==='water-wave'?125:95,.16,'sawtooth',.022,h.kind==='water-wave'?65:35);
+        }else if(!h.started&&h.hiddenUntilStart){h.mesh.visible=false;}
+        if(h.started&&h.active){h.mesh.position.z-=h.speed*dt;if(h.mesh.position.z<=h.endZ){h.active=false;h.mesh.visible=false;}}
+      }else if(h.risingWater){
+        if(!h.started&&!h.completed&&!reviveProtected&&G.pos.z<=h.triggerZ){h.started=true;h.phase='rising';toast(h.triggerText||'🌊 FLUT STEIGT!','bad',1700);tone(120,.18,'sawtooth',.02,80);}
+        if(h.started&&h.active){
+          if(h.phase==='rising'){
+            h.mesh.position.y=Math.min(h.endY,h.mesh.position.y+h.riseSpeed*dt);
+            if(h.mesh.position.y>=h.endY-.01){h.phase='hold';h.holdUntil=now+h.holdSeconds*1000;}
+          }else if(h.phase==='hold'){
+            if(now>=h.holdUntil)h.phase='falling';
+          }else if(h.phase==='falling'){
+            h.mesh.position.y=Math.max(h.startY,h.mesh.position.y-h.fallSpeed*dt);
+            if(h.mesh.position.y<=h.startY+.01){h.mesh.position.y=h.startY;h.started=false;h.completed=true;h.active=false;h.mesh.visible=false;}
+          }
+        }
+      }else if(h.motion){const t=now/1000,q=Math.sin(t*h.motion.speed+(h.motion.phase||0))*h.motion.amp;h.mesh.position[h.motion.axis]=h.base[h.motion.axis]+q;}
+    }
+    if(!reviveProtected&&hazardTouchesPlayer(h)){
+      if(h.pulseHazard)toast('💥 COLOR-STORM-TREFFER · RAUS!','bad',1200);
+      else if(h.mazeBoss)toast('🐙 DER KRAKEN HAT DICH!','bad',1200);
+      if(isEscapeWorld())beginReviveOffer();else respawn();return true;
+    }
   }return false;
 }
-function resolveHubColliders(prevX,prevZ){
-  if(G.world!=='hub')return;
-  G.pos.x=Math.max(-54.35,Math.min(54.35,G.pos.x));G.pos.z=Math.max(-54.35,Math.min(54.35,G.pos.z));
-  for(const c of G.colliders){const inside=Math.abs(G.pos.x-c.x)<c.w/2+currentPlayerRadius()&&Math.abs(G.pos.z-c.z)<c.d/2+currentPlayerRadius();if(!inside)continue;const oldX=Math.abs(prevX-c.x)<c.w/2+currentPlayerRadius(),oldZ=Math.abs(prevZ-c.z)<c.d/2+currentPlayerRadius();if(!oldX)G.pos.x=prevX;else if(!oldZ)G.pos.z=prevZ;else{G.pos.x=prevX;G.pos.z=prevZ;}G.moveVel.x*=.35;G.moveVel.z*=.35;}
+function resolveScopedColliders(prevX,prevZ){
+  if(G.world==='hub'){G.pos.x=Math.max(-54.35,Math.min(54.35,G.pos.x));G.pos.z=Math.max(-54.35,Math.min(54.35,G.pos.z));}
+  for(const c of G.colliders){
+    if(c.scope&&c.scope!==G.world)continue;
+    const inside=Math.abs(G.pos.x-c.x)<c.w/2+currentPlayerRadius()&&Math.abs(G.pos.z-c.z)<c.d/2+currentPlayerRadius();if(!inside)continue;
+    const oldX=Math.abs(prevX-c.x)<c.w/2+currentPlayerRadius(),oldZ=Math.abs(prevZ-c.z)<c.d/2+currentPlayerRadius();
+    if(!oldX)G.pos.x=prevX;else if(!oldZ)G.pos.z=prevZ;else{G.pos.x=prevX;G.pos.z=prevZ;}G.moveVel.x*=.30;G.moveVel.z*=.30;
+  }
 }
 function ensureAudio(){if(G.audioCtx)return G.audioCtx;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;G.audioCtx=new C();G.audioUnlocked=true;if(G.audioCtx.state==='suspended')G.audioCtx.resume().catch(()=>{});return G.audioCtx}catch{return null}}
 function tone(freq=240,duration=.05,type='sine',gain=.025,slide=0){const ctx=ensureAudio();if(!ctx||ctx.state==='closed')return;try{const now=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type=type;o.frequency.setValueAtTime(Math.max(30,freq),now);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide),now+duration);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(Math.max(.0002,gain),now+.006);g.gain.exponentialRampToValueAtTime(.0001,now+duration);o.connect(g).connect(ctx.destination);o.start(now);o.stop(now+duration+.02)}catch{}}
@@ -1075,7 +1163,7 @@ function setupScene(){
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
   G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
-  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
+  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);G.buildScope='world-4';buildWaterWorld(worldApi);
   G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
@@ -1146,7 +1234,7 @@ function buildHub(){
     {id:'keyboard-lab',number:1,name:'WIND WORLD',x:-45,w:11,d:7,h:6.1,wall:0xd8d0c4,roof:0x3e596b,accent:0x58ddff},
     {id:'candy-keys',number:2,name:'CANDY WORLD',x:-31,w:11,d:7,h:7.0,wall:0xcfc8bc,roof:0x4b535c,accent:0xff77bb},
     {id:'toxic-keyboard',number:3,name:'TOXIC WORLD',x:-15,w:12,d:7,h:6.5,wall:0xe0d8cb,roof:0x46525a,accent:0x75ff72},
-    {id:'world-4',number:4,name:'WATER WORLD',ownerOnly:true,x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x4fd8ff},
+    {id:'world-4',number:4,name:'WATER WORLD',ownerOnly:false,x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x4fd8ff},
     {id:null,number:5,name:'COMING SOON',x:31,w:11,d:7,h:7.1,wall:0xd6cec0,roof:0x4b5057,accent:0x858bff},
     {id:null,number:6,name:'COMING SOON',x:45,w:11,d:7,h:6.1,wall:0xd9d1c4,roof:0x3f5361,accent:0x858bff}
   ];
@@ -2296,7 +2384,7 @@ function openTreadmillStation(id){
 }
 
 function rememberRevivePlatform(p){
-  if(!isEscapeWorld()||!p||p.scope!==G.world||p.kind==='win-pad'||p.kind==='collapse-key'||!p.mesh)return false;
+  if(!isEscapeWorld()||!p||p.scope!==G.world||p.kind==='win-pad'||p.kind==='collapse-key'||p.kind==='water-maze-floor'||p.kind==='water-final-runway'||!p.mesh)return false;
   // V482: Der letzte sichere Punkt wird direkt an der realen Plattform festgemacht.
   // So kann ein späterer Fall nicht versehentlich wieder die Welt-Startplatte benutzen.
   // Immer die Plattformmitte verwenden: sicherer als eine gespeicherte Randposition,
@@ -2310,7 +2398,7 @@ function rememberRevivePlatform(p){
 }
 function handlePlatformContact(p){
   if(!p)return;const now=performance.now();p.press=1;
-  // V499: Water-World-Crumble-Plattformen starten ihren 1,5-s-Timer exakt beim ersten Landen.
+  // Crumble-Plattformen starten ihren 2,0-s-Timer exakt beim ersten echten Landen.
   if(p.collapseDelayMs>0&&!p.collapseAt&&!p.collapsedUntil){p.collapseAt=now+p.collapseDelayMs;tone(245,.07,'square',.012,-35);}
   // Sofort beim Landen speichern, nicht erst irgendwann in einem späteren Frame.
   rememberRevivePlatform(p);
@@ -2344,7 +2432,7 @@ function processMovement(dt,t){
   if(Math.abs(G.moveVel.x)<.004)G.moveVel.x=0;if(Math.abs(G.moveVel.z)<.004)G.moveVel.z=0;
   if(G.grounded&&G.support?.motion)G.pos.add(G.support.delta);
   const prevX=G.pos.x,prevZ=G.pos.z;G.pos.x+=G.moveVel.x*dt;G.pos.z+=G.moveVel.z*dt;
-  if(G.world==='hub')resolveHubColliders(prevX,prevZ);
+  if(G.world==='hub')resolveScopedColliders(prevX,prevZ);
   else if(isEscapeWorld()){
     const w=currentWorldDef(),half=Math.max(8,Number(w?.laneHalfWidth)||13.2),startZ=Number(w?.start?.z)||-70;
     G.pos.x=Math.max(-half,Math.min(half,G.pos.x));
@@ -2357,6 +2445,7 @@ function processMovement(dt,t){
     // Keyboard Lab behält den etwas größeren Portalbereich für den Rückweg zum Hub.
     const startBackLimit=startZ+(G.world==='keyboard-lab'?9:6.5);
     G.pos.z=Math.min(startBackLimit,G.pos.z);
+    resolveScopedColliders(prevX,prevZ);
   }
   const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);G.moveIntensity=movementSpeed()>0?Math.min(1,planarSpeed/movementSpeed()):0;
   if(planarSpeed>.08&&G.playerRoot){const wanted=Math.atan2(G.moveVel.x,G.moveVel.z),diff=Math.atan2(Math.sin(wanted-G.playerRoot.rotation.y),Math.cos(wanted-G.playerRoot.rotation.y)),turn=1-Math.exp(-dt*(G.sprint?13:10));G.playerRoot.rotation.y+=diff*turn;}
@@ -2616,8 +2705,13 @@ function restoreModalScrollSnapshot(kind,snap){
 }
 function captureShopScroll(tab=G.shopActiveTab){if(!tab)return;const snap=modalScrollSnapshot('shop');if(snap)G.shopScrollMemory[tab]=snap;}
 function restoreShopScroll(tab){restoreModalScrollSnapshot('shop',G.shopScrollMemory?.[tab]);}
-function openModal(html){closeModal();G.modalOpen=true;const wrap=document.createElement('div');wrap.className='ekl-modal-wrap';wrap.dataset.eklModal='1';wrap.innerHTML=html;G.overlay.append(wrap);wrap.addEventListener('click',e=>{if(e.target===wrap)closeModal()});wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=closeModal);return wrap;}
-function closeModal(){G.overlay?.querySelector('[data-ekl-modal]')?.remove();G.modalOpen=false;}
+function resetMovementControls(stopVelocity=true){
+  G.keys?.clear?.();G.mobileX=0;G.mobileY=0;G.mobileSprint=false;G.sprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.pointer=null;G.lookPointer=null;G.ownerFlyVertical=0;
+  if(stopVelocity&&G.moveVel){G.moveVel.x=0;G.moveVel.z=0;}
+  G.overlay?.classList.remove('ekl-looking');
+}
+function openModal(html){closeModal({preservePause:true});resetMovementControls(true);G.modalOpen=true;const wrap=document.createElement('div');wrap.className='ekl-modal-wrap';wrap.dataset.eklModal='1';wrap.innerHTML=html;G.overlay.append(wrap);wrap.addEventListener('click',e=>{if(e.target===wrap)closeModal()});wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=closeModal);return wrap;}
+function closeModal(options={}){const preservePause=options===true||!!options?.preservePause;G.overlay?.querySelector('[data-ekl-modal]')?.remove();G.modalOpen=false;resetMovementControls(true);if(!preservePause&&!G.revivePending)G.paused=false;}
 function coreTierValue(kind){return Math.max(0,Math.min(3,Number(G.state?.[`${kind}CoreTier`])||0));}
 function coreUpgradeDef(kind,tier){return CORE_UPGRADES[kind]?.find(x=>x.tier===tier)||null;}
 function buyCoreUpgrade(kind){
@@ -2799,7 +2893,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V502</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt bis Level 1000 auf 300. In Wind World steigt er danach als Level-Overdrive kontrolliert weiter: bis +15 % bei Level 2500. Dadurch bleibt z. B. Level 1400 nicht mehr bei exakt Speed 300 hängen. Kleine additive Boni aus Chips, Auren, Pets, Verwandlung und Speed Core kommen zusätzlich dazu.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst standardmäßig zwei Pets gleichzeitig benutzen. Im JK/Coin-Shop lässt sich einmalig für 1.000 JK/Coin ein dritter Pet-Slot dauerhaft freischalten. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins. Phönix: +3,0 % Speed / +2,5 % Wins. Die Dämonenverwandlung bleibt getrennt. Der Owner besitzt zusätzlich ein Pet-Lab mit 20 rein programmierten Testformen; beim Zurückverwandeln bleiben alle vorherigen Pets und Effekte ausgerüstet.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events. V502 ergänzt dort ein Pet-Lab mit 20 prozedural programmierten Test-Pets. Phoenix Fly bleibt ein eigener Modus.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · HILFE</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt bis Level 1000 auf 300. In Wind World steigt er danach als Level-Overdrive kontrolliert weiter: bis +15 % bei Level 2500. Dadurch bleibt z. B. Level 1400 nicht mehr bei exakt Speed 300 hängen. Kleine additive Boni aus Chips, Auren, Pets, Verwandlung und Speed Core kommen zusätzlich dazu.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist nach Toxic World Level 800 + Finish regulär freischaltbar und besitzt eine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst standardmäßig zwei Pets gleichzeitig benutzen. Im JK/Coin-Shop lässt sich einmalig für 1.000 JK/Coin ein dritter Pet-Slot dauerhaft freischalten. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins. Phönix: +3,0 % Speed / +2,5 % Wins. Die Dämonenverwandlung bleibt getrennt. Der Owner besitzt zusätzlich ein Pet-Lab mit 20 rein programmierten Testformen; beim Zurückverwandeln bleiben alle vorherigen Pets und Effekte ausgerüstet.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events. Dort gibt es zusätzlich ein Pet-Lab mit 20 prozedural programmierten Test-Pets. Phoenix Fly bleibt ein eigener Modus.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2831,7 +2925,7 @@ function openOwnerPetLab(){
   G.paused=true;
   const current=ownerPreviewPetDef(G.ownerPetPreviewId);
   const cards=OWNER_PREVIEW_PETS.map((pet,i)=>`<article class="${G.ownerPetPreviewId===pet.id?'owned':''}"><small>OWNER TEST PET ${String(i+1).padStart(2,'0')}</small><h3>${pet.name}</h3><p>Komplett prozedural in Escape.KL gebaut · ${pet.float?'Flug-/Schwebeform':'Bodenform'} · eigene Silhouette und Farben.</p><button class="owner" data-mod-preview-pet="${pet.id}">${G.ownerPetPreviewId===pet.id?'AKTIV · erneut ansehen':'In Pet verwandeln'}</button></article>`).join('');
-  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · V502 PET LAB</small><h2>🧪 20 neue Pet-Prototypen</h2><p>Diese 20 Pets bestehen vollständig aus programmierter Three.js-Geometrie und brauchen keine zusätzlichen GLB-Dateien. Wähle eins aus: Dein normaler Charakter und deine ausgerüsteten Pets werden nur ausgeblendet – dein Equipment wird nicht verändert.</p></div><button data-mod-pet-lab-back>×</button></div><div class="ekl-world-economy-note"><b>Aktuelle Form:</b><span>${current?current.name:'Normaler Escape-Charakter'}${G.ownerFlyActive?' · Phoenix Fly aktiv':''}</span></div><div class="ekl-shop-grid">${cards}</div><div class="ekl-modal-actions"><button class="gold" data-mod-preview-normal ${G.ownerPetPreviewId?'':'disabled'}>↩ Zurückverwandeln</button><button data-mod-pet-lab-back>Zurück zum Mod-Menü</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · PET LAB</small><h2>🧪 20 neue Pet-Prototypen</h2><p>Diese 20 Pets bestehen vollständig aus programmierter Three.js-Geometrie und brauchen keine zusätzlichen GLB-Dateien. Wähle eins aus: Dein normaler Charakter und deine ausgerüsteten Pets werden nur ausgeblendet – dein Equipment wird nicht verändert.</p></div><button data-mod-pet-lab-back>×</button></div><div class="ekl-world-economy-note"><b>Aktuelle Form:</b><span>${current?current.name:'Normaler Escape-Charakter'}${G.ownerFlyActive?' · Phoenix Fly aktiv':''}</span></div><div class="ekl-shop-grid">${cards}</div><div class="ekl-modal-actions"><button class="gold" data-mod-preview-normal ${G.ownerPetPreviewId?'':'disabled'}>↩ Zurückverwandeln</button><button data-mod-pet-lab-back>Zurück zum Mod-Menü</button></div></div>`);
   wrap.querySelectorAll('[data-mod-pet-lab-back]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(openOwnerModMenu,0);});
   wrap.querySelectorAll('[data-mod-preview-pet]').forEach(b=>b.onclick=()=>{
     if(startOwnerPetPreview(b.dataset.modPreviewPet)){closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;}
@@ -2897,7 +2991,7 @@ function openOwnerModMenu(){
 function showPause(){
   G.paused=true;const owner=isEscapeOwner();
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL</small><h2>Pause</h2><p>Dein Lauf ist angehalten.${owner?' · Owner-Mod-Menü verfügbar.':''}</p></div><button data-ekl-resume>×</button></div><div class="ekl-modal-actions"><button data-ekl-resume class="gold">Weiter</button><button data-ekl-treadmills>🏃 Laufband</button><button data-ekl-vending>🥤 Vending Machine</button><button data-ekl-pets>🪽 Pets ausrüsten</button><button data-ekl-hub>Zum Hub</button>${owner?'<button class="owner" data-ekl-owner-mod>👑 Mod-Menü</button>':''}<button data-ekl-exit>Top Games</button><button data-ekl-help>Steuerung</button></div></div>`);
-  G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false});
+  G.overlay.querySelectorAll('[data-ekl-resume]').forEach(b=>b.onclick=()=>{closeModal();G.paused=false;resetMovementControls(true)});
   G.overlay.querySelector('[data-ekl-treadmills]')?.addEventListener('click',openTreadmillSpawnMenu);G.overlay.querySelector('[data-ekl-vending]')?.addEventListener('click',()=>openVendingManagement('pause'));G.overlay.querySelector('[data-ekl-pets]')?.addEventListener('click',openPetEquipMenu);
   G.overlay.querySelector('[data-ekl-hub]').onclick=()=>{G.paused=false;setWorld('hub')};
   G.overlay.querySelector('[data-ekl-exit]').onclick=returnToTopGames;
@@ -2912,6 +3006,8 @@ function showRaceComplete(sec,reward,previous,record){const wrap=document.create
 function bindInput(){
   G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyE','KeyR','KeyF','KeyG','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyF'){setOwnerFly(!G.ownerFlyActive);return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyG'){setOwnerVanish(!G.ownerVanish);return}if(e.code==='Space'){if(G.ownerFlyActive){G.keys.add('Space');return}G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){if(!G.ownerFlyActive)respawn();return}G.keys.add(e.code)};
   G.keyUp=e=>{if(e.code==='Space'){G.keys.delete('Space');G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
+  G.inputBlurHandler=()=>resetMovementControls(true);G.visibilityHandler=()=>{if(document.hidden)resetMovementControls(true)};
+  window.addEventListener('blur',G.inputBlurHandler,{passive:true});document.addEventListener('visibilitychange',G.visibilityHandler,{passive:true});
   const canvas=G.overlay.querySelector('canvas');
   const clampPitch=value=>Math.max(CAMERA_PITCH_MIN,Math.min(CAMERA_PITCH_MAX,value));
   const applyCameraLook=(dx,dy,touch=false)=>{
@@ -3000,7 +3096,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);if(G.inputBlurHandler)window.removeEventListener('blur',G.inputBlurHandler);if(G.visibilityHandler)document.removeEventListener('visibilitychange',G.visibilityHandler);G.inputBlurHandler=null;G.visibilityHandler=null;window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){
