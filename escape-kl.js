@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V500 · Treadmill 5-Minute Anti-AFK */
-const VERSION = '2026-08-18-v500';
+/* Escape.kl – JK.Games Top Game V501 · Vending Orientation Fix */
+const VERSION = '2026-08-18-v501';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -2006,7 +2006,8 @@ function loadSummonedVendingAsset(vm=G.summonedVending){
   if(vm.model){vm.model.removeFromParent?.();disposeExternalObject(vm.model);vm.model=null;}
   createSharedLoader().load(asset,gltf=>{
     if(seq!==G.vendingLoadSeq||G.summonedVending!==vm||!vm.wrapper)return;
-    const model=normalizeExternalModel(gltf.scene,{targetHeight:2.65});model.position.set(0,.12,0);model.rotation.y=Math.PI;vm.wrapper.add(model);vm.model=model;
+    const model=normalizeExternalModel(gltf.scene,{targetHeight:2.65});model.position.set(0,.12,0);model.rotation.y=Math.PI*1.5; // V501: GLB-Front um +90° korrigiert, damit die Maschine beim Platzieren zum Spieler zeigt.
+    vm.wrapper.add(model);vm.model=model;
   },undefined,error=>{if(seq===G.vendingLoadSeq)console.warn('Escape.kl Vending-GLB konnte nicht geladen werden.',error)});
 }
 function spawnVendingMachine(){
