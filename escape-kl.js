@@ -6,7 +6,7 @@ import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=2
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V486 · World shops + hub/shop polish */
+/* Escape.kl – JK.Games Top Game V487 · utility houses + camera/shop cleanup */
 const VERSION = '2026-08-18-v486';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
@@ -945,11 +945,16 @@ function buildHub(){
     else buildingDoorTrigger(`world-house-${h.number}`,b,()=>toast(`WORLD ${h.number} · COMING SOON`,'info',1500));
   }
 
-  // --- SOUTH STREET: alle übrigen großen Außenwände werden echte Funktionshäuser --
+  // --- SOUTH STREET V487: Funktionsseite bleibt als echte Häuserzeile erhalten.
+  // Links und rechts von Records sowie rechts neben Skyrun stehen bewusst freie
+  // COMING-SOON-Häuser für spätere Funktionen.
   const utilityHouses=[
-    {id:'records-house',label:'RECORDS',x:-35,w:10,d:7,h:6.8,wall:0xd8d0c5,roof:0x46535a,accent:0x72eaff,onEnter:()=>openRecords()},
-    {id:'race-house',label:'SPEED RACE',x:35,w:10,d:7,h:6.8,wall:0xd7d1c8,roof:0x4a525a,accent:0xff9064,onEnter:()=>setWorld('race')},
-    {id:'skyrun-house',label:'SKYRUN',x:47,w:9,d:7,h:5.8,wall:0xdccfc3,roof:0x5a514b,accent:0x9aa7ff,onEnter:()=>setWorld('only-up')}
+    {id:'utility-future-left',label:'COMING SOON',x:-47,w:9,d:7,h:5.9,wall:0xd7d0c5,roof:0x46535a,accent:0x98a7b8,onEnter:()=>toast('COMING SOON','info',1500)},
+    {id:'records-house',label:'RECORDS',x:-35,w:9,d:7,h:6.4,wall:0xd8d0c5,roof:0x46535a,accent:0x72eaff,onEnter:()=>openRecords()},
+    {id:'utility-future-records-right',label:'COMING SOON',x:-23,w:9,d:7,h:5.9,wall:0xd9d2c8,roof:0x4b555c,accent:0x98a7b8,onEnter:()=>toast('COMING SOON','info',1500)},
+    {id:'race-house',label:'SPEED RACE',x:23,w:9,d:7,h:6.4,wall:0xd7d1c8,roof:0x4a525a,accent:0xff9064,onEnter:()=>setWorld('race')},
+    {id:'skyrun-house',label:'SKYRUN',x:35,w:9,d:7,h:6.2,wall:0xdccfc3,roof:0x5a514b,accent:0x9aa7ff,onEnter:()=>setWorld('only-up')},
+    {id:'utility-future-right',label:'COMING SOON',x:47,w:9,d:7,h:5.9,wall:0xd9d2c8,roof:0x46535a,accent:0x98a7b8,onEnter:()=>toast('COMING SOON','info',1500)}
   ];
   for(const h of utilityHouses){
     const b=addHubBuilding({x:h.x,z:50,w:h.w,d:h.d,h:h.h,wall:h.wall,roof:h.roof,accent:h.accent,label:h.label});
@@ -986,11 +991,13 @@ function buildHub(){
   boxDeco(leftX,sh/2+.30,sz,.38,sh,sd,0xd5d0c6);addCollider(leftX,sz,.38,sd);
   boxDeco(rightX,sh/2+.30,sz,.38,sh,sd,0xd5d0c6);addCollider(rightX,sz,.38,sd);
   boxDeco(sx,sh/2+.30,backZ,.38+sw,sh,.38,0xd5d0c6);addCollider(sx,backZ,sw,.38);
-  const doorW=4.6,frontPart=(sw-doorW)/2;
+  const doorW=4.9,doorH=3.65,frontPart=(sw-doorW)/2;
   boxDeco(leftX+frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(leftX+frontPart/2,frontZ,frontPart,.38);
   boxDeco(rightX-frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(rightX-frontPart/2,frontZ,frontPart,.38);
+  // V487: echter Türsturz statt einer bis zum Dach offenen schwarzen Öffnung.
+  const lintelH=Math.max(.5,sh-doorH);boxDeco(sx,doorH+.30+lintelH/2,frontZ,doorW,lintelH,.38,0xd5d0c6);
   boxDeco(sx,sh+.35,sz,sw+.6,.42,sd+.6,0x46525a);
-  // V486: Eingang vollständig offen – keine schwarze Scheinwand mehr.
+  // Eingang bleibt physisch offen; nur oberhalb der Tür sitzt wieder Hauswand.
   addSign('ESCAPE SHOP',{x:sx,y:sh+1.15,z:frontZ+.05},0xffd06c,.66);addSign('DAILY · SHOP · REBIRTH',{x:sx,y:sh+.25,z:frontZ+.04},0x9ee8ff,.27);
   // Weg vom Straßengehweg bis zur Eingangstür.
   addPlatform({x:22.5,y:.366,z:frontZ,w:25,h:.075,d:2.5,color:walkColor,kind:'hub-path',hub:true});
@@ -999,20 +1006,41 @@ function buildHub(){
   for(const z of[-10,-5,0,5]){boxDeco(leftX-.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);boxDeco(rightX+.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);}
   addGlowLight(sx,4.7,2.5,0xffe7b0,.85,18);addGlowLight(sx,4.7,-9,0xbbeeff,.72,16);
 
-  // Daily + Rebirth gemeinsam links an der Wand, als echte Stationen statt Kreise auf dem Boden.
-  boxDeco(22.45,2.35,-.7,.18,3.9,6.4,0x3f4848);boxDeco(23.0,1.05,-2.3,1.0,1.45,2.2,0x6d7470);boxDeco(23.35,2.30,-2.3,.18,2.05,2.15,0xf0b85b);
-  addSign('DAILY WHEEL',{x:23.42,y:4.25,z:-2.3},0xffc65a,.34);addSign('AKTIVE WELT',{x:23.43,y:3.60,z:-2.3},0x9ee8ff,.20);
-  addInteractable('daily-wheel','Daily Wheel drehen',24.0,1.0,-2.3,2.8,()=>openDailyWheel());addInteractable('daily-quests','Daily Quests ansehen',24.0,1.0,-5.0,2.5,()=>openDailyQuests());
-  boxDeco(23.0,1.05,3.15,1.0,1.45,2.4,0x6d6874);boxDeco(23.35,2.30,3.15,.18,2.05,2.25,0xa66ddd);addSign('REBIRTH',{x:23.42,y:4.25,z:3.15},0xc998ff,.36);addInteractable('rebirth','Rebirth öffnen',24.0,1.0,3.15,2.8,()=>openRebirth());
+  // V487: Daily Wheel + Rebirth sauber an der linken Innenwand. Keine große schwarze
+  // Hintergrundwand mehr. Beide Stationen schauen in den Raum (+X) und sind schon
+  // vom Eingang aus lesbar.
+  const addLeftWallSign=(text,y,z,color,scale)=>{const sign=addSign(text,{x:22.38,y,z},color,scale);sign.rotation.y=Math.PI/2;return sign;};
+
+  // DAILY WHEEL: sichtbares Rad auf einem Ständerwerk.
+  boxDeco(23.05,.72,3.10,1.55,.62,3.10,0x59645f);
+  for(const z of[2.18,4.02])boxDeco(23.16,1.63,z,.16,1.95,.16,0x3e4948);
+  boxDeco(23.16,2.55,3.10,.16,.14,2.18,0x3e4948);
+  const dailyRing=addRingDeco(23.20,2.72,3.10,1.10,.115,0xffc857,0);dailyRing.rotation.y=Math.PI/2;
+  boxDeco(23.22,2.72,3.10,.08,.10,1.72,0xffe7a0,0xffd45c);
+  boxDeco(23.22,2.72,3.10,.08,1.72,.10,0xffe7a0,0xffd45c);
+  const ds1=boxDeco(23.22,2.72,3.10,.08,.10,1.72,0xf6a94e,0xffb342);ds1.rotation.x=Math.PI/4;
+  const ds2=boxDeco(23.22,2.72,3.10,.08,.10,1.72,0xf6a94e,0xffb342);ds2.rotation.x=-Math.PI/4;
+  addLeftWallSign('DAILY WHEEL',4.55,3.10,0xffc65a,.38);
+  addLeftWallSign('AKTIVE WELT',4.00,3.10,0x9ee8ff,.20);
+  addInteractable('daily-wheel','Daily Wheel drehen',24.15,1.0,3.10,2.9,()=>openDailyWheel());
+  addInteractable('daily-quests','Daily Quests ansehen',24.15,1.0,5.35,2.25,()=>openDailyQuests());
+
+  // REBIRTH: eigener violetter Ascension-Stand statt einer flachen Platte.
+  boxDeco(23.05,.72,-2.95,1.55,.62,3.10,0x5c5862);
+  for(const [z,h,c] of [[-3.70,1.65,0x7f56b3],[-2.95,2.35,0xb173ee],[-2.20,1.65,0x7f56b3]]){
+    boxDeco(23.18,1.22+h/2,z,.22,h,.32,c,c);
+  }
+  boxDeco(23.10,2.55,-2.95,.55,.20,2.25,0xd6a4ff,0xb96cff);
+  addLeftWallSign('REBIRTH',4.55,-2.95,0xc998ff,.42);
+  addLeftWallSign('AKTIVE WELT',4.00,-2.95,0x9ee8ff,.20);
+  addInteractable('rebirth','Rebirth öffnen',24.15,1.0,-2.95,2.9,()=>openRebirth());
+
   // Richtiger Shop-Tresen hinten: Theke, Regale und beleuchtetes Schild.
   boxDeco(sx,1.05,-12.15,13.2,1.28,1.45,0x715b46);boxDeco(sx,1.72,-12.0,13.6,.18,1.55,0xc39b64);for(const x of[31.2,36,40.8]){boxDeco(x,3.1,-14.1,3.4,3.2,.45,0x32434a);for(const y of[2.15,3.05,3.95])boxDeco(x,y,-13.82,3.0,.10,.34,0x8ea3aa);}addSign('WORLD SHOP',{x:sx,y:5.25,z:-13.65},0xffd36a,.58);addSign('UPGRADES · ITEMS · PETS',{x:sx,y:4.35,z:-13.63},0x9ee8ff,.26);addInteractable('shop','World Shop öffnen',sx,1.0,-10.2,4.6,()=>openShop());
 
-  // V486: breitere, flachere Treppe mit freier Laufkante. Etage 2 liegt höher und hat sicheren Abschluss.
-  const stairX=47.0,stairStartZ=4.4;
-  for(let i=0;i<16;i++){const top=.56+i*.22;addPlatform({x:stairX,y:top-.10,z:stairStartZ-i*.62,w:3.25,h:.20,d:.78,color:0x918e85,kind:'shop-stair',hub:true});}
-  addPlatform({x:38.0,y:4.02,z:-8.3,w:21.0,h:.20,d:10.2,color:0x777d78,kind:'shop-floor-2',hub:true});
-  boxDeco(27.55,5.10,-8.3,.12,2.05,10.1,0x30383d);boxDeco(38.0,5.10,-3.25,21,.12,.12,0x30383d);for(const x of[28,32,36,40,44,48])addCylinderDeco(x,4.72,-3.25,.04,.05,1.35,0x30383d,0,8);
-  addSign('2. ETAGE',{x:38.0,y:5.65,z:-3.05},0xdfe8ee,.30);
+  // V487: Die zweite Etage entfällt vollständig. Damit entfallen auch Treppe, Geländer
+  // und der bisherige Speed-/Stufen-Kollisionsfehler im Shop. Der Innenraum bleibt
+  // bewusst ebenerdig und frei begehbar.
 
   // --- PARK / STADTMÖBLIERUNG ----------------------------------------------------
   // Bäume bleiben auf Gras. Die kleinen Baumplatten sind die einzigen Platten direkt darunter.
@@ -1854,7 +1882,43 @@ function finishWorldAndReturnHub(){
   return finishWorld({autoHub:true,source:'end-interaction',stageReward});
 }
 
-function updateCamera(dt){if(!G.playerRoot)return;const speed=Math.hypot(G.moveVel.x,G.moveVel.z),ratio=Math.min(1,speed/17),bob=G.grounded&&speed>.35?Math.sin(performance.now()*.012*(G.sprint?1.3:1))*Math.min(.032,speed*.002):0;const target=G.tmpV.set(G.pos.x,G.pos.y+.25+bob,G.pos.z);const horiz=G.camDistance*Math.cos(G.pitch);const desired=G.tmpV2.set(target.x+Math.sin(G.yaw)*horiz,target.y+1.52+Math.sin(G.pitch)*G.camDistance,target.z+Math.cos(G.yaw)*horiz);const k=1-Math.exp(-dt*7.5);G.camera.position.lerp(desired,k);G.camera.lookAt(target);const targetFov=63+ratio*7+(G.sprint&&speed>.5?2:0);G.camera.fov+=(targetFov-G.camera.fov)*(1-Math.exp(-dt*5.5));G.camera.updateProjectionMatrix();}
+function clipCameraAgainstHubWalls(target,point){
+  if(G.world!=='hub'||!G.colliders?.length)return point;
+  const dx=point.x-target.x,dz=point.z-target.z,dy=point.y-target.y;
+  let bestT=1;
+  for(const c of G.colliders){
+    if(c.scope&&c.scope!=='hub')continue;
+    const pad=.30,minX=c.x-c.w/2-pad,maxX=c.x+c.w/2+pad,minZ=c.z-c.d/2-pad,maxZ=c.z+c.d/2+pad;
+    let t0=0,t1=1;
+    const axis=(p,d,min,max)=>{
+      if(Math.abs(d)<1e-7)return p>=min&&p<=max;
+      let a=(min-p)/d,b=(max-p)/d;if(a>b){const q=a;a=b;b=q;}
+      t0=Math.max(t0,a);t1=Math.min(t1,b);return t0<=t1;
+    };
+    if(!axis(target.x,dx,minX,maxX)||!axis(target.z,dz,minZ,maxZ))continue;
+    if(t1<0||t0>1)continue;
+    // Startet die Kamera-Linie bereits innerhalb eines Colliders, ignorieren wir
+    // diesen Collider; der Spieler selbst darf nie in einer Hauswand stecken.
+    if(t0<=.001)continue;
+    bestT=Math.min(bestT,Math.max(.08,t0-.035));
+  }
+  if(bestT>=.999)return point;
+  return point.set(target.x+dx*bestT,target.y+dy*bestT,target.z+dz*bestT);
+}
+function updateCamera(dt){
+  if(!G.playerRoot)return;
+  const speed=Math.hypot(G.moveVel.x,G.moveVel.z),ratio=Math.min(1,speed/17),bob=G.grounded&&speed>.35?Math.sin(performance.now()*.012*(G.sprint?1.3:1))*Math.min(.032,speed*.002):0;
+  const target=G.tmpV.set(G.pos.x,G.pos.y+.25+bob,G.pos.z);
+  const horiz=G.camDistance*Math.cos(G.pitch);
+  const desired=G.tmpV2.set(target.x+Math.sin(G.yaw)*horiz,target.y+1.52+Math.sin(G.pitch)*G.camDistance,target.z+Math.cos(G.yaw)*horiz);
+  clipCameraAgainstHubWalls(target,desired);
+  const k=1-Math.exp(-dt*7.5);G.camera.position.lerp(desired,k);
+  // Auch die geglättete Zwischenposition wird nochmals geclippt. So kann die Kamera
+  // beim schnellen Drehen nicht für ein einzelnes Frame durch eine Hauswand sehen.
+  const safe=G.tmpV2.copy(G.camera.position);clipCameraAgainstHubWalls(target,safe);G.camera.position.copy(safe);
+  G.camera.lookAt(target);
+  const targetFov=63+ratio*7+(G.sprint&&speed>.5?2:0);G.camera.fov+=(targetFov-G.camera.fov)*(1-Math.exp(-dt*5.5));G.camera.updateProjectionMatrix();
+}
 function trailParticleColor(def,particle,t){
   if(def.effect==='fire')return new THREE.Color().setHSL(.02+particle.seed*.08,1,.54+.12*Math.sin(t*4+particle.seed));
   if(def.effect==='water')return new THREE.Color().setHSL(.52+particle.seed*.06,.9,.58);
@@ -2072,7 +2136,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V486</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares Haus. Links an der Wand stehen Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; World 4 ist bereits als nächste Shop-Stufe vorbereitet. Die Treppe führt auf eine höhere zweite Etage.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V487</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; World 4 ist bereits als nächste Shop-Stufe vorbereitet. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
