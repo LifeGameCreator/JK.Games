@@ -3,12 +3,12 @@ import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-wo
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v486-start-return';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v486-start-return';
-import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v489-water-stages';
+import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v493-wave-placement-fix';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V492 · Vending 5m Auto-Remove Fix */
-const VERSION = '2026-08-18-v492';
+/* Escape.kl – JK.Games Top Game V493 · Water Wave Placement Fix */
+const VERSION = '2026-08-18-v493';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -878,15 +878,19 @@ function addHazardBox({x=0,y=2,z=0,w=4,h=4,d=1,color=0xff345f,emissive=0xff123d,
   const mesh=tagScope(new THREE.Mesh(geo(`hazard-box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),m));mesh.position.set(x,y,z);mesh.castShadow=false;mesh.receiveShadow=false;G.scene.add(mesh);G.decorative.push(mesh);
   const hz={mesh,scope:G.buildScope,kind,w,h,d,base:new THREE.Vector3(x,y,z),motion,active:true,chase:false,started:false,startZ:z,endZ:z,triggerZ:z,speed:0};G.hazards.push(hz);return hz;
 }
-function addChaseWall({x=0,y=2.7,startZ=0,triggerZ=-5,endZ=-45,w=22,h=6,d=1.2,speed=12.5,color=0x7dff58,kind='chase-wall',triggerText='☣ TOXIC WALL · LAUF!'}){
-  const hz=addHazardBox({x,y,z:startZ,w,h,d,color,emissive:color,kind});hz.chase=true;hz.started=false;hz.startZ=startZ;hz.triggerZ=triggerZ;hz.endZ=endZ;hz.speed=Math.max(1,Number(speed)||12.5);hz.triggerText=String(triggerText||'LAUF!');return hz;
+function addChaseWall({x=0,y=2.7,startZ=0,triggerZ=-5,endZ=-45,w=22,h=6,d=1.2,speed=12.5,color=0x7dff58,kind='chase-wall',triggerText='☣ TOXIC WALL · LAUF!',spawnBehind=0,clearZ=null,hiddenUntilStart=false}){
+  const hz=addHazardBox({x,y,z:startZ,w,h,d,color,emissive:color,kind});
+  hz.chase=true;hz.started=false;hz.startZ=startZ;hz.triggerZ=triggerZ;hz.endZ=endZ;hz.speed=Math.max(1,Number(speed)||12.5);hz.triggerText=String(triggerText||'LAUF!');
+  hz.spawnBehind=Math.max(0,Number(spawnBehind)||0);hz.clearZ=Number.isFinite(Number(clearZ))?Number(clearZ):null;hz.hiddenUntilStart=!!hiddenUntilStart;
+  if(hz.hiddenUntilStart)hz.mesh.visible=false;
+  return hz;
 }
-function addWaterWave(options={}){return addChaseWall({...options,kind:'water-wave',triggerText:options.triggerText||'🌊 WASSERWELLE · LAUF!'});}
+function addWaterWave(options={}){return addChaseWall({...options,kind:'water-wave',hiddenUntilStart:true,triggerText:options.triggerText||'🌊 WASSERWELLE · LAUF!'});}
 function addRisingWater({x=0,z=0,w=24,d=28,startY=-1.2,endY=12,h=.45,triggerZ=-5,riseSpeed=.75,holdSeconds=1.2,fallSpeed=2.2,color=0x24c5ef,triggerText='🌊 FLUT STEIGT · NACH OBEN!'}){
   const hz=addHazardBox({x,y:startY,z,w,h,d,color,emissive:color,kind:'rising-water'});
   hz.risingWater=true;hz.started=false;hz.completed=false;hz.phase='idle';hz.startY=startY;hz.endY=endY;hz.triggerZ=triggerZ;hz.riseSpeed=Math.max(.1,Number(riseSpeed)||.75);hz.fallSpeed=Math.max(.1,Number(fallSpeed)||2.2);hz.holdSeconds=Math.max(0,Number(holdSeconds)||0);hz.holdUntil=0;hz.triggerText=String(triggerText||'🌊 FLUT STEIGT!');return hz;
 }
-function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;if(h.risingWater)h.mesh.position.y=h.startY;h.mesh.visible=h.scope===G.world;}}
+function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;if(h.risingWater)h.mesh.position.y=h.startY;h.mesh.visible=h.scope===G.world&&!h.hiddenUntilStart;}}
 function hazardTouchesPlayer(h){
   if(!h?.mesh?.visible||!h.active)return false;const r=currentPlayerRadius();
   return Math.abs(G.pos.x-h.mesh.position.x)<=h.w/2+r&&Math.abs(G.pos.z-h.mesh.position.z)<=h.d/2+r&&Math.abs(G.pos.y-h.mesh.position.y)<=h.h/2+PLAYER_HALF;
@@ -896,7 +900,13 @@ function updateHazards(dt){
   for(const h of G.hazards){
     if(h.scope!==G.world){h.mesh.visible=false;continue;}h.mesh.visible=true;
     if(h.chase){
-      if(!h.started&&G.pos.z<=h.triggerZ){h.started=true;toast(h.triggerText||'LAUF!','bad',1500);tone(h.kind==='water-wave'?125:95,.16,'sawtooth',.022,h.kind==='water-wave'?65:35);}
+      if(h.clearZ!==null&&G.pos.z<=h.clearZ){h.active=false;h.mesh.visible=false;continue;}
+      if(!h.started&&G.pos.z<=h.triggerZ){
+        h.started=true;
+        if(h.spawnBehind>0)h.mesh.position.z=G.pos.z+h.spawnBehind;
+        h.mesh.visible=true;
+        toast(h.triggerText||'LAUF!','bad',1500);tone(h.kind==='water-wave'?125:95,.16,'sawtooth',.022,h.kind==='water-wave'?65:35);
+      }else if(!h.started&&h.hiddenUntilStart){h.mesh.visible=false;}
       if(h.started&&h.active){h.mesh.position.z-=h.speed*dt;if(h.mesh.position.z<=h.endZ){h.active=false;h.mesh.visible=false;}}
     }else if(h.risingWater){
       if(!h.started&&!h.completed&&G.pos.z<=h.triggerZ){h.started=true;h.phase='rising';toast(h.triggerText||'🌊 FLUT STEIGT!','bad',1700);tone(120,.18,'sawtooth',.02,80);}

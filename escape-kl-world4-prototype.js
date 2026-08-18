@@ -1,5 +1,5 @@
-/* Escape.kl World 4 – V489 WATER WORLD.
-   Owner-Testbuild. Stages 1–5 sind spielbar; der weitere Ausbau folgt danach. */
+/* Escape.kl World 4 – V493 WATER WORLD.
+   Water-Wave Spawn-/Stage-Übergänge korrigiert; Stages 1–5 bleiben spielbar. */
 export function buildWaterWorld(api){
   const {
     addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},
@@ -37,7 +37,7 @@ export function buildWaterWorld(api){
   addPlatform({x:0,y:1.52,z:-156,w:12,h:.58,d:7,color:safe,label:'STAGE 2',stage:2,kind:'safe-zone'});
   addSign('STAGE 2 · WAVE ESCAPE',{x:0,y:5.9,z:-157},0x4fd8ff,.70);
   addSign('WASSERWELLE HINTER DIR · EMPFOHLEN SPEED 100+',{x:0,y:4.72,z:-157.02},0xffffff,.34);
-  addWaterWave({x:0,y:2.1,startZ:-160.5,triggerZ:-164,endZ:-270,w:32,h:6.6,d:2.2,speed:10.4,color:0x21b9ec,triggerText:'🌊 WASSERWELLE · LAUF!'});
+  addWaterWave({x:0,y:2.1,startZ:-151,triggerZ:-159.6,endZ:-252,w:32,h:6.6,d:2.2,speed:10.4,spawnBehind:9,clearZ:-251.5,color:0x21b9ec,triggerText:'🌊 WASSERWELLE · LAUF!'});
   const s2=[
     [-170,-2.8,1.52,7.0,4.6,'RUN'],[-182,3.1,1.64,6.4,4.4,'WAVE'],[-194,-3.2,1.76,6.2,4.3,'ESCAPE'],[-206,2.6,1.90,6.0,4.2,'100+'],
     [-218,-2.2,2.02,5.8,4.1,'RUN'],[-230,3.0,2.12,5.8,4.1,'FASTER'],[-242,-3.0,2.24,6.0,4.2,'WATER'],[-254,0,2.34,8.8,5.0,'SAFE'],[-262,0,2.34,7.2,5.0,'STAGE 2 END']
@@ -95,9 +95,9 @@ export function buildWaterWorld(api){
     if(n%2===0)boxDeco(-5.55,13.73,z,.12,.05,9.0,0xdaf8ff);
     if(n%2===0)boxDeco(5.55,13.73,z,.12,.05,9.0,0xdaf8ff);
   }
-  addWaterWave({x:0,y:16.35,startZ:-412,triggerZ:-424,endZ:-560,w:31,h:7.2,d:2.3,speed:16.5,color:0x22bce9,triggerText:'🌊 FINAL WAVE · VOLLGAS!'});
-  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'V489 TEST END',stage:5,kind:'safe-zone'});
-  addSign('WATER WORLD · V489 TESTSTRECKE ENDE',{x:0,y:18.35,z:-565},0x8cecff,.62);
+  addWaterWave({x:0,y:16.35,startZ:-409,triggerZ:-419.6,endZ:-551,w:31,h:7.2,d:2.3,speed:16.5,spawnBehind:10,clearZ:-548,color:0x22bce9,triggerText:'🌊 FINAL WAVE · VOLLGAS!'});
+  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'V493 TEST END',stage:5,kind:'safe-zone'});
+  addSign('WATER WORLD · V493 TESTSTRECKE ENDE',{x:0,y:18.35,z:-565},0x8cecff,.62);
   addSign('WEITERE STAGES BAUEN WIR ALS NÄCHSTES',{x:0,y:17.32,z:-565.02},0xffffff,.30);
   addInteractable('water-world-test-return','Water World Test verlassen · Zum Hub',0,14.45,-565,6.5,returnHub);
 
