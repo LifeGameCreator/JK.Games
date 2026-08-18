@@ -8,7 +8,7 @@ import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escap
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* Escape.kl – JK.Games Top Game V505 · Vending placement / facing / collision fix */
-const VERSION = '2026-08-18-v505';
+const VERSION = '2026-08-18-v506';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -1409,7 +1409,7 @@ function buildHub(){
     const back=boxDeco(x+dx,.90,z+dz,3.2,.76,.14,0x75614f);back.rotation.y=rot;
   };
   // Bänke stehen immer auf der Grasseite des Gehwegs, nie auf Asphalt.
-  for(const [x,z,rot] of [[-11.6,-12,0],[11.6,-12,Math.PI],[-11.6,12,0],[11.6,12,Math.PI],[-11.6,43,0],[11.6,43,Math.PI],[-30,-21.3,Math.PI/2],[30,-21.3,-Math.PI/2],[-30,39.0,Math.PI/2],[30,39.0,-Math.PI/2]])addBench(x,z,rot+Math.PI/2);
+  for(const [x,z,rot] of [[-11.6,-12,0],[11.6,-12,Math.PI],[-11.6,12,0],[11.6,12,Math.PI],[-11.6,43,0],[11.6,43,Math.PI],[-30,-21.3,Math.PI/2],[30,-21.3,-Math.PI/2],[-30,39.0,Math.PI/2],[30,39.0,-Math.PI/2]])addBench(x,z,rot+Math.PI/2+Math.PI);
   // Mehr Laternen entlang der Straßenränder, ebenfalls auf der Grasseite.
   for(const [x,z] of [[-11.2,-18],[11.2,-18],[-11.2,-8],[11.2,-8],[-11.2,8],[11.2,8],[-11.2,18],[11.2,18],[-11.2,42],[11.2,42],[-40,-21.5],[-22,-21.5],[22,-21.5],[40,-21.5],[-40,39],[ -22,39],[22,39],[40,39]])addHubStreetLamp(x,z);
 
