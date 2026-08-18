@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v489-water-world';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v499-level800-water7';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
-import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v494-stage-wins';
+import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v499-water-stages-6-7';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V496 · Paid Revive Stabilization Fix */
-const VERSION = '2026-08-18-v496';
+/* Escape.kl – JK.Games Top Game V499 · Level-800 Gates + Wind Overdrive + Water Stages 6–7 */
+const VERSION = '2026-08-18-v499';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -409,7 +409,7 @@ function defaultProgress(){
     version:14,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
     worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0},activeTrainingWorld:'keyboard-lab',
-    ownedTreadmills:['starter'],ownerEventMultiplier:1,
+    ownedTreadmills:['starter'],ownerEventMultiplier:1,ownerWorldUnlockBypass:false,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
     activePet:'none',activePets:[],ownedPets:['none'],freeCatLevel:0,freeButterflyLevel:0,freeLegoLevel:0,
     vendingOwned:false,vendingLevel:0,vendingPotionSpeedUntil:0,vendingPotionSpeedPct:0,vendingPotionWinsUntil:0,vendingPotionWinsPct:0,vendingPotionTreadmillUntil:0,vendingPotionTreadmillPct:0,vendingJkWinsBonus:0,vendingJkWinsCharges:0,
@@ -510,7 +510,7 @@ function normalizeProgress(raw){
   // Galaxy and Admin can be bought independently without auto-unlocking each other.
   if(d.jkTreadmillTier>=1&&!d.ownedTreadmills.includes('gold'))d.ownedTreadmills.push('gold');
   if(d.jkTreadmillTier>=2&&!d.ownedTreadmills.includes('diamond'))d.ownedTreadmills.push('diamond');
-  d.ownerEventMultiplier=[1,2,3,5,10,25,50,100].includes(Number(d.ownerEventMultiplier))?Number(d.ownerEventMultiplier):1;
+  d.ownerEventMultiplier=[1,2,3,5,10,25,50,100].includes(Number(d.ownerEventMultiplier))?Number(d.ownerEventMultiplier):1;d.ownerWorldUnlockBypass=!!d.ownerWorldUnlockBypass;
   d.trainingCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.trainingCoreTier)||0)));
   d.treadmillCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.treadmillCoreTier)||0)));
   d.speedCoreTier=Math.max(0,Math.min(3,Math.floor(Number(d.speedCoreTier)||0)));
@@ -605,6 +605,14 @@ function baseSpeedForLevel(level){
   }
   return REGULAR_SPEED_CAP;
 }
+function levelSpeedOverdrivePct(id=progressWorldId()){
+  // V499: Wind World bleibt nach Level 1000 nicht mehr optisch/physisch bei exakt 300 hängen.
+  // Der reguläre Basiswert bleibt 300, aber hohe Wind-Level geben einen kontrollierten
+  // additiven Overdrive bis +15 % bei Level 2500. Level 1400 liegt damit bereits über 300.
+  if(String(id||'')!=='keyboard-lab')return 0;
+  const level=currentLevel(id);if(level<=1000)return 0;
+  return Math.max(0,Math.min(.15,((level-1000)/1500)*.15));
+}
 function specialCharacterState(choice=G.state?.characterChoice){
   const def=SPECIAL_CHARACTERS.find(c=>c.id===choice);
   if(!def)return null;
@@ -650,7 +658,7 @@ function currentSpeedStat(id=progressWorldId()){
   // SKYRUN is a fair time-trial: every player has exactly Speed 100.
   // Character, pet, aura, core, item and owner-speed bonuses do not change it.
   if(G.world==='only-up')return SKYRUN_SPEED_STAT;
-  return rawSpeedStat(id)*(1+totalSpeedBonus());
+  return rawSpeedStat(id)*(1+totalSpeedBonus()+levelSpeedOverdrivePct(id));
 }
 function regularSpeedRemaining(id=progressWorldId()){
   const p=progressForWorld(id),rawOverride=p.adminSpeedOverride;
@@ -761,21 +769,23 @@ function useSpeedItem(id){
 }
 function worldUnlockStatus(w){
   if(!w||w.locked)return {unlocked:false,locked:true,reason:'COMING SOON'};
-  if(w.ownerOnly)return isEscapeOwner()?{unlocked:true,ownerOnly:true,sourceId:w.unlockFrom||null,level:currentLevel(w.unlockFrom||'toxic-keyboard'),requiredLevel:0,completionReady:true}:{unlocked:false,locked:true,ownerOnly:true,reason:'OWNER ONLY'};
-  if(w.number===1)return {unlocked:true,sourceId:null,level:0,requiredLevel:0,completionReady:true};
-  if(G.state?.worldsUnlocked?.includes(w.id))return {unlocked:true,sourceId:w.unlockFrom||null,level:currentLevel(w.unlockFrom||'keyboard-lab'),requiredLevel:Number(w.requiredLevel)||0,completionReady:true};
+  if(w.number===1)return {unlocked:true,sourceId:null,level:currentLevel('keyboard-lab'),requiredLevel:0,completionReady:true};
+  if(w.ownerOnly&&!isEscapeOwner())return {unlocked:false,locked:true,ownerOnly:true,reason:'OWNER ONLY'};
+  if(isEscapeOwner()&&G.state?.ownerWorldUnlockBypass)return {unlocked:true,locked:false,ownerOnly:!!w.ownerOnly,sourceId:w.unlockFrom||null,level:currentLevel(w.unlockFrom||'keyboard-lab'),requiredLevel:Number(w.requiredLevel)||0,completionReady:true,ownerBypass:true};
   const sourceId=w.unlockFrom||'keyboard-lab',level=currentLevel(sourceId),requiredLevel=Math.max(0,Number(w.requiredLevel)||0),requiredRuns=Math.max(0,Number(w.requiredCompletions)||0),runs=Math.max(0,Number(G.state?.completions?.[sourceId])||0);
-  const completionReady=runs>=requiredRuns;
-  return {unlocked:level>=requiredLevel&&completionReady,sourceId,level,requiredLevel,runs,requiredRuns,completionReady,reason:`${escapeWorldById(sourceId)?.name||sourceId}: Level ${requiredLevel}${requiredRuns?` + ${requiredRuns} Finish`:''}`};
+  const completionReady=runs>=requiredRuns,unlocked=level>=requiredLevel&&completionReady;
+  return {unlocked,locked:!unlocked,ownerOnly:!!w.ownerOnly,sourceId,level,requiredLevel,runs,requiredRuns,completionReady,reason:`${escapeWorldById(sourceId)?.name||sourceId}: Level ${requiredLevel}${requiredRuns?` + ${requiredRuns} Finish`:''}`};
 }
 function updateWorldUnlocks(){
   if(!G.state)return [];
-  const unlocked=[];
+  const before=new Set(Array.isArray(G.state.worldsUnlocked)?G.state.worldsUnlocked:[]),next=['keyboard-lab'],unlocked=[];
   for(const w of WORLD_DEFS){
-    if(w.locked||w.ownerOnly||w.number===1||G.state.worldsUnlocked.includes(w.id))continue;
-    if(worldUnlockStatus(w).unlocked){G.state.worldsUnlocked.push(w.id);unlocked.push(w);}
+    if(w.locked||w.number===1)continue;
+    const st=worldUnlockStatus(w);if(!st.unlocked)continue;
+    next.push(w.id);if(!before.has(w.id))unlocked.push(w);
   }
-  if(unlocked.length)refreshHubWorldPortalStatus();
+  G.state.worldsUnlocked=[...new Set(next)];
+  refreshHubWorldPortalStatus();
   return unlocked;
 }
 function awardWins(amount,source='Wins',stageWin=false){
@@ -824,7 +834,7 @@ function movementSpeed(){
     baseMove=BASE_MOVE_SPEED+(MAX_REGULAR_MOVE_SPEED-BASE_MOVE_SPEED)*t;
   }else baseMove=Math.min(80,MAX_REGULAR_MOVE_SPEED+Math.log1p((stat-REGULAR_SPEED_CAP)/80)*3.2);
   // SKYRUN deliberately ignores every normal additive Speed bonus.
-  return G.world==='only-up'?baseMove:baseMove*(1+totalSpeedBonus());
+  return G.world==='only-up'?baseMove:baseMove*(1+totalSpeedBonus()+levelSpeedOverdrivePct(progressWorldId()));
 }
 function movementBonusPercent(){return Math.max(0,(movementSpeed()/BASE_MOVE_SPEED-1)*100);}
 function characterAnimationRate(){
@@ -854,12 +864,12 @@ function signTexture(key,text,color=0x58ddff){
 }
 function disposeAll(){for(const v of G.geometries.values())v.dispose?.();for(const v of G.materials.values())v.dispose?.();for(const v of G.textures.values())v.dispose?.();G.geometries.clear();G.materials.clear();G.textures.clear();}
 
-function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoint=0,stage=0,finish=false,winReward=0,winStage=0,motion=null,blink=false,kind='key',hub=false,jumpBoost=0}){
+function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoint=0,stage=0,finish=false,winReward=0,winStage=0,motion=null,blink=false,kind='key',hub=false,jumpBoost=0,speedGate=0,requiredSpeed=0,collapseDelayMs=0,collapseRespawnMs=0}){
   const sharedSide=mat(`side-${color}`,{color:new THREE.Color(color).multiplyScalar(.62),roughness:.68,metalness:.1});const side=blink?sharedSide.clone():sharedSide;if(blink)G.materials.set(`blink-side-${color}-${G.platforms.length}`,side);
   let top=mat(`top-${color}`,{color,roughness:.48,metalness:.1});
   if(label){top=new THREE.MeshStandardMaterial({map:canvasTexture(`key-${label}-${color}`,label,`#${new THREE.Color(color).getHexString()}`),roughness:.46,metalness:.06});G.materials.set(`labelmat-${label}-${color}-${G.platforms.length}`,top)}else if(blink){top=top.clone();G.materials.set(`blink-top-${color}-${G.platforms.length}`,top)}
   const mesh=new THREE.Mesh(geo(`box-${w}-${h}-${d}`,()=>new THREE.BoxGeometry(w,h,d)),[side,side,top,side,side,side]);mesh.position.set(x,y,z);mesh.castShadow=kind==='hub'||kind==='shop-floor'||kind==='start'||kind==='finish';mesh.receiveShadow=true;G.scene.add(mesh);
-  const p={mesh,w,h,d,label,base:new THREE.Vector3(x,y,z),motion,blink,active:true,checkpoint,stage,finish,winReward:Math.max(0,Number(winReward)||0),winStage:Math.max(0,Number(winStage)||0),kind,hub,jumpBoost:Math.max(0,Number(jumpBoost)||0),scope:G.buildScope,lastPos:new THREE.Vector3(x,y,z),delta:new THREE.Vector3(),press:0,lastContactAt:0};tagScope(mesh,p.scope);mesh.userData.escapePlatform=p;G.platforms.push(p);return p;
+  const p={mesh,w,h,d,label,base:new THREE.Vector3(x,y,z),motion,blink,active:true,checkpoint,stage,finish,winReward:Math.max(0,Number(winReward)||0),winStage:Math.max(0,Number(winStage)||0),kind,hub,jumpBoost:Math.max(0,Number(jumpBoost)||0),speedGate:Math.max(0,Number(speedGate)||0),requiredSpeed:Math.max(0,Number(requiredSpeed)||0),collapseDelayMs:Math.max(0,Number(collapseDelayMs)||0),collapseRespawnMs:Math.max(500,Number(collapseRespawnMs)||2400),collapseAt:0,collapsedUntil:0,speedGateWarnAt:0,scope:G.buildScope,lastPos:new THREE.Vector3(x,y,z),delta:new THREE.Vector3(),press:0,lastContactAt:0};tagScope(mesh,p.scope);mesh.userData.escapePlatform=p;G.platforms.push(p);return p;
 }
 function tagScope(object,scope=G.buildScope){if(object?.userData)object.userData.escapeScope=scope;return object;}
 function addSign(text,pos,color=0x58ddff,scale=1){
@@ -892,7 +902,7 @@ function addRisingWater({x=0,z=0,w=24,d=28,startY=-1.2,endY=12,h=.45,triggerZ=-5
   const hz=addHazardBox({x,y:startY,z,w,h,d,color,emissive:color,kind:'rising-water'});
   hz.risingWater=true;hz.started=false;hz.completed=false;hz.phase='idle';hz.startY=startY;hz.endY=endY;hz.triggerZ=triggerZ;hz.riseSpeed=Math.max(.1,Number(riseSpeed)||.75);hz.fallSpeed=Math.max(.1,Number(fallSpeed)||2.2);hz.holdSeconds=Math.max(0,Number(holdSeconds)||0);hz.holdUntil=0;hz.triggerText=String(triggerText||'🌊 FLUT STEIGT!');return hz;
 }
-function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;if(h.risingWater)h.mesh.position.y=h.startY;h.mesh.visible=h.scope===G.world&&!h.hiddenUntilStart;}}
+function resetHazardsForWorld(scope=G.world){for(const h of G.hazards){if(h.scope!==scope)continue;h.started=false;h.active=true;h.completed=false;h.phase='idle';h.holdUntil=0;h.mesh.position.copy(h.base);if(h.chase)h.mesh.position.z=h.startZ;if(h.risingWater)h.mesh.position.y=h.startY;h.mesh.visible=h.scope===G.world&&!h.hiddenUntilStart;}for(const p of G.platforms){if(p.scope!==scope||!p.collapseDelayMs)continue;p.collapseAt=0;p.collapsedUntil=0;p.active=true;p.mesh.visible=p.scope===G.world;p.mesh.position.copy(p.base);}}
 function hazardTouchesPlayer(h){
   if(!h?.mesh?.visible||!h.active)return false;const r=currentPlayerRadius();
   return Math.abs(G.pos.x-h.mesh.position.x)<=h.w/2+r&&Math.abs(G.pos.z-h.mesh.position.z)<=h.d/2+r&&Math.abs(G.pos.y-h.mesh.position.y)<=h.h/2+PLAYER_HALF;
@@ -1026,7 +1036,7 @@ function setupScene(){
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
   G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
-  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
+  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);G.buildScope='world-4';buildWaterWorld(worldApi);
   G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
@@ -1816,23 +1826,32 @@ function respawn(){
 }
 
 function updatePlatforms(t,dt=.016){
+  const now=performance.now();
   for(const p of G.platforms){
-    if(p.scope!==G.world){p.mesh.visible=false;continue;}p.mesh.visible=true;
+    if(p.scope!==G.world){p.mesh.visible=false;continue;}
     p.lastPos.copy(p.mesh.position);p.mesh.position.copy(p.base);
     if(p.motion){const q=Math.sin(t*p.motion.speed+p.motion.phase)*p.motion.amp;p.mesh.position[p.motion.axis]=p.base[p.motion.axis]+q;}
     p.press=Math.max(0,(Number(p.press)||0)-dt*5.6);p.mesh.position.y-=Math.sin(Math.min(1,p.press)*Math.PI*.5)*.055;
+    if(p.collapseDelayMs){
+      if(p.collapsedUntil>0&&now<p.collapsedUntil){p.active=false;p.mesh.visible=false;p.delta.set(0,0,0);continue;}
+      if(p.collapsedUntil>0&&now>=p.collapsedUntil){p.collapsedUntil=0;p.collapseAt=0;p.active=true;}
+      if(p.collapseAt>0){
+        const left=p.collapseAt-now;
+        if(left<=0){p.active=false;p.mesh.visible=false;p.collapsedUntil=now+p.collapseRespawnMs;if(G.support===p){G.support=null;G.grounded=false;}p.delta.set(0,0,0);continue;}
+        // In den letzten 0,7 s wackelt die Plattform sichtbar als Warnung, bleibt aber kollidierbar.
+        if(left<700)p.mesh.position.y+=Math.sin(now*.045)*.035;
+      }
+    }
+    p.mesh.visible=true;
     if(p.blink){
-      // V482: GL/Glitch-Keycaps bleiben IMMER kollidierbar. Der alte Blink-Code
-      // schaltete die physische Plattform zeitweise ab und ließ Spieler zufällig
-      // hindurchfallen. Ab jetzt ist der Glitch ausschließlich ein Lichteffekt.
       const phase=(t*.55+(Math.abs(p.base.z)%7)*.13)%1,pulse=.72+.28*(.5+.5*Math.sin(phase*Math.PI*2));
-      p.active=true;p.mesh.visible=true;p.mesh.material.forEach?.(m=>{m.transparent=true;m.opacity=pulse;});
+      p.active=true;p.mesh.material.forEach?.(m=>{m.transparent=true;m.opacity=pulse;});
     }else p.active=true;
     p.delta.subVectors(p.mesh.position,p.lastPos);
   }
   for(const fx of G.portalFx){if((fx.userData?.escapeScope||'hub')!==G.world){fx.visible=false;continue;}fx.visible=true;fx.material.opacity=.12+Math.sin(t*2.2)*.05;fx.scale.setScalar(1+Math.sin(t*1.7)*.02);fx.rotation.z=Math.sin(t*.55)*.025;}
 }
-function platformUnder(x,z,fromBottom,toBottom){let best=null,bestTop=-Infinity;for(const p of G.platforms){if(p.scope!==G.world||!p.active)continue;const px=p.mesh.position.x,pz=p.mesh.position.z,top=p.mesh.position.y+p.h/2;if(Math.abs(x-px)>p.w/2+currentPlayerRadius()*.20||Math.abs(z-pz)>p.d/2+currentPlayerRadius()*.20)continue;if(fromBottom>=top-.24&&toBottom<=top+.34&&top>bestTop){best=p;bestTop=top}}return best?{p:best,top:bestTop}:null;}
+function platformUnder(x,z,fromBottom,toBottom){let best=null,bestTop=-Infinity;for(const p of G.platforms){if(p.scope!==G.world||!p.active)continue;const px=p.mesh.position.x,pz=p.mesh.position.z,top=p.mesh.position.y+p.h/2;if(Math.abs(x-px)>p.w/2+currentPlayerRadius()*.20||Math.abs(z-pz)>p.d/2+currentPlayerRadius()*.20)continue;if(p.requiredSpeed>0&&isEscapeWorld()&&currentSpeedStat(G.world)+1e-6<p.requiredSpeed){const now=performance.now();if(now-Number(G.requiredSpeedToastAt||0)>1300){G.requiredSpeedToastAt=now;toast(`⚡ ZU LANGSAM · SPEED ${Math.round(currentSpeedStat(G.world))}/${p.requiredSpeed} benötigt`,'bad',1700);}continue;}if(fromBottom>=top-.24&&toBottom<=top+.34&&top>bestTop){best=p;bestTop=top}}return best?{p:best,top:bestTop}:null;}
 function treadmillDef(id){return TREADMILLS.find(t=>t.id===id)||TREADMILLS[0];}
 function treadmillUnlocked(def,worldId=progressWorldId()){
   if(!def)return false;
@@ -2023,7 +2042,7 @@ function openTreadmillStation(id){
 }
 
 function rememberRevivePlatform(p){
-  if(!isEscapeWorld()||!p||p.scope!==G.world||p.kind==='win-pad'||!p.mesh)return false;
+  if(!isEscapeWorld()||!p||p.scope!==G.world||p.kind==='win-pad'||p.kind==='collapse-key'||!p.mesh)return false;
   // V482: Der letzte sichere Punkt wird direkt an der realen Plattform festgemacht.
   // So kann ein späterer Fall nicht versehentlich wieder die Welt-Startplatte benutzen.
   // Immer die Plattformmitte verwenden: sicherer als eine gespeicherte Randposition,
@@ -2037,9 +2056,11 @@ function rememberRevivePlatform(p){
 }
 function handlePlatformContact(p){
   if(!p)return;const now=performance.now();p.press=1;
+  // V499: Water-World-Crumble-Plattformen starten ihren 1,5-s-Timer exakt beim ersten Landen.
+  if(p.collapseDelayMs>0&&!p.collapseAt&&!p.collapsedUntil){p.collapseAt=now+p.collapseDelayMs;tone(245,.07,'square',.012,-35);}
   // Sofort beim Landen speichern, nicht erst irgendwann in einem späteren Frame.
   rememberRevivePlatform(p);
-  if(now-(p.lastContactAt||0)>150){p.lastContactAt=now;if(p.label||p.kind==='key'||p.kind==='hub-key'||p.kind==='start'||p.kind==='finish')soundKey(p.label||p.kind);}
+  if(now-(p.lastContactAt||0)>150){p.lastContactAt=now;if(p.label||p.kind==='key'||p.kind==='hub-key'||p.kind==='start'||p.kind==='finish'||p.kind==='collapse-key')soundKey(p.label||p.kind);}
 }
 function processOwnerFlight(dt,t){
   if(!G.ownerFlyActive||!isEscapeOwner())return false;
@@ -2142,7 +2163,12 @@ function processMovement(dt,t){
 function performJump(){
   if(G.ownerFlyActive)return false;
   if(G.paused||G.modalOpen||G.runFinished)return false;
-  const jumpVelocity=Math.max(JUMP_VELOCITY,Number(G.support?.jumpBoost)||0);
+  const support=G.support,gate=Math.max(0,Number(support?.speedGate)||0),actualSpeed=isEscapeWorld()?currentSpeedStat(G.world):0;
+  let boost=Math.max(0,Number(support?.jumpBoost)||0);
+  if(boost>0&&gate>0&&actualSpeed+1e-6<gate){
+    boost=0;const now=performance.now();if(!support.speedGateWarnAt||now-support.speedGateWarnAt>1300){support.speedGateWarnAt=now;toast(`🚀 FLUGBOOST GESPERRT · SPEED ${Math.round(actualSpeed)}/${gate} · erst mit ${gate} geht WUMM!`,'bad',1800);tone(105,.11,'sawtooth',.014,-45);}
+  }
+  const jumpVelocity=Math.max(JUMP_VELOCITY,boost);
   soundJump();G.vel.y=jumpVelocity;G.grounded=false;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.jumpQueuedUntil=0;return true;
 }
 function requestJump(){
@@ -2389,7 +2415,7 @@ function renderShopBody(tab,skipCapture=false){
     body.querySelectorAll('[data-ekl-special-shop]').forEach(b=>b.onclick=()=>{buySpecialCharacter(b.dataset.eklSpecialShop);openShop('characters')});
     body.querySelectorAll('[data-ekl-special-upgrade-shop]').forEach(b=>b.onclick=()=>{upgradeDemonTransformation();openShop('characters')});
   }else if(tab==='worlds'){
-    body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>{const st=worldUnlockStatus(w);return `<article class="${st.unlocked&&!w.locked?'owned':''}"><small>WELT ${w.number} · ${w.difficulty||''}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?'COMING SOON':st.unlocked?'IM HUB FREIGESCHALTET':`🔒 ${st.reason}`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>Jede Welt hat eigene Level-Power und eigenen Speed 0–300.</b><span>World 2 wächst langsamer als World 1; World 3 ist absichtlich extrem grindig. Freischaltungen hängen an der Vorwelt.</span></div>`;
+    body.innerHTML=`<div class="ekl-shop-grid">${WORLD_DEFS.map(w=>{const st=worldUnlockStatus(w);return `<article class="${st.unlocked&&!w.locked?'owned':''}"><small>WELT ${w.number} · ${w.difficulty||''}</small><h3>${w.name}</h3><p>${w.description}</p><button disabled>${w.locked?'COMING SOON':st.unlocked?'IM HUB FREIGESCHALTET':`🔒 ${st.reason}`}</button></article>`}).join('')}</div><div class="ekl-world-economy-note"><b>Jede Welt hat eigene Level-Power und eigenen Speed 0–300.</b><span>Jeder Weltwechsel zu World 2, 3 oder Water World verlangt mindestens Level 800 in der jeweiligen Vorwelt. Bestehende alte Freischaltungen umgehen diese neue Level-800-Grenze nicht mehr.</span></div>`;
   }else{
     const balance=Number(window.JKCoinApp?.coinState?.()?.balance||0),items=[
       {name:'Gold Speed-Treadmill ×2,8',price:250,owned:Number(G.state.jkTreadmillTier||0)>=1,desc:'Permanentes Gold-Laufband mit ×2,8 Training.'},
@@ -2505,7 +2531,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V495</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V499</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt bis Level 1000 auf 300. In Wind World steigt er danach als Level-Overdrive kontrolliert weiter: bis +15 % bei Level 2500. Dadurch bleibt z. B. Level 1400 nicht mehr bei exakt Speed 300 hängen. Kleine additive Boni aus Chips, Auren, Pets, Verwandlung und Speed Core kommen zusätzlich dazu.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2567,7 +2593,7 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-level-plus]')?.addEventListener('click',()=>{const id=selected();ownerSetExactLevel(id,currentLevel(id)+100);refresh();});
   wrap.querySelector('[data-mod-speed-plus]')?.addEventListener('click',()=>{const id=selected();ownerSetExactSpeed(id,rawSpeedStat(id)+25);refresh();});
   wrap.querySelector('[data-mod-speed-max]')?.addEventListener('click',()=>{ownerSetExactSpeed(selected(),300);refresh();});
-  wrap.querySelector('[data-mod-unlock]')?.addEventListener('click',()=>{G.state.worldsUnlocked=[...new Set(WORLD_DEFS.filter(w=>!w.locked).map(w=>w.id))];queuePersist(50);toast('Alle vorhandenen Escape-Welten freigeschaltet.','good');});
+  wrap.querySelector('[data-mod-unlock]')?.addEventListener('click',()=>{G.state.ownerWorldUnlockBypass=true;G.state.worldsUnlocked=[...new Set(WORLD_DEFS.filter(w=>!w.locked).map(w=>w.id))];queuePersist(50);refreshHubWorldPortalStatus();toast('Owner-Test: alle vorhandenen Escape-Welten freigeschaltet.','good');});
   wrap.querySelector('[data-mod-reset-world]')?.addEventListener('click',()=>{const id=selected();G.state.worldProgress[id]=emptyWorldProgress();refresh();queuePersist(50);updateHud(true);toast('Weltfortschritt zurückgesetzt.','good');});
   wrap.querySelector('[data-mod-reset-rebirth]')?.addEventListener('click',()=>{setWorldRebirthCount(wrap.querySelector('[data-mod-world]')?.value||worldId,0);wrap.querySelector('[data-mod-rebirth]').value=0;queuePersist(50);updateHud(true);toast('Rebirths dieser Welt auf 0 gesetzt.','good');});
   wrap.querySelector('[data-mod-clear-trail]')?.addEventListener('click',()=>{ownerSetActiveTrail('none');refresh();queuePersist(50);updateHud(true);toast('Spur abgelegt. Besitz bleibt erhalten.','good');});

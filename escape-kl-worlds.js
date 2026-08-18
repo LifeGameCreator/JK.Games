@@ -1,4 +1,4 @@
-/* Escape.kl world registry V489 – World 4 Water World Owner-Testbuild. */
+/* Escape.kl world registry V499 – Level-800 world gates + Water World stages 1–7. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -29,7 +29,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     name:'Candy World',
     number:2,
     stageCount:10,
-    requiredLevel:250,
+    requiredLevel:800,
     unlockFrom:'keyboard-lab',
     requiredCompletions:1,
     progressionFactor:6,
@@ -46,7 +46,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     speedRecommendations:Object.freeze([15,35,60,90,120,150,185,220,260,295]),
     stageRewards:Object.freeze([5000,10000,18000,30000,45000,65000,90000,120000,160000,200000]),
     difficulty:'SCHWER',
-    description:'Welt 2 wird nach World 1 Level 250 + Finish freigeschaltet. Die letzten Sprünge sind echte Speed-Gates und verlangen ungefähr Speed 260–300. Der finale Cash-out ist auf 200.000 Wins reduziert.'
+    description:'Welt 2 wird nach World 1 Level 800 + Finish freigeschaltet. Die letzten Sprünge sind echte Speed-Gates und verlangen ungefähr Speed 260–300. Der finale Cash-out ist auf 200.000 Wins reduziert.'
   }),
   Object.freeze({
     id:'toxic-keyboard',
@@ -76,10 +76,10 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     id:'world-4',
     name:'Water World',
     number:4,
-    stageCount:5,
-    requiredLevel:0,
+    stageCount:7,
+    requiredLevel:800,
     unlockFrom:'toxic-keyboard',
-    requiredCompletions:0,
+    requiredCompletions:1,
     progressionFactor:75,
     maxPlayerSpeed:300,
     finishBonusWins:0,
@@ -91,12 +91,12 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     backtrackAllowance:6,
     time2:0,
     time3:0,
-    speedRecommendations:Object.freeze([60,100,160,200,230]),
-    stageRewards:Object.freeze([0,0,0,0,0]),
+    speedRecommendations:Object.freeze([60,100,160,200,230,280,280]),
+    stageRewards:Object.freeze([600000000,800000000,1100000000,1500000000,2000000000,2700000000,3600000000]),
     ownerOnly:true,
     locked:false,
-    difficulty:'OWNER BUILD · WATER CHASE',
-    description:'V489 Water World Testbuild: normaler Einstieg, Wasserwellen-Chase ab Stage 2, steigende Flut in Stage 3, sechs Boost-Sprünge in Stage 4 und ein Speed-230-Wellenlauf in Stage 5. Der weitere Ausbau folgt danach.'
+    difficulty:'OWNER BUILD · WATER CHASE · FLIGHT',
+    description:'V499 Water World: Stage 1–5 bleiben erhalten. Stage 6 ist ein Speed-280-Flugboost-Zickzack mit langen Anläufen; Stage 7 verlangt ebenfalls Speed 280 und lässt jede betretene Plattform nach 1,5 Sekunden verschwinden und kurz danach wieder erscheinen. Eintritt setzt Toxic World Level 800 + Finish voraus; die Welt bleibt vorerst Owner-Testbuild.'
   })
 ]);
 

@@ -1,15 +1,16 @@
-/* Escape.kl World 4 – V494 WATER WORLD.
-   Kleine rechtsliegende WIN-Pads an jeder Stage; Belohnungen steigen proportional zur Schwierigkeit. */
+/* Escape.kl World 4 – V499 WATER WORLD.
+   Stage 6: Speed-280-Flugboosts. Stage 7: 1,5-s-Crumble-Plattformen.
+   Kleine rechtsliegende WIN-Pads bleiben an jeder Stage erhalten. */
 export function buildWaterWorld(api){
   const {
     addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},
-    addInteractable,addAutoTrigger=()=>{},addHazardBox,addWaterWave=()=>{},addRisingWater=()=>{},returnHub=()=>{}
+    addInteractable,addAutoTrigger=()=>{},addHazardBox,addWaterWave=()=>{},addRisingWater=()=>{},worldToast=()=>{},returnHub=()=>{}
   }=api;
   const startZ=-70;
   const water=0x2bbcf0,deep=0x087fae,foam=0xbdf4ff,rock=0x174657,platform=0x2f8fb0,safe=0x47b9d2,boost=0x52d7ff;
   const compact=n=>n>=1e9?`${(n/1e9).toFixed(n>=1e10?0:1).replace('.0','')}B`:n>=1e6?`${(n/1e6).toFixed(n>=1e7?0:1).replace('.0','')}M`:n>=1e3?`${(n/1e3).toFixed(n>=1e4?0:1).replace('.0','')}K`:String(n);
   // V494: rund +33–38 % pro Stage; World 4 setzt oberhalb des Toxic-Finales (500M) an.
-  const rewards=[600000000,800000000,1100000000,1500000000,2000000000];
+  const rewards=[600000000,800000000,1100000000,1500000000,2000000000,2700000000,3600000000];
   const addStageWin=(stage,reward,x,y,z)=>{
     addPlatform({x,y,z,w:2.55,h:.18,d:1.75,color:0xe0ad32,label:`WIN +${compact(reward)}`,kind:'win-pad',winReward:reward,winStage:stage});
     addSign(`+${compact(reward)} WINS`,{x,y:y+1.55,z:z+.08},0xffd45f,.31);
@@ -17,10 +18,10 @@ export function buildWaterWorld(api){
 
   // Sichtbares Wasser unter der gesamten Map statt schwarzem Void. Die leichte Y-Bewegung
   // sorgt dafür, dass die Wasserfläche auch ohne Textur sichtbar "lebt".
-  const floorWater=addHazardBox({x:0,y:-1.18,z:-355,w:64,h:.34,d:650,color:water,emissive:deep,motion:{axis:'y',amp:.07,speed:1.15,phase:0},kind:'water-floor'});
+  const floorWater=addHazardBox({x:0,y:-1.18,z:-485,w:64,h:.34,d:930,color:water,emissive:deep,motion:{axis:'y',amp:.07,speed:1.15,phase:0},kind:'water-floor'});
   floorWater.waterFloor=true;
-  boxDeco(-24,1.8,-355,1.2,7.0,650,rock);boxDeco(24,1.8,-355,1.2,7.0,650,rock);
-  for(let z=-92,i=0;z>-640;z-=34,i++){
+  boxDeco(-24,1.8,-485,1.2,7.0,930,rock);boxDeco(24,1.8,-485,1.2,7.0,930,rock);
+  for(let z=-92,i=0;z>-930;z-=34,i++){
     addCylinderDeco(-21.6,-.15,z,.65,1.15,2.1,i%2?0x2a7c8d:0x256878,0,10);
     addCylinderDeco(21.6,-.15,z,.65,1.15,2.1,i%2?0x2a7c8d:0x256878,0,10);
   }
@@ -108,10 +109,46 @@ export function buildWaterWorld(api){
   }
   addWaterWave({x:0,y:16.35,startZ:-409,triggerZ:-419.6,endZ:-551,w:31,h:7.2,d:2.3,speed:16.5,spawnBehind:10,clearZ:-548,color:0x22bce9,triggerText:'🌊 FINAL WAVE · VOLLGAS!'});
   addStageWin(5,rewards[4],6.05,13.83,-565.0);
-  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'V494 TEST END',stage:5,kind:'safe-zone'});
-  addSign('WATER WORLD · V494 TESTSTRECKE ENDE',{x:0,y:18.35,z:-565},0x8cecff,.62);
-  addSign('WEITERE STAGES BAUEN WIR ALS NÄCHSTES',{x:0,y:17.32,z:-565.02},0xffffff,.30);
-  addInteractable('water-world-test-return','Water World Test verlassen · Zum Hub',0,14.45,-565,6.5,returnHub);
+  addPlatform({x:0,y:13.48,z:-565,w:15,h:.62,d:10,color:safe,label:'STAGE 6',stage:6,kind:'safe-zone'});
+
+  // STAGE 6 – lange Anläufe + echte Flugboosts. Der Boost funktioniert erst ab sichtbarem Speed 280.
+  // Ohne den Boost reicht der normale Sprung bewusst nicht über die diagonalen Lücken.
+  addSign('STAGE 6 · WUMM FLIGHT',{x:0,y:18.55,z:-579},0x75ecff,.76);
+  addSign('MINDESTENS SPEED 280 · ANLAUF · BOOST · NACH RECHTS FLIEGEN',{x:0,y:17.35,z:-579.02},0xffffff,.31);
+  addSign('UNTER 280? DANN MACHT DER BOOST NUR: nö.',{x:0,y:16.45,z:-579.04},0xffd56a,.27);
+  const flightPads=[
+    {x:0,z:-583,w:7.2,d:16.0,label:'WUMM START'},
+    {x:8,z:-610,w:6.2,d:10.0,label:'RIGHT'},
+    {x:1,z:-637,w:6.2,d:10.0,label:'WUMM 2'},
+    {x:10,z:-664,w:6.2,d:10.0,label:'RIGHT'},
+    {x:2,z:-691,w:6.2,d:10.0,label:'WUMM 3'},
+    {x:11,z:-718,w:6.2,d:10.0,label:'FINAL WUMM'}
+  ];
+  flightPads.forEach((pad,i)=>{
+    addPlatform({x:pad.x,y:13.48,z:pad.z,w:pad.w,h:.58,d:pad.d,color:i%2?0x2fc4ec:0x5ee8ff,label:pad.label,stage:6,kind:'water-flight-boost',jumpBoost:14.8,speedGate:280});
+    addRingDeco(pad.x,15.00,pad.z,1.45,.065,i%2?0x98f2ff:foam,Math.PI/2);
+    addGlowLight(pad.x,15.15,pad.z,0x6be8ff,.48,8);
+    for(let dz=-pad.d*.30;dz<=pad.d*.30;dz+=2.2)boxDeco(pad.x,13.80,pad.z+dz,Math.max(2.8,pad.w*.68),.035,.16,i%2?0xbaf8ff:0xffffff);
+  });
+  addPlatform({x:0,y:13.48,z:-745,w:15,h:.62,d:12,color:safe,label:'STAGE 7',stage:7,kind:'safe-zone'});
+  addStageWin(6,rewards[5],6.15,13.83,-745.0);
+
+  // STAGE 7 – gleiche Speed-Anforderung, aber jede Plattform zerfällt 1,5 Sekunden nach dem Landen.
+  addSign('STAGE 7 · BLUBB BLOCKS',{x:0,y:18.60,z:-755},0x66e5ff,.75);
+  addSign('SPEED 280 · 1,5 SEKUNDEN PRO BLOCK · NICHT TRÖDELN!',{x:0,y:17.40,z:-755.02},0xffffff,.31);
+  addAutoTrigger('water-stage7-warning',0,-756,14,10,()=>worldToast('💦 BEEIL DICH! DIE PLATTFORMEN MACHEN IN 1,5 SEKUNDEN BLUBB!','bad',2600));
+  const crumble=[
+    [-766,-4],[-778,3],[-790,-5],[-802,5],[-814,-2],[-826,6],[-838,-6],[-850,2],[-862,-4],[-874,5],[-886,-1]
+  ];
+  crumble.forEach(([z,x],i)=>{
+    addPlatform({x,y:13.48,z,w:5.6,h:.54,d:5.8,color:i%2?0x2d9fc5:0x46cbe7,label:i===0?'BEEIL!':`${i+1}`,stage:7,kind:'collapse-key',requiredSpeed:280,collapseDelayMs:1500,collapseRespawnMs:2400});
+    if(i%2===0)addRingDeco(x,14.82,z,1.0,.045,0xc9f8ff,Math.PI/2);
+  });
+  addPlatform({x:0,y:13.48,z:-902,w:16,h:.62,d:12,color:safe,label:'STAGE 7 END',stage:7,kind:'safe-zone'});
+  addStageWin(7,rewards[6],6.35,13.83,-902.0);
+  addSign('WATER WORLD · V499 STAGE 7 ENDE',{x:0,y:18.55,z:-902},0x8cecff,.60);
+  addSign('NÄCHSTE WATER-STAGES PLANEN WIR DANACH',{x:0,y:17.48,z:-902.02},0xffffff,.29);
+  addInteractable('water-world-test-return','Water World verlassen · Zum Hub',0,14.45,-902,6.5,returnHub);
 
   function iColor(label){return label==='100+'?0x47cde7:label==='SAFE'?safe:platform;}
 }
