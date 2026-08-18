@@ -1,8 +1,8 @@
-/* Escape.kl world registry V461 – separate world progression, 300 regular-speed cap and rising difficulty. */
+/* Escape.kl world registry V484 – separate world progression, 300 regular-speed cap and rising difficulty. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
-    name:'Keyboard Lab',
+    name:'Wind World',
     number:1,
     stageCount:15,
     requiredLevel:0,
@@ -26,7 +26,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
   }),
   Object.freeze({
     id:'candy-keys',
-    name:'Candy Keys',
+    name:'Candy World',
     number:2,
     stageCount:10,
     requiredLevel:250,
@@ -50,7 +50,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
   }),
   Object.freeze({
     id:'toxic-keyboard',
-    name:'Toxic Keyboard',
+    name:'Toxic World',
     number:3,
     stageCount:10,
     requiredLevel:800,

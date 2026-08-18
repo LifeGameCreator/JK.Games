@@ -1,4 +1,4 @@
-/* Escape.kl World 2 – Candy Keys V482. Longer route with the existing difficulty curve and stable finish flow. */
+/* Escape.kl World 2 – Candy World V484. Longer route with the existing difficulty curve and stable finish flow. */
 export function buildCandyKeysWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},finishAndReturnHub=()=>{}}=api;
   // V461: World 2 economy deliberately reduced. The final cash-out is capped at 200,000 Wins.
@@ -12,7 +12,7 @@ export function buildCandyKeysWorld(api){
     addGlowLight(i%2?-30:30,3.2,zz,i%2?0xff73be:0x74dfff,.34,9);
   }
   addPlatform({x:0,y:.3,z:startZ,w:14,h:.6,d:11,color:0x9d4778,label:'CANDY',stage:1,kind:'start'});
-  addSign('WORLD 2 · CANDY KEYS',{x:0,y:5.25,z:startZ+4.5},0xff80c7,1.03);addSign('LETZTE STAGES BRAUCHEN SPEED 280–300',{x:0,y:4.05,z:startZ+4.52},0xffd26b,.43);
+  addSign('WORLD 2 · CANDY WORLD',{x:0,y:5.25,z:startZ+4.5},0xff80c7,1.03);addSign('LETZTE STAGES BRAUCHEN SPEED 280–300',{x:0,y:4.05,z:startZ+4.52},0xffd26b,.43);
   let z=startZ-9;
   const title=(n,t)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y:3.45,z:z+2.0},0xff8ccb,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:2.62,z:z+2.02},0xffd36a,.35);};
   const key=(gap,x,y,w,d,label,color,extra={})=>{z-=gap;return addPlatform({x,y,z,w,h:.48,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});};
@@ -29,5 +29,5 @@ export function buildCandyKeysWorld(api){
   z-=2.9;title(9,'SWEET FULL SPEED RUN');for(let i=0;i<8;i++)key(12.7,i%2?2.75:-2.75,2.4+(i%2)*.12,3.1,2.3,i%2?'SHIFT':'W',0xa94783);win(9,rewards[8],2.52);
   z-=3.0;title(10,'SPEED 295+ CANDY ESCAPE');for(let i=0;i<7;i++)key(14.35+i*.12,Math.sin(i*.95)*2.85,2.55+i*.12,3.0,2.25,i===5?'ESC':'C',0xce679f,{motion:i===2||i===4?{axis:'x',amp:1.9,speed:.76+i*.025,phase:.4+i}:null});
   z-=5.4;addPlatform({x:0,y:3.15,z,w:12,h:.6,d:7,color:0x8d3e6d,label:'FINISH',kind:'safe-zone',stage:10});addPlatform({x:0,y:3.52,z:z-2.55,w:4.2,h:.18,d:1.25,color:0xff75bd,label:'FINISH',kind:'finish-strip',finish:true,stage:10,winReward:rewards[9],winStage:10});
-  addRingDeco(0,5.2,z-2.7,2.0,.08,0xff87cc,0);addRingDeco(0,5.2,z-2.6,1.45,.05,0xffdc72,0);addGlowLight(0,5.3,z-2.4,0xff7fc6,1.25,12);addSign('CANDY KEYS COMPLETE',{x:0,y:5.9,z:z+3.5},0xff8dcc,.78);addSign('DURCH DEN KREIS · +200K WINS',{x:0,y:4.85,z:z+3.52},0xffd45f,.48);addAutoTrigger('candy-keys-finish-circle',0,z-2.6,5.8,2.5,finishAndReturnHub);addInteractable('candy-hub-return','Finish + Wins · Zum Hub',0,3.95,z-2.0,5,finishAndReturnHub);
+  addRingDeco(0,5.2,z-2.7,2.0,.08,0xff87cc,0);addRingDeco(0,5.2,z-2.6,1.45,.05,0xffdc72,0);addGlowLight(0,5.3,z-2.4,0xff7fc6,1.25,12);addSign('CANDY WORLD COMPLETE',{x:0,y:5.9,z:z+3.5},0xff8dcc,.78);addSign('DURCH DEN KREIS · +200K WINS',{x:0,y:4.85,z:z+3.52},0xffd45f,.48);addAutoTrigger('candy-keys-finish-circle',0,z-2.6,5.8,2.5,finishAndReturnHub);addInteractable('candy-hub-return','Finish + Wins · Zum Hub',0,3.95,z-2.0,5,finishAndReturnHub);
 }

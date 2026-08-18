@@ -1,13 +1,13 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260816-escape-v461';
-import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260817-escape-v471-finish-circle-long-frame';
-import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v482-longer-route';
-import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v482-stable-gl-longer-route';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v484-world-names';
+import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v484-wind-world';
+import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v484-candy-world';
+import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v484-toxic-world';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V483 · Open Green Sportplatz Hub */
-const VERSION = '2026-08-18-v483';
+/* Escape.kl – JK.Games Top Game V484 · Clean House Hub */
+const VERSION = '2026-08-18-v484';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -551,7 +551,7 @@ function rawSpeedStat(id=progressWorldId()){
   return Math.min(REGULAR_SPEED_CAP,baseSpeedForLevel(currentLevel(id)));
 }
 function currentSpeedStat(id=progressWorldId()){
-  // JK SKYRUN is a fair time-trial: every player has exactly Speed 100.
+  // SKYRUN is a fair time-trial: every player has exactly Speed 100.
   // Character, pet, aura, core, item and owner-speed bonuses do not change it.
   if(G.world==='only-up')return SKYRUN_SPEED_STAT;
   return rawSpeedStat(id)*(1+totalSpeedBonus());
@@ -646,7 +646,7 @@ function awardWins(amount,source='Wins',stageWin=false){
   const finalAmount=Math.max(0,Math.round(amount*(1+totalWinsBonus()+winCoreBonus())));
   G.state.wins+=finalAmount;G.state.lifetimeWins+=finalAmount;if(stageWin)G.state.stageWinsCollected+=finalAmount;queuePersist(80);updateHud(true);return finalAmount;
 }
-function awardFixedWins(amount,source='JK SKYRUN'){
+function awardFixedWins(amount,source='SKYRUN'){
   // Competitive SKYRUN rewards are identical for everybody; no Pet/Win-Core multipliers.
   amount=Math.max(0,Math.floor(Number(amount)||0));if(!amount)return 0;
   G.state.wins+=amount;G.state.lifetimeWins+=amount;queuePersist(80);updateHud(true);return amount;
@@ -669,7 +669,7 @@ function awardRunPoints(points){
   points=Math.max(0,Math.floor(Number(points)||0));if(!points)return 0;const powerGain=points*levelPowerPerRunPoint();G.state.runPoints+=points;addLevelPower(powerGain,true,progressWorldId());flashRunPoints(points,powerGain);return powerGain;
 }
 function movementSpeedStat(){
-  // No sprint/stat override in JK SKYRUN: fixed Speed 100 for every run.
+  // No sprint/stat override in SKYRUN: fixed Speed 100 for every run.
   if(G.world==='only-up')return SKYRUN_SPEED_STAT;
   const stat=rawSpeedStat();if(stat>REGULAR_SPEED_CAP)return stat;
   const sprintBonus=G.sprint?SPRINT_SPEED_STAT_BONUS:0;return Math.min(REGULAR_SPEED_CAP,stat+sprintBonus);
@@ -775,7 +775,7 @@ function buildHubSky(){
   G.hubStars=null;G.hubMoon=null;G.hubAuroraMats=[];
 }
 function updateDayNight(){
-  // V480: dauerhaft klarer Tag in Hub, Welten, Race und JK SKYRUN.
+  // V480: dauerhaft klarer Tag in Hub, Welten, Race und SKYRUN.
   const sky=new THREE.Color(0xb9e3ff);
   G.lastDayNightMode='daylight-v480';
   if(G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);
@@ -792,7 +792,7 @@ function addHubBuilding({x,z,w=10,d=7,h=6,wall=0xd8d1c5,trim=0xffffff,roof=0x465
   boxDeco(x,base+h+.20,z,w+.55,.34,d+.55,roof);
   boxDeco(x,base+.23,z,w+.28,.18,d+.28,trim);
   const frontSign=z>0?-1:1,frontZ=z+frontSign*(d/2+.045),backZ=z-frontSign*(d/2+.045);
-  boxDeco(x,1.55,frontZ,1.8,2.45,.10,0x29323a);
+  boxDeco(x,1.55,frontZ,1.8,2.45,.10,0x05080a);
   boxDeco(x,2.82,frontZ,2.2,.12,.14,accent,accent);
   const windowXs=w>=11?[-w*.31,0,w*.31]:[-w*.27,w*.27];
   for(const wx of windowXs){
@@ -867,87 +867,87 @@ function checkAutoTriggers(){
   }
 }
 function buildHub(){
-  // V481 HUB: saubere, getrennte Bodenebenen. Keine große Platte liegt mehr über einer Straße.
-  // Funktionale Stationen und alle Laufbänder behalten ihre bisherigen Positionen.
+  // V484 HUB: klare Stadtstruktur. Funktionen sitzen in Häusern statt auf freistehenden Wänden.
+  // Screenshots dienen nur als Orientierung; alle Änderungen sind reine 3D-Code-Geometrie.
   addPlatform({x:0,y:0,z:0,w:110,h:.55,d:110,color:0x769866,kind:'hub',hub:true});
 
-  // Straßennetz: eine klar sichtbare Ebene oberhalb des Rasens.
+  // --- Straßen + saubere Gehwege -------------------------------------------------
+  // Straße und Gehweg sind getrennte Ebenen. Gehwege werden an Kreuzungen ausgespart,
+  // damit niemals wieder helle Platten quer über der Fahrbahn liegen.
   const roadY=.315,roadH=.08,roadTop=roadY+roadH/2;
   addPlatform({x:0,y:roadY,z:4,w:14,h:roadH,d:100,color:0x30383d,kind:'hub-road',hub:true});
   addPlatform({x:0,y:roadY,z:-31,w:96,h:roadH,d:12,color:0x30383d,kind:'hub-road',hub:true});
   addPlatform({x:0,y:roadY,z:30,w:104,h:roadH,d:12,color:0x30383d,kind:'hub-road',hub:true});
+  const walkY=.365,walkH=.10,walkColor=0xc9c6bc;
+  const addWalk=(x,z,w,d)=>addPlatform({x,y:walkY,z,w,h:walkH,d,color:walkColor,kind:'hub-sidewalk',hub:true});
+  // Längsstraße: drei Segmente pro Straßenseite, Kreuzungen bleiben frei.
+  for(const x of[-8.45,8.45]){
+    addWalk(x,-45.5,2.5,9.0);
+    addWalk(x,-.5,2.5,47.0);
+    addWalk(x,44.0,2.5,12.0);
+  }
+  // Querstraße Nord: keine Gehwege durch die mittlere Kreuzung.
+  for(const z of[-38.3,-23.7]){addWalk(-30,z,40,2.5);addWalk(30,z,40,2.5);}
+  // Querstraße Süd.
+  for(const z of[22.7,37.3]){addWalk(-30,z,40,2.5);addWalk(30,z,40,2.5);}
 
-  // Gehwege liegen sichtbar höher, berühren die Straße aber nicht flächig.
-  const walkY=.365,walkH=.10;
-  addPlatform({x:-8.45,y:walkY,z:4,w:2.5,h:walkH,d:100,color:0xc9c6bc,kind:'hub-sidewalk',hub:true});
-  addPlatform({x:8.45,y:walkY,z:4,w:2.5,h:walkH,d:100,color:0xc9c6bc,kind:'hub-sidewalk',hub:true});
-  // V483: Links bleibt der Bereich bei Bank/Baum vollständig Rasen. Nur die kleine Baumplatte bleibt.
-  // Rechts bleibt die separate Aufenthaltsfläche bestehen.
-  addPlatform({x:17,y:.335,z:8,w:13,h:.09,d:24,color:0xbdbab0,kind:'hub-plaza',hub:true});
-
-  // Echte Straßenmarkierung: längs zur jeweiligen Fahrtrichtung und mit ausreichend Höhenabstand.
+  // Fahrbahnmarkierungen nur auf Asphalt.
   const markY=roadTop+.012;
-  for(let z=-43;z<=45;z+=8)boxDeco(0,markY,z,.16,.018,3.2,0xeee6b8);
-  for(let x=-42;x<=42;x+=8){boxDeco(x,markY,-31,3.2,.018,.16,0xeee6b8);boxDeco(x,markY,30,3.2,.018,.16,0xeee6b8);}
+  for(const [a,b] of[[-46,-38],[-22,22],[38,46]])for(let z=a;z<=b;z+=8)boxDeco(0,markY,z,.16,.018,3.2,0xeee6b8);
+  for(let x=-45;x<=45;x+=8){if(Math.abs(x)<10)continue;boxDeco(x,markY,-31,3.2,.018,.16,0xeee6b8);boxDeco(x,markY,30,3.2,.018,.16,0xeee6b8);}
 
-  // Das alte große JK.GAMES-Mittelportal aus V480 ist vollständig entfernt.
-
-  // Niedrige Sicherheitsmauer; dahinter stehen jetzt echte, klar erkennbare Häuserzeilen.
+  // Niedrige äußere Begrenzung.
   for(const z of[-54.55,54.55]){boxDeco(0,.72,z,109.2,.78,.32,0x9ba39f);boxDeco(0,1.13,z,109.2,.07,.36,0xd9ddd9);}
   for(const x of[-54.55,54.55]){boxDeco(x,.72,0,.32,.78,109.2,0x9ba39f);boxDeco(x,1.13,0,.36,.07,109.2,0xd9ddd9);}
-  const northBuildings=[
-    [-45,11,7,6.1,0xd8d0c4,0x3e596b,0x4388b6,'RUNNER HOUSE'],[-31,11,7,7.0,0xcfc8bc,0x4b535c,0x5b9ac2,'SPEED OFFICE'],
-    [-15,12,7,6.5,0xe0d8cb,0x46525a,0x63a6c9,'ESCAPE ACADEMY'],[15,12,7,6.5,0xd8d4c8,0x425866,0x4aa19d,'WORLD CENTER'],
-    [31,11,7,7.1,0xd6cec0,0x4b5057,0xa88448,'WIN HOUSE'],[45,11,7,6.1,0xd9d1c4,0x3f5361,0x7587c8,'CYBER OFFICE']
-  ];
-  for(const [x,w,d,h,wall,roof,accent,label] of northBuildings)addHubBuilding({x,z:-50,w,d,h,wall,roof,accent,label});
-  const southBuildings=[
-    [-47,9,7,5.8,0xdccfc3,0x5a514b,0xb88163,'CAFE'],[-35,10,7,6.8,0xd8d0c5,0x46535a,0x5d9fc7,'TRAINER'],
-    [35,10,7,6.8,0xd7d1c8,0x4a525a,0xd1a44b,'GEAR LAB'],[47,9,7,5.8,0xdccfc3,0x5a514b,0x7b9ac7,'LOUNGE']
-  ];
-  for(const [x,w,d,h,wall,roof,accent,label] of southBuildings)addHubBuilding({x,z:50,w,d,h,wall,roof,accent,label});
 
-  // Arrival deck: deliberately flat/open instead of the old giant blue circle.
-  boxDeco(-7.2,2.4,42,.36,4.8,.55,0x183b52,0x0b2d43);boxDeco(7.2,2.4,42,.36,4.8,.55,0x183b52,0x0b2d43);
-  boxDeco(0,4.65,42,14.7,.36,.55,0x183b52,0x0b2d43);addGlowLight(0,4.2,39.5,0x5ce6ff,.85,14);
-  addSign('ESCAPE.KL',{x:0,y:5.55,z:41.65},0x5ce6ff,.78);
-  addSign('TRAINIEREN  ·  WINS  ·  REBIRTH  ·  ESCAPE',{x:0,y:4.42,z:41.64},0xffcf69,.34);
-
-  // World Avenue – clean portals with readable headers.
-  const addWorldPortal=(id,x,z,color)=>{
-    const w=escapeWorldById(id);if(!w)return;const status=worldUnlockStatus(w),unlocked=status.unlocked;
-    addPlatform({x,y:.33,z,w:12.3,h:.20,d:8.2,color:0x102538,kind:'world-gate',hub:true});
-    for(const sx of[-5.0,5.0])boxDeco(x+sx,2.75,z-3.1,.42,5.25,.58,0x173348,color);
-    boxDeco(x,5.15,z-3.1,10.4,.38,.58,0x173348,color);
-    addRingDeco(x,2.86,z-3.0,2.38,.075,color,0);const portalLight=addGlowLight(x,3.0,z-2.5,color,unlocked?1.0:.35,11);portalLight.userData.escapeWorldPortalId=id;
-    addSign(`WORLD ${w.number}  ·  ${w.name.toUpperCase()}`,new THREE.Vector3(x,6.05,z-2.9),color,.53);
-    const statusSign=addSign(w.number===1?'BETRETEN':unlocked?'FREIGESCHALTET':`LEVEL ${status.requiredLevel} + VORWELT`,new THREE.Vector3(x,4.72,z-2.88),unlocked?0x98efb5:0xffcb66,.29);statusSign.userData.escapeWorldStatusId=id;
-    addAutoTrigger(`${id}-walkthrough`,x,z-3.0,8.6,2.5,()=>{soundKey('ENTER');enterWorld(id)});
+  const buildingDoorTrigger=(id,b,onEnter)=>{
+    const frontSign=b.z>0?-1:1;
+    const triggerZ=b.z+frontSign*(b.d/2+.58);
+    addAutoTrigger(id,b.x,triggerZ,2.35,1.45,onEnter);
+    return triggerZ;
   };
-  addSign('WELTEN',{x:0,y:7.15,z:-48.0},0xffffff,.62);
-  addWorldPortal('keyboard-lab',-21,-42,0x58ddff);
-  addWorldPortal('candy-keys',0,-42,0xff77bb);
-  addWorldPortal('toxic-keyboard',21,-42,0x75ff72);
-  addPlatform({x:42,y:.33,z:-42,w:11,h:.20,d:8.2,color:0x111a30,kind:'locked',hub:true});
-  boxDeco(42,3.0,-45.1,9.6,5.3,.48,0x151c35,0x232857);addSign('WORLD 4  ·  CYBER CITY',{x:42,y:5.65,z:-44.82},0x858bff,.45);addSign('COMING SOON',{x:42,y:4.35,z:-44.80},0xffd36a,.28);
+  const addHousePath=(b)=>{
+    const frontSign=b.z>0?-1:1,frontEdge=b.z+frontSign*(b.d/2+.25);
+    const sidewalkZ=b.z>0?37.3:-38.3;
+    const len=Math.max(2,Math.abs(frontEdge-sidewalkZ));
+    addPlatform({x:b.x,y:.366,z:(frontEdge+sidewalkZ)/2,w:2.45,h:.075,d:len,color:0xc9c6bc,kind:'hub-path',hub:true});
+  };
 
-  // V483 SPORTPLATZ: offener Rasen statt Hallenboden, Rückwand oder Trainingswelt-Platte.
-  // Die fünf bestehenden Laufbänder bleiben exakt funktional an ihren Positionen.
+  // --- WORLD STREET: sechs Häuser, World 1–3 aktiv, World 4–6 Coming Soon -------
+  const worldHouses=[
+    {id:'keyboard-lab',number:1,name:'WIND WORLD',x:-45,w:11,d:7,h:6.1,wall:0xd8d0c4,roof:0x3e596b,accent:0x58ddff},
+    {id:'candy-keys',number:2,name:'CANDY WORLD',x:-31,w:11,d:7,h:7.0,wall:0xcfc8bc,roof:0x4b535c,accent:0xff77bb},
+    {id:'toxic-keyboard',number:3,name:'TOXIC WORLD',x:-15,w:12,d:7,h:6.5,wall:0xe0d8cb,roof:0x46525a,accent:0x75ff72},
+    {id:null,number:4,name:'COMING SOON',x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x858bff},
+    {id:null,number:5,name:'COMING SOON',x:31,w:11,d:7,h:7.1,wall:0xd6cec0,roof:0x4b5057,accent:0x858bff},
+    {id:null,number:6,name:'COMING SOON',x:45,w:11,d:7,h:6.1,wall:0xd9d1c4,roof:0x3f5361,accent:0x858bff}
+  ];
+  for(const h of worldHouses){
+    const b=addHubBuilding({x:h.x,z:-50,w:h.w,d:h.d,h:h.h,wall:h.wall,roof:h.roof,accent:h.accent,label:`WORLD ${h.number} · ${h.name}`});
+    addHousePath(b);
+    if(h.id)buildingDoorTrigger(`world-house-${h.number}`,b,()=>{soundKey('ENTER');enterWorld(h.id)});
+    else buildingDoorTrigger(`world-house-${h.number}`,b,()=>toast(`WORLD ${h.number} · COMING SOON`,'info',1500));
+  }
+
+  // --- SOUTH STREET: alle übrigen großen Außenwände werden echte Funktionshäuser --
+  const utilityHouses=[
+    {id:'character-house',label:'CHARACTER STUDIO',x:-47,w:9,d:7,h:5.8,wall:0xdccfc3,roof:0x5a514b,accent:0x80dcff,onEnter:()=>openCharacterStudio()},
+    {id:'records-house',label:'RECORDS',x:-35,w:10,d:7,h:6.8,wall:0xd8d0c5,roof:0x46535a,accent:0x72eaff,onEnter:()=>openRecords()},
+    {id:'race-house',label:'SPEED RACE',x:35,w:10,d:7,h:6.8,wall:0xd7d1c8,roof:0x4a525a,accent:0xff9064,onEnter:()=>setWorld('race')},
+    {id:'skyrun-house',label:'SKYRUN',x:47,w:9,d:7,h:5.8,wall:0xdccfc3,roof:0x5a514b,accent:0x9aa7ff,onEnter:()=>setWorld('only-up')}
+  ];
+  for(const h of utilityHouses){
+    const b=addHubBuilding({x:h.x,z:50,w:h.w,d:h.d,h:h.h,wall:h.wall,roof:h.roof,accent:h.accent,label:h.label});
+    addHousePath(b);buildingDoorTrigger(h.id,b,h.onEnter);
+  }
+
+  // --- SPORTPLATZ: V483 bleibt erhalten -----------------------------------------
   const sportLineY=.302,sportWhite=0xf1f2e8,sportDark=0x27343a,sportBlue=0x3d87a8,sportRed=0xb84f45;
-
-  // Dezente Spielfeld-/Sprintmarkierungen direkt über dem Rasen – keine große Bodenplatte.
-  boxDeco(-36,sportLineY,-15.5,29,.035,.10,sportWhite);
-  boxDeco(-36,sportLineY,11.2,29,.035,.10,sportWhite);
-  boxDeco(-50.45,sportLineY,-2.15,.10,.035,26.8,sportWhite);
-  boxDeco(-21.55,sportLineY,-2.15,.10,.035,26.8,sportWhite);
-  // Vier Sprint-/Agility-Lanes vor den Laufbändern.
+  boxDeco(-36,sportLineY,-15.5,29,.035,.10,sportWhite);boxDeco(-36,sportLineY,11.2,29,.035,.10,sportWhite);
+  boxDeco(-50.45,sportLineY,-2.15,.10,.035,26.8,sportWhite);boxDeco(-21.55,sportLineY,-2.15,.10,.035,26.8,sportWhite);
   for(const z of[5.8,7.25,8.7,10.15])boxDeco(-33.2,sportLineY,z,22.0,.028,.075,0xe8eee7);
-  // Linke Sprintkante startet erst hinter dem vorhandenen Baum samt Baumplatte.
-  boxDeco(-44.25,sportLineY,7.98,.12,.032,4.5,sportWhite);
-  boxDeco(-22.15,sportLineY,7.98,.12,.032,4.5,sportWhite);
-  addSign('SPORTPLATZ',{x:-36,y:2.65,z:11.15},0x72f0de,.44);
-  addSign('LAUFBÄNDER · SPRINT · FITNESS',{x:-36,y:1.92,z:11.13},0xf4fbff,.24);
-
+  boxDeco(-44.25,sportLineY,7.98,.12,.032,4.5,sportWhite);boxDeco(-22.15,sportLineY,7.98,.12,.032,4.5,sportWhite);
+  addSign('SPORTPLATZ',{x:-36,y:2.65,z:11.15},0x72f0de,.44);addSign('LAUFBÄNDER · SPRINT · FITNESS',{x:-36,y:1.92,z:11.13},0xf4fbff,.24);
   const xs=[-47,-41.5,-36,-30.5,-25];
   TREADMILLS.filter(def=>def.hubPhysical).forEach((def,index)=>{
     const x=xs[index],z=-2.6,tr=addPlatform({x,y:.38,z,w:4.25,h:.24,d:7.2,color:new THREE.Color(def.color).multiplyScalar(.40).getHex(),label:'',kind:'training',hub:true});
@@ -956,93 +956,64 @@ function buildHub(){
     boxDeco(x-1.88,.78,z,.14,.42,6.8,0x283b49);boxDeco(x+1.88,.78,z,.14,.42,6.8,0x283b49);
     for(const sx of[-1.35,1.35])boxDeco(x+sx,1.75,z+3.1,.15,2.25,.18,0x385363);
     boxDeco(x,2.68,z+3.1,2.9,.16,.20,0x426071);boxDeco(x,2.28,z+2.9,1.8,.72,.38,0x08141c,0x0b2734);boxDeco(x,2.29,z+2.68,1.24,.34,.06,def.color,def.color);
-    addSign(def.name,{x,y:3.62,z:z+3.30},def.color,.27);
-    addInteractable(`treadmill-${def.id}`,`${def.name} Laufband`,x,1.0,z+3.2,2.6,()=>openTreadmillStation(def.id));
+    addSign(def.name,{x,y:3.62,z:z+3.30},def.color,.27);addInteractable(`treadmill-${def.id}`,`${def.name} Laufband`,x,1.0,z+3.2,2.6,()=>openTreadmillStation(def.id));
   });
-
-  // Zusätzliche Sportgeräte auf einzelnen kleinen Standflächen – kein flächiger Unterboden.
-  // Klimmzugstation.
-  for(const x of[-48.6,-45.9])addCylinderDeco(x,1.63,-12.1,.075,.085,2.7,sportDark,0,10);
-  boxDeco(-47.25,2.92,-12.1,2.9,.12,.12,sportDark);
-  addSign('PULL-UP',{x:-47.25,y:3.72,z:-11.96},0x8de8ff,.22);
-
-  // Dip-Barren.
-  for(const x of[-42.2,-40.2]){addCylinderDeco(x,1.18,-12.2,.065,.075,1.9,sportDark,0,10);boxDeco(x,2.02,-11.65,.11,.10,1.25,sportBlue);}
-  addSign('DIPS',{x:-41.2,y:3.18,z:-11.45},0x8de8ff,.20);
-
-  // Hantelbank mit Langhantel und Gewichtsscheiben.
-  boxDeco(-35.3,.55,-12.0,3.1,.28,.82,0x3d4549);boxDeco(-35.3,.82,-12.55,2.7,.18,.40,0x20292e);
-  for(const x of[-36.85,-33.75])addCylinderDeco(x,1.35,-12.55,.055,.065,1.45,sportDark,0,10);
-  boxDeco(-35.3,1.98,-12.55,3.75,.10,.10,0x9ca8ae);
-  for(const x of[-37.05,-36.82,-33.78,-33.55])addCylinderDeco(x,1.98,-12.55,.28,.28,.13,sportRed,0,14).rotation.z=Math.PI/2;
-  addSign('BENCH',{x:-35.3,y:3.18,z:-11.45},0xffb083,.20);
-
-  // Hürden-/Koordinationsstrecke.
-  for(let i=0;i<4;i++){const x=-29.6+i*1.65;for(const dz of[-.58,.58])addCylinderDeco(x,.70,-12.0+dz,.045,.05,.78,sportDark,0,8);boxDeco(x,1.08,-12.0,.10,.08,1.35,0xffd36a);}
-  addSign('AGILITY',{x:-27.1,y:3.18,z:-11.45},0xffd36a,.20);
-
-  // Kleine Stretch-/Warm-up-Matten als getrennte Objekte auf dem Rasen.
+  for(const x of[-48.6,-45.9])addCylinderDeco(x,1.63,-12.1,.075,.085,2.7,sportDark,0,10);boxDeco(-47.25,2.92,-12.1,2.9,.12,.12,sportDark);addSign('PULL-UP',{x:-47.25,y:3.72,z:-11.96},0x8de8ff,.22);
+  for(const x of[-42.2,-40.2]){addCylinderDeco(x,1.18,-12.2,.065,.075,1.9,sportDark,0,10);boxDeco(x,2.02,-11.65,.11,.10,1.25,sportBlue);}addSign('DIPS',{x:-41.2,y:3.18,z:-11.45},0x8de8ff,.20);
+  boxDeco(-35.3,.55,-12.0,3.1,.28,.82,0x3d4549);boxDeco(-35.3,.82,-12.55,2.7,.18,.40,0x20292e);for(const x of[-36.85,-33.75])addCylinderDeco(x,1.35,-12.55,.055,.065,1.45,sportDark,0,10);boxDeco(-35.3,1.98,-12.55,3.75,.10,.10,0x9ca8ae);for(const x of[-37.05,-36.82,-33.78,-33.55])addCylinderDeco(x,1.98,-12.55,.28,.28,.13,sportRed,0,14).rotation.z=Math.PI/2;addSign('BENCH',{x:-35.3,y:3.18,z:-11.45},0xffb083,.20);
+  for(let i=0;i<4;i++){const x=-29.6+i*1.65;for(const dz of[-.58,.58])addCylinderDeco(x,.70,-12.0+dz,.045,.05,.78,sportDark,0,8);boxDeco(x,1.08,-12.0,.10,.08,1.35,0xffd36a);}addSign('AGILITY',{x:-27.1,y:3.18,z:-11.45},0xffd36a,.20);
   for(const [x,z,color] of [[-47.5,4.0,0x4d87a0],[-43.4,4.0,0x8a5e9d],[-28.6,4.0,0x4d9a79],[-24.5,4.0,0xa86d4f]])boxDeco(x,.315,z,3.1,.07,1.25,color);
 
-  // Escape Shop – all Gear, Items and Power upgrades exist here and nowhere else in the hub.
-  addPlatform({x:36,y:.31,z:-3,w:30,h:.07,d:29,color:0x64717a,kind:'hub-zone',hub:true});
-  boxDeco(36,2.7,-13.3,24,4.9,.52,0x0b1c2b,0x0b2b43);addCollider(36,-13.3,24,.52);
-  boxDeco(25.0,2.0,-3,.42,3.7,18,0x132f44,0x0a2537);boxDeco(47.0,2.0,-3,.42,3.7,18,0x132f44,0x0a2537);
-  addSign('ESCAPE SHOP',{x:36,y:5.35,z:-13.0},0xffd06c,.67);addSign('UPGRADES  ·  ITEMS  ·  TRAILS  ·  AUREN',{x:36,y:4.15,z:-12.98},0x9ee8ff,.28);
-  addPlatform({x:36,y:.40,z:1.0,w:13,h:.24,d:8,color:0x173852,kind:'shop-floor',hub:true});
-  boxDeco(36,1.62,4.4,8.2,2.05,.42,0x0b1825,0x102d45);addSign('SHOP ÖFFNEN',{x:36,y:2.7,z:4.18},0xffd36a,.35);
-  addInteractable('shop','Escape Shop öffnen',36,1.0,1.0,6.0,()=>openShop());
+  // --- ESCAPE SHOP HOUSE: begehbar, Daily links, Rebirth rechts, Shop geradeaus --
+  const sx=36,sz=-3,sw=28,sd=24,sh=7.2,frontZ=sz+sd/2,backZ=sz-sd/2,leftX=sx-sw/2,rightX=sx+sw/2;
+  addPlatform({x:sx,y:.34,z:sz,w:sw,h:.14,d:sd,color:0x737b77,kind:'shop-floor',hub:true});
+  // Außenwände: echte Türöffnung statt einer geschlossenen Frontwand.
+  boxDeco(leftX,sh/2+.30,sz,.38,sh,sd,0xd5d0c6);addCollider(leftX,sz,.38,sd);
+  boxDeco(rightX,sh/2+.30,sz,.38,sh,sd,0xd5d0c6);addCollider(rightX,sz,.38,sd);
+  boxDeco(sx,sh/2+.30,backZ,.38+sw,sh,.38,0xd5d0c6);addCollider(sx,backZ,sw,.38);
+  const doorW=4.6,frontPart=(sw-doorW)/2;
+  boxDeco(leftX+frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(leftX+frontPart/2,frontZ,frontPart,.38);
+  boxDeco(rightX-frontPart/2,sh/2+.30,frontZ,frontPart,sh,.38,0xd5d0c6);addCollider(rightX-frontPart/2,frontZ,frontPart,.38);
+  boxDeco(sx,sh+.35,sz,sw+.6,.42,sd+.6,0x46525a);
+  // Schwarzer Eingang und Gebäudeschilder.
+  boxDeco(sx,1.70,frontZ-.08,doorW,2.75,.08,0x05080a);addSign('ESCAPE SHOP',{x:sx,y:sh+1.15,z:frontZ+.05},0xffd06c,.66);addSign('DAILY · SHOP · REBIRTH',{x:sx,y:sh+.25,z:frontZ+.04},0x9ee8ff,.27);
+  // Weg vom Straßengehweg bis zur Eingangstür.
+  addPlatform({x:22.5,y:.366,z:frontZ,w:25,h:.075,d:2.5,color:walkColor,kind:'hub-path',hub:true});
+  // Fenster außen.
+  for(const x of[26.5,31.0,41.0,45.5]){boxDeco(x,3.0,frontZ+.20,2.2,1.55,.07,0x8fd2ec,0x244b61);}
+  for(const z of[-10,-5,0,5]){boxDeco(leftX-.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);boxDeco(rightX+.20,3.2,z,.07,1.45,2.0,0x91cfe8,0x1d4357);}
+  addGlowLight(sx,4.7,2.5,0xffe7b0,.85,18);addGlowLight(sx,4.7,-9,0xbbeeff,.72,16);
 
-  // Lower plaza: each utility has its own small building, with clean spacing.
-  // V481: Utility-Flächen beginnen erst hinter der Straße und sind links/rechts getrennt.
-  // Dadurch bleibt die komplette Querstraße bei z=30 sichtbar und kollisionsfrei lesbar.
-  addPlatform({x:-29,y:.33,z:42,w:44,h:.09,d:12,color:0x777d78,kind:'hub-zone',hub:true});
-  addPlatform({x:29,y:.33,z:42,w:44,h:.09,d:12,color:0x777d78,kind:'hub-zone',hub:true});
+  // Daily links innen.
+  addRingDeco(29.0,2.15,-1.3,1.75,.14,0xf0b85b,0);addRingDeco(29.0,2.15,-1.38,1.02,.06,0x69e4ff,0);addSign('DAILY',{x:29.0,y:4.55,z:-.95},0xffc65a,.42);
+  addInteractable('daily-wheel','Daily Wheel drehen',29.0,1.0,-1.0,3.0,()=>openDailyWheel());addInteractable('daily-quests','Daily Quests ansehen',29.0,1.0,-4.4,2.4,()=>openDailyQuests());addSign('QUESTS',{x:29.0,y:2.25,z:-4.1},0x9ee8ff,.23);
+  // Rebirth rechts innen.
+  addRingDeco(42.5,2.05,-2.2,1.65,.11,0xc998ff,0);addSign('REBIRTH',{x:42.5,y:4.45,z:-1.95},0xc998ff,.42);addInteractable('rebirth','Rebirth öffnen',42.5,1.0,-2.0,3.2,()=>openRebirth());
+  // Shop geradeaus am hinteren Ende.
+  boxDeco(sx,1.48,-12.4,11.5,2.15,.62,0x0b1825,0x102d45);addSign('SHOP',{x:sx,y:3.45,z:-12.02},0xffd36a,.48);addSign('UPGRADES · ITEMS · PETS',{x:sx,y:2.65,z:-12.0},0x9ee8ff,.24);addInteractable('shop','Escape Shop öffnen',sx,1.0,-10.7,4.2,()=>openShop());
 
-  // Rebirth.
-  boxDeco(-43,2.7,36.4,13.5,4.8,.38,0x17152a,0x2f1b54);addCollider(-43,36.4,13.5,.38);
-  for(const sx of[-4.7,4.7])boxDeco(-43+sx,2.0,30.7,.45,3.6,.45,0x392557,0x4a276e);
-  addSign('REBIRTH',{x:-43,y:4.95,z:36.15},0xc998ff,.50);addSign('PERMANENTE POWER',{x:-43,y:3.85,z:36.13},0x88dcff,.25);
-  addInteractable('rebirth','Rebirth öffnen',-43,1.0,30.3,5.5,()=>openRebirth());
+  // Offene Treppe zur zweiten Etage; kleine Stufen sind physisch begehbar.
+  const stairX=47.2,stairStartZ=2.5;
+  for(let i=0;i<13;i++){const top=.56+i*.20;addPlatform({x:stairX,y:top-.09,z:stairStartZ-i*.55,w:2.25,h:.18,d:.66,color:0x8d8a82,kind:'shop-stair',hub:true});}
+  addPlatform({x:38.5,y:2.91,z:-9.0,w:20.0,h:.18,d:9.0,color:0x777d78,kind:'shop-floor-2',hub:true});
+  boxDeco(38.5,3.78,-4.45,20,.10,.10,0x30383d);for(const x of[29,33,37,41,45,48])addCylinderDeco(x,3.42,-4.45,.035,.045,.72,0x30383d,0,8);
+  addSign('2. ETAGE',{x:38.5,y:4.60,z:-4.28},0xdfe8ee,.27);
 
-  // Daily.
-  boxDeco(-25,2.45,36.4,14,4.3,.38,0x151f2c,0x2b2910);addCollider(-25,36.4,14,.38);
-  addRingDeco(-25,2.3,35.7,1.75,.14,0xf0b85b,0);addRingDeco(-25,2.3,35.62,1.02,.06,0x69e4ff,0);
-  addSign('DAILY',{x:-25,y:4.75,z:36.16},0xffc65a,.47);
-  addInteractable('daily-wheel','Daily Wheel drehen',-28.0,1.0,30.4,3.8,()=>openDailyWheel());
-  addInteractable('daily-quests','Daily Quests ansehen',-22.0,1.0,30.4,3.8,()=>openDailyQuests());
+  // --- PARK / STADTMÖBLIERUNG ----------------------------------------------------
+  // Bäume bleiben auf Gras. Die kleinen Baumplatten sind die einzigen Platten direkt darunter.
+  for(const [x,z,scale] of [[-15,16,1],[15,16,1],[-14,-20,.9],[14,-20,.9],[-18,43,.9],[18,43,.9],[-48,8,.82],[48,16,.82],[22,14,.82]])addHubTree(x,z,scale);
+  const addBench=(x,z,rot=0)=>{
+    const seat=boxDeco(x,.58,z,3.2,.34,1.0,0x7b6654);seat.rotation.y=rot;
+    const off=.38,dx=Math.sin(rot)*off,dz=Math.cos(rot)*off;
+    const back=boxDeco(x+dx,.90,z+dz,3.2,.76,.14,0x75614f);back.rotation.y=rot;
+  };
+  // Bänke stehen immer auf der Grasseite des Gehwegs, nie auf Asphalt.
+  for(const [x,z,rot] of [[-11.6,-12,0],[11.6,-12,Math.PI],[-11.6,12,0],[11.6,12,Math.PI],[-11.6,43,0],[11.6,43,Math.PI],[-30,-21.3,Math.PI/2],[30,-21.3,-Math.PI/2],[-30,39.0,Math.PI/2],[30,39.0,-Math.PI/2]])addBench(x,z,rot);
+  // Mehr Laternen entlang der Straßenränder, ebenfalls auf der Grasseite.
+  for(const [x,z] of [[-11.2,-18],[11.2,-18],[-11.2,-8],[11.2,-8],[-11.2,8],[11.2,8],[-11.2,18],[11.2,18],[-11.2,42],[11.2,42],[-40,-21.5],[-22,-21.5],[22,-21.5],[40,-21.5],[-40,39],[ -22,39],[22,39],[40,39]])addHubStreetLamp(x,z);
 
-  // Character Studio.
-  boxDeco(-7,2.45,36.4,14,4.3,.38,0x102433,0x14364b);addCollider(-7,36.4,14,.38);
-  addSign('CHARAKTER STUDIO',{x:-7,y:4.75,z:36.16},0x80dcff,.46);
-  for(const [dx,label,color] of [[-3.5,'MANN',0x5ccfff],[0,'FRAU',0xff8fcf],[3.5,'SPECIAL',0xc18cff]]){boxDeco(-7+dx,.47,30.5,2.7,.16,3.0,0x142a3b,color);addSign(label,{x:-7+dx,y:1.55,z:31.9},color,.20);}
-  addInteractable('character-studio','Charakter Studio öffnen',-7,1.0,30.3,6.0,()=>openCharacterStudio());
-
-  // Records.
-  boxDeco(12,2.45,36.4,14,4.3,.38,0x111f2f,0x0d3045);addCollider(12,36.4,14,.38);
-  addSign('RECORDS',{x:12,y:4.75,z:36.16},0x72eaff,.48);addInteractable('records','Escape-Statistiken ansehen',12,1.0,30.3,5.5,()=>openRecords());
-
-  // Race.
-  boxDeco(32,2.45,36.4,16,4.3,.38,0x251713,0x4b2517);addCollider(32,36.4,16,.38);
-  addSign('SPEED RACE',{x:32,y:4.75,z:36.16},0xff9064,.52);
-  addPlatform({x:32,y:.37,z:30.4,w:10,h:.20,d:5.4,color:0x4a2b23,kind:'race-gate',hub:true});
-  addInteractable('speed-race','Speed Race starten',32,1.0,30.4,5.3,()=>setWorld('race'));
-
-  // JK SKYRUN – fair vertical time-trial, separate from Worlds 1–3.
-  boxDeco(45,2.45,18.3,15,4.3,.38,0x101b31,0x263f78);addCollider(45,18.3,15,.38);
-  addSign('JK SKYRUN',{x:45,y:4.78,z:18.05},0x9aa7ff,.56);addSign('100 SPEED · ZEITJAGD',{x:45,y:3.72,z:18.03},0xd6dcff,.25);
-  addPlatform({x:45,y:.38,z:12.0,w:10,h:.22,d:5.2,color:0x27345c,kind:'only-up-gate',hub:true});
-  addInteractable('only-up','JK SKYRUN starten',45,1.0,12.0,5.2,()=>setWorld('only-up'));
-
-  // V480 Stadtmöblierung: Bäume, Lampen, Sitzbänke und saubere Grüninseln entlang der Wege.
-  for(const [x,z,scale] of [[-15,16,1],[15,16,1],[-14,-20,.9],[14,-20,.9],[-18,43,.9],[18,43,.9],[-48,8,.82],[48,8,.82]])addHubTree(x,z,scale);
-  for(const [x,z] of [[-10,20],[10,20],[-10,-17],[10,-17],[-10,40],[10,40],[-28,-25],[28,-25]])addHubStreetLamp(x,z);
-  for(const [x,z,rot] of [[-15,10,0],[15,10,0],[-16,24,0],[16,24,0],[-12,-23,0],[12,-23,0]]){
-    const bench=boxDeco(x,.58,z,3.2,.34,1.0,0x7b6654);bench.rotation.y=rot;boxDeco(x,.88,z+.36,3.2,.72,.14,0x75614f);
-  }
-  // V483: Kein gepflasterter Trainings-Vorplatz mehr; der Sportbereich bleibt Rasen.
-  // Der Shop-Vorplatz bleibt als klarer Gebäudeeingang bestehen.
-  addPlatform({x:36,y:.312,z:-10,w:30,h:.08,d:5,color:0xb7b5ad,kind:'shop-entry',hub:true});
+  // Kleines, sauberes Willkommen statt eines großen Mittelportals.
+  addSign('ESCAPE.KL',{x:0,y:2.65,z:19.8},0x5ce6ff,.42);
 }
 
 function buildRaceCourse(){
@@ -1051,10 +1022,10 @@ function buildRaceCourse(){
   z-=6.5;addPlatform({x:x0,y:1.05,z,w:12,h:.6,d:7,color:0xd27a38,label:'FINISH',finish:true,checkpoint:5,kind:'race-finish'});boxDeco(x0,4.5,z-2.8,12,.35,.55,0xffa24e,0x8b3e18);addSign('RACE FINISH',new THREE.Vector3(x0,5.1,z+3.45),0xffb35d,.92);addGlowLight(x0,3.2,z,0xff9a50,1.25,12);addInteractable('race-hub-return','Nach dem Rennen zum Hub',x0,1.8,z-2,5,()=>setWorld('hub'));
 }
 function buildOnlyUpCourse(){
-  // V467 JK SKYRUN: no checkpoints, fixed Speed 100, height milestones pay fixed Wins.
+  // V467 SKYRUN: no checkpoints, fixed Speed 100, height milestones pay fixed Wins.
   const startX=0,startY=1.15,startZ=0;
-  addPlatform({x:startX,y:startY,z:startZ,w:11,h:.6,d:9,color:0x27325c,label:'JK SKYRUN',kind:'only-up-start'});
-  addSign('JK.GAMES · JK SKYRUN',{x:0,y:5.2,z:3.8},0xa8b7ff,.92);addSign('100 SPEED · KEINE CHECKPOINTS',{x:0,y:4.05,z:3.82},0xffd56b,.34);
+  addPlatform({x:startX,y:startY,z:startZ,w:11,h:.6,d:9,color:0x27325c,label:'SKYRUN',kind:'only-up-start'});
+  addSign('SKYRUN',{x:0,y:5.2,z:3.8},0xa8b7ff,.92);addSign('100 SPEED · KEINE CHECKPOINTS',{x:0,y:4.05,z:3.82},0xffd56b,.34);
   let lastX=0,lastZ=0,y=1.35;
   const total=144;
   for(let i=1;i<=total;i++){
@@ -1071,20 +1042,20 @@ function buildOnlyUpCourse(){
     lastX=x;lastZ=z;
   }
   y+=1.05;addPlatform({x:lastX,y,z:lastZ,w:11,h:.62,d:8,color:0xc69d3b,label:'FINISH',finish:true,kind:'only-up-finish'});
-  addSign('JK SKYRUN · ZIEL',{x:lastX,y:y+4.2,z:lastZ+3.6},0xffd66b,.78);addSign('150+ METER GESCHAFFT',{x:lastX,y:y+3.1,z:lastZ+3.62},0xcad0ff,.32);addGlowLight(lastX,y+2,lastZ,0xffd66b,1.1,13);
+  addSign('SKYRUN · ZIEL',{x:lastX,y:y+4.2,z:lastZ+3.6},0xffd66b,.78);addSign('150+ METER GESCHAFFT',{x:lastX,y:y+3.1,z:lastZ+3.62},0xcad0ff,.32);addGlowLight(lastX,y+2,lastZ,0xffd66b,1.1,13);
 }
 function claimSkyrunMilestone(p){
   if(G.world!=='only-up'||!p?.winReward||!p.winStage)return false;
   const claimKey=`jk-skyrun:${p.winStage}`;if(G.stageClaims.has(claimKey))return false;
-  G.stageClaims.add(claimKey);const reward=awardFixedWins(p.winReward,'JK SKYRUN Höhen-Wins');soundCheckpoint();
+  G.stageClaims.add(claimKey);const reward=awardFixedWins(p.winReward,'SKYRUN Höhen-Wins');soundCheckpoint();
   toast(`🏆 Höhe ${p.winStage}/9 · +${reward.toLocaleString('de-DE')} Wins`,'good',1500);return true;
 }
 function finishOnlyUp(){
   if(G.runFinished)return;G.runFinished=true;soundFinish();
   const sec=Math.max(0,(performance.now()-G.runStartedAt)/1000),key='jk-skyrun',previous=Number(G.state.bestTimes[key]||0),record=!previous||sec<previous;
   if(record)G.state.bestTimes[key]=sec;G.state.completions[key]=Math.max(0,Number(G.state.completions[key]||0))+1;
-  const reward=awardFixedWins(SKYRUN_FINISH_REWARD,'JK SKYRUN Finish');queuePersist(50);
-  const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>JK.GAMES · JK SKYRUN</small><h2>${record?'🏆 Neue Bestzeit!':'🏔️ Ganz oben!'}</h2><div class="ekl-stars">★★★</div><p>Speed <b>100</b> · Höhe <b>150+ Meter</b> · Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Feste Ziel-Belohnung <b>+${reward.toLocaleString('de-DE')} Wins</b></p><div class="ekl-modal-actions"><button data-ekl-only-again class="gold">Nochmal</button><button data-ekl-only-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-only-again]').onclick=()=>{wrap.remove();setWorld('only-up')};wrap.querySelector('[data-ekl-only-hub]').onclick=()=>{wrap.remove();setWorld('hub')};updateHud(true);
+  const reward=awardFixedWins(SKYRUN_FINISH_REWARD,'SKYRUN Finish');queuePersist(50);
+  const wrap=document.createElement('div');wrap.className='ekl-complete';wrap.dataset.eklComplete='1';wrap.innerHTML=`<div class="ekl-complete-card"><small>SKYRUN</small><h2>${record?'🏆 Neue Bestzeit!':'🏔️ Ganz oben!'}</h2><div class="ekl-stars">★★★</div><p>Speed <b>100</b> · Höhe <b>150+ Meter</b> · Zeit <b>${timeText(sec)}</b>${previous?` · Vorher ${timeText(previous)}`:''}<br>Feste Ziel-Belohnung <b>+${reward.toLocaleString('de-DE')} Wins</b></p><div class="ekl-modal-actions"><button data-ekl-only-again class="gold">Nochmal</button><button data-ekl-only-hub>Zum Hub</button></div></div>`;G.overlay.append(wrap);wrap.querySelector('[data-ekl-only-again]').onclick=()=>{wrap.remove();setWorld('only-up')};wrap.querySelector('[data-ekl-only-hub]').onclick=()=>{wrap.remove();setWorld('hub')};updateHud(true);
 }
 
 function activeCharacterDef(choice=G.state?.characterChoice){return SPECIAL_CHARACTERS.find(c=>c.id===choice)||null;}
@@ -1397,7 +1368,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
     toast(`${w.name} · Speed ${Math.round(currentSpeedStat(w.id))}/300 · Bei einem Fall hast du 5 Sekunden für JK/Coin-Revive.`,'good',2400);
   }else if(id==='only-up'){
-    const startY=1.15+.6/2+PLAYER_HALF+.08;G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint=null;G.stageClaims.clear();teleport(0,startY,0);G.scene.background.setHex(0x101a36);G.scene.fog.color.setHex(0x101a36);G.scene.fog.near=55;G.scene.fog.far=260;toast('JK SKYRUN · alle haben Speed 100 · keine Checkpoints · Bestzeit zählt!','good',2600);
+    const startY=1.15+.6/2+PLAYER_HALF+.08;G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint=null;G.stageClaims.clear();teleport(0,startY,0);G.scene.background.setHex(0x101a36);G.scene.fog.color.setHex(0x101a36);G.scene.fog.near=55;G.scene.fog.far=260;toast('SKYRUN · alle haben Speed 100 · keine Checkpoints · Bestzeit zählt!','good',2600);
   }else if(id==='race'){
     const raceY=.4+.55/2+PLAYER_HALF+.08;
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=20;G.checkpoint={x:72,y:raceY,z:20};teleport(72,raceY,20);
@@ -1539,9 +1510,9 @@ function respawn(){
   soundFail();
   if(isEscapeWorld()){resetEscapeRun({countDeath:true,showToast:true});return;}
   if(G.world==='only-up'){
-    // JK SKYRUN has neither checkpoints nor JK/Coin revive. Falling starts a fresh timed attempt.
+    // SKYRUN has neither checkpoints nor JK/Coin revive. Falling starts a fresh timed attempt.
     G.deaths++;G.runFinished=false;G.stage=1;G.stageClaims.clear();G.runStartedAt=performance.now();G.runFurthestZ=0;G.checkpoint=null;G.vel.set(0,0,0);G.moveVel.set(0,0,0);
-    const startY=1.15+.6/2+PLAYER_HALF+.08;teleport(0,startY,0);toast('JK SKYRUN · abgestürzt · neuer Versuch von ganz unten.','bad',1700);updateHud(true);return;
+    const startY=1.15+.6/2+PLAYER_HALF+.08;teleport(0,startY,0);toast('SKYRUN · abgestürzt · neuer Versuch von ganz unten.','bad',1700);updateHud(true);return;
   }
   G.deaths++;const c=G.checkpoint||{x:0,y:1.08,z:30};teleport(c.x,c.y,c.z);toast(G.world==='race'?`Race-Respawn · Checkpoint ${Math.max(1,G.stage)}`:'Respawn','bad',1500);
 }
@@ -2046,10 +2017,10 @@ function claimDailyQuest(id){const q=ensureDailyQuest(),row=dailyQuestRows().fin
 function openRecords(){
   const worldId=progressWorldId(),level=currentLevel(worldId),speed=currentSpeedStat(worldId),lp=levelProgress(worldId),raceBest=Number(G.state.bestTimes?.['speed-race']||0),races=Number(G.state.completions?.['speed-race']||0),onlyBest=Number(G.state.bestTimes?.['jk-skyrun']||0),onlyRuns=Number(G.state.completions?.['jk-skyrun']||0);
   const worlds=WORLD_DEFS.filter(w=>!w.locked).map(w=>({w,best:Number(G.state.bestTimes?.[w.id]||0),stars:Number(G.state.worldStars?.[w.id]||0),runs:Number(G.state.completions?.[w.id]||0)}));
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>JK SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS</small><b>${G.state.rebirths}</b><span>Power-Multiplikator ×${rebirthMultiplier().toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V483</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Power-Upgrades, Speed-Items, Trails, Auren, Charaktere, Pets und Premium-Inhalte befinden sich ausschließlich im Shop – nicht mehr als Kaufbuttons auf dem Hub-Boden.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und JK SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ JK SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V484</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt mit dem Level und erreicht bei Level 1000 regulär 300. Kleine additive Prozent-Boni aus Speed-Chips, Auren, Pets, Verwandlung und Speed Core dürfen den effektiven Speed darüber anheben.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2 oder 3 herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin und World 3 kostet 30 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist jetzt ein begehbares Haus. Links innen stehen Daily Wheel und Daily Quests, rechts Rebirth, geradeaus der eigentliche Shop; über die Treppe ist eine offene zweite Etage erreichbar.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;

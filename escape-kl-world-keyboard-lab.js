@@ -1,4 +1,4 @@
-/* Escape.kl World 1 – Keyboard Lab V471.
+/* Escape.kl World 1 – Wind World V484.
    Speed-gated beginner route: wide keys, progressively longer jumps, 15 cash-out stages.
    No respawn checkpoints: fall = world start. */
 export function buildKeyboardLabWorld(api){
@@ -21,7 +21,7 @@ export function buildKeyboardLabWorld(api){
   addPlatform({x:0,y:.3,z:startZ,w:15,h:.6,d:11,color:0x224d67,label:'ESC',stage:1,kind:'start'});
   boxDeco(-6.8,2.5,startZ+4.4,.55,5.2,.65,0x1c8199,0x13546b);boxDeco(6.8,2.5,startZ+4.4,.55,5.2,.65,0x1c8199,0x13546b);boxDeco(0,5,startZ+4.4,14.2,.45,.65,0x1c8199,0x13546b);
   addRingDeco(0,2.8,startZ+4.2,2.4,.07,0x57e7ff,0);addGlowLight(0,3.2,startZ+2.4,0x55e7ff,1.0,12);
-  addSign('WORLD 1 · KEYBOARD LAB',{x:0,y:5.75,z:startZ+4.72},0x58ddff,1.04);
+  addSign('WORLD 1 · WIND WORLD',{x:0,y:5.75,z:startZ+4.72},0x58ddff,1.04);
   addSign('SPEED 5 → 300 · BREITE KEYS · LANGE SPEED-GAPS',{x:0,y:4.08,z:startZ+4.73},0xffd25f,.45);
   // V451: Der sichtbare Portal-Kreis selbst ist der Rückweg zum Hub.
   // Spawn liegt deutlich davor, deshalb wird der Spieler beim Weltstart nicht sofort zurückgeschickt.

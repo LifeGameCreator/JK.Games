@@ -1,4 +1,4 @@
-/* Escape.kl World 3 – Toxic Keyboard V482. Longer endgame route; GL keys are visual glitches only and stay physically solid. */
+/* Escape.kl World 3 – Toxic World V484. Longer endgame route; GL keys are visual glitches only and stay physically solid. */
 export function buildToxicKeyboardWorld(api){
   const {addPlatform,addSign,boxDeco,addCylinderDeco=()=>{},addRingDeco=()=>{},addGlowLight=()=>{},addInteractable,addAutoTrigger=()=>{},addChaseWall=()=>{},finishAndReturnHub=()=>{}}=api;
   const rewards=[5000000,8000000,12000000,20000000,35000000,60000000,100000000,175000000,300000000,500000000];
@@ -7,7 +7,7 @@ export function buildToxicKeyboardWorld(api){
   const startZ=-70;
   boxDeco(0,-9.0,-560,92,1.2,1080,0x061109);boxDeco(-38,-2.0,-560,2.7,12,1065,0x14321a);boxDeco(38,-2.0,-560,2.7,12,1065,0x14321a);
   for(let zz=-100,i=0;zz>-1055;zz-=48,i++){addCylinderDeco(-31,-1.5,zz,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addCylinderDeco(31,-1.5,zz,2.0,2.4,2.0,0x57d45d,0x173c1b,12);addGlowLight(i%2?-30:30,2.3,zz,0x64ff6d,.42,9);}
-  addPlatform({x:0,y:.3,z:startZ,w:13,h:.6,d:10,color:0x245d2c,label:'TOXIC',stage:1,kind:'start'});addSign('WORLD 3 · TOXIC KEYBOARD',{x:0,y:5.25,z:startZ+4.4},0x7bff79,1.0);addSign('AIR CONTROL · CHASE WALL · SPEED 300 FINALE',{x:0,y:4.05,z:startZ+4.42},0xffd16b,.40);
+  addPlatform({x:0,y:.3,z:startZ,w:13,h:.6,d:10,color:0x245d2c,label:'TOXIC',stage:1,kind:'start'});addSign('WORLD 3 · TOXIC WORLD',{x:0,y:5.25,z:startZ+4.4},0x7bff79,1.0);addSign('AIR CONTROL · CHASE WALL · SPEED 300 FINALE',{x:0,y:4.05,z:startZ+4.42},0xffd16b,.40);
   let z=startZ-9;
   const title=(n,t)=>{addSign(`STAGE ${n} · ${t}`,{x:0,y:3.5,z:z+2.0},0x7cff7a,.58);addSign(`EMPFOHLEN: SPEED ${recommended[n-1]}+`,{x:0,y:2.65,z:z+2.02},0xffd36a,.35);};
   const key=(gap,x,y,w,d,label,color=0x286d35,extra={})=>{z-=gap;return addPlatform({x,y,z,w,h:.46,d,color,label,kind:extra.blink?'glitch-key':'key',...extra});};
@@ -44,5 +44,5 @@ export function buildToxicKeyboardWorld(api){
 
   z-=3.4;title(10,'SPEED 300 TOXIC FINALE');
   for(let i=0;i<7;i++)key(14.1+i*.22,i%2?3.0:-3.0,13.7+i*.10,2.7,2.2,i===5?'ESC':'FULL',0x2d7738,{motion:i===2||i===4?{axis:'x',amp:2.0,speed:.92+i*.04,phase:i}:null});
-  z-=5.8;addPlatform({x:0,y:14.45,z,w:11,h:.6,d:6.5,color:0x245e2c,label:'FINISH',kind:'safe-zone',stage:10});addPlatform({x:0,y:14.82,z:z-2.45,w:4.0,h:.18,d:1.2,color:0x55dc5e,label:'FINISH',kind:'finish-strip',finish:true,stage:10,winReward:rewards[9],winStage:10});addRingDeco(0,16.4,z-2.5,1.9,.08,0x75ff72,0);addRingDeco(0,16.4,z-2.42,1.35,.05,0xffd45e,0);addGlowLight(0,16.5,z-2.2,0x69ff70,1.4,12);addSign('TOXIC KEYBOARD COMPLETE',{x:0,y:17.1,z:z+3.2},0x7cff79,.76);addSign(`DURCH DEN KREIS · +${compact(rewards[9])} WINS`,{x:0,y:16.0,z:z+3.22},0xffd35b,.50);addAutoTrigger('toxic-keyboard-finish-circle',0,z-2.5,5.6,2.5,finishAndReturnHub);addInteractable('toxic-hub-return','Finish + Wins · Zum Hub',0,15.2,z-1.8,5,finishAndReturnHub);
+  z-=5.8;addPlatform({x:0,y:14.45,z,w:11,h:.6,d:6.5,color:0x245e2c,label:'FINISH',kind:'safe-zone',stage:10});addPlatform({x:0,y:14.82,z:z-2.45,w:4.0,h:.18,d:1.2,color:0x55dc5e,label:'FINISH',kind:'finish-strip',finish:true,stage:10,winReward:rewards[9],winStage:10});addRingDeco(0,16.4,z-2.5,1.9,.08,0x75ff72,0);addRingDeco(0,16.4,z-2.42,1.35,.05,0xffd45e,0);addGlowLight(0,16.5,z-2.2,0x69ff70,1.4,12);addSign('TOXIC WORLD COMPLETE',{x:0,y:17.1,z:z+3.2},0x7cff79,.76);addSign(`DURCH DEN KREIS · +${compact(rewards[9])} WINS`,{x:0,y:16.0,z:z+3.22},0xffd35b,.50);addAutoTrigger('toxic-keyboard-finish-circle',0,z-2.5,5.6,2.5,finishAndReturnHub);addInteractable('toxic-hub-return','Finish + Wins · Zum Hub',0,15.2,z-1.8,5,finishAndReturnHub);
 }
