@@ -7,8 +7,8 @@ import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-esca
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V501 · Vending Orientation Fix */
-const VERSION = '2026-08-18-v501';
+/* Escape.kl – JK.Games Top Game V502 · Third Pet Slot + Owner Pet Lab */
+const VERSION = '2026-08-18-v502';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -83,6 +83,29 @@ const PET_DEFS = Object.freeze([
   {id:'cyclops-wing',name:'EYE Pet',cost:500,currency:'jk',category:'jk',speedBonus:.02,winsBonus:.02,asset:'./escape-pet-cyclops.glb?v=20260816-escape-v452',movement:'orbit',targetHeight:.80,desc:'Fliegendes Eye-Pet. Gibt +2 % Speed und +2 % Wins.'},
   {id:'reptisect',name:'Reptisect',cost:400,currency:'jk',category:'jk',speedBonus:.015,winsBonus:.015,asset:'./escape-pet-reptisect.glb?v=20260817-escape-v477',movement:'ground-follow',targetHeight:.72,animationHint:/niet|basic|walk|run|move/i,desc:'Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung. +1,5 % Speed und +1,5 % Wins. Günstiger als das stärkere EYE Pet.'},
   {id:'phoenix',name:'Phönix',cost:3000,currency:'jk',category:'jk',speedBonus:.03,winsBonus:.025,asset:'./escape-pet-phoenix.glb?v=20260817-escape-v477-optimized',movement:'fly-follow',targetHeight:1.02,animationHint:/fly|flight|take|wing/i,desc:'Premium-Flug-Pet. Fliegt dir weich hinterher und steigt beim Springen mit. +3,0 % Speed und +2,5 % Wins.'}
+]);
+const PET_SLOT3_COST = 1000;
+const OWNER_PREVIEW_PETS = Object.freeze([
+  {id:'galaxy-fox',name:'Galaxy Fox',kind:'fox',primary:0x6d3cff,secondary:0x15102a,accent:0xe8dcff,float:false},
+  {id:'lava-wolf',name:'Lava Wolf',kind:'wolf',primary:0x421514,secondary:0xf4511e,accent:0xffd166,float:false},
+  {id:'aqua-dragon',name:'Aqua Dragon',kind:'dragon',primary:0x1b8ea8,secondary:0x7ce9ff,accent:0xd8fbff,float:true},
+  {id:'neon-bee',name:'Neon Bee',kind:'bee',primary:0xffd600,secondary:0x171717,accent:0x6ef7ff,float:true},
+  {id:'crystal-golem',name:'Crystal Golem',kind:'golem',primary:0x80d8ff,secondary:0x33485c,accent:0xe7fbff,float:false},
+  {id:'shadow-raven',name:'Shadow Raven',kind:'raven',primary:0x171225,secondary:0x553b82,accent:0xd9c7ff,float:true},
+  {id:'toxic-slime',name:'Toxic Slime',kind:'slime',primary:0x54e34f,secondary:0x163a19,accent:0xd7ff76,float:false},
+  {id:'cyber-cat',name:'Cyber Cat',kind:'cat',primary:0x1f2937,secondary:0x00e5ff,accent:0xff4fd8,float:false},
+  {id:'moon-bunny',name:'Moon Bunny',kind:'bunny',primary:0xd8d8e8,secondary:0x6b5b95,accent:0xffb4e8,float:false},
+  {id:'storm-owl',name:'Storm Owl',kind:'owl',primary:0x3b4657,secondary:0x8fc7ff,accent:0xffffff,float:true},
+  {id:'inferno-serpent',name:'Inferno Serpent',kind:'serpent',primary:0x8b1a0e,secondary:0xff6a00,accent:0xffe0a3,float:true},
+  {id:'ice-turtle',name:'Ice Turtle',kind:'turtle',primary:0x75c9e8,secondary:0x2d6578,accent:0xe5ffff,float:false},
+  {id:'plasma-bat',name:'Plasma Bat',kind:'bat',primary:0x35114f,secondary:0xff40d1,accent:0x8efcff,float:true},
+  {id:'golden-scarab',name:'Golden Scarab',kind:'scarab',primary:0xc99723,secondary:0x4f3510,accent:0xfff0a8,float:true},
+  {id:'void-spider',name:'Void Spider',kind:'spider',primary:0x16101f,secondary:0x7e57c2,accent:0xee7cff,float:false},
+  {id:'candy-axolotl',name:'Candy Axolotl',kind:'axolotl',primary:0xff7eb6,secondary:0x78d9ff,accent:0xfff2a6,float:false},
+  {id:'thunder-ram',name:'Thunder Ram',kind:'ram',primary:0x5d6673,secondary:0xf8d94e,accent:0xc7efff,float:false},
+  {id:'sakura-kirin',name:'Sakura Kirin',kind:'kirin',primary:0xffb3c7,secondary:0x8f5ba6,accent:0xfff5d7,float:false},
+  {id:'robo-shark',name:'Robo Shark',kind:'shark',primary:0x526b78,secondary:0x16d5e8,accent:0xff5964,float:true},
+  {id:'celestial-griffin',name:'Celestial Griffin',kind:'griffin',primary:0xe2c56d,secondary:0x5165c9,accent:0xffffff,float:true}
 ]);
 const FREE_PET_WORLD_CAPS = Object.freeze({1:5,2:9,3:13,4:16});
 const FREE_PET_BASE_LEVEL_COSTS = Object.freeze([
@@ -179,7 +202,7 @@ const G = {
   runCombo:0,comboLastAt:0,comboVisited:new Set(),perfectLandingClaims:new Set(),trainingStreakSeconds:0,trainingStreakTier:0,trainingAfkPlatformKey:'',trainingAfkLastMoveAt:0,trainingAfkMoveCarry:0,trainingAfkLocked:false,trainingAfkWarned:false,
   hitboxDebugEnabled:false,hitboxDebugGroup:null,hitboxDebugItems:[],hitboxDebugPlayer:null,
   summonedTreadmill:null,summonedVending:null,vendingLoadSeq:0,
-  ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,
+  ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,ownerPetPreviewId:'',ownerPetPreviewWrapper:null,ownerPetPreviewRig:null,
   hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
   materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
@@ -409,12 +432,12 @@ function updateEscapeRemotePlayers(dt,t){
 function emptyWorldProgress(){return {xp:0,itemSpeedBonus:0,adminSpeedOverride:null};}
 function defaultProgress(){
   return {
-    version:14,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
+    version:15,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
     worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,ownerWorldUnlockBypass:false,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
-    activePet:'none',activePets:[],ownedPets:['none'],freeCatLevel:0,freeButterflyLevel:0,freeLegoLevel:0,
+    activePet:'none',activePets:[],ownedPets:['none'],petSlot3Unlocked:false,freeCatLevel:0,freeButterflyLevel:0,freeLegoLevel:0,
     vendingOwned:false,vendingLevel:0,vendingPotionSpeedUntil:0,vendingPotionSpeedPct:0,vendingPotionWinsUntil:0,vendingPotionWinsPct:0,vendingPotionTreadmillUntil:0,vendingPotionTreadmillPct:0,vendingJkWinsBonus:0,vendingJkWinsCharges:0,
     trainingCoreTier:0,treadmillCoreTier:0,speedCoreTier:0,winCoreTier:0,
     worldStars:{},bestTimes:{},completions:{},hiddenKeys:{},totalDistance:0,
@@ -453,9 +476,11 @@ function normalizeProgress(raw){
   if(SPECIAL_CHARACTERS.some(c=>c.id===d.characterChoice)&&!d.ownedSpecialCharacters.includes(d.characterChoice))d.characterChoice=mainGender;
   d.ownedPets=Array.isArray(d.ownedPets)?[...new Set(d.ownedPets.filter(id=>PET_DEFS.some(p=>p.id===id)))]:['none'];
   if(!d.ownedPets.includes('none'))d.ownedPets.unshift('none');
+  d.petSlot3Unlocked=!!d.petSlot3Unlocked;
   const legacyPet=d.ownedPets.includes(d.activePet)&&d.activePet!=='none'?d.activePet:'';
   const requestedPets=Array.isArray(d.activePets)?d.activePets:(legacyPet?[legacyPet]:[]);
-  d.activePets=[...new Set(requestedPets.filter(id=>id!=='none'&&d.ownedPets.includes(id)&&PET_DEFS.some(p=>p.id===id)))].slice(0,2);
+  const petLimit=d.petSlot3Unlocked?3:2;
+  d.activePets=[...new Set(requestedPets.filter(id=>id!=='none'&&d.ownedPets.includes(id)&&PET_DEFS.some(p=>p.id===id)))].slice(0,petLimit);
   d.activePet=d.activePets[0]||'none';
   for(const [petId,prog] of Object.entries(FREE_PET_PROGRESS)){
     let level=Math.max(0,Math.min(prog.maxLevel,Math.floor(Number(d[prog.stateKey])||0)));
@@ -542,7 +567,7 @@ function normalizeProgress(raw){
     }
     if(hadLegacyDirectSpeed&&Object.values(d.speedItemLevels).every(v=>Number(v||0)===0))d.speedItemLevels.speed25=1;
   }
-  d.version=14;
+  d.version=15;
   return d;
 }
 function loadProgress(){
@@ -622,13 +647,22 @@ function specialCharacterState(choice=G.state?.characterChoice){
   const upgraded=def.id==='demon-transformation'&&!!G.state?.demonGalaxyUpgrade;
   return {def,upgraded,speedBonus:upgraded?(def.upgradeSpeedBonus||def.speedBonus||0):(def.speedBonus||0),winsBonus:upgraded?(def.upgradeWinsBonus||def.winsBonus||0):(def.winsBonus||0)};
 }
+function maxActivePets(){return G.state?.petSlot3Unlocked?3:2;}
 function activePetDefs(){
   if(!G.state)return [];
   const ids=Array.isArray(G.state.activePets)?G.state.activePets:(G.state.activePet&&G.state.activePet!=='none'?[G.state.activePet]:[]);
-  return ids.map(id=>PET_DEFS.find(p=>p.id===id)).filter(Boolean).slice(0,2);
+  return ids.map(id=>PET_DEFS.find(p=>p.id===id)).filter(Boolean).slice(0,maxActivePets());
 }
 function activePetDef(){return activePetDefs()[0]||PET_DEFS[0];}
 function syncLegacyActivePet(){if(G.state)G.state.activePet=G.state.activePets?.[0]||'none';}
+function petFollowerLayout(slot,total=maxActivePets()){
+  if(total>=3){
+    if(slot===0)return {side:-.86,back:1.58};
+    if(slot===1)return {side:.86,back:1.58};
+    return {side:0,back:2.42};
+  }
+  return {side:slot===0?-.72:.72,back:1.65};
+}
 function freePetProgress(id){return FREE_PET_PROGRESS[String(id||'')]||null;}
 function freePetLevel(id){const prog=freePetProgress(id);if(!prog||!G.state?.ownedPets?.includes(id))return 0;return Math.max(prog.startLevel,Math.min(prog.maxLevel,Math.floor(Number(G.state?.[prog.stateKey])||prog.startLevel)));}
 function freePetWorldCap(id,worldId=shopWorldId()){const prog=freePetProgress(id);if(!prog)return 0;const n=Math.max(1,Math.min(4,Number(shopTier(worldId)?.number)||1));return Math.min(prog.maxLevel,FREE_PET_WORLD_CAPS[n]||5);}
@@ -690,6 +724,7 @@ function setNormalOwnerVisibility(visible=true){
 function applyOwnerVanishVisual(){
   const ghost=!!G.ownerVanish;
   if(G.ownerFlyActive){setGhostMaterialState(G.ownerFlyWrapper,ghost,.24);return;}
+  if(G.ownerPetPreviewId&&G.ownerPetPreviewWrapper){setGhostMaterialState(G.ownerPetPreviewWrapper,ghost,.22);return;}
   for(const root of [G.character?.visualRoot,G.formWrapper,G.auraGroup,G.specialFxGroup,G.trail,...(G.petVisuals||[]).map(v=>v.wrapper)])setGhostMaterialState(root,ghost,.22);
 }
 function loadOwnerFlightPhoenix(){
@@ -704,6 +739,7 @@ function loadOwnerFlightPhoenix(){
 }
 function setOwnerFly(enabled){
   if(!isEscapeOwner())return false;enabled=!!enabled;if(G.ownerFlyActive===enabled)return true;
+  if(enabled&&G.ownerPetPreviewId)clearOwnerPetPreview({silent:true,restore:true});
   G.ownerFlyActive=enabled;G.ownerFlyVertical=0;G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.support=null;G.lastSupport=null;G.jumpQueuedUntil=0;G.jumpHeld=false;
   if(enabled){clearPetVisuals();setNormalOwnerVisibility(false);loadOwnerFlightPhoenix();toast('🪽 OWNER FLY AN · Phoenix · WASD bewegen · SPACE hoch · STRG runter · SHIFT schneller','good',3200);}
   else{clearOwnerFlightVisual();setNormalOwnerVisibility(true);refreshCompanionVisuals();applyOwnerVanishVisual();toast('🪽 OWNER FLY AUS · Charakter und Pets wiederhergestellt.','good',2200);}
@@ -1287,13 +1323,178 @@ function removeNamedPlayerChildren(name){
 function disposeExternalObject(root){
   try{root?.traverse?.(o=>{if(!o?.isMesh)return;try{o.geometry?.dispose?.()}catch{}const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){if(!m)continue;try{m.map?.dispose?.();m.normalMap?.dispose?.();m.emissiveMap?.dispose?.();m.metalnessMap?.dispose?.();m.roughnessMap?.dispose?.();m.dispose?.()}catch{}}});}catch{}
 }
+
+function ownerPreviewPetDef(id){return OWNER_PREVIEW_PETS.find(p=>p.id===String(id||''))||null;}
+function previewPetMaterial(color,{emissive=0,metalness=.08,roughness=.62,transparent=false,opacity=1}={}){
+  return new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:emissive?0.55:0,metalness,roughness,transparent,opacity});
+}
+function previewPetPart(parent,geometry,material,{x=0,y=0,z=0,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0,name=''}={}){
+  const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);mesh.rotation.set(rx,ry,rz);mesh.castShadow=true;mesh.receiveShadow=true;if(name)mesh.name=name;parent.add(mesh);return mesh;
+}
+function createOwnerPreviewPetModel(def){
+  const root=new THREE.Group();root.name=`escape-owner-preview-${def.id}`;
+  const rig={wings:[],tails:[],spin:[],float:!!def.float,baseY:-PLAYER_HALF+.08};
+  const m1=previewPetMaterial(def.primary,{metalness:.12,roughness:.52});
+  const m2=previewPetMaterial(def.secondary,{metalness:.18,roughness:.48});
+  const ma=previewPetMaterial(def.accent,{emissive:def.accent,metalness:.2,roughness:.3});
+  const dark=previewPetMaterial(0x11131a,{roughness:.72});
+  const white=previewPetMaterial(0xf7fbff,{emissive:0xcfe8ff,roughness:.35});
+  const sphere=(par,mat,opt={})=>previewPetPart(par,new THREE.SphereGeometry(.5,16,11),mat,opt);
+  const box=(par,mat,opt={})=>previewPetPart(par,new THREE.BoxGeometry(1,1,1),mat,opt);
+  const cone=(par,mat,opt={})=>previewPetPart(par,new THREE.ConeGeometry(.5,1,8),mat,opt);
+  const cyl=(par,mat,opt={})=>previewPetPart(par,new THREE.CylinderGeometry(.22,.28,1,8),mat,opt);
+  const torus=(par,mat,opt={})=>previewPetPart(par,new THREE.TorusGeometry(.42,.10,8,18),mat,opt);
+  const eye=(par,x,y,z,scale=.10)=>sphere(par,ma,{x,y,z,sx:scale,sy:scale,sz:scale});
+  const leg=(x,z,mat=m2,h=.62)=>cyl(root,mat,{x,y:.30,z,sx:.42,sy:h,sz:.42});
+  const wing=(x,y,z,side=1,mat=m2,scale=1)=>{
+    const g=new THREE.Group();g.position.set(x,y,z);root.add(g);
+    const w=box(g,mat,{x:side*.47,sx:.92*scale,sy:.10,sz:.55*scale,rz:side*.28});
+    rig.wings.push({obj:g,base:g.rotation.clone(),side,amp:.58});return w;
+  };
+  const tail=(x,y,z,ry=0,mat=m2,len=1)=>{
+    const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;root.add(g);
+    cyl(g,mat,{z:.42*len,sx:.30,sy:.86*len,sz:.30,rx:Math.PI/2});
+    rig.tails.push({obj:g,base:g.rotation.clone(),amp:.32});return g;
+  };
+  const ear=(x,y,z,side=1,mat=m1,s=.36)=>cone(root,mat,{x,y,z,sx:s,sy:s*1.75,sz:s,rz:side*.10});
+  const horn=(x,y,z,side=1,mat=ma,s=.30)=>cone(root,mat,{x,y,z,sx:s,sy:s*2.0,sz:s,rz:side*.35});
+  const beak=(x,y,z,mat=ma)=>cone(root,mat,{x,y,z,sx:.22,sy:.48,sz:.22,rx:Math.PI/2});
+  const body=(sx=.78,sy=.62,sz=1.0,y=.66,z=0)=>sphere(root,m1,{y,z,sx,sy,sz});
+  const head=(sx=.56,sy=.54,sz=.58,y=1.22,z=-.55,mat=m1)=>sphere(root,mat,{y,z,sx,sy,sz});
+  const stripe=(z,mat=m2)=>box(root,mat,{y:.67,z,sx:.70,sy:.54,sz:.11});
+
+  switch(def.kind){
+    case'fox':
+      body(.78,.58,1.0,.66,.05);head(.56,.52,.58,1.18,-.63);ear(-.25,1.65,-.68,-1);ear(.25,1.65,-.68,1);
+      sphere(root,m2,{y:1.08,z:-1.0,sx:.25,sy:.20,sz:.38});eye(root,-.19,1.30,-1.0);eye(root,.19,1.30,-1.0);leg(-.32,-.18);leg(.32,-.18);leg(-.32,.52);leg(.32,.52);tail(0,.82,.82,Math.PI,m1,1.35);
+      for(let i=0;i<7;i++)sphere(root,ma,{x:(i-3)*.13,y:.88+Math.sin(i)*.05,z:.12,sx:.035,sy:.035,sz:.035});
+      break;
+    case'wolf':
+      body(.88,.64,1.08,.68,.10);head(.61,.58,.64,1.20,-.68);ear(-.27,1.67,-.70,-1,m2,.38);ear(.27,1.67,-.70,1,m2,.38);
+      box(root,m2,{y:1.10,z:-1.08,sx:.42,sy:.28,sz:.52});eye(root,-.20,1.32,-1.02);eye(root,.20,1.32,-1.02);leg(-.37,-.25,m2,.68);leg(.37,-.25,m2,.68);leg(-.37,.55,m2,.68);leg(.37,.55,m2,.68);tail(0,.83,.96,Math.PI,m2,1.15);
+      horn(-.30,1.48,-.56,-1,ma,.16);horn(.30,1.48,-.56,1,ma,.16);
+      break;
+    case'dragon':
+      body(.84,.58,1.18,.78,.12);head(.58,.48,.74,1.30,-.72);sphere(root,m2,{y:1.25,z:-1.20,sx:.34,sy:.27,sz:.55});eye(root,-.20,1.42,-1.25);eye(root,.20,1.42,-1.25);
+      horn(-.28,1.72,-.75,-1,ma,.20);horn(.28,1.72,-.75,1,ma,.20);wing(-.58,1.05,.05,-1,m2,1.15);wing(.58,1.05,.05,1,m2,1.15);tail(0,.82,1.05,Math.PI,m1,1.70);
+      for(let i=0;i<5;i++)cone(root,ma,{y:1.12-i*.08,z:.08+i*.35,sx:.13,sy:.30,sz:.13,rx:-.18});
+      break;
+    case'bee':
+      sphere(root,m1,{y:.90,sx:.62,sy:.62,sz:.88});stripe(-.20,m2);stripe(.12,m2);stripe(.43,m2);head(.50,.48,.48,1.05,-.70,m2);eye(root,-.18,1.13,-1.08,.12);eye(root,.18,1.13,-1.08,.12);
+      wing(-.48,1.15,.0,-1,white,1.0);wing(.48,1.15,.0,1,white,1.0);cyl(root,dark,{x:-.16,y:1.48,z:-.82,sx:.12,sy:.35,sz:.12,rz:-.22});cyl(root,dark,{x:.16,y:1.48,z:-.82,sx:.12,sy:.35,sz:.12,rz:.22});
+      break;
+    case'golem':
+      box(root,m2,{y:.75,sx:.95,sy:.90,sz:.72});box(root,m1,{y:1.48,sx:.68,sy:.62,sz:.62});eye(root,-.20,1.52,-.33,.10);eye(root,.20,1.52,-.33,.10);
+      box(root,m2,{x:-.70,y:.85,sx:.34,sy:.85,sz:.38});box(root,m2,{x:.70,y:.85,sx:.34,sy:.85,sz:.38});box(root,m2,{x:-.30,y:.22,sx:.38,sy:.46,sz:.44});box(root,m2,{x:.30,y:.22,sx:.38,sy:.46,sz:.44});
+      for(const [x,z,h] of [[0,.18,.68],[-.34,.24,.44],[.34,.24,.44]])cone(root,ma,{x,y:1.95,z,sx:.20,sy:h,sz:.20});
+      break;
+    case'raven':
+      body(.68,.72,.82,.92,.05);head(.50,.50,.50,1.48,-.47,m2);beak(0,1.38,-.88,ma);eye(root,-.18,1.58,-.76,.09);eye(root,.18,1.58,-.76,.09);
+      wing(-.49,1.10,.08,-1,m1,1.05);wing(.49,1.10,.08,1,m1,1.05);tail(0,.92,.56,Math.PI,m2,.85);
+      leg(-.18,-.05,dark,.38);leg(.18,-.05,dark,.38);
+      break;
+    case'slime':
+      sphere(root,m1,{y:.58,sx:.92,sy:.72,sz:.82});sphere(root,m2,{y:.35,z:.08,sx:.75,sy:.46,sz:.68});eye(root,-.25,.74,-.64,.13);eye(root,.25,.74,-.64,.13);
+      for(const x of [-.45,0,.45])cone(root,ma,{x,y:1.16,z:0,sx:.17,sy:.48,sz:.17});
+      sphere(root,ma,{x:-.40,y:.30,z:-.48,sx:.08,sy:.08,sz:.08});sphere(root,ma,{x:.42,y:.25,z:.34,sx:.06,sy:.06,sz:.06});
+      break;
+    case'cat':
+      body(.72,.58,.90,.67,.08);head(.55,.52,.54,1.18,-.62,m2);ear(-.24,1.63,-.64,-1,m2,.34);ear(.24,1.63,-.64,1,m2,.34);eye(root,-.19,1.28,-.96);eye(root,.19,1.28,-.96);
+      leg(-.30,-.18,m1,.58);leg(.30,-.18,m1,.58);leg(-.30,.48,m1,.58);leg(.30,.48,m1,.58);tail(0,.80,.78,Math.PI,m2,1.20);
+      box(root,ma,{y:.82,z:-.35,sx:.58,sy:.045,sz:.05});box(root,ma,{x:.40,y:.68,z:.02,sx:.04,sy:.46,sz:.05});
+      break;
+    case'bunny':
+      body(.68,.62,.78,.65,.15);head(.58,.56,.54,1.18,-.45);cone(root,m1,{x:-.22,y:1.78,z:-.42,sx:.22,sy:.85,sz:.20,rz:-.08});cone(root,m1,{x:.22,y:1.78,z:-.42,sx:.22,sy:.85,sz:.20,rz:.08});eye(root,-.20,1.30,-.79);eye(root,.20,1.30,-.79);
+      sphere(root,m2,{y:.68,z:.86,sx:.26,sy:.26,sz:.26});box(root,m2,{x:-.32,y:.16,z:-.20,sx:.42,sy:.20,sz:.70});box(root,m2,{x:.32,y:.16,z:-.20,sx:.42,sy:.20,sz:.70});
+      break;
+    case'owl':
+      sphere(root,m1,{y:1.00,sx:.72,sy:.88,sz:.65});sphere(root,m2,{y:1.43,z:-.42,sx:.63,sy:.52,sz:.42});sphere(root,white,{x:-.25,y:1.47,z:-.72,sx:.22,sy:.22,sz:.10});sphere(root,white,{x:.25,y:1.47,z:-.72,sx:.22,sy:.22,sz:.10});eye(root,-.25,1.47,-.82,.09);eye(root,.25,1.47,-.82,.09);beak(0,1.25,-.78,ma);
+      wing(-.54,1.03,.02,-1,m2,.90);wing(.54,1.03,.02,1,m2,.90);horn(-.28,1.78,-.35,-1,m1,.18);horn(.28,1.78,-.35,1,m1,.18);
+      break;
+    case'serpent':
+      for(let i=0;i<7;i++){const z=.35+i*.30;sphere(root,i%2?m2:m1,{x:Math.sin(i*.75)*.17,y:.72+i*.05,z,sx:.38-i*.022,sy:.33-i*.018,sz:.52});}
+      head(.58,.47,.64,1.18,.12,m1);eye(root,-.20,1.30,-.28);eye(root,.20,1.30,-.28);horn(-.24,1.58,.05,-1,ma,.17);horn(.24,1.58,.05,1,ma,.17);tail(0,.95,2.16,Math.PI,m2,.85);
+      break;
+    case'turtle':
+      sphere(root,m2,{y:.62,sx:1.0,sy:.40,sz:.90});sphere(root,m1,{y:.72,sx:.84,sy:.50,sz:.72});sphere(root,m2,{y:.69,z:-.88,sx:.38,sy:.32,sz:.46});eye(root,-.13,.78,-1.23,.08);eye(root,.13,.78,-1.23,.08);
+      for(const [x,z,rz] of [[-.77,-.36,-.3],[.77,-.36,.3],[-.77,.45,.3],[.77,.45,-.3]])box(root,m1,{x,y:.48,z,sx:.42,sy:.12,sz:.62,rz});
+      for(let i=0;i<5;i++)box(root,ma,{x:(i-2)*.27,y:1.02,z:.05,sx:.16,sy:.04,sz:.30,ry:i*.35});
+      break;
+    case'bat':
+      sphere(root,m2,{y:1.08,sx:.48,sy:.68,sz:.45});head(.48,.46,.44,1.55,-.30,m2);ear(-.19,1.94,-.28,-1,m1,.24);ear(.19,1.94,-.28,1,m1,.24);eye(root,-.16,1.60,-.64,.08);eye(root,.16,1.60,-.64,.08);
+      wing(-.62,1.32,.0,-1,m1,1.35);wing(.62,1.32,.0,1,m1,1.35);for(const w of rig.wings)w.amp=.88;
+      break;
+    case'scarab':
+      sphere(root,m1,{y:.86,sx:.72,sy:.48,sz:.94});sphere(root,m2,{y:1.04,z:-.75,sx:.46,sy:.38,sz:.48});eye(root,-.16,1.11,-1.10,.07);eye(root,.16,1.11,-1.10,.07);
+      box(root,ma,{y:1.16,z:.08,sx:.08,sy:.08,sz:1.18});wing(-.43,1.08,.12,-1,m1,.72);wing(.43,1.08,.12,1,m1,.72);
+      for(const side of [-1,1])for(let i=0;i<3;i++){const g=new THREE.Group();g.position.set(side*.50,.70,-.30+i*.46);root.add(g);cyl(g,m2,{x:side*.30,sx:.14,sy:.68,sz:.14,rz:side*Math.PI/2.7});}
+      horn(0,1.20,-1.06,0,ma,.22);
+      break;
+    case'spider':
+      sphere(root,m1,{y:.78,z:.20,sx:.65,sy:.50,sz:.72});sphere(root,m2,{y:.82,z:-.55,sx:.48,sy:.42,sz:.48});eye(root,-.18,.92,-.93,.07);eye(root,.18,.92,-.93,.07);eye(root,-.07,.80,-.96,.05);eye(root,.07,.80,-.96,.05);
+      for(const side of [-1,1])for(let i=0;i<4;i++){const z=-.42+i*.30;const g=new THREE.Group();g.position.set(side*.36,.72,z);root.add(g);cyl(g,i%2?m2:m1,{x:side*.42,sx:.12,sy:.90,sz:.12,rz:side*(1.05+(i%2)*.18),rx:(i-1.5)*.10});}
+      break;
+    case'axolotl':
+      body(.72,.48,1.12,.64,.14);head(.60,.48,.58,.86,-.76,m1);eye(root,-.20,.98,-1.10,.08);eye(root,.20,.98,-1.10,.08);tail(0,.68,1.05,Math.PI,m2,1.38);
+      for(const side of [-1,1])for(let i=0;i<3;i++)cyl(root,ma,{x:side*(.42+i*.06),y:.96+i*.10,z:-.63+i*.03,sx:.10,sy:.40,sz:.10,rz:side*(.75+i*.12)});
+      for(const [x,z] of [[-.38,-.10],[.38,-.10],[-.38,.55],[.38,.55]])box(root,m2,{x,y:.32,z,sx:.32,sy:.10,sz:.48});
+      break;
+    case'ram':
+      body(.88,.67,1.0,.73,.10);head(.62,.55,.62,1.20,-.70,m2);eye(root,-.20,1.33,-1.02,.08);eye(root,.20,1.33,-1.02,.08);
+      torus(root,ma,{x:-.38,y:1.43,z:-.60,sx:.72,sy:.72,sz:.72,ry:Math.PI/2});torus(root,ma,{x:.38,y:1.43,z:-.60,sx:.72,sy:.72,sz:.72,ry:Math.PI/2});
+      leg(-.35,-.20,m2,.70);leg(.35,-.20,m2,.70);leg(-.35,.52,m2,.70);leg(.35,.52,m2,.70);box(root,ma,{y:.85,z:.08,sx:.16,sy:.06,sz:.85});
+      break;
+    case'kirin':
+      body(.72,.62,1.08,.78,.18);sphere(root,m1,{y:1.25,z:-.62,sx:.46,sy:.54,sz:.56});sphere(root,m2,{y:1.22,z:-1.04,sx:.30,sy:.25,sz:.42});eye(root,-.16,1.38,-.96,.07);eye(root,.16,1.38,-.96,.07);
+      horn(0,1.95,-.66,0,ma,.19);ear(-.24,1.66,-.66,-1,m1,.24);ear(.24,1.66,-.66,1,m1,.24);leg(-.28,-.18,m2,.78);leg(.28,-.18,m2,.78);leg(-.28,.58,m2,.78);leg(.28,.58,m2,.78);tail(0,.90,1.03,Math.PI,m2,1.02);
+      for(let i=0;i<7;i++)sphere(root,ma,{y:1.34-i*.06,z:-.18+i*.26,sx:.08,sy:.11,sz:.08});
+      break;
+    case'shark':
+      sphere(root,m1,{y:.92,sx:.65,sy:.48,sz:1.45});sphere(root,m2,{y:.92,z:-1.15,sx:.58,sy:.42,sz:.68});eye(root,-.26,1.03,-1.62,.07);eye(root,.26,1.03,-1.62,.07);
+      cone(root,m2,{y:1.46,z:.10,sx:.32,sy:.70,sz:.18});cone(root,m2,{x:-.62,y:.88,z:.05,sx:.28,sy:.70,sz:.18,rz:-Math.PI/2});cone(root,m2,{x:.62,y:.88,z:.05,sx:.28,sy:.70,sz:.18,rz:Math.PI/2});
+      const tg=new THREE.Group();tg.position.set(0,.92,1.46);root.add(tg);cone(tg,ma,{y:.34,sx:.40,sy:.75,sz:.18});cone(tg,ma,{y:-.34,sx:.40,sy:.75,sz:.18,rz:Math.PI});rig.tails.push({obj:tg,base:tg.rotation.clone(),amp:.42});
+      break;
+    case'griffin':
+      body(.82,.62,1.02,.76,.18);sphere(root,m1,{y:1.28,z:-.70,sx:.50,sy:.52,sz:.56});beak(0,1.24,-1.15,ma);eye(root,-.18,1.40,-1.05,.08);eye(root,.18,1.40,-1.05,.08);
+      wing(-.62,1.11,.14,-1,m2,1.22);wing(.62,1.11,.14,1,m2,1.22);leg(-.32,-.20,m1,.72);leg(.32,-.20,m1,.72);leg(-.32,.58,m2,.68);leg(.32,.58,m2,.68);tail(0,.90,1.02,Math.PI,m2,1.18);horn(-.20,1.73,-.63,-1,ma,.14);horn(.20,1.73,-.63,1,ma,.14);
+      break;
+  }
+  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  root.position.y=rig.baseY+(rig.float ? .26 : 0);root.rotation.y=0;
+  return {root,rig};
+}
+function clearOwnerPetPreview({silent=false,restore=true}={}){
+  if(G.ownerPetPreviewWrapper){G.ownerPetPreviewWrapper.removeFromParent?.();disposeExternalObject(G.ownerPetPreviewWrapper);}
+  const had=!!G.ownerPetPreviewId;G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;G.ownerPetPreviewId='';
+  if(restore&&G.playerRoot&&!G.ownerFlyActive){setNormalOwnerVisibility(true);refreshCompanionVisuals();setTrailColor();setAuraStyle();applyOwnerVanishVisual();}
+  if(had&&!silent)toast('🧪 Pet-Vorschau beendet · dein vorheriger Charakter, Pets, Aura und Spur sind wieder da.','good',2400);
+}
+function startOwnerPetPreview(id){
+  if(!isEscapeOwner())return false;
+  if(G.ownerFlyActive)return toast('Phoenix Fly ist aktiv. Schalte Phoenix Fly zuerst aus, damit die Pet-Vorschau nicht mit dem Flugmodus kollidiert.','bad',2600),false;
+  const def=ownerPreviewPetDef(id);if(!def||!G.playerRoot)return false;
+  clearOwnerPetPreview({silent:true,restore:false});clearPetVisuals();setNormalOwnerVisibility(false);
+  const built=createOwnerPreviewPetModel(def);built.root.position.y=built.rig.baseY+(def.float ? .26 : 0);G.playerRoot.add(built.root);
+  G.ownerPetPreviewId=def.id;G.ownerPetPreviewWrapper=built.root;G.ownerPetPreviewRig=built.rig;applyOwnerVanishVisual();
+  toast(`🧪 ${def.name} · Owner-Pet-Vorschau aktiv. Im Mod-Menü kannst du jederzeit zurückverwandeln.`,'good',2800);return true;
+}
+function updateOwnerPetPreview(dt,t){
+  const root=G.ownerPetPreviewWrapper,rig=G.ownerPetPreviewRig;if(!root||!rig)return;
+  const moving=Math.hypot(G.moveVel.x,G.moveVel.z)>.15;
+  root.position.y=rig.baseY+(rig.float ? .28 : 0)+(rig.float?Math.sin(t*3.1)*.06:moving?Math.abs(Math.sin(t*8.5))*.035:Math.sin(t*2.2)*.012);
+  root.rotation.z=moving?Math.sin(t*8.5)*.025:0;
+  for(const wingData of rig.wings||[]){const {obj,base,side,amp}=wingData;obj.rotation.copy(base);obj.rotation.z+=side*Math.sin(t*7.2)*(amp||.55);}
+  for(const tailData of rig.tails||[]){const {obj,base,amp}=tailData;obj.rotation.copy(base);obj.rotation.y+=Math.sin(t*3.5)*(amp||.28);}
+  for(const spin of rig.spin||[])spin.rotation.y+=dt*1.2;
+  setGhostMaterialState(root,!!G.ownerVanish,.22);
+}
 function clearPetVisuals(){
   G.petLoadSeq++;
   for(const visual of G.petVisuals||[]){try{visual.mixer?.stopAllAction?.()}catch{}visual.wrapper?.removeFromParent?.();disposeExternalObject(visual.wrapper);}
   G.petVisuals=[];
 }
 function clearCustomVisuals(){
-  clearPetVisuals();G.formLoadSeq++;
+  clearOwnerPetPreview({silent:true,restore:false});clearPetVisuals();G.formLoadSeq++;
   if(G.formMixer){try{G.formMixer.stopAllAction?.()}catch{}G.formMixer=null;}
   G.formActions=null;G.formAction=null;
   removeNamedPlayerChildren('escape-form-wrapper');
@@ -1348,8 +1549,8 @@ function loadPetVisuals(){
       const clips=gltf.animations||[],clip=petAnimationClip(pet,clips);let mixer=null,action=null;
       if(clip){mixer=new THREE.AnimationMixer(gltf.scene);action=mixer.clipAction(clip).reset().setLoop(THREE.LoopRepeat,Infinity).play();action.setEffectiveTimeScale?.(pet.movement==='ground-follow'?1.05:1);if(pet.movement==='ground-follow')action.paused=true;}
       const visual={def:pet,slot,wrapper:wrap,model,mixer,action,groundMoving:false,bindPose,idleRig,rockBase};G.petVisuals.push(visual);
-      const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),side=slot===0?-.72:.72,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
-      const back=pet.movement==='fly-follow'?2.25:(pet.movement==='ground-follow'||pet.movement==='ground-rock')?1.65:1.05;
+      const yaw=G.playerRoot?.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),layout=petFollowerLayout(slot,pets.length),side=layout.side,rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
+      const back=pet.movement==='fly-follow'?layout.back+.60:(pet.movement==='ground-follow'||pet.movement==='ground-rock')?layout.back:Math.max(1.05,layout.back-.55);
       wrap.position.set(G.pos.x-forwardX*back+rightX*side,pet.movement==='fly-follow'?G.pos.y+.18:G.pos.y-PLAYER_HALF+.04,G.pos.z-forwardZ*back+rightZ*side);
       if(pet.movement==='orbit')wrap.position.set(G.pos.x+Math.cos(slot*Math.PI)*1.0,G.pos.y+.18,G.pos.z-1.0);
     },undefined,err=>{if(seq===G.petLoadSeq)console.warn(`Escape.kl: Pet-GLB ${pet.id} konnte nicht geladen werden.`,err)});
@@ -1383,6 +1584,7 @@ function loadCharacterFormVisual(choice=G.state?.characterChoice){
 }
 function refreshCompanionVisuals(){
   if(G.ownerFlyActive){clearPetVisuals();setNormalOwnerVisibility(false);return;}
+  if(G.ownerPetPreviewId){clearPetVisuals();setNormalOwnerVisibility(false);applyOwnerVanishVisual();return;}
   loadPetVisuals();
   const choice=G.state?.characterChoice,special=activeCharacterDef(choice);
   if(special?.asset)loadCharacterFormVisual(choice);else if(G.character?.visualRoot)G.character.visualRoot.visible=true;
@@ -1392,6 +1594,9 @@ function updateCustomVisuals(dt,t){
   if(G.ownerFlyActive){
     G.ownerFlyMixer?.update?.(dt);if(G.ownerFlyModel)G.ownerFlyModel.position.y=-PLAYER_HALF+.10+Math.sin(t*3.0)*.035;
     setNormalOwnerVisibility(false);if((G.petVisuals||[]).length)clearPetVisuals();applyOwnerVanishVisual();return;
+  }
+  if(G.ownerPetPreviewId){
+    setNormalOwnerVisibility(false);if((G.petVisuals||[]).length)clearPetVisuals();updateOwnerPetPreview(dt,t);return;
   }
   const playerPlanarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);
   for(const visual of G.petVisuals||[]){
@@ -1436,13 +1641,13 @@ function updateCustomVisuals(dt,t){
         visual.model.rotation.z+=Math.sin(t*4.25+slot*.6)*.035;
       }
     }
-    const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),side=slot===0?-.72:.72;
+    const yaw=G.playerRoot.rotation.y||0,forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw),rightX=Math.cos(yaw),rightZ=-Math.sin(yaw),layout=petFollowerLayout(slot,Math.max(1,(G.petVisuals||[]).length)),side=layout.side;
     let tx=G.pos.x,ty=G.pos.y,tz=G.pos.z;
     if(pet.movement==='orbit'){
       const a=t*1.12+slot*Math.PI;tx+=Math.cos(a)*(1.02+slot*.12);tz+=Math.sin(a)*(1.02+slot*.12);ty+=.16+Math.sin(t*2.4+slot)*.08;
       wrap.rotation.y+=dt*.18;
     }else{
-      const back=pet.movement==='fly-follow'?2.25:1.65;tx-=forwardX*back;tz-=forwardZ*back;tx+=rightX*side;tz+=rightZ*side;
+      const back=pet.movement==='fly-follow'?layout.back+.60:layout.back;tx-=forwardX*back;tz-=forwardZ*back;tx+=rightX*side;tz+=rightZ*side;
       if(pet.movement==='fly-follow')ty=G.pos.y+.18+(!G.grounded?.42:0)+Math.sin(t*4.2+slot)*.045;
       else ty=G.grounded?G.pos.y-PLAYER_HALF+.035:wrap.position.y;
       const dx=tx-wrap.position.x,dz=tz-wrap.position.z;if(Math.hypot(dx,dz)>.04){const wanted=Math.atan2(dx,dz);wrap.rotation.y=onlineLerpAngle(wrap.rotation.y,wanted,1-Math.exp(-dt*8));}
@@ -1566,8 +1771,8 @@ function buyOrEquipPet(id,returnTo='menu'){
       G.state.wins-=pet.cost;G.state.ownedPets.push(id);const prog=freePetProgress(id);if(prog)G.state[prog.stateKey]=Math.max(prog.startLevel,Number(G.state[prog.stateKey])||0);
     }else return toast(`${pet.name} ist noch nicht freigeschaltet.`,'bad',1800),false;
   }
-  if(G.state.activePets.length>=2)return toast('Du kannst maximal 2 Pets gleichzeitig benutzen. Lege zuerst ein Pet ab.','bad',2300),false;
-  G.state.activePets.push(id);G.state.activePets=[...new Set(G.state.activePets)].slice(0,2);soundBuy();
+  if(G.state.activePets.length>=maxActivePets())return toast(`Du kannst maximal ${maxActivePets()} Pets gleichzeitig benutzen.${G.state.petSlot3Unlocked?'':' Den 3. Slot kannst du für 1.000 JK/Coin freischalten.'}`,'bad',2600),false;
+  G.state.activePets.push(id);G.state.activePets=[...new Set(G.state.activePets)].slice(0,maxActivePets());soundBuy();
   const bonus=petEffectiveBonuses(pet);toast(`${pet.name} ausgerüstet · +${petPercent(bonus.speed)} Speed / +${petPercent(bonus.wins)} Wins.`,'good',2300);refreshPetSelection({returnTo});return true;
 }
 function unequipAllPets(){
@@ -1575,21 +1780,28 @@ function unequipAllPets(){
 }
 function equipBestPets(){
   const owned=PET_DEFS.filter(p=>p.id!=='none'&&G.state.ownedPets.includes(p.id)).sort((a,b)=>{const A=petEffectiveBonuses(a),B=petEffectiveBonuses(b);return ((B.speed+B.wins)-(A.speed+A.wins))||(B.speed-A.speed)||(B.wins-A.wins);});
-  G.state.activePets=owned.slice(0,2).map(p=>p.id);syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
+  G.state.activePets=owned.slice(0,maxActivePets()).map(p=>p.id);syncLegacyActivePet();queuePersist(50);refreshCompanionVisuals();updateHud(true);
   toast(G.state.activePets.length?`Beste Pets ausgerüstet: ${activePetDefs().map(p=>p.name).join(' + ')}`:'Du besitzt noch kein Pet.','good',2200);openPetEquipMenu();
 }
 function openPetEquipMenu(){
   const scrollSnap=modalScrollSnapshot('pets');
-  const active=activePetDefs(),free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
-  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PETS</small><h2>🪽 Pets ausrüsten</h2><p>Maximal zwei Pets gleichzeitig. Free Pets kaufst und levelst du mit Wins. Butterfly nutzt seine echte GLB-Fluganimation; Cat und LEGO bewegen sich beim Laufen dezent mit.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>SLOTS</small><b>${active.length}/2</b></div><div><small>PET-SPEED</small><b>+${petPercent(petBonusTotals().speed)}</b></div><div><small>PET-WINS</small><b>+${petPercent(petBonusTotals().wins)}</b></div></div><div class="ekl-modal-actions"><button class="gold" data-ekl-best-pets>⭐ Beste Pets</button><button data-ekl-clear-pets>Alle ablegen</button><button class="jk" data-ekl-pets-jk-shop>◆ JK-Shop</button></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielte Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Noch keine Free Pets im aktuellen Katalog.</b><span>Die Kategorie ist vorbereitet; spätere kostenlose Pets erscheinen automatisch hier.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Premium-Pets · dauerhaft im Besitz</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div></div>`);
+  const active=activePetDefs(),limit=maxActivePets(),free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
+  const slotHtml=G.state.petSlot3Unlocked
+    ? `<div class="ekl-world-economy-note"><b>✅ 3. Pet-Slot dauerhaft freigeschaltet</b><span>Du kannst jetzt bis zu drei Begleiter gleichzeitig ausrüsten.</span></div>`
+    : `<div class="ekl-world-economy-note"><b>🔒 3. Pet-Slot</b><span>Im JK/Coin-Shop kannst du den dritten Pet-Slot einmalig für <b>${PET_SLOT3_COST.toLocaleString('de-DE')} JK/Coin</b> dauerhaft freischalten.</span><button class="jk" data-ekl-pet-slot3-shop>◆ 3. Pet-Slot · ${PET_SLOT3_COST.toLocaleString('de-DE')} JK/Coin</button></div>`;
+  const wrap=openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · PETS</small><h2>🪽 Pets ausrüsten</h2><p>Standardmäßig sind zwei Pets gleichzeitig möglich. Der dritte Slot ist eine dauerhafte JK/Coin-Freischaltung. Free Pets kaufst und levelst du weiterhin mit Wins.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-big-stat"><div><small>SLOTS</small><b>${active.length}/${limit}</b></div><div><small>PET-SPEED</small><b>+${petPercent(petBonusTotals().speed)}</b></div><div><small>PET-WINS</small><b>+${petPercent(petBonusTotals().wins)}</b></div></div>${slotHtml}<div class="ekl-modal-actions"><button class="gold" data-ekl-best-pets>⭐ Beste Pets</button><button data-ekl-clear-pets>Alle ablegen</button><button class="jk" data-ekl-pets-jk-shop>◆ JK-Shop</button></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielte Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Noch keine Free Pets im aktuellen Katalog.</b><span>Die Kategorie ist vorbereitet; spätere kostenlose Pets erscheinen automatisch hier.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Premium-Pets · dauerhaft im Besitz</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div></div>`);
   wrap.dataset.eklModalKind='pets';
   wrap.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'menu'));
   wrap.querySelectorAll('[data-ekl-pet-upgrade]').forEach(b=>b.onclick=()=>upgradeFreePet(b.dataset.eklPetUpgrade,'menu'));
-  wrap.querySelector('[data-ekl-best-pets]')?.addEventListener('click',equipBestPets);wrap.querySelector('[data-ekl-clear-pets]')?.addEventListener('click',unequipAllPets);wrap.querySelector('[data-ekl-pets-jk-shop]')?.addEventListener('click',openJkCoinShop);restoreModalScrollSnapshot('pets',scrollSnap);
+  wrap.querySelector('[data-ekl-best-pets]')?.addEventListener('click',equipBestPets);
+  wrap.querySelector('[data-ekl-clear-pets]')?.addEventListener('click',unequipAllPets);
+  wrap.querySelector('[data-ekl-pets-jk-shop]')?.addEventListener('click',openJkCoinShop);
+  wrap.querySelector('[data-ekl-pet-slot3-shop]')?.addEventListener('click',openJkCoinShop);
+  restoreModalScrollSnapshot('pets',scrollSnap);
 }
 function openCharacterStudio(tab='base'){
   const active=G.state.characterChoice,specialActive=activeCharacterDef(active);
-  const wrap=openModal(`<div class="ekl-modal ekl-character-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · CHARAKTER STUDIO</small><h2>🧍 Charakter wählen</h2><p>Mann und Frau sind jederzeit kostenlos wechselbar. Spezialcharaktere und Pets sind getrennte Systeme; bis zu zwei Pets können gleichzeitig aktiv sein.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-character-choice"><button data-ekl-character="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>JK.Games Hauptskin + Mann-Animationen</span></button><button data-ekl-character="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>JK.Games Hauptskin + Frau-Animationen</span></button></div><div class="ekl-character-special-head"><b>✨ Spezialcharaktere</b><span>${specialActive?`Aktiv: ${specialActive.name}`:'Kein Spezialcharakter aktiv'}</span></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br>Galaxy-Upgrade: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin · danach +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div><div class="ekl-character-special-head"><b>🪽 Pets</b><span>${petSelectionSummary()}</span></div><div class="ekl-modal-actions"><button data-ekl-open-pets>Pets ausrüsten</button><button data-ekl-best-pets-studio>⭐ Beste Pets</button></div><div class="ekl-character-trail-position"><b>Spur-Position</b><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-character-modal"><div class="ekl-modal-head"><div><small>ESCAPE HUB · CHARAKTER STUDIO</small><h2>🧍 Charakter wählen</h2><p>Mann und Frau sind jederzeit kostenlos wechselbar. Spezialcharaktere und Pets sind getrennte Systeme; zwei Pet-Slots sind Standard, ein dritter Slot kann dauerhaft für 1.000 JK/Coin freigeschaltet werden.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-character-choice"><button data-ekl-character="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>JK.Games Hauptskin + Mann-Animationen</span></button><button data-ekl-character="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>JK.Games Hauptskin + Frau-Animationen</span></button></div><div class="ekl-character-special-head"><b>✨ Spezialcharaktere</b><span>${specialActive?`Aktiv: ${specialActive.name}`:'Kein Spezialcharakter aktiv'}</span></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br>Galaxy-Upgrade: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin · danach +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div><div class="ekl-character-special-head"><b>🪽 Pets</b><span>${petSelectionSummary()}</span></div><div class="ekl-modal-actions"><button data-ekl-open-pets>Pets ausrüsten</button><button data-ekl-best-pets-studio>⭐ Beste Pets</button></div><div class="ekl-character-trail-position"><b>Spur-Position</b><button data-ekl-trail-pos="feet" class="${G.state.trailPlacement==='feet'?'active':''}">👟 Fußspur</button><button data-ekl-trail-pos="back" class="${G.state.trailPlacement==='back'?'active':''}">🎒 Rückenspur</button></div></div>`);
   wrap.querySelectorAll('[data-ekl-character]').forEach(b=>b.onclick=()=>{setCharacterChoice(b.dataset.eklCharacter);openCharacterStudio('base')});
   wrap.querySelectorAll('[data-ekl-special]').forEach(b=>b.onclick=()=>buySpecialCharacter(b.dataset.eklSpecial));
   wrap.querySelectorAll('[data-ekl-special-upgrade]').forEach(b=>b.onclick=()=>upgradeDemonTransformation());
@@ -2458,9 +2670,10 @@ function renderShopBody(tab,skipCapture=false){
     body.querySelector('[data-ekl-vending-upgrade]')?.addEventListener('click',()=>{if(upgradeVendingMachine())openShop('vending')});
     body.querySelector('[data-ekl-vending-manage]')?.addEventListener('click',()=>openVendingManagement('shop'));
   }else if(tab==='pets'){
-    const free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk');
-    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP · ${activePetDefs().length}/2 AKTIV</b><span>Maximal zwei Pets gleichzeitig. Cat, Butterfly und LEGO sind Free Pets mit Wins und weltweisen Upgrade-Limits. Butterfly ist auf gleicher Power-Stufe immer +0,1 Prozentpunkt stärker als Cat. Reptisect ist günstiger als das stärkere EYE Pet.</span><div class="ekl-trail-pos-inline"><button class="gold" data-ekl-best-pets-shop>⭐ Beste Pets</button><button data-ekl-pets-menu-shop>Pets ausrüsten</button></div></div><div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielbare Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Aktuell keine Free Pets im Katalog.</b><span>Die Kategorie bleibt für zukünftige kostenlose Pets bestehen.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Dauerhafte Premium-Pets</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div>`;
-    body.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'shop'));body.querySelectorAll('[data-ekl-pet-upgrade]').forEach(b=>b.onclick=()=>upgradeFreePet(b.dataset.eklPetUpgrade,'shop'));body.querySelector('[data-ekl-best-pets-shop]')?.addEventListener('click',equipBestPets);body.querySelector('[data-ekl-pets-menu-shop]')?.addEventListener('click',openPetEquipMenu);
+    const free=PET_DEFS.filter(p=>p.id!=='none'&&(p.category==='free'||p.currency==='wins')),paid=PET_DEFS.filter(p=>p.id!=='none'&&p.currency==='jk'),limit=maxActivePets();
+    const slotNote=G.state.petSlot3Unlocked?`<div class="ekl-world-economy-note"><b>✅ 3. Pet-Slot aktiv</b><span>Du kannst bis zu drei Pets gleichzeitig benutzen.</span></div>`:`<div class="ekl-world-economy-note"><b>🔒 3. Pet-Slot</b><span>Einmalig ${PET_SLOT3_COST.toLocaleString('de-DE')} JK/Coin im JK-Shop. Danach dauerhaft drei Pets gleichzeitig.</span><button class="jk" data-ekl-pet-slot3-shop>◆ JK-Shop öffnen</button></div>`;
+    body.innerHTML=`<div class="ekl-progression-note"><b>🪽 PET SHOP · ${activePetDefs().length}/${limit} AKTIV</b><span>Standardmäßig zwei Pets. Mit der dauerhaften 1.000-JK/Coin-Freischaltung stehen drei Slots bereit. Cat, Butterfly und LEGO bleiben Free Pets mit Wins und weltweisen Upgrade-Limits.</span><div class="ekl-trail-pos-inline"><button class="gold" data-ekl-best-pets-shop>⭐ Beste Pets</button><button data-ekl-pets-menu-shop>Pets ausrüsten</button></div></div>${slotNote}<div class="ekl-character-special-head"><b>🆓 Free Pets</b><span>Kostenlos erspielbare Pets</span></div>${free.length?`<div class="ekl-shop-grid">${free.map(petCardHtml).join('')}</div>`:`<div class="ekl-world-economy-note"><b>Aktuell keine Free Pets im Katalog.</b><span>Die Kategorie bleibt für zukünftige kostenlose Pets bestehen.</span></div>`}<div class="ekl-character-special-head"><b>◆ JK Pets</b><span>Dauerhafte Premium-Pets</span></div><div class="ekl-shop-grid">${paid.map(petCardHtml).join('')}</div><div class="ekl-world-economy-note"><b>Aktiv:</b><span>${petSelectionSummary()}</span></div>`;
+    body.querySelectorAll('[data-ekl-pet-pick]').forEach(b=>b.onclick=()=>buyOrEquipPet(b.dataset.eklPetPick,'shop'));body.querySelectorAll('[data-ekl-pet-upgrade]').forEach(b=>b.onclick=()=>upgradeFreePet(b.dataset.eklPetUpgrade,'shop'));body.querySelector('[data-ekl-best-pets-shop]')?.addEventListener('click',equipBestPets);body.querySelector('[data-ekl-pets-menu-shop]')?.addEventListener('click',openPetEquipMenu);body.querySelector('[data-ekl-pet-slot3-shop]')?.addEventListener('click',openJkCoinShop);
   }else if(tab==='characters'){
     const active=G.state.characterChoice;
     body.innerHTML=`<div class="ekl-progression-note"><b>🧍 CHARAKTER SHOP</b><span>Mann/Frau jederzeit kostenlos. Der Dämonen-Slot nutzt deine gelieferte GLB-Datei und kann nach dem Kauf per JK/Coin zum Galaxy-Skin aufgewertet werden.</span></div><div class="ekl-character-choice"><button data-ekl-character-shop="male" class="${active==='male'?'active':''}"><b>♂ Mann</b><span>Hauptskin</span></button><button data-ekl-character-shop="female" class="${active==='female'?'active':''}"><b>♀ Frau</b><span>Hauptskin</span></button></div><div class="ekl-shop-grid">${SPECIAL_CHARACTERS.map(c=>{const owned=G.state.ownedSpecialCharacters.includes(c.id),isActive=active===c.id,isDemon=c.id==='demon-transformation',upgraded=isDemon&&G.state.demonGalaxyUpgrade;return `<article class="${owned?'owned':''} ${c.currency==='jk'?'jk':''}"><small>${c.currency==='jk'?'JK/COIN':'SPEZIALCHARAKTER'}</small><h3>${c.name}</h3><p>${c.desc}${isDemon?`<br><b>Galaxy-Upgrade</b>: ${c.upgradeCost.toLocaleString('de-DE')} JK/Coin → +2,5 % Speed / Wins.`:''}</p><div class="ekl-item-actions"><button data-ekl-special-shop="${c.id}" ${isActive?'disabled':''}>${isActive?'AKTIV':owned?'Ausrüsten':characterPriceLabel(c)}</button>${isDemon&&owned?`<button data-ekl-special-upgrade-shop="${c.id}" ${upgraded?'disabled':''}>${upgraded?'Galaxy aktiv':`${c.upgradeCost.toLocaleString('de-DE')} JK/Coin`}</button>`:''}</div></article>`}).join('')}</div>`;
@@ -2517,6 +2730,7 @@ function canApplyJkPurchase(kind){
   if(kind==='speedTreadmill:galaxy')return !G.state?.ownedTreadmills?.includes('galaxy');
   if(kind==='speedTreadmill:admin')return !G.state?.ownedTreadmills?.includes('admin');
   if(kind==='trail:galaxy')return !G.state?.ownedTrails?.includes('galaxy');
+  if(kind==='petSlot:3')return !G.state?.petSlot3Unlocked;
   if(kind==='pet:cyclops-wing')return !G.state?.ownedPets?.includes('cyclops-wing');
   if(kind==='pet:reptisect')return !G.state?.ownedPets?.includes('reptisect');
   if(kind==='pet:phoenix')return !G.state?.ownedPets?.includes('phoenix');
@@ -2531,8 +2745,9 @@ function grantJkCoinPurchase(kind,amount=1){
   else if(kind==='speedTreadmill:galaxy'){if(!G.state.ownedTreadmills.includes('galaxy'))G.state.ownedTreadmills.push('galaxy');}
   else if(kind==='speedTreadmill:admin'){if(!G.state.ownedTreadmills.includes('admin'))G.state.ownedTreadmills.push('admin');}
   else if(kind==='trail:galaxy'){if(!G.state.ownedTrails.includes('galaxy'))G.state.ownedTrails.push('galaxy');}
+  else if(kind==='petSlot:3'){G.state.petSlot3Unlocked=true;G.state.activePets=Array.isArray(G.state.activePets)?[...new Set(G.state.activePets)].slice(0,3):[];syncLegacyActivePet();refreshCompanionVisuals();}
   else if(kind==='speedBoost:2'){G.state.jkSpeedBoostUntil=Date.now()+15*60*1000;}
-  else if(kind==='pet:cyclops-wing'||kind==='pet:reptisect'||kind==='pet:phoenix'){const id=kind.split(':')[1];if(!G.state.ownedPets.includes(id))G.state.ownedPets.push(id);G.state.activePets=Array.isArray(G.state.activePets)?G.state.activePets:[];if(!G.state.activePets.includes(id)&&G.state.activePets.length<2)G.state.activePets.push(id);syncLegacyActivePet();refreshCompanionVisuals();}
+  else if(kind==='pet:cyclops-wing'||kind==='pet:reptisect'||kind==='pet:phoenix'){const id=kind.split(':')[1];if(!G.state.ownedPets.includes(id))G.state.ownedPets.push(id);G.state.activePets=Array.isArray(G.state.activePets)?G.state.activePets:[];if(!G.state.activePets.includes(id)&&G.state.activePets.length<maxActivePets())G.state.activePets.push(id);syncLegacyActivePet();refreshCompanionVisuals();}
   else if(kind==='character:demon-transformation'){if(!G.state.ownedSpecialCharacters.includes('demon-transformation'))G.state.ownedSpecialCharacters.push('demon-transformation');}
   else if(kind==='character:demon-galaxy'){if(!G.state.ownedSpecialCharacters.includes('demon-transformation'))return false;G.state.demonGalaxyUpgrade=true;if(G.state.characterChoice==='demon-transformation')mountCharacter('demon-transformation');}
   else return false;
@@ -2584,7 +2799,7 @@ function openRecords(){
   openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>PERSÖNLICHE ESCAPE-REKORDE</small><h2>🏆 Records Board</h2><p>Level, Speed, Wins und deine Welt-Bestzeiten auf einen Blick.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-record-grid"><article><small>AKTIVE WELT</small><b>${escapeWorldById(worldId)?.name||worldId}</b><span>Trainingswelt im Hub</span></article><article><small>LEVEL</small><b>${level}</b><span>noch ${fmt(Math.max(0,lp.to-lp.xp))} Power bis Level ${level+1}</span></article><article><small>EFFEKTIVER SPEED</small><b>${Math.round(speed)}</b><span>Basis ${Math.round(rawSpeedStat(worldId))}/300 · Extras +${(totalSpeedBonus()*100).toFixed(1).replace('.',',')} %</span></article><article><small>LAUFTEMPO</small><b>${movementSpeed().toFixed(1).replace('.',',')} u/s</b><span>Speed 300 = reguläres Bewegungslimit</span></article><article><small>POWER-MULTIPLIKATOR</small><b>×${normalPowerMultiplier().toFixed(2).replace('.',',')}</b><span>Additiv: Trail · Aura · Rebirth · Core · Zeitboost</span></article>${worlds.map(({w,best,stars,runs})=>`<article><small>WORLD ${w.number}</small><b>Lv ${currentLevel(w.id)} · Sp ${Math.round(currentSpeedStat(w.id))}</b><span>${w.name} · ${runs} Finishes · ${best?timeText(best):'keine Bestzeit'} · ${'★'.repeat(stars)}${'☆'.repeat(Math.max(0,3-stars))}</span></article>`).join('')}<article><small>STAGE-WINS</small><b>${Number(G.state.stageWinsCollected||0).toLocaleString('de-DE')}</b><span>über gelbe WIN-Pads gesammelt</span></article><article><small>RACE BEST</small><b>${raceBest?timeText(raceBest):'–'}</b><span>${races} Läufe</span></article><article><small>SKYRUN BEST</small><b>${onlyBest?timeText(onlyBest):'–'}</b><span>${onlyRuns} Finishes · Speed 100 · 150+ Meter</span></article><article><small>REBIRTHS · AKTIVE WELT</small><b>${worldRebirthCount(worldId)}</b><span>${escapeWorldById(worldId)?.name||worldId} · Power ×${rebirthMultiplier(worldId).toFixed(2).replace('.',',')}</span></article><article><small>BEST RUN COMBO</small><b>×${G.state.bestRunCombo||0}</b><span>Neue Plattformen ohne langen Unterbruch</span></article></div></div>`);
 }
 function showHelp(){
-  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V499</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt bis Level 1000 auf 300. In Wind World steigt er danach als Level-Overdrive kontrolliert weiter: bis +15 % bei Level 2500. Dadurch bleibt z. B. Level 1400 nicht mehr bei exakt Speed 300 hängen. Kleine additive Boni aus Chips, Auren, Pets, Verwandlung und Speed Core kommen zusätzlich dazu.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst maximal zwei Pets gleichzeitig benutzen. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins und läuft dir animiert hinterher. Phönix: +3,0 % Speed / +2,5 % Wins und folgt dir dauerhaft fliegend mit leichter Verzögerung. Die Dämonenverwandlung bleibt ein getrenntes System und kann gleichzeitig mit Pets aktiv sein.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
+  openModal(`<div class="ekl-modal"><div class="ekl-modal-head"><div><small>ESCAPE.KL · V502</small><h2>Wie funktioniert Escape.kl?</h2><p>Laufen und Training erzeugen Level-Power. Level erhöht deinen physischen Speed bis regulär 300. Wins, Gear und Rebirth beschleunigen deinen Fortschritt. Normale Speed- und Power-Boni sind bewusst additiv gebalanced.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-help"><article><b>⚡ Speed 0–300</b><p>Dein Basis-Speed steigt bis Level 1000 auf 300. In Wind World steigt er danach als Level-Overdrive kontrolliert weiter: bis +15 % bei Level 2500. Dadurch bleibt z. B. Level 1400 nicht mehr bei exakt Speed 300 hängen. Kleine additive Boni aus Chips, Auren, Pets, Verwandlung und Speed Core kommen zusätzlich dazu.</p></article><article><b>⬆ Level-Power</b><p>Normales Laufen und Laufbänder erzeugen intern Trainings-Power. Die internen Bewegungspunkte werden nicht im HUD angezeigt.</p></article><article><b>🏆 WIN-Pads</b><p>Gelbes WIN-Pad rechts = Wins kassieren und zurück zum Weltstart. Wer weiter zur nächsten Stage will, lässt das Pad aus.</p></article><article><b>◆ Wiederbelebung</b><p>Fällst du in World 1, 2, 3 oder Water World herunter, wirst du sofort am Weltstart eingesetzt und kannst ohne Pause weiterspielen. Für 5 Sekunden kannst du optional an die letzte sichere Plattform zurückspringen: World 1 kostet 10 JK/Coin, World 2 kostet 20 JK/Coin, World 3 kostet 30 JK/Coin und Water World kostet 40 JK/Coin. Ohne Kauf spielst du einfach vom Start weiter.</p></article><article><b>🏃 Laufbänder</b><p>FREE ×1,3 · FREE+ ×1,6 · SILBER ×2 · GOLD ×2,8 · DIAMOND ×4. Im Pausenmenü kannst du freigeschaltete Laufbänder selbst erzeugen; GALAXY ×6 und ADMIN ×10 gibt es nur dort als Premium-Spawn-Laufbänder.</p></article><article><b>🏪 Escape Shop</b><p>Der Escape Shop ist ein begehbares, ebenerdiges Haus. Links an der Wand stehen das sichtbare Daily Wheel, Daily Quests und der weltbezogene Rebirth. Geradeaus befindet sich der World Shop. Jede Welt besitzt eigene Preis-/Upgrade-Limits; Water World (World 4) ist als Owner-Testwelt aktiv und besitzt bereits seine eigene Shop-Stufe. Eine zweite Etage gibt es bewusst nicht mehr.</p></article><article><b>🌈 Trails + Auren</b><p>Fuß- oder Rückenspuren bleiben kurz als Partikel hinter dir. Trails geben kleine Power-Boni. Auren geben zusätzlich einen kleinen Speed-Prozentbonus; alle normalen Boni werden addiert statt miteinander multipliziert.</p></article><article><b>🪽 Pets + Verwandlung</b><p>Du kannst standardmäßig zwei Pets gleichzeitig benutzen. Im JK/Coin-Shop lässt sich einmalig für 1.000 JK/Coin ein dritter Pet-Slot dauerhaft freischalten. EYE: +2 % Speed/Wins. Free Pet Cat: startet bei +0,1 % Speed/Wins und kann weltweise bis +1,6 % verbessert werden. Reptisect: +1,5 % Speed/Wins. Phönix: +3,0 % Speed / +2,5 % Wins. Die Dämonenverwandlung bleibt getrennt. Der Owner besitzt zusätzlich ein Pet-Lab mit 20 rein programmierten Testformen; beim Zurückverwandeln bleiben alle vorherigen Pets und Effekte ausgerüstet.</p></article><article><b>🥤 Vending Machine</b><p>Mit Wins kaufen und auf Stufe 1–10 ausbauen. Über Pause platzierst du deine eigene Maschine auf der aktuellen Map und öffnest sie mit E. Stufe 1–5 nutzt das erste GLB, Stufe 6–10 das zweite. Normale Getränke geben bis +2,0 % und JK/Coin-Win-Tränke verstärken den nächsten Stage-/Finish-Payout.</p></article><article><b>🧩 Core-Upgrades</b><p>Training Core, Treadmill Core, Speed Core und Win Core werden mit Wins ausgebaut und haben jeweils drei Stufen. Speed Core darf den effektiven Speed kontrolliert über 300 anheben.</p></article><article><b>🔄 Rebirth</b><p>Rebirth braucht hohe Level, setzt die aktive Welt zurück und gibt einen permanenten Power-Multiplikator.</p></article><article><b>👑 Owner-Mod-Menü</b><p>Nur der Owner sieht das Escape-Mod-Menü für Level, Speed, Wins, Rebirths, Weltfreischaltung, Perks und Events. V502 ergänzt dort ein Pet-Lab mit 20 prozedural programmierten Test-Pets. Phoenix Fly bleibt ein eigener Modus.</p></article><article><b>☀️ Dauerhaft Tag</b><p>Escape.KL bleibt dauerhaft hell. Hub, Welten, Race und SKYRUN besitzen keinen Tag-/Nacht-Zyklus mehr.</p></article><article><b>🏔️ SKYRUN</b><p>Vertikale Zeitjagd über 140 Plattformen und 150+ Meter. Jeder hat exakt Speed 100; Speed-Items, Auren, Pets und Sprint geben dort keinen Vorteil. Es gibt keine Checkpoints und kein JK/Coin-Revive. Ein Sturz bedeutet Neustart ganz unten. An neun Höhenmarken gibt es feste Wins; am Ziel immer dieselbe feste Win-Belohnung.</p></article><article><b>🎮 Steuerung</b><p>PC: WASD · Space · Shift · Maus. Handy: linker Daumen Bewegung, rechter Daumen Kamera sowie separate Sprint-, Springen- und Aktion-Buttons.</p></article></div></div>`);
 }
 function ownerSetExactSpeed(worldId,value){
   if(!isEscapeOwner())return false;
@@ -2611,8 +2826,22 @@ function ownerSetActiveAura(id){
   if(id!=='none'&&!G.state.ownedAuras.includes(id))G.state.ownedAuras.push(id);
   G.state.aura=id;setAuraStyle();return true;
 }
+function openOwnerPetLab(){
+  if(!isEscapeOwner())return toast('Nur für den Owner.','bad');
+  G.paused=true;
+  const current=ownerPreviewPetDef(G.ownerPetPreviewId);
+  const cards=OWNER_PREVIEW_PETS.map((pet,i)=>`<article class="${G.ownerPetPreviewId===pet.id?'owned':''}"><small>OWNER TEST PET ${String(i+1).padStart(2,'0')}</small><h3>${pet.name}</h3><p>Komplett prozedural in Escape.KL gebaut · ${pet.float?'Flug-/Schwebeform':'Bodenform'} · eigene Silhouette und Farben.</p><button class="owner" data-mod-preview-pet="${pet.id}">${G.ownerPetPreviewId===pet.id?'AKTIV · erneut ansehen':'In Pet verwandeln'}</button></article>`).join('');
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · V502 PET LAB</small><h2>🧪 20 neue Pet-Prototypen</h2><p>Diese 20 Pets bestehen vollständig aus programmierter Three.js-Geometrie und brauchen keine zusätzlichen GLB-Dateien. Wähle eins aus: Dein normaler Charakter und deine ausgerüsteten Pets werden nur ausgeblendet – dein Equipment wird nicht verändert.</p></div><button data-mod-pet-lab-back>×</button></div><div class="ekl-world-economy-note"><b>Aktuelle Form:</b><span>${current?current.name:'Normaler Escape-Charakter'}${G.ownerFlyActive?' · Phoenix Fly aktiv':''}</span></div><div class="ekl-shop-grid">${cards}</div><div class="ekl-modal-actions"><button class="gold" data-mod-preview-normal ${G.ownerPetPreviewId?'':'disabled'}>↩ Zurückverwandeln</button><button data-mod-pet-lab-back>Zurück zum Mod-Menü</button></div></div>`);
+  wrap.querySelectorAll('[data-mod-pet-lab-back]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(openOwnerModMenu,0);});
+  wrap.querySelectorAll('[data-mod-preview-pet]').forEach(b=>b.onclick=()=>{
+    if(startOwnerPetPreview(b.dataset.modPreviewPet)){closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;}
+  });
+  wrap.querySelector('[data-mod-preview-normal]')?.addEventListener('click',()=>{
+    clearOwnerPetPreview();closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;
+  });
+}
 function ownerClearActivePerks({resetPowerTier=true}={}){
-  if(!isEscapeOwner())return false;
+  if(!isEscapeOwner())return false;if(G.ownerPetPreviewId)clearOwnerPetPreview({silent:true,restore:true});
   G.state.trail='none';G.state.aura='none';G.state.activePets=[];G.state.activePet='none';if(SPECIAL_CHARACTERS.some(c=>c.id===G.state.characterChoice))G.state.characterChoice='male';G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;
   if(resetPowerTier)G.state.stepButtonTier=0;
   setTrailColor();setAuraStyle();mountCharacter(G.state.characterChoice);queuePersist(50);updateHud(true);return true;
@@ -2624,7 +2853,7 @@ function openOwnerModMenu(){
   const powerOptions=STEP_BUTTONS.map(u=>`<option value="${u.tier}" ${Number(G.state.stepButtonTier||0)===u.tier?'selected':''}>Stufe ${u.tier} · +${u.gain} Power</option>`).join('');
   const trailOptions=TRAILS.map(t=>`<option value="${t.id}" ${G.state.trail===t.id?'selected':''}>${t.name}</option>`).join('');
   const auraOptions=AURAS.map(a=>`<option value="${a.id}" ${G.state.aura===a.id?'selected':''}>${a.name}</option>`).join('');
-  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${worldRebirthCount(worldId)}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-fly>🪽 Phoenix Fly ${G.ownerFlyActive?'AUS':'AN'}</button><button class="owner" data-mod-vanish>👻 Vanish ${G.ownerVanish?'AUS':'AN'}</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
+  const wrap=openModal(`<div class="ekl-modal ekl-owner-mod"><div class="ekl-modal-head"><div><small>OWNER ONLY · ESCAPE.KL</small><h2>👑 Mod-Menü</h2><p>Direkte Entwicklungs-/Eventsteuerung. Zusätzlich kannst du alle aktiven Perks, Trails, Auren und Boosts sofort ablegen. Bereits gekaufte Trails/Auren bleiben im Besitz.</p></div><button data-ekl-modal-close>×</button></div><div class="ekl-owner-mod-grid"><label><span>Welt</span><select data-mod-world>${options}</select></label><label><span>Level</span><input data-mod-level type="number" min="0" max="100000" value="${currentLevel(worldId)}"></label><label><span>Speed</span><input data-mod-speed type="number" min="0" max="${OWNER_SPEED_SOFT_CAP}" step="1" value="${Math.round(rawSpeedStat(worldId))}"></label><label><span>Wins</span><input data-mod-wins type="number" min="0" step="1" value="${Math.floor(G.state.wins)}"></label><label><span>Rebirths</span><input data-mod-rebirth type="number" min="0" max="10000" step="1" value="${worldRebirthCount(worldId)}"></label><label><span>Admin-Event Power</span><select data-mod-event>${[1,2,3,5,10,25,50,100].map(v=>`<option value="${v}" ${Number(G.state.ownerEventMultiplier||1)===v?'selected':''}>×${v}</option>`).join('')}</select></label><label><span>Power-Perk</span><select data-mod-power-tier>${powerOptions}</select></label><label><span>Aktive Spur</span><select data-mod-trail>${trailOptions}</select></label><label><span>Aktive Aura</span><select data-mod-aura>${auraOptions}</select></label></div><div class="ekl-owner-quick"><button data-mod-level-plus>+100 Level</button><button data-mod-speed-plus>+25 Speed</button><button data-mod-speed-max>Speed 300</button><button data-mod-unlock>Alle Welten frei</button><button data-mod-reset-world>Welt zurücksetzen</button><button data-mod-reset-rebirth>Rebirths 0</button><button data-mod-clear-trail>Spur entfernen</button><button data-mod-clear-aura>Aura entfernen</button><button data-mod-clear-boosts>Boosts / Event aus</button><button class="owner" data-mod-clear-all>Alle Perks & Effekte entfernen</button><button class="owner" data-mod-pet-lab>🧪 Pet-Lab · 20 Formen</button>${G.ownerPetPreviewId?`<button class="owner" data-mod-pet-normal>↩ ${ownerPreviewPetDef(G.ownerPetPreviewId)?.name||'Pet'} zurückverwandeln</button>`:''}<button class="owner" data-mod-fly>🪽 Phoenix Fly ${G.ownerFlyActive?'AUS':'AN'}</button><button class="owner" data-mod-vanish>👻 Vanish ${G.ownerVanish?'AUS':'AN'}</button><button class="owner" data-mod-hitboxes>Hitboxen ${G.hitboxDebugEnabled?'AUS':'AN'}</button></div><div class="ekl-modal-actions"><button class="gold" data-mod-apply>Werte übernehmen</button><button data-ekl-modal-close>Schließen</button></div></div>`);
   // V460: X/Schließen im Owner-Menü führt sauber zurück ins Pause-Menü. So bleibt
   // kein unsichtbarer Pause-Zustand hängen.
   wrap.querySelectorAll('[data-ekl-modal-close]').forEach(b=>b.onclick=()=>{closeModal();setTimeout(showPause,0);});
@@ -2653,6 +2882,8 @@ function openOwnerModMenu(){
   wrap.querySelector('[data-mod-clear-aura]')?.addEventListener('click',()=>{ownerSetActiveAura('none');refresh();queuePersist(50);updateHud(true);toast('Aura abgelegt. Besitz bleibt erhalten.','good');});
   wrap.querySelector('[data-mod-clear-boosts]')?.addEventListener('click',()=>{G.state.jkSpeedBoostUntil=0;G.state.ownerEventMultiplier=1;refresh();queuePersist(50);updateHud(true);toast('Temporäre Boosts und Admin-Event-Multiplikator entfernt.','good');});
   wrap.querySelector('[data-mod-clear-all]')?.addEventListener('click',()=>{ownerClearActivePerks({resetPowerTier:true});refresh();toast('Alle aktiven Perks, Spur, Aura und Boosts entfernt.','good',2200);});
+  wrap.querySelector('[data-mod-pet-lab]')?.addEventListener('click',()=>{closeModal();setTimeout(openOwnerPetLab,0);});
+  wrap.querySelector('[data-mod-pet-normal]')?.addEventListener('click',()=>{clearOwnerPetPreview();closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;});
   wrap.querySelector('[data-mod-fly]')?.addEventListener('click',()=>{setOwnerFly(!G.ownerFlyActive);closeModal();G.paused=false;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;});
   wrap.querySelector('[data-mod-vanish]')?.addEventListener('click',()=>{setOwnerVanish(!G.ownerVanish);const b=wrap.querySelector('[data-mod-vanish]');if(b)b.textContent=`👻 Vanish ${G.ownerVanish?'AUS':'AN'}`;});
   wrap.querySelector('[data-mod-hitboxes]')?.addEventListener('click',()=>{
@@ -2769,7 +3000,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-18-jkcoin-v491-reptisect-price";
+  const VERSION = "2026-08-18-jkcoin-v502-escape-third-pet-slot";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -278,6 +278,7 @@
     { game:"escape", id:"escape-treadmill-galaxy", name:"GALAXY Laufband ×6", cost:1200, text:"Spawnbares GALAXY-Laufband für Escape.kl.", grant:{kind:"speedTreadmill:galaxy",amount:1} },
     { game:"escape", id:"escape-treadmill-admin", name:"ADMIN Laufband ×10", cost:2000, text:"Spawnbares ADMIN-Laufband für Escape.kl.", grant:{kind:"speedTreadmill:admin",amount:1} },
     { game:"escape", id:"escape-trail-galaxy", name:"Galaxy Keyboard Trail", cost:300, text:"Galaxy-Partikelspur mit additivem Power-Bonus für Escape.kl.", grant:{kind:"trail:galaxy",amount:1} },
+    { game:"escape", id:"escape-pet-slot-3", name:"3. Pet-Slot", cost:1000, text:"Dauerhafte Freischaltung: In Escape.kl können danach bis zu drei Pets gleichzeitig ausgerüstet werden.", grant:{kind:"petSlot:3",amount:1} },
     { game:"escape", id:"escape-pet-eye", name:"EYE Pet", cost:500, text:"Fliegendes Escape-Pet mit +2 % Speed und +2 % Wins.", grant:{kind:"pet:cyclops-wing",amount:1} },
     { game:"escape", id:"escape-pet-reptisect", name:"Reptisect Pet", cost:400, text:"Animiertes Lauf-Pet. Folgt dir mit leichter Verzögerung und gibt +1,5 % Speed sowie +1,5 % Wins.", grant:{kind:"pet:reptisect",amount:1} },
     { game:"escape", id:"escape-pet-phoenix", name:"Phönix Pet", cost:3000, text:"Teuerstes Escape-Pet: animierter Flug-Follower mit +3,0 % Speed und +2,5 % Wins.", grant:{kind:"pet:phoenix",amount:1} },
@@ -479,7 +480,7 @@
   function formatChance(value){const n=Math.max(0,Number(value)||0);return n>=1?String(Number(n.toFixed(3))).replace(".",","):String(Number(n.toFixed(6))).replace(".",",");}
   function bigCardsStorageTarget(entry){if(entry?.game!=="bigcards")return 0;const kind=String(entry?.grant?.kind||"");if(!kind.startsWith("featuredStorage:"))return 0;return Math.max(0,Math.floor(Number(kind.split(":")[1])||0));}
   function bigCardsPermanentOwned(entry){if(entry?.game!=="bigcards")return false;const kind=String(entry?.grant?.kind||"");try{if(kind==="bulkLevelUnlock"||kind==="bulkRebirthUnlock")return false;if(kind==="vipUnlock")return !!window.BigCardsKL?.hasVip?.()||Number(coinState()?.gamePurchases?.[entry.id]||0)>0;const target=bigCardsStorageTarget(entry);return target?Math.floor(Number(window.BigCardsKL?.getFeaturedStorageTier?.())||0)>=target:false;}catch{return false;}}
-  function gamePermanentOwned(entry){if(bigCardsPermanentOwned(entry))return true;if(entry?.game!=="escape")return false;const kind=String(entry?.grant?.kind||"");if(kind==="speedBoost:2")return false;try{const st=window.EscapeKL?.getState?.()||{};if(kind.startsWith("pet:"))return Array.isArray(st.ownedPets)&&st.ownedPets.includes(kind.split(":")[1]);if(kind==="trail:galaxy")return Array.isArray(st.ownedTrails)&&st.ownedTrails.includes("galaxy");if(kind==="speedTreadmill:gold")return Number(st.jkTreadmillTier||0)>=1||st.ownedTreadmills?.includes?.("gold");if(kind==="speedTreadmill:diamond")return Number(st.jkTreadmillTier||0)>=2||st.ownedTreadmills?.includes?.("diamond");if(kind==="speedTreadmill:galaxy")return st.ownedTreadmills?.includes?.("galaxy");if(kind==="speedTreadmill:admin")return st.ownedTreadmills?.includes?.("admin");if(kind==="character:demon-transformation")return st.ownedSpecialCharacters?.includes?.("demon-transformation");if(kind==="character:demon-galaxy")return !!st.demonGalaxyUpgrade;}catch{}return Number(coinState()?.gamePurchases?.[entry.id]||0)>0;}
+  function gamePermanentOwned(entry){if(bigCardsPermanentOwned(entry))return true;if(entry?.game!=="escape")return false;const kind=String(entry?.grant?.kind||"");if(kind==="speedBoost:2")return false;try{const st=window.EscapeKL?.getState?.()||{};if(kind==="petSlot:3")return !!st.petSlot3Unlocked;if(kind.startsWith("pet:"))return Array.isArray(st.ownedPets)&&st.ownedPets.includes(kind.split(":")[1]);if(kind==="trail:galaxy")return Array.isArray(st.ownedTrails)&&st.ownedTrails.includes("galaxy");if(kind==="speedTreadmill:gold")return Number(st.jkTreadmillTier||0)>=1||st.ownedTreadmills?.includes?.("gold");if(kind==="speedTreadmill:diamond")return Number(st.jkTreadmillTier||0)>=2||st.ownedTreadmills?.includes?.("diamond");if(kind==="speedTreadmill:galaxy")return st.ownedTreadmills?.includes?.("galaxy");if(kind==="speedTreadmill:admin")return st.ownedTreadmills?.includes?.("admin");if(kind==="character:demon-transformation")return st.ownedSpecialCharacters?.includes?.("demon-transformation");if(kind==="character:demon-galaxy")return !!st.demonGalaxyUpgrade;}catch{}return Number(coinState()?.gamePurchases?.[entry.id]||0)>0;}
   function bigCardsBulkAccessMeta(entry){if(entry?.game!=="bigcards")return null;const kind=String(entry?.grant?.kind||"");if(kind!=="bulkLevelUnlock"&&kind!=="bulkRebirthUnlock")return null;try{const getter=kind==="bulkRebirthUnlock"?"getBulkRebirthAccessState":"getBulkLevelAccessState",st=window.BigCardsKL?.[getter]?.()||{};const until=Math.max(0,Number(st.until)||0),active=!!st.active&&until>Date.now(),ms=Math.max(0,until-Date.now()),sec=Math.max(0,Math.ceil(ms/1000)),h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),ss=sec%60;return {active,until,kind,remaining:`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`};}catch{return {active:false,until:0,kind,remaining:"00:00:00"};}}
   const GAME_SHOP_CATEGORIES = Object.freeze({
     packs:{label:"Packs & Kisten",icon:"🎴",desc:"Packs, Kisten und Ziehungen."},
@@ -506,7 +507,7 @@
     if(kind.startsWith("aura:"))return"auras";
     if(kind.startsWith("bind:"))return"bindings";
     if(kind.startsWith("trail:"))return"trails";
-    if(kind.startsWith("pet:"))return"pets";
+    if(kind.startsWith("pet:")||kind==="petslot:3")return"pets";
     if(kind.startsWith("jkmaker:"))return"makers";
     if(kind.startsWith("featuredstorage:")||/storage|speicher|slot/.test(hay))return"storage";
     if(/skin|design|figure|figur|cosmetic|kleidung|outfit|theme|lack|farbe/.test(hay))return"cosmetics";
