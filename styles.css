@@ -20341,3 +20341,21 @@ body.gfx-ultra .jk-exclusive-card.jk-exclusive-realgalaxy { box-shadow: inset 0 
   .phone-shortcut.phone-shortcut-has-model-v512{padding-top:112px!important}
   .phone-shortcut-model-v511{top:-3px!important;width:106px!important;height:120px!important}
 }
+
+/* ========================================================================== 
+   JK.Games V514 · echtes Smartphone vollständig in der Dashboard-Kachel
+   ========================================================================== */
+.phone-shortcut.phone-shortcut-has-model-v512{
+  padding-top:142px!important;
+}
+.phone-shortcut-model-v511{
+  top:2px!important;
+  width:94px!important;
+  height:140px!important;
+  filter:none!important;
+}
+.phone-shortcut-canvas-v511{width:100%!important;height:100%!important;background:transparent!important}
+@media(max-width:720px){
+  .phone-shortcut.phone-shortcut-has-model-v512{padding-top:124px!important}
+  .phone-shortcut-model-v511{top:2px!important;width:82px!important;height:122px!important}
+}

@@ -14006,9 +14006,15 @@ function phoneToneContext(event = null) {
   const AudioCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtor) return null;
 
-  const mayUnlock = hasTransientUserGesture(event);
+  // V514: WebAudio wird ausschließlich in einem echten CLICK oder KEYDOWN erzeugt/
+  // resumed. Automatische App-/Firebase-Aufrufe dürfen den Browser nicht mehr zum
+  // Starten eines AudioContext auffordern und erzeugen deshalb keine Autoplay-Warnung.
+  const trustedUnlock = event?.isTrusted === true
+    && (event.type === "click" || event.type === "keydown")
+    && navigator.userActivation?.isActive === true;
+
   if (!phoneToneAudioContext) {
-    if (!mayUnlock) return null;
+    if (!trustedUnlock) return null;
     try {
       phoneToneAudioContext = new AudioCtor();
     } catch {
@@ -14016,7 +14022,7 @@ function phoneToneContext(event = null) {
     }
   }
 
-  if (phoneToneAudioContext.state === "suspended" && mayUnlock) {
+  if (phoneToneAudioContext.state === "suspended" && trustedUnlock) {
     phoneToneAudioContext.resume().catch(() => {});
   }
   return phoneToneAudioContext.state === "closed" ? null : phoneToneAudioContext;
@@ -30078,7 +30084,7 @@ function stabilizeMobileCharacterScroll(section = "") {
   // WebAudio genau einmal direkt innerhalb der ersten echten Benutzeraktion
   // entsperren. Die Listener werden gemeinsam entfernt, damit Pointer- und
   // Touch-Ereignis nicht doppelt denselben AudioContext starten.
-  const phoneAudioGestureEventsV56 = ["pointerdown", "touchend", "keydown"];
+  const phoneAudioGestureEventsV56 = ["click", "keydown"];
   const unlockPhoneAudioV56 = (event) => {
     if (!hasTransientUserGesture(event)) return;
     phoneAudioGestureEventsV56.forEach((eventName) => {

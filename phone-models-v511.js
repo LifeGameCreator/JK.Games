@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-/* JK.Games V513 · echtes iPhone ohne Zusatzrahmen, persistente freie Drehung.
-   Weiterhin exakt zwei wiederverwendete WebGL-Kontexte:
-   1x Dashboard-Vorschau + 1x geöffnetes 3D-Handy. */
-const VERSION = "2026-08-19-phone-models-v513-real-iphone-free-rotation";
+/* JK.Games V514 · echtes iPhone als einzige sichtbare Hardware-Shell.
+   Orthografische Kamera verhindert Cropping/Verzerrung; weiterhin nur zwei
+   wiederverwendete WebGL-Kontexte (Dashboard + geöffnetes Handy). */
+const VERSION = "2026-08-19-phone-models-v514-native-shell-ortho";
 const loader = new GLTFLoader();
 const sceneCache = new Map();
 const sessions = new WeakMap();
@@ -81,17 +81,26 @@ function prepareModel(root, skin) {
   });
 }
 
-function fitModel(root, camera, scaleFactor = 2.05) {
+function centerModel(root) {
   const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   root.position.sub(center);
-  const max = Math.max(size.x, size.y, size.z, 1e-6);
-  root.scale.setScalar(scaleFactor / max);
-  const fitted = new THREE.Box3().setFromObject(root);
-  const radius = fitted.getBoundingSphere(new THREE.Sphere()).radius;
-  camera.position.set(0, 0, Math.max(3.35, radius / Math.tan(THREE.MathUtils.degToRad(camera.fov * .47))));
+}
+
+function fitOrthographic(root, camera, aspect = 0.48, margin = 1.035) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const maxSpan = Math.max(size.x, size.y, size.z, 1e-6);
+  const halfHeight = Math.max(size.y * .5 * margin, (size.x * .5 * margin) / Math.max(.1, aspect));
+  camera.left = -halfHeight * aspect;
+  camera.right = halfHeight * aspect;
+  camera.top = halfHeight;
+  camera.bottom = -halfHeight;
+  camera.near = .001;
+  camera.far = Math.max(100, maxSpan * 30);
+  camera.position.set(0, 0, Math.max(3, maxSpan * 5));
   camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
 }
 
 function setBackClass(session) {
@@ -104,7 +113,7 @@ function setBackClass(session) {
      ausgeblendet, damit kein flaches UI neben dem 3D-iPhone schwebt. */
   const screenHidden = frontDistance > Math.PI * .28;
   session.shell.classList.toggle("phone-back-visible-v511", isBack);
-  session.shell.classList.toggle("phone-screen-hidden-v513", screenHidden);
+  session.shell.classList.toggle("phone-screen-hidden-v514", screenHidden);
   session.shell.dataset.phoneSideV511 = isBack ? "back" : (screenHidden ? "side" : "front");
 }
 
@@ -229,12 +238,12 @@ async function mount(shell, { model, skin } = {}) {
   let bundle;
   try { bundle = mainRendererFor(frame); }
   catch (error) {
-    console.warn("JK.Games V512 phone WebGL konnte nicht gestartet werden.", error);
+    console.warn("JK.Games V514 phone WebGL konnte nicht gestartet werden.", error);
     return null;
   }
   const { canvas, renderer } = bundle;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(24, 1, .01, 100);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .001, 100);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x17201d, 2.35));
   const key = new THREE.DirectionalLight(0xffffff, 3.0); key.position.set(3.5, 5, 6); scene.add(key);
   const rim = new THREE.DirectionalLight(0x8edfff, 1.85); rim.position.set(-5, 1, -5); scene.add(rim);
@@ -249,8 +258,8 @@ async function mount(shell, { model, skin } = {}) {
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    const aspect = w / h;
+    if (session.root) fitOrthographic(session.root, camera, aspect, 1.025);
     renderSession(session);
   };
   session.resize = new ResizeObserver(resize);
@@ -264,15 +273,14 @@ async function mount(shell, { model, skin } = {}) {
     session.root = root;
     prepareModel(root, skin);
     scene.add(root);
-    fitModel(root, camera);
-    /* V513: echtes Gerät größer im verfügbaren Bereich, Vorder- und Rückseite identisch skaliert. */
-    camera.zoom = 1.24;
-    camera.updateProjectionMatrix();
+    centerModel(root);
+    const rect = frame.getBoundingClientRect();
+    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.025);
     root.rotation.y = session.currentY;
     setBackClass(session);
     renderSession(session);
   } catch (error) {
-    console.warn("JK.Games V512 phone GLB", model.asset, error);
+    console.warn("JK.Games V514 phone GLB", model.asset, error);
     canvas.classList.add("phone-model-load-error-v511");
   }
   return session;
@@ -299,12 +307,12 @@ async function mountShortcutPreview() {
   let bundle;
   try { bundle = shortcutRendererFor(host); }
   catch (error) {
-    console.warn("JK.Games V512 Dashboard-iPhone WebGL konnte nicht gestartet werden.", error);
+    console.warn("JK.Games V514 Dashboard-iPhone WebGL konnte nicht gestartet werden.", error);
     return;
   }
   const { canvas, renderer } = bundle;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(22, 1, .01, 100);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .001, 100);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x13211e, 2.4));
   const key = new THREE.DirectionalLight(0xffffff, 2.8); key.position.set(3, 5, 6); scene.add(key);
 
@@ -316,8 +324,8 @@ async function mountShortcutPreview() {
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    const aspect = w / h;
+    if (record.root) fitOrthographic(record.root, camera, aspect, 1.045);
     renderer.render(scene, camera);
   };
   record.resize = new ResizeObserver(render);
@@ -329,15 +337,14 @@ async function mountShortcutPreview() {
     record.root = root;
     prepareModel(root, null);
     scene.add(root);
-    fitModel(root, camera, 2.18);
-    /* V513: Dashboard zeigt die echte Vorderseite gerade und deutlich größer. */
-    camera.zoom = 1.34;
-    camera.updateProjectionMatrix();
+    centerModel(root);
+    const rect = host.getBoundingClientRect();
+    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.045);
     root.rotation.y = 0;
     root.rotation.x = 0;
     render();
   } catch (error) {
-    console.warn("JK.Games V512 Dashboard-iPhone GLB", asset, error);
+    console.warn("JK.Games V514 Dashboard-iPhone GLB", asset, error);
   }
 }
 

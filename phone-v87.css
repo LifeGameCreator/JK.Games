@@ -1815,3 +1815,337 @@ dialog.device-dialog-v64:has(.device-phone-v513){
   pointer-events:none!important;
   transform:none!important;
 }
+
+/* ========================================================================== 
+   JK.Games V514 · NATIVE IPHONE DISPLAY
+   Nur das echte GLB-iPhone ist die sichtbare Hardware. Die vorhandenen Apps
+   werden in eine neue, direkt in die Displayfläche eingepasste UI gelegt.
+   ========================================================================== */
+#detailDialog.device-dialog-v64:has(.device-phone-v514)[open],
+#detailDialog.device-dialog-v65:has(.device-phone-v514)[open],
+dialog.device-dialog-v64:has(.device-phone-v514){
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:none!important;
+  height:100dvh!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:1.5dvh 1.5vw!important;
+  overflow:visible!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+#detailDialog:has(.device-phone-v514)::backdrop{background:rgba(0,0,0,.68)}
+.device-phone-v514{
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v514 .device-frame{
+  --iphone-display-x:5.35%;
+  --iphone-display-top:4.2%;
+  --iphone-display-bottom:4.25%;
+  box-sizing:border-box!important;
+  position:relative!important;
+  display:block!important;
+  width:min(94vw, calc(94dvh * .478), 455px)!important;
+  max-width:none!important;
+  height:auto!important;
+  max-height:94dvh!important;
+  aspect-ratio:.478!important;
+  margin:auto!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  isolation:isolate!important;
+}
+.device-phone-v514 .phone-model-canvas-v511{
+  position:absolute!important;
+  inset:0!important;
+  z-index:0!important;
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  pointer-events:none!important;
+  background:transparent!important;
+  filter:none!important;
+}
+/* Das ist die einzige sichtbare Softwarefläche und liegt exakt innerhalb des
+   schwarzen Displayrandes des echten GLB-Modells. */
+.device-phone-v514 .device-screen{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:4!important;
+  top:var(--iphone-display-top)!important;
+  right:var(--iphone-display-x)!important;
+  bottom:var(--iphone-display-bottom)!important;
+  left:var(--iphone-display-x)!important;
+  width:auto!important;
+  height:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:clamp(32px,8.8vw,48px)!important;
+  background:#06080b!important;
+  box-shadow:none!important;
+  transform:none!important;
+}
+.device-phone-v514 .device-status{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:8!important;
+  top:calc(var(--iphone-display-top) + 7px)!important;
+  right:calc(var(--iphone-display-x) + 12px)!important;
+  left:calc(var(--iphone-display-x) + 12px)!important;
+  display:grid!important;
+  grid-template-columns:minmax(74px,1fr) auto minmax(80px,1fr) 31px 44px!important;
+  align-items:center!important;
+  gap:4px!important;
+  width:auto!important;
+  height:26px!important;
+  min-height:26px!important;
+  margin:0!important;
+  padding:0 4px!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#fff!important;
+  text-shadow:0 1px 4px rgba(0,0,0,.8)!important;
+  pointer-events:auto!important;
+}
+.device-phone-v514 .device-status .device-island{
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:104px!important;
+  height:24px!important;
+  min-width:104px!important;
+  padding:0 15px 0 8px!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:rgba(0,0,0,.98)!important;
+  color:#fff!important;
+  font:800 .47rem/1 system-ui!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  cursor:pointer!important;
+}
+.device-phone-v514 .device-status .device-island::after{right:7px!important;top:7px!important}
+/* Neuer Homescreen-Skin: gleiche App-Funktionen und Anordnung, aber ohne die
+   alte zusätzliche Smartphone-Karte/Toolbar. */
+.device-phone-v514 .device-home-shell-v64{
+  box-sizing:border-box!important;
+  display:grid!important;
+  grid-template-rows:30px minmax(0,1fr) 13px 70px!important;
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:34px 11px 10px!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:0!important;
+  background:
+    radial-gradient(circle at 78% 12%,rgba(255,80,120,.44),transparent 34%),
+    radial-gradient(circle at 12% 82%,rgba(167,64,255,.48),transparent 42%),
+    radial-gradient(circle at 82% 82%,rgba(26,188,255,.48),transparent 38%),
+    linear-gradient(155deg,#4a153e 0%,#c52550 36%,#f47a37 56%,#3145ad 76%,#10a7c0 100%)!important;
+  box-shadow:none!important;
+}
+.device-phone-v514 .ios-home-toolbar-v64{
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:6px!important;
+  min-height:26px!important;
+  padding:0 2px!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.device-phone-v514 .ios-home-edit-title-v64{display:none!important}
+.device-phone-v514 .device-home-shell-v64.is-arranging .ios-home-edit-title-v64{
+  display:block!important;
+  margin-right:auto!important;
+  color:#fff!important;
+  font-size:.64rem!important;
+  font-weight:850!important;
+}
+.device-phone-v514 .phone-model-label-v511{display:none!important}
+.device-phone-v514 .phone-flip-v511{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:30px!important;
+  height:30px!important;
+  min-width:30px!important;
+  padding:0!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  border-radius:50%!important;
+  background:rgba(0,0,0,.22)!important;
+  color:#fff!important;
+  box-shadow:0 5px 16px rgba(0,0,0,.18)!important;
+  backdrop-filter:blur(12px)!important;
+}
+.device-phone-v514 .ios-home-toolbar-v64 [data-phone-edit-done]{
+  min-height:28px!important;
+  padding:0 10px!important;
+  border-radius:999px!important;
+  background:rgba(0,0,0,.25)!important;
+  color:#fff!important;
+}
+.device-phone-v514 .device-home-page-v64.has-widgets{
+  grid-template-rows:98px minmax(0,1fr)!important;
+  gap:7px!important;
+}
+.device-phone-v514 .ios-widgets-row-v64{gap:7px!important}
+.device-phone-v514 .ios-widget-v64{
+  height:98px!important;
+  padding:9px!important;
+  border:1px solid rgba(255,255,255,.12)!important;
+  border-radius:20px!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.16)!important;
+}
+.device-phone-v514 .ios-icons-grid-v64{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-template-rows:repeat(4,minmax(62px,1fr))!important;
+  gap:4px!important;
+}
+.device-phone-v514 .ios-app-icon-v64:not(.ios-dock-app-v64){
+  width:72px!important;
+  min-width:72px!important;
+  max-width:72px!important;
+  height:70px!important;
+  min-height:70px!important;
+  max-height:70px!important;
+  grid-template-rows:50px auto!important;
+  gap:3px!important;
+}
+.device-phone-v514 .ios-app-icon-v64:not(.ios-dock-app-v64)>span{
+  width:50px!important;
+  min-width:50px!important;
+  height:50px!important;
+  min-height:50px!important;
+  border-radius:14px!important;
+}
+.device-phone-v514 .ios-app-icon-v64:not(.ios-dock-app-v64)>b{
+  max-width:72px!important;
+  color:#fff!important;
+  font-size:.44rem!important;
+  text-shadow:0 1px 4px rgba(0,0,0,.72)!important;
+}
+.device-phone-v514 .ios-dock-v64{
+  min-height:66px!important;
+  padding:5px 9px!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  border-radius:23px!important;
+  background:rgba(255,255,255,.18)!important;
+  box-shadow:0 10px 26px rgba(0,0,0,.18)!important;
+  backdrop-filter:blur(18px) saturate(1.18)!important;
+}
+.device-phone-v514 .ios-dock-v64 .ios-app-icon-v64{
+  width:52px!important;min-width:52px!important;max-width:52px!important;
+  height:52px!important;min-height:52px!important;max-height:52px!important;
+  grid-template-rows:48px!important;
+}
+.device-phone-v514 .ios-dock-v64 .ios-app-icon-v64>span{
+  width:48px!important;min-width:48px!important;height:48px!important;min-height:48px!important;
+}
+/* Apps selbst füllen jetzt dieselbe echte Displayfläche. */
+.device-phone-v514.device-app-open-v64 .device-screen,
+.device-phone-v514 .device-app-window-v64{
+  border-radius:clamp(32px,8.8vw,48px)!important;
+}
+/* Genau ein Home-/Zurück-Indikator, innerhalb des echten Displays. */
+.device-phone-v514 .device-home-bar,
+.device-phone-v514 .device-home-bar-v64,
+.device-phone-v514 .device-home-bar-v65{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:9!important;
+  right:34%!important;
+  bottom:calc(var(--iphone-display-bottom) + 7px)!important;
+  left:34%!important;
+  width:auto!important;
+  height:16px!important;
+  min-height:16px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  cursor:pointer!important;
+}
+.device-phone-v514 .device-home-bar::before,
+.device-phone-v514 .device-home-bar-v64::before,
+.device-phone-v514 .device-home-bar-v65::before{
+  content:""!important;
+  position:absolute!important;
+  right:0!important;
+  bottom:3px!important;
+  left:0!important;
+  display:block!important;
+  height:5px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.92)!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.42)!important;
+}
+.device-phone-v514 .device-home-bar::after,
+.device-phone-v514 .device-home-bar-v64::after,
+.device-phone-v514 .device-home-bar-v65::after{content:none!important;display:none!important}
+.device-phone-v514 .phone-model-drag-rail-v511{
+  position:absolute!important;
+  z-index:12!important;
+  top:8%!important;
+  bottom:8%!important;
+  width:10%!important;
+  background:transparent!important;
+  border:0!important;
+  opacity:0!important;
+  cursor:ew-resize!important;
+}
+.device-phone-v514 .phone-model-drag-rail-v511.left{left:-7%!important}
+.device-phone-v514 .phone-model-drag-rail-v511.right{right:-7%!important}
+.device-phone-v514 .phone-model-drag-rail-v511::after{content:none!important;display:none!important}
+.device-phone-v514.phone-back-visible-v511 .device-status,
+.device-phone-v514.phone-back-visible-v511 .device-screen,
+.device-phone-v514.phone-back-visible-v511 .device-home-bar,
+.device-phone-v514.phone-screen-hidden-v514 .device-status,
+.device-phone-v514.phone-screen-hidden-v514 .device-screen,
+.device-phone-v514.phone-screen-hidden-v514 .device-home-bar{
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+@media(pointer:coarse){
+  .device-phone-v514 .device-frame{width:min(96vw,calc(94dvh * .478),455px)!important}
+  .device-phone-v514 .phone-model-drag-rail-v511{display:none!important}
+}
+@media(max-width:430px){
+  .device-phone-v514 .device-frame{--iphone-display-x:5.55%;width:min(98vw,calc(95dvh * .478))!important}
+  .device-phone-v514 .device-home-shell-v64{padding:33px 8px 9px!important}
+  .device-phone-v514 .ios-app-icon-v64:not(.ios-dock-app-v64){width:66px!important;min-width:66px!important;max-width:66px!important}
+}

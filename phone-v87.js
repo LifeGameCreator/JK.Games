@@ -2690,11 +2690,11 @@
 
 
 /* ==========================================================================
-   JK.Games V513 · echtes GLB-iPhone, Display-Overlay und freie Front/Rückseiten-Drehung
+   JK.Games V514 · echtes iPhone als einzige Shell + neues Display-Layout
    ========================================================================== */
 (() => {
   "use strict";
-  const VERSION = "2026-08-19-phone-v513-real-iphone-screen";
+  const VERSION = "2026-08-19-phone-v514-native-iphone-display";
   const baseOpenV512 = openDeviceInterface;
 
   function bindIslandV512(island, item) {
@@ -2719,20 +2719,12 @@
   }
 
   function ensurePhoneControlsV512(shell, item, model) {
-    /* V513: der echte Home-Indikator des GLB bleibt sichtbar; der HTML-Bar ist nur
-       noch eine unsichtbare Klick-/Touch-Hitbox für Zurück/Home. */
-    shell.querySelector(".device-home-bar")?.classList.add("phone-home-hit-v513");
+    /* V514: Keine zweite Handy-Optik mehr. Der HTML-Homebar ist nur eine unsichtbare
+       Bedienfläche; sichtbar bleibt ausschließlich das echte GLB-iPhone. */
+    shell.querySelector(".device-home-bar")?.classList.add("phone-home-hit-v514");
     const homeToolbar = shell.querySelector(".device-home-shell-v64 .ios-home-toolbar-v64");
     if (homeToolbar) {
-      let label = homeToolbar.querySelector("[data-phone-model-label-v511]");
-      if (!label) {
-        label = document.createElement("span");
-        label.className = "phone-model-label-v511";
-        label.dataset.phoneModelLabelV511 = "1";
-        homeToolbar.prepend(label);
-      }
-      label.innerHTML = `<b>${escapeHtml(model.label)}</b><small>${escapeHtml(item)} · 3D</small>`;
-
+      homeToolbar.querySelector("[data-phone-model-label-v511]")?.remove();
       let flip = homeToolbar.querySelector("[data-phone-flip-v511]");
       if (!flip) {
         flip = document.createElement("button");
@@ -2777,7 +2769,8 @@
     if (!phoneItems().includes(item)) return;
     const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
     if (!shell) return;
-    shell.classList.add("device-phone-v511", "device-phone-v512", "device-phone-v513");
+    shell.classList.remove("device-phone-v511", "device-phone-v512", "device-phone-v513");
+    shell.classList.add("device-phone-v514");
     shell.dataset.phoneActiveAppV512 = String(activeApp || "home");
 
     const model = window.JKGamesPhoneV511Config?.model?.(item) || { label: "Smartphone", asset: "" };
@@ -2803,7 +2796,7 @@
     }
   }
 
-  openDeviceInterface = function openDeviceInterfaceV512(item, activeApp = "home", activeUse = true) {
+  openDeviceInterface = function openDeviceInterfaceV514(item, activeApp = "home", activeUse = true) {
     const result = baseOpenV512(item, activeApp, activeUse);
     requestAnimationFrame(() => decorateV512(item, activeApp));
     return result;
