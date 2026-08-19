@@ -2629,3 +2629,173 @@ dialog.device-dialog-v64:has(.device-phone-v515){
 @media(max-width:600px){
   .device-phone-v517 .device-frame{height:min(96dvh,960px)!important;max-width:96vw!important;max-height:96dvh!important}
 }
+
+
+/* ========================================================================== 
+   JK.Games V518 · DISPLAY-KALIBRIERUNG
+   - Dialog schrumpft auf die echte iPhone-Hardware: keine schwarzen Seitenflächen
+   - nur die markierte Display-Innenfläche bekommt einen provisorischen Test-Screen
+   - Dynamic Island ist eine separat kalibrierte Zone
+   ========================================================================== */
+#detailDialog.device-dialog-v518-calibration[open]{
+  position:fixed!important;
+  inset:0!important;
+  display:block!important;
+  width:fit-content!important;
+  min-width:0!important;
+  max-width:98vw!important;
+  height:fit-content!important;
+  min-height:0!important;
+  max-height:98dvh!important;
+  margin:auto!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  backdrop-filter:none!important;
+}
+#detailDialog.device-dialog-v518-calibration::backdrop{
+  background:transparent!important;
+  backdrop-filter:none!important;
+}
+#detailDialog.device-dialog-v518-calibration>#closeDialog,
+#detailDialog.device-dialog-v518-calibration>#dialogBack,
+#detailDialog.device-dialog-v518-calibration>#dialogTitle,
+#detailDialog.device-dialog-v518-calibration>#dialogText{
+  display:none!important;
+  visibility:hidden!important;
+}
+.device-phone-v518{
+  position:relative!important;
+  display:inline-grid!important;
+  place-items:center!important;
+  width:fit-content!important;
+  min-width:0!important;
+  max-width:98vw!important;
+  height:fit-content!important;
+  min-height:0!important;
+  max-height:98dvh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v518 .device-frame{
+  position:relative!important;
+  display:block!important;
+  height:min(96dvh,960px)!important;
+  max-height:96dvh!important;
+  width:auto!important;
+  max-width:98vw!important;
+  aspect-ratio:var(--phone-v518-aspect,.48472)!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v518 .phone-model-canvas-v511{
+  position:absolute!important;
+  inset:0!important;
+  z-index:1!important;
+  width:100%!important;
+  height:100%!important;
+  border:0!important;
+  background:transparent!important;
+  pointer-events:none!important;
+}
+.device-phone-v518 .phone-display-test-v518{
+  position:absolute!important;
+  z-index:2!important;
+  left:var(--phone-v518-display-left,4.3%)!important;
+  right:var(--phone-v518-display-right,4.0%)!important;
+  top:var(--phone-v518-display-top,1.4%)!important;
+  bottom:var(--phone-v518-display-bottom,1.4%)!important;
+  overflow:hidden!important;
+  border-radius:var(--phone-v518-display-radius,7.0%)!important;
+  background:
+    radial-gradient(circle at 24% 18%,rgba(84,135,255,.34),transparent 28%),
+    radial-gradient(circle at 78% 74%,rgba(192,74,255,.28),transparent 34%),
+    linear-gradient(155deg,#11182b 0%,#17223a 48%,#0e1220 100%)!important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)!important;
+  pointer-events:none!important;
+}
+.device-phone-v518 .phone-display-test-v518::before{
+  content:"DISPLAY TEST · V518";
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  color:rgba(255,255,255,.42);
+  font:700 clamp(9px,1.1dvh,13px)/1 system-ui,sans-serif;
+  letter-spacing:.14em;
+  white-space:nowrap;
+}
+.device-phone-v518 .phone-display-corner-v518{
+  position:absolute;
+  width:9px;
+  height:9px;
+  border:2px solid rgba(87,220,255,.95);
+  z-index:4;
+  pointer-events:none;
+}
+.device-phone-v518 .phone-display-corner-v518.tl{left:7px;top:7px;border-right:0;border-bottom:0;border-radius:5px 0 0 0}
+.device-phone-v518 .phone-display-corner-v518.tr{right:7px;top:7px;border-left:0;border-bottom:0;border-radius:0 5px 0 0}
+.device-phone-v518 .phone-display-corner-v518.bl{left:7px;bottom:7px;border-right:0;border-top:0;border-radius:0 0 0 5px}
+.device-phone-v518 .phone-display-corner-v518.br{right:7px;bottom:7px;border-left:0;border-top:0;border-radius:0 0 5px 0}
+.device-phone-v518 .phone-island-test-v518{
+  position:absolute!important;
+  z-index:5!important;
+  left:var(--phone-v518-island-left,36.0%)!important;
+  top:var(--phone-v518-island-top,3.0%)!important;
+  width:var(--phone-v518-island-width,28.0%)!important;
+  height:var(--phone-v518-island-height,4.5%)!important;
+  min-height:16px!important;
+  border-radius:999px!important;
+  background:#020204!important;
+  box-shadow:0 0 0 2px rgba(0,139,255,.82)!important;
+  pointer-events:none!important;
+}
+.device-phone-v518 .phone-island-test-v518::after{
+  content:"";
+  position:absolute;
+  right:12%;
+  top:50%;
+  width:16%;
+  aspect-ratio:1;
+  transform:translateY(-50%);
+  border-radius:50%;
+  background:radial-gradient(circle at 42% 38%,#223345 0 18%,#071018 24% 48%,#020204 56% 100%);
+  opacity:.95;
+}
+/* V518: alles Alte bleibt für die Kalibrierung konsequent unsichtbar. */
+.device-phone-v518 .device-status,
+.device-phone-v518 .device-screen,
+.device-phone-v518 .device-home-bar,
+.device-phone-v518 .device-home-bar-v64,
+.device-phone-v518 .device-home-bar-v65,
+.device-phone-v518 .device-home-shell-v64,
+.device-phone-v518 .device-app-window-v64,
+.device-phone-v518 .device-app-view,
+.device-phone-v518 .phone-flip-v511,
+.device-phone-v518 .phone-model-label-v511,
+.device-phone-v518 .phone-model-drag-rail-v511{
+  display:none!important;
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+@media(max-width:600px){
+  .device-phone-v518 .device-frame{height:min(95dvh,960px)!important;max-width:98vw!important}
+}

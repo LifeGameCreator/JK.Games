@@ -2975,3 +2975,97 @@
     }
   });
 })();
+
+
+/* ========================================================================== 
+   JK.Games V518 · DISPLAY-KALIBRIERUNG
+   Orientierung: rote Markierung = Display-Innenkante, blau = Dynamic Island.
+   Nur provisorische Testfläche; das alte Smartphone-UI bleibt ausgeblendet.
+   ========================================================================== */
+(() => {
+  "use strict";
+  const VERSION = "2026-08-19-phone-v518-display-corners-island";
+  const baseOpenV517 = openDeviceInterface;
+
+  const CALIBRATION = Object.freeze({
+    iphone14: Object.freeze({aspect:.49444,left:4.9,right:4.9,top:2.1,bottom:2.1,radius:7.2,islandLeft:35.5,islandTop:3.0,islandWidth:29.0,islandHeight:4.35}),
+    iphone16: Object.freeze({aspect:.49350,left:5.0,right:5.0,top:1.9,bottom:1.9,radius:7.1,islandLeft:35.8,islandTop:2.8,islandWidth:28.4,islandHeight:4.25}),
+    iphone16pro: Object.freeze({aspect:.48150,left:4.5,right:4.5,top:1.65,bottom:1.7,radius:7.0,islandLeft:35.8,islandTop:2.8,islandWidth:28.4,islandHeight:4.25}),
+    // V518: anhand der roten/blauen Orientierung im 17-Pro-Screenshot enger gesetzt.
+    iphone17pro: Object.freeze({aspect:.48472,left:4.3,right:4.0,top:1.4,bottom:1.4,radius:6.9,islandLeft:36.0,islandTop:3.0,islandWidth:28.0,islandHeight:4.5})
+  });
+
+  function cfgFor(item){
+    const model = window.JKGamesPhoneV511Config?.model?.(item) || {id:"iphone17pro"};
+    return {model, cfg: CALIBRATION[model.id] || CALIBRATION.iphone17pro};
+  }
+
+  function ensureTestLayer(frame){
+    let display = frame.querySelector(".phone-display-test-v518");
+    if (!display){
+      display = document.createElement("div");
+      display.className = "phone-display-test-v518";
+      for (const pos of ["tl","tr","bl","br"]){
+        const c = document.createElement("span");
+        c.className = `phone-display-corner-v518 ${pos}`;
+        display.append(c);
+      }
+      frame.append(display);
+    }
+    let island = frame.querySelector(".phone-island-test-v518");
+    if (!island){
+      island = document.createElement("div");
+      island.className = "phone-island-test-v518";
+      frame.append(island);
+    }
+    return {display,island};
+  }
+
+  function applyV518(item){
+    if (!phoneItems().includes(item)) return;
+    const dialog = els.dialog;
+    const shell = dialog?.querySelector?.(".device-shell.device-phone");
+    const frame = shell?.querySelector?.(".device-frame");
+    if (!dialog || !shell || !frame) return;
+
+    const {model,cfg} = cfgFor(item);
+    dialog.classList.add("device-dialog-v518-calibration");
+    shell.classList.add("device-phone-v518");
+    shell.dataset.phoneModelV518 = String(model.id || "iphone17pro");
+
+    frame.style.setProperty("--phone-v518-aspect", String(cfg.aspect));
+    frame.style.setProperty("--phone-v518-display-left", `${cfg.left}%`);
+    frame.style.setProperty("--phone-v518-display-right", `${cfg.right}%`);
+    frame.style.setProperty("--phone-v518-display-top", `${cfg.top}%`);
+    frame.style.setProperty("--phone-v518-display-bottom", `${cfg.bottom}%`);
+    frame.style.setProperty("--phone-v518-display-radius", `${cfg.radius}%`);
+    frame.style.setProperty("--phone-v518-island-left", `${cfg.islandLeft}%`);
+    frame.style.setProperty("--phone-v518-island-top", `${cfg.islandTop}%`);
+    frame.style.setProperty("--phone-v518-island-width", `${cfg.islandWidth}%`);
+    frame.style.setProperty("--phone-v518-island-height", `${cfg.islandHeight}%`);
+    ensureTestLayer(frame);
+
+    // Kalibrierung bleibt frontal und unverändert, damit die vier Ecken vergleichbar sind.
+    const api = window.JKGamesPhone3DV511;
+    if (api?.front){
+      requestAnimationFrame(() => api.front(shell));
+      setTimeout(() => api.front(shell),120);
+    }
+  }
+
+  openDeviceInterface = function openDeviceInterfaceV518(item, activeApp="home", activeUse=true){
+    const result = baseOpenV517(item, activeApp, activeUse);
+    requestAnimationFrame(() => applyV518(item));
+    setTimeout(() => applyV518(item),0);
+    setTimeout(() => applyV518(item),160);
+    return result;
+  };
+
+  const baseClearV518 = clearDialogDynamic;
+  clearDialogDynamic = function clearDialogDynamicV518(){
+    els.dialog?.classList.remove("device-dialog-v518-calibration");
+    return baseClearV518();
+  };
+
+  window.JKGamesPhoneV518 = Object.freeze({version:VERSION, calibration:CALIBRATION});
+})();
