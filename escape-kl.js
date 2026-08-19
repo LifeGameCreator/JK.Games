@@ -8,7 +8,7 @@ import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escap
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* Escape.kl – JK.Games Top Game V508 · Butterfly loop + 1 VS 1 Speed Race */
-const VERSION = '2026-08-19-v508';
+const VERSION = '2026-08-19-v509';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -210,6 +210,9 @@ function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
 function shopTier(worldId=shopWorldId()){return WORLD_SHOP_TIERS[worldId]||WORLD_SHOP_TIERS['keyboard-lab'];}
 function shopScaledCost(cost,worldId=shopWorldId()){return Math.max(1,Math.round((Number(cost)||0)*shopTier(worldId).costMult));}
 
+const MOVEMENT_REPRESS_KEYS = Object.freeze(['KeyW','KeyA','KeyS','KeyD']);
+const MOVEMENT_REPRESS_KEY_SET = new Set(MOVEMENT_REPRESS_KEYS);
+
 const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
@@ -217,7 +220,7 @@ const G = {
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[], hazards:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
-  keys:new Set(), inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
+  keys:new Set(), physicalMoveKeys:new Set(), movementRepressRequired:false, mobileMoveHeld:false, inputX:0, inputY:0, mobileX:0, mobileY:0, sprint:false,mobileSprint:false,moveIntensity:0,jumpHeld:false,jumpQueuedUntil:0,lastGroundedAt:0,coyoteAvailable:false,
   yaw:0, pitch:.32, camDistance:7.2, pointer:null,lookPointer:null,lookTouchId:null,
   keyDown:null,keyUp:null,resizeHandler:null,orientationHandler:null,pointerMove:null,pointerUp:null,stickMove:null,stickUp:null,stickTouchMove:null,stickTouchEnd:null,lookTouchMove:null,lookTouchEnd:null,
   lastGroundPos:new THREE.Vector3(), reviveAnchor:new THREE.Vector3(),reviveSupport:null,reviveOffsetX:0,reviveOffsetZ:0,reviveYaw:0,reviveStage:1,reviveStageClaims:null,reviveOfferAnchor:new THREE.Vector3(),reviveOfferSupport:null,reviveOfferOffsetX:0,reviveOfferOffsetZ:0,reviveOfferYaw:0,reviveOfferStage:1,reviveOfferStageClaims:null,reviveOfferWorld:'',reviveOfferPlatformUuid:'',revivePending:false,revivePurchaseBusy:false,reviveTimer:0,reviveTicker:0,reviveStartedAt:0,reviveGraceUntil:0,reviveStabilizeUntil:0,reviveStabilizeSupport:null, speedDistanceCarry:0, trainingCarry:0, runPopTimer:0, lastLevelShown:0,
@@ -2191,7 +2194,7 @@ function enterWorld(id){
   G.state.activeTrainingWorld=id;
   setWorld(id);
 }
-function teleport(x,y,z){G.pos.set(x,y,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.lastGroundedAt=0;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.lastGroundPos.copy(G.pos);G.trailPoints=[];G.trailEmitCarry=0;for(const tp of G.trailParticles||[]){tp.age=tp.life;tp.mesh.visible=false;}if(G.playerRoot)G.playerRoot.position.copy(G.pos);}
+function teleport(x,y,z){G.pos.set(x,y,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);G.grounded=false;G.lastGroundedAt=0;G.coyoteAvailable=false;G.support=null;G.lastSupport=null;G.lastGroundPos.copy(G.pos);G.trailPoints=[];G.trailEmitCarry=0;for(const tp of G.trailParticles||[]){tp.age=tp.life;tp.mesh.visible=false;}if(G.playerRoot)G.playerRoot.position.copy(G.pos);armMovementRepressLock();}
 function reviveCostForWorld(id=G.world){
   // V495: Jede aktuell betretbare Escape-Welt besitzt einen JK/Coin-Portpreis.
   // Water World fehlte zuvor in der Tabelle und fiel deshalb direkt auf den Weltstart
@@ -2937,7 +2940,22 @@ function restoreModalScrollSnapshot(kind,snap){
 }
 function captureShopScroll(tab=G.shopActiveTab){if(!tab)return;const snap=modalScrollSnapshot('shop');if(snap)G.shopScrollMemory[tab]=snap;}
 function restoreShopScroll(tab){restoreModalScrollSnapshot('shop',G.shopScrollMemory?.[tab]);}
-function resetMovementControls(stopVelocity=true){
+function releaseMovementRepressIfReady(){
+  if(!G.movementRepressRequired)return false;
+  if((G.physicalMoveKeys?.size||0)>0||G.mobileMoveHeld)return false;
+  G.movementRepressRequired=false;
+  return true;
+}
+function armMovementRepressLock(){
+  const held=(G.physicalMoveKeys?.size||0)>0||!!G.mobileMoveHeld;
+  G.movementRepressRequired=held;
+  for(const code of MOVEMENT_REPRESS_KEYS)G.keys?.delete?.(code);
+  G.mobileX=0;G.mobileY=0;
+  if(G.moveVel){G.moveVel.x=0;G.moveVel.z=0;}
+  return held;
+}
+function resetMovementControls(stopVelocity=true,clearPhysical=false){
+  if(clearPhysical){G.physicalMoveKeys?.clear?.();G.mobileMoveHeld=false;G.movementRepressRequired=false;}else armMovementRepressLock();
   G.keys?.clear?.();G.mobileX=0;G.mobileY=0;G.mobileSprint=false;G.sprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.pointer=null;G.lookPointer=null;G.ownerFlyVertical=0;
   if(stopVelocity&&G.moveVel){G.moveVel.x=0;G.moveVel.z=0;}
   G.overlay?.classList.remove('ekl-looking');
@@ -3236,9 +3254,9 @@ function showRaceComplete(sec,reward,previous,record){const wrap=document.create
 
 
 function bindInput(){
-  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyE','KeyR','KeyF','KeyG','Escape'].includes(e.code))e.preventDefault();if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyF'){setOwnerFly(!G.ownerFlyActive);return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyG'){setOwnerVanish(!G.ownerVanish);return}if(e.code==='Space'){if(G.ownerFlyActive){G.keys.add('Space');return}G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){if(!G.ownerFlyActive)respawn();return}G.keys.add(e.code)};
-  G.keyUp=e=>{if(e.code==='Space'){G.keys.delete('Space');G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
-  G.inputBlurHandler=()=>resetMovementControls(true);G.visibilityHandler=()=>{if(document.hidden)resetMovementControls(true)};
+  G.keyDown=e=>{ensureAudio();if(['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight','KeyE','KeyR','KeyF','KeyG','Escape'].includes(e.code))e.preventDefault();if(MOVEMENT_REPRESS_KEY_SET.has(e.code)){G.physicalMoveKeys.add(e.code);if(G.movementRepressRequired){G.keys.delete(e.code);return;}}if(e.code==='Escape'){if(G.modalOpen){closeModal();G.paused=false}else showPause();return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyF'){setOwnerFly(!G.ownerFlyActive);return}if(isEscapeOwner()&&!G.modalOpen&&!e.repeat&&e.code==='KeyG'){setOwnerVanish(!G.ownerVanish);return}if(e.code==='Space'){if(G.ownerFlyActive){G.keys.add('Space');return}G.jumpHeld=true;requestJump();return}if(e.code==='KeyE'){interact();return}if(e.code==='KeyR'){if(!G.ownerFlyActive)respawn();return}G.keys.add(e.code)};
+  G.keyUp=e=>{if(MOVEMENT_REPRESS_KEY_SET.has(e.code)){G.physicalMoveKeys.delete(e.code);G.keys.delete(e.code);releaseMovementRepressIfReady();return}if(e.code==='Space'){G.keys.delete('Space');G.jumpHeld=false;G.jumpQueuedUntil=0;return}G.keys.delete(e.code)};document.addEventListener('keydown',G.keyDown);document.addEventListener('keyup',G.keyUp);
+  G.inputBlurHandler=()=>resetMovementControls(true,true);G.visibilityHandler=()=>{if(document.hidden)resetMovementControls(true,true)};
   window.addEventListener('blur',G.inputBlurHandler,{passive:true});document.addEventListener('visibilitychange',G.visibilityHandler,{passive:true});
   const canvas=G.overlay.querySelector('canvas');
   const clampPitch=value=>Math.max(CAMERA_PITCH_MIN,Math.min(CAMERA_PITCH_MAX,value));
@@ -3297,15 +3315,15 @@ function bindInput(){
   const stick=G.overlay.querySelector('[data-ekl-stick]'),knob=stick?.querySelector('.ekl-stick-knob');
   if(stick&&knob){
     let pointerId=null,touchId=null;
-    const reset=()=>{pointerId=null;touchId=null;G.mobileX=0;G.mobileY=0;knob.style.transform='translate(-50%,-50%)';stick.classList.remove('active')};
-    const applyPoint=(clientX,clientY)=>{ensureAudio();const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=Math.max(24,r.width*.34);let dx=clientX-cx,dy=clientY-cy;const len=Math.hypot(dx,dy)||1,scale=Math.min(1,max/len);dx*=scale;dy*=scale;G.mobileX=Math.max(-1,Math.min(1,dx/max));G.mobileY=Math.max(-1,Math.min(1,dy/max));knob.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`};
-    stick.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();e.stopPropagation();pointerId=e.pointerId;stick.classList.add('active');applyPoint(e.clientX,e.clientY);try{stick.setPointerCapture?.(e.pointerId)}catch{}},{passive:false});
+    const reset=()=>{pointerId=null;touchId=null;G.mobileMoveHeld=false;G.mobileX=0;G.mobileY=0;releaseMovementRepressIfReady();knob.style.transform='translate(-50%,-50%)';stick.classList.remove('active')};
+    const applyPoint=(clientX,clientY)=>{ensureAudio();const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,max=Math.max(24,r.width*.34);let dx=clientX-cx,dy=clientY-cy;const len=Math.hypot(dx,dy)||1,scale=Math.min(1,max/len);dx*=scale;dy*=scale;if(G.movementRepressRequired){G.mobileX=0;G.mobileY=0;}else{G.mobileX=Math.max(-1,Math.min(1,dx/max));G.mobileY=Math.max(-1,Math.min(1,dy/max));}knob.style.transform=`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`};
+    stick.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.preventDefault();e.stopPropagation();pointerId=e.pointerId;G.mobileMoveHeld=true;stick.classList.add('active');applyPoint(e.clientX,e.clientY);try{stick.setPointerCapture?.(e.pointerId)}catch{}},{passive:false});
     G.stickMove=e=>{if(pointerId===null||e.pointerId!==pointerId)return;e.preventDefault();applyPoint(e.clientX,e.clientY)};
     G.stickUp=e=>{if(pointerId===null||e.pointerId!==pointerId)return;e.preventDefault();reset()};
     window.addEventListener('pointermove',G.stickMove,{passive:false});window.addEventListener('pointerup',G.stickUp,{passive:false});window.addEventListener('pointercancel',G.stickUp,{passive:false});
     // TouchEvent fallback for older/inconsistent iOS WebViews.
     const touchFrom=e=>[...e.changedTouches,...e.touches].find(t=>touchId===null||t.identifier===touchId)||null;
-    stick.addEventListener('touchstart',e=>{if(pointerId!==null)return;const t=e.changedTouches[0];if(!t)return;e.preventDefault();touchId=t.identifier;stick.classList.add('active');applyPoint(t.clientX,t.clientY)},{passive:false});
+    stick.addEventListener('touchstart',e=>{if(pointerId!==null)return;const t=e.changedTouches[0];if(!t)return;e.preventDefault();touchId=t.identifier;G.mobileMoveHeld=true;stick.classList.add('active');applyPoint(t.clientX,t.clientY)},{passive:false});
     G.stickTouchMove=e=>{if(pointerId!==null||touchId===null)return;const t=[...e.touches].find(x=>x.identifier===touchId);if(!t)return;e.preventDefault();applyPoint(t.clientX,t.clientY)};
     G.stickTouchEnd=e=>{if(pointerId!==null||touchId===null)return;if([...e.changedTouches].some(x=>x.identifier===touchId)){e.preventDefault();reset()}};
     window.addEventListener('touchmove',G.stickTouchMove,{passive:false});window.addEventListener('touchend',G.stickTouchEnd,{passive:false});window.addEventListener('touchcancel',G.stickTouchEnd,{passive:false});
@@ -3328,7 +3346,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);if(G.inputBlurHandler)window.removeEventListener('blur',G.inputBlurHandler);if(G.visibilityHandler)document.removeEventListener('visibilitychange',G.visibilityHandler);G.inputBlurHandler=null;G.visibilityHandler=null;window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;if(G.duelRaceShieldVisual){G.duelRaceShieldVisual.removeFromParent?.();G.duelRaceShieldVisual=null;}G.duelRacePhase='idle';G.duelRaceMode='solo';G.duelRaceHits=0;G.duelShieldInvulnerableUntil=0;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);if(G.inputBlurHandler)window.removeEventListener('blur',G.inputBlurHandler);if(G.visibilityHandler)document.removeEventListener('visibilitychange',G.visibilityHandler);G.inputBlurHandler=null;G.visibilityHandler=null;window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;if(G.duelRaceShieldVisual){G.duelRaceShieldVisual.removeFromParent?.();G.duelRaceShieldVisual=null;}G.duelRacePhase='idle';G.duelRaceMode='solo';G.duelRaceHits=0;G.duelShieldInvulnerableUntil=0;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.physicalMoveKeys.clear();G.movementRepressRequired=false;G.mobileMoveHeld=false;G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){
