@@ -3428,7 +3428,7 @@ service cloud.firestore {
     }
 
 
-    // ===== BIGCARDS.KL V510 FIRESTORE ACCESS =====
+    // ===== BIGCARDS.KL V511 FIRESTORE ACCESS =====
     // Privater Cloud-Spielstand: jeder Account liest und schreibt nur seine eigene UID.
     match /bigCardsSaves/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
@@ -3466,7 +3466,9 @@ service cloud.firestore {
     }
 
     match /bigCardsPayouts/{uid}/items/{itemId} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      // V511: explizites get/list, damit die pending-Abfrage des eigenen Accounts
+      // genauso eindeutig erlaubt ist wie ein einzelner Dokument-Lesezugriff.
+      allow get, list: if signedIn() && request.auth.uid == uid;
       allow create: if signedIn()
         && request.resource.data.sellerUid == uid
         && request.resource.data.buyerUid == request.auth.uid
@@ -3575,7 +3577,7 @@ service cloud.firestore {
         allow delete: if signedIn() && (request.auth.uid == uid || jkIsOwner());
       }
     }
-    // ===== BIGCARDS.KL V510 FIRESTORE ACCESS END =====
+    // ===== BIGCARDS.KL V511 FIRESTORE ACCESS END =====
 
     // ===== JK.GAMES JK/COIN REGELN END =====
 

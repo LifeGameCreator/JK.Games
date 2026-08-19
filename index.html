@@ -19,7 +19,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20260729-jkgames-v88-unified-shop-design">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png?v=20260729-jkgames-v88-unified-shop-design">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png?v=20260729-jkgames-v88-unified-shop-design">
-    <link rel="stylesheet" href="styles.css?v=20260810-jkgames-v388-games-cleanup">
+    <link rel="stylesheet" href="styles.css?v=20260819-jkgames-v511-ui-highlight-phone-rebuild">
     <link rel="stylesheet" href="financial-crisis.css?v=20260729-jkgames-v88-unified-shop-design">
     <link rel="stylesheet" href="online-settings-menu.css?v=20260804-jkgames-v180-owner-money-reset">
     <link rel="stylesheet" href="mrdn-kl.css?v=20260729-jkgames-v88-unified-shop-design">
@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="cottbus-3d.css?v=20260729-jkgames-v88-unified-shop-design">
     <link rel="stylesheet" href="center-medieval.css?v=20260808-jkgames-v274-staff-colors-ego-locomotion">
     <link rel="stylesheet" href="casino-v82.css?v=20260806-jkgames-v212-jkcoin-exclusives">
-    <link rel="stylesheet" href="phone-v87.css?v=20260807-jkgames-v223-shop-swipe">
+    <link rel="stylesheet" href="phone-v87.css?v=20260819-jkgames-v511-3d-phone-ui">
     <link rel="stylesheet" href="runner-kl.css?v=20260807-runner-kl-v237-free-jk-info">
     <link rel="stylesheet" href="city-kl.css?v=20260801-city-kl-v110-webgl-dice">
     <link rel="stylesheet" href="match-kl.css?v=20260801-match-kl-v111-no-flicker-exit">
@@ -153,6 +153,21 @@
                   <option value="ultra">Ultra</option>
                 </select>
               </label>
+            </section>
+
+            <section class="settings-v62-group settings-wide settings-highlight-v511">
+              <header><span>✦</span><div><b>Highlighter-Farbe <em>NEU</em></b><small>Bestimme selbst die Hover-/Auswahlfarbe im gesamten Hauptmenü.</small></div></header>
+              <div class="highlight-picker-v511 settings-wide">
+                <button type="button" data-highlight-color="#6ee7ff" style="--swatch:#6ee7ff" aria-label="Cyan"></button>
+                <button type="button" data-highlight-color="#ff3b4f" style="--swatch:#ff3b4f" aria-label="Rot"></button>
+                <button type="button" data-highlight-color="#ffd84a" style="--swatch:#ffd84a" aria-label="Gelb"></button>
+                <button type="button" data-highlight-color="#55e77c" style="--swatch:#55e77c" aria-label="Grün"></button>
+                <button type="button" data-highlight-color="#b66cff" style="--swatch:#b66cff" aria-label="Violett"></button>
+                <button type="button" data-highlight-color="#ff7ab8" style="--swatch:#ff7ab8" aria-label="Pink"></button>
+                <button type="button" data-highlight-color="#ffffff" style="--swatch:#ffffff" aria-label="Weiß"></button>
+                <label><span>Eigene Farbe</span><input id="highlightColorCustom" type="color" value="#6ee7ff"></label>
+              </div>
+              <p class="settings-v511-new-hint settings-wide">Der Highlighter gilt jetzt auch für Heute, Arbeit, Statuswerte, Handy, Hype, Zuhause, Center und normale Buttons.</p>
             </section>
 
             <section class="settings-v62-group settings-wide">
@@ -416,7 +431,7 @@
 
   <script src="webrtc-config.js?v=20260729-jkgames-v88-unified-shop-design"></script>
   <script src="firebase-runtime.js?v=20260817-jkgames-v472-escape-online-presence"></script>
-  <script src="app.js?v=20260818-jkgames-v497-weed-farm-topgames"></script>
+  <script src="app.js?v=20260819-jkgames-v511-phone-market-ui"></script>
   <script src="jk-coin.js?v=20260818-jkcoin-v502-escape-third-pet-slot"></script>
   <script src="casino-v82.js?v=20260807-jkgames-v228-highlow-tie"></script>
   <script src="financial-crisis.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>
@@ -437,7 +452,7 @@
   <script src="pet-ui-v88.js?v=20260729-jkgames-v88-unified-shop-design"></script>
   <script src="arena-kl-server-config.js?v=20260729-jkgames-v88-unified-shop-design"></script>
   <script src="arena-kl.js?v=20260729-jkgames-v88-unified-shop-design"></script>
-  <script src="phone-v87.js?v=20260816-v469-weather-network-recovery"></script>
+  <script src="phone-v87.js?v=20260819-phone-v511-model-dynamic-island"></script>
   <script type="importmap">
     {
       "imports": {
@@ -446,9 +461,10 @@
       }
     }
   </script>
+  <script type="module" src="phone-models-v511.js?v=20260819-phone-models-v511"></script>
   <script src="money-kl.js?v=20260810-money-kl-v371-dynamic-jk-booster"></script>
   <script type="module" src="runner-kl.js?v=20260808-runner-kl-v255-shader-precision-fix"></script>
-  <script src="bigcards-kl.js?v=20260816-bigcards-v470-write-stream-protection"></script>
+  <script src="bigcards-kl.js?v=20260819-bigcards-v511-cloud-cache-permission-recovery"></script>
   <script type="module" src="escape-kl.js?v=20260819-escape-kl-v509-teleport-input-repress-lock"></script>
   <script type="module" src="weed-farm-kl.js?v=20260818-weed-farm-kl-v498-business-phone-map"></script>
   <script type="module" src="egoshoot-kl.js?v=20260819-egoshoot-kl-v510-fps-tactical-rebuild"></script>

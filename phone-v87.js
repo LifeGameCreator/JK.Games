@@ -2687,3 +2687,80 @@
     refreshWallpaper: applyWallpaperV85
   });
 })();
+
+
+/* ==========================================================================\n   JK.Games V511 · 3D phone decorator, Dynamic Island and back/front control\n   ========================================================================== */
+(() => {
+  "use strict";
+  const VERSION = "2026-08-19-phone-v511-3d-model-dynamic-island";
+  const baseOpenV511 = openDeviceInterface;
+
+  function decorateV511(item, activeApp) {
+    if (!phoneItems().includes(item)) return;
+    const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
+    if (!shell) return;
+    shell.classList.add("device-phone-v511");
+    const model = window.JKGamesPhoneV511Config?.model?.(item) || {label:"Smartphone",asset:""};
+    const island = shell.querySelector(".device-island");
+    if (island) {
+      island.setAttribute("role", "button");
+      island.setAttribute("tabindex", "0");
+      island.setAttribute("title", "Dynamic Island anpassen");
+      island.textContent = window.JKGamesPhoneV511Config?.island?.() || "";
+      const openIslandSettings = () => {
+        openDeviceInterface(item, "settings", false);
+        requestAnimationFrame(() => els.dialog?.querySelector?.("[data-phone-island-settings-v511]")?.scrollIntoView?.({block:"center",behavior:"smooth"}));
+      };
+      island.addEventListener("click", openIslandSettings, {once:true});
+      island.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openIslandSettings(); } }, {once:true});
+    }
+
+    const homeToolbar = shell.querySelector(".device-home-shell-v64 .ios-home-toolbar-v64");
+    if (homeToolbar && !homeToolbar.querySelector("[data-phone-model-label-v511]")) {
+      const label = document.createElement("span");
+      label.className = "phone-model-label-v511";
+      label.dataset.phoneModelLabelV511 = "1";
+      label.innerHTML = `<b>${escapeHtml(model.label)}</b><small>${escapeHtml(item)} · 3D</small>`;
+      homeToolbar.prepend(label);
+      const flip = document.createElement("button");
+      flip.type = "button";
+      flip.className = "phone-flip-v511";
+      flip.dataset.phoneFlipV511 = "1";
+      flip.title = "Vorder-/Rückseite drehen";
+      flip.setAttribute("aria-label", "Vorder- oder Rückseite anzeigen");
+      flip.textContent = "↻";
+      homeToolbar.append(flip);
+    }
+
+    const frame = shell.querySelector(".device-frame");
+    if (frame && !frame.querySelector(".phone-model-drag-rail-v511")) {
+      for (const side of ["left", "right"]) {
+        const rail = document.createElement("span");
+        rail.className = `phone-model-drag-rail-v511 ${side}`;
+        rail.dataset.phoneModelDragV511 = side;
+        rail.title = "Mit der Maus ziehen, um das Handy zu drehen";
+        frame.append(rail);
+      }
+    }
+
+    const mount = () => {
+      const api = window.JKGamesPhone3DV511;
+      if (!api?.mount) return false;
+      api.mount(shell, { item, model, skin: window.JKGamesPhoneV511Config?.skin?.() || null });
+      shell.querySelector("[data-phone-flip-v511]")?.addEventListener("click", () => api.toggleSide?.(shell));
+      return true;
+    };
+    if (!mount()) {
+      let tries = 0;
+      const timer = setInterval(() => { tries += 1; if (mount() || tries > 30 || !document.body.contains(shell)) clearInterval(timer); }, 80);
+    }
+  }
+
+  openDeviceInterface = function openDeviceInterfaceV511(item, activeApp = "home", activeUse = true) {
+    const result = baseOpenV511(item, activeApp, activeUse);
+    requestAnimationFrame(() => decorateV511(item, activeApp));
+    return result;
+  };
+
+  window.JKGamesPhoneV511 = Object.freeze({version:VERSION, refresh(){const item=ownedPhoneItem();if(item)openDeviceInterface(item,"home",false);}});
+})();
