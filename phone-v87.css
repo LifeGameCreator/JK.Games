@@ -2523,3 +2523,109 @@ dialog.device-dialog-v64:has(.device-phone-v515){
   .device-phone-v516 .device-frame{height:min(97dvh,calc(98vw / var(--phone-hardware-aspect-v516)))!important;max-width:98vw!important}
   .device-phone-v516 .device-status{right:calc(var(--phone-display-right-v516) + 2.0%)!important;left:calc(var(--phone-display-left-v516) + 2.0%)!important}
 }
+
+
+/* ========================================================================== 
+   JK.Games V517 · PHONE-ONLY RESET
+   Nur das echte GLB-iPhone ist sichtbar. Kein Fake-Rahmen, keine UI, kein
+   Zurück-/Home-Button, kein Dynamic-Island-Overlay, keine Drehbedienung.
+   ========================================================================== */
+#detailDialog.device-dialog-v517-phoneonly[open]{
+  position:fixed!important;
+  inset:0!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:100vw!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  backdrop-filter:none!important;
+}
+#detailDialog.device-dialog-v517-phoneonly::backdrop{background:rgba(0,0,0,.78)!important}
+#detailDialog.device-dialog-v517-phoneonly>#closeDialog,
+#detailDialog.device-dialog-v517-phoneonly>#dialogBack,
+#detailDialog.device-dialog-v517-phoneonly>#dialogTitle,
+#detailDialog.device-dialog-v517-phoneonly>#dialogText{display:none!important;visibility:hidden!important}
+
+.device-phone-v517{
+  position:relative!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:100vw!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  transform:none!important;
+}
+.device-phone-v517 .device-frame{
+  position:relative!important;
+  display:block!important;
+  height:min(94dvh,940px)!important;
+  width:auto!important;
+  max-width:94vw!important;
+  max-height:94dvh!important;
+  aspect-ratio:var(--phone-hardware-aspect-v516,.48472)!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  transform:none!important;
+}
+.device-phone-v517 .phone-model-canvas-v511{
+  position:absolute!important;
+  inset:0!important;
+  z-index:1!important;
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  pointer-events:none!important;
+}
+.device-phone-v517 .device-status,
+.device-phone-v517 .device-screen,
+.device-phone-v517 .device-home-bar,
+.device-phone-v517 .device-home-bar-v64,
+.device-phone-v517 .device-home-bar-v65,
+.device-phone-v517 .device-home-shell-v64,
+.device-phone-v517 .device-app-window-v64,
+.device-phone-v517 .device-app-view,
+.device-phone-v517 .phone-flip-v511,
+.device-phone-v517 .phone-model-label-v511,
+.device-phone-v517 .phone-model-drag-rail-v511{
+  display:none!important;
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+@media(max-width:600px){
+  .device-phone-v517 .device-frame{height:min(96dvh,960px)!important;max-width:96vw!important;max-height:96dvh!important}
+}

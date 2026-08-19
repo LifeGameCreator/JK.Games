@@ -2907,3 +2907,71 @@
     }
   });
 })();
+
+
+/* ========================================================================== 
+   JK.Games V517 · PHONE-ONLY RESET
+   - geöffnetes Smartphone zeigt ausschließlich das echte GLB-Gerät
+   - keinerlei Display-UI, Homebar, Dynamic-Island-Overlay oder Zusatzrahmen
+   - bewusst statische Frontansicht als neue saubere Basis
+   ========================================================================== */
+(() => {
+  "use strict";
+  const VERSION = "2026-08-19-phone-v517-phone-only-reset";
+  const baseOpenV516 = openDeviceInterface;
+
+  function applyPhoneOnlyV517(item) {
+    if (!phoneItems().includes(item)) return;
+    const dialog = els.dialog;
+    const shell = dialog?.querySelector?.(".device-shell.device-phone");
+    if (!dialog || !shell) return;
+
+    dialog.classList.remove("device-dialog-v514-native");
+    dialog.classList.add("device-dialog-v516-clean", "device-dialog-v517-phoneonly");
+    shell.classList.add("device-phone-v517");
+
+    // V517 ist absichtlich nur das physische Gerät. Alle Software-Layer bleiben
+    // technisch vorhanden, werden aber vollständig ausgeblendet.
+    shell.querySelectorAll([
+      ".device-status",
+      ".device-screen",
+      ".device-home-bar",
+      ".device-home-bar-v64",
+      ".device-home-bar-v65",
+      ".phone-flip-v511",
+      ".phone-model-label-v511",
+      ".phone-model-drag-rail-v511"
+    ].join(",")).forEach((node) => {
+      node.setAttribute("aria-hidden", "true");
+    });
+
+    // Keine versehentlich gespeicherte Seiten-/Rückansicht übernehmen.
+    const api = window.JKGamesPhone3DV511;
+    if (api?.front) {
+      requestAnimationFrame(() => api.front(shell));
+      setTimeout(() => api.front(shell), 140);
+    }
+  }
+
+  openDeviceInterface = function openDeviceInterfaceV517(item, activeApp = "home", activeUse = true) {
+    const result = baseOpenV516(item, activeApp, activeUse);
+    requestAnimationFrame(() => applyPhoneOnlyV517(item));
+    setTimeout(() => applyPhoneOnlyV517(item), 0);
+    setTimeout(() => applyPhoneOnlyV517(item), 180);
+    return result;
+  };
+
+  const baseClearV517 = clearDialogDynamic;
+  clearDialogDynamic = function clearDialogDynamicV517() {
+    els.dialog?.classList.remove("device-dialog-v517-phoneonly");
+    return baseClearV517();
+  };
+
+  window.JKGamesPhoneV517 = Object.freeze({
+    version: VERSION,
+    refresh() {
+      const item = ownedPhoneItem();
+      if (item) openDeviceInterface(item, "home", false);
+    }
+  });
+})();
