@@ -2238,3 +2238,288 @@ dialog.device-dialog-v64:has(.device-phone-v515){
 @media(max-width:600px){
   .device-phone-v515 .device-frame{width:min(98vw,calc(96dvh * .488))!important}
 }
+
+/* ========================================================================== 
+   JK.Games V516 · MODELLSPEZIFISCHE ECHTE DISPLAYFLAECHE
+   Der Dialog selbst hat keinerlei sichtbaren Rahmen. Die Software liegt nur
+   innerhalb der pro iPhone-Modell kalibrierten vier Display-Eckpunkte.
+   ========================================================================== */
+#detailDialog.device-dialog-v516-clean[open]{
+  position:fixed!important;
+  inset:0!important;
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:100vw!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  backdrop-filter:none!important;
+  scrollbar-width:none!important;
+}
+#detailDialog.device-dialog-v516-clean[open]::-webkit-scrollbar{display:none!important}
+#detailDialog.device-dialog-v516-clean::backdrop{background:rgba(0,0,0,.76)!important}
+#detailDialog.device-dialog-v516-clean>#closeDialog,
+#detailDialog.device-dialog-v516-clean>#dialogBack,
+#detailDialog.device-dialog-v516-clean>#dialogTitle,
+#detailDialog.device-dialog-v516-clean>#dialogText{display:none!important;visibility:hidden!important}
+
+.device-phone-v516{
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:100vw!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v516 .device-frame{
+  --phone-hardware-aspect-v516:.48472;
+  --phone-display-left-v516:3.9%;
+  --phone-display-right-v516:3.9%;
+  --phone-display-top-v516:1.65%;
+  --phone-display-bottom-v516:1.75%;
+  --phone-display-radius-v516:6.8%;
+  box-sizing:border-box!important;
+  position:relative!important;
+  display:block!important;
+  height:min(96dvh,calc(96vw / var(--phone-hardware-aspect-v516)))!important;
+  width:auto!important;
+  max-width:96vw!important;
+  max-height:96dvh!important;
+  aspect-ratio:var(--phone-hardware-aspect-v516)!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  transform:none!important;
+  isolation:isolate!important;
+}
+.device-phone-v516 .phone-model-canvas-v511{
+  position:absolute!important;
+  inset:0!important;
+  z-index:1!important;
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  filter:none!important;
+  pointer-events:none!important;
+}
+
+/* Exakte Projektionsfläche: nur INNERHALB des schwarzen Displayrandes. */
+.device-phone-v516 .device-screen{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:4!important;
+  top:var(--phone-display-top-v516)!important;
+  right:var(--phone-display-right-v516)!important;
+  bottom:var(--phone-display-bottom-v516)!important;
+  left:var(--phone-display-left-v516)!important;
+  width:auto!important;
+  max-width:none!important;
+  height:auto!important;
+  max-height:none!important;
+  min-width:0!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  outline:0!important;
+  border-radius:var(--phone-display-radius-v516)!important;
+  background:#050609!important;
+  box-shadow:none!important;
+  transform:none!important;
+  transform-origin:center!important;
+  contain:layout paint!important;
+}
+
+/* Das Home-/App-Layout darf die kalibrierte Displayfläche niemals verlassen. */
+.device-phone-v516 .device-home-shell-v64,
+.device-phone-v516 .device-app-window-v64,
+.device-phone-v516 .device-app-view{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  max-width:100%!important;
+  height:100%!important;
+  max-height:100%!important;
+  margin:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:inherit!important;
+  box-shadow:none!important;
+  transform:none!important;
+}
+.device-phone-v516 .device-home-shell-v64{
+  padding:7.0% 2.8% 2.2%!important;
+  grid-template-rows:3.8% minmax(0,1fr) 1.5% 9.0%!important;
+}
+.device-phone-v516 .device-home-pages-viewport-v68,
+.device-phone-v516 .device-home-pages-v64,
+.device-phone-v516 .device-home-page-v64{
+  max-width:100%!important;
+  max-height:100%!important;
+  min-width:0!important;
+  min-height:0!important;
+}
+
+/* Statuszeile liegt links/rechts neben der echten Dynamic-Island-Zone. */
+.device-phone-v516 .device-status{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:9!important;
+  top:calc(var(--phone-display-top-v516) + 1.05%)!important;
+  right:calc(var(--phone-display-right-v516) + 2.6%)!important;
+  left:calc(var(--phone-display-left-v516) + 2.6%)!important;
+  display:grid!important;
+  grid-template-columns:minmax(70px,1fr) auto minmax(92px,1.2fr) 30px 42px!important;
+  align-items:center!important;
+  gap:4px!important;
+  width:auto!important;
+  height:3.2%!important;
+  min-height:24px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#fff!important;
+  pointer-events:auto!important;
+}
+.device-phone-v516 .device-status .device-island{
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:106px!important;
+  min-width:106px!important;
+  height:25px!important;
+  min-height:25px!important;
+  margin:0!important;
+  padding:0 13px 0 8px!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:#000!important;
+  box-shadow:none!important;
+  color:#fff!important;
+  font-size:.47rem!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+
+/* Ein einziger Home-/Zurück-Strich – unten INNERHALB des Displays. */
+.device-phone-v516 .device-home-bar,
+.device-phone-v516 .device-home-bar-v64,
+.device-phone-v516 .device-home-bar-v65{
+  box-sizing:border-box!important;
+  position:absolute!important;
+  z-index:10!important;
+  left:35%!important;
+  right:35%!important;
+  bottom:calc(var(--phone-display-bottom-v516) + .75%)!important;
+  display:block!important;
+  width:auto!important;
+  height:18px!important;
+  min-height:18px!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  cursor:pointer!important;
+}
+.device-phone-v516 .device-home-bar::before,
+.device-phone-v516 .device-home-bar-v64::before,
+.device-phone-v516 .device-home-bar-v65::before{
+  content:""!important;
+  position:absolute!important;
+  left:0!important;
+  right:0!important;
+  bottom:3px!important;
+  height:5px!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.95)!important;
+  box-shadow:0 1px 4px rgba(0,0,0,.38)!important;
+}
+.device-phone-v516 .device-home-bar::after,
+.device-phone-v516 .device-home-bar-v64::after,
+.device-phone-v516 .device-home-bar-v65::after{content:none!important;display:none!important}
+
+/* Keine zusätzliche sichtbare Bedienfläche neben dem Gerät. */
+.device-phone-v516 .phone-model-label-v511,
+.device-phone-v516 .phone-flip-v511{display:none!important}
+.device-phone-v516 .phone-model-drag-rail-v511{
+  position:absolute!important;
+  z-index:12!important;
+  top:8%!important;
+  bottom:8%!important;
+  width:8%!important;
+  opacity:0!important;
+  background:transparent!important;
+  border:0!important;
+  cursor:ew-resize!important;
+}
+.device-phone-v516 .phone-model-drag-rail-v511.left{left:-6%!important}
+.device-phone-v516 .phone-model-drag-rail-v511.right{right:-6%!important}
+
+.device-phone-v516.phone-back-visible-v511 .device-status,
+.device-phone-v516.phone-back-visible-v511 .device-screen,
+.device-phone-v516.phone-back-visible-v511 .device-home-bar,
+.device-phone-v516.phone-screen-hidden-v514 .device-status,
+.device-phone-v516.phone-screen-hidden-v514 .device-screen,
+.device-phone-v516.phone-screen-hidden-v514 .device-home-bar{
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+/* Modellwerte auch als CSS-Fallback – JS setzt dieselben Werte direkt. */
+.device-phone-v516[data-phone-model-v516="iphone14"] .device-frame{
+  --phone-hardware-aspect-v516:.49444;--phone-display-left-v516:4.65%;--phone-display-right-v516:4.65%;--phone-display-top-v516:2.45%;--phone-display-bottom-v516:2.45%;--phone-display-radius-v516:7.2%;
+}
+.device-phone-v516[data-phone-model-v516="iphone16"] .device-frame{
+  --phone-hardware-aspect-v516:.49350;--phone-display-left-v516:5.15%;--phone-display-right-v516:5.15%;--phone-display-top-v516:2.20%;--phone-display-bottom-v516:2.20%;--phone-display-radius-v516:7.0%;
+}
+.device-phone-v516[data-phone-model-v516="iphone16pro"] .device-frame{
+  --phone-hardware-aspect-v516:.48150;--phone-display-left-v516:4.35%;--phone-display-right-v516:4.35%;--phone-display-top-v516:2.15%;--phone-display-bottom-v516:2.20%;--phone-display-radius-v516:7.0%;
+}
+.device-phone-v516[data-phone-model-v516="iphone17pro"] .device-frame{
+  --phone-hardware-aspect-v516:.48472;--phone-display-left-v516:3.90%;--phone-display-right-v516:3.90%;--phone-display-top-v516:1.65%;--phone-display-bottom-v516:1.75%;--phone-display-radius-v516:6.8%;
+}
+
+@media(max-width:600px){
+  .device-phone-v516 .device-frame{height:min(97dvh,calc(98vw / var(--phone-hardware-aspect-v516)))!important;max-width:98vw!important}
+  .device-phone-v516 .device-status{right:calc(var(--phone-display-right-v516) + 2.0%)!important;left:calc(var(--phone-display-left-v516) + 2.0%)!important}
+}

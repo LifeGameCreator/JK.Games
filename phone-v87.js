@@ -2812,53 +2812,95 @@
 })();
 
 /* ========================================================================== 
-   JK.Games V515 · iPhone Calibration Base
-   Das alte Smartphone-Layout ist bewusst vollständig ausgeblendet. Sichtbar
-   bleibt nur das echte GLB-iPhone in stabiler Frontansicht. Auf dieser Basis
-   werden die Display-Eckpunkte im nächsten Schritt neu festgelegt.
+   JK.Games V516 · ECHTES IPHONE / MODELLSPEZIFISCHE DISPLAY-KALIBRIERUNG
+   - kein äußerer Fake-Handyrahmen
+   - vier getrennte Display-Innenflächen für 14 / 16 / 16 Pro / 17 Pro
+   - bestehende Smartphone-Funktionen werden ausschließlich in diese Fläche gelegt
    ========================================================================== */
 (() => {
   "use strict";
-  const VERSION = "2026-08-19-phone-v515-iphone-only-calibration-base";
+  const VERSION = "2026-08-19-phone-v516-model-display-calibration";
   const baseOpenV514 = openDeviceInterface;
 
-  function stripPhoneUiV515(item) {
-    if (!phoneItems().includes(item)) return;
-    const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
-    if (!shell) return;
+  const CALIBRATION = Object.freeze({
+    iphone14: Object.freeze({ aspect:.49444, left:4.65, right:4.65, top:2.45, bottom:2.45, radius:7.2 }),
+    iphone16: Object.freeze({ aspect:.49350, left:5.15, right:5.15, top:2.20, bottom:2.20, radius:7.0 }),
+    iphone16pro: Object.freeze({ aspect:.48150, left:4.35, right:4.35, top:2.15, bottom:2.20, radius:7.0 }),
+    iphone17pro: Object.freeze({ aspect:.48472, left:3.90, right:3.90, top:1.65, bottom:1.75, radius:6.8 })
+  });
 
-    shell.classList.remove("device-phone-v511", "device-phone-v512", "device-phone-v513", "device-phone-v514");
-    shell.classList.add("device-phone-v515");
-    shell.dataset.phoneCalibrationV515 = "1";
-
-    /* V515: Alle alten Software-Layer werden wirklich aus der geöffneten
-       Telefonansicht entfernt. Dadurch kann kein altes Layout, keine Homebar
-       und kein zweiter Zurück-Button mehr über dem GLB liegen. */
-    shell.querySelectorAll([
-      ".device-status",
-      ".device-screen",
-      ".device-home-bar",
-      ".device-home-shell-v64",
-      ".phone-flip-v511",
-      ".phone-model-drag-rail-v511"
-    ].join(",")).forEach((node) => node.remove());
-
-    /* Für die spätere Display-Kalibrierung bleibt das Telefon zunächst exakt
-       frontal stehen. Rotation kommt erst wieder dazu, wenn die Front sitzt. */
-    requestAnimationFrame(() => window.JKGamesPhone3DV511?.front?.(shell));
-    setTimeout(() => window.JKGamesPhone3DV511?.front?.(shell), 120);
+  function calibrationFor(item) {
+    const model = window.JKGamesPhoneV511Config?.model?.(item) || {};
+    return { model, calibration: CALIBRATION[model.id] || CALIBRATION.iphone17pro };
   }
 
-  openDeviceInterface = function openDeviceInterfaceV515(item, activeApp = "home", activeUse = true) {
+  function hideLegacyDialogChrome(dialog) {
+    if (!dialog) return;
+    dialog.classList.add("device-dialog-v64", "device-dialog-v65", "device-dialog-v516-clean");
+    ["closeDialog","dialogBack","dialogTitle","dialogText"].forEach((id) => {
+      const node = dialog.querySelector(`:scope > #${id}`);
+      if (!node) return;
+      node.hidden = true;
+      node.setAttribute("aria-hidden","true");
+      node.style.setProperty("display","none","important");
+    });
+  }
+
+  function applyDisplayCalibrationV516(item, activeApp = "home") {
+    if (!phoneItems().includes(item)) return;
+    const dialog = els.dialog;
+    const shell = dialog?.querySelector?.(".device-shell.device-phone");
+    if (!dialog || !shell) return;
+
+    const { model, calibration } = calibrationFor(item);
+    hideLegacyDialogChrome(dialog);
+
+    shell.classList.remove("device-phone-v511","device-phone-v512","device-phone-v513","device-phone-v515");
+    shell.classList.add("device-phone-v514","device-phone-v516");
+    shell.dataset.phoneModelV516 = String(model.id || "iphone17pro");
+    shell.dataset.phoneActiveAppV516 = String(activeApp || "home");
+
+    const frame = shell.querySelector(".device-frame");
+    if (frame) {
+      frame.style.setProperty("--phone-hardware-aspect-v516", String(calibration.aspect));
+      frame.style.setProperty("--phone-display-left-v516", `${calibration.left}%`);
+      frame.style.setProperty("--phone-display-right-v516", `${calibration.right}%`);
+      frame.style.setProperty("--phone-display-top-v516", `${calibration.top}%`);
+      frame.style.setProperty("--phone-display-bottom-v516", `${calibration.bottom}%`);
+      frame.style.setProperty("--phone-display-radius-v516", `${calibration.radius}%`);
+    }
+
+    shell.querySelectorAll(".phone-model-drag-rail-v511").forEach((rail) => {
+      rail.style.removeProperty("display");
+      rail.style.removeProperty("visibility");
+      rail.style.removeProperty("opacity");
+      rail.style.removeProperty("pointer-events");
+    });
+
+    const api = window.JKGamesPhone3DV511;
+    if (api?.front && shell.dataset.phoneV516InitialFront !== "1") {
+      shell.dataset.phoneV516InitialFront = "1";
+      requestAnimationFrame(() => api.front(shell));
+    }
+  }
+
+  openDeviceInterface = function openDeviceInterfaceV516(item, activeApp = "home", activeUse = true) {
     const result = baseOpenV514(item, activeApp, activeUse);
-    requestAnimationFrame(() => stripPhoneUiV515(item));
-    setTimeout(() => stripPhoneUiV515(item), 0);
-    setTimeout(() => stripPhoneUiV515(item), 160);
+    requestAnimationFrame(() => applyDisplayCalibrationV516(item, activeApp));
+    setTimeout(() => applyDisplayCalibrationV516(item, activeApp), 0);
+    setTimeout(() => applyDisplayCalibrationV516(item, activeApp), 120);
     return result;
   };
 
-  window.JKGamesPhoneV515 = Object.freeze({
+  const baseClearV516 = clearDialogDynamic;
+  clearDialogDynamic = function clearDialogDynamicV516() {
+    els.dialog?.classList.remove("device-dialog-v516-clean");
+    return baseClearV516();
+  };
+
+  window.JKGamesPhoneV516 = Object.freeze({
     version: VERSION,
+    calibration: CALIBRATION,
     refresh() {
       const item = ownedPhoneItem();
       if (item) openDeviceInterface(item, "home", false);

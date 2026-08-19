@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-/* JK.Games V515 · iPhone Calibration Base.
-   Nur das echte GLB wird gezeigt; stabile Frontansicht für die anschließende
-   exakte Festlegung der vier Display-Eckpunkte. */
-const VERSION = "2026-08-19-phone-models-v515-iphone-only-calibration";
+/* JK.Games V516 · iPhone Display Calibration.
+   Das echte GLB bleibt die einzige Hardware. V516 richtet die Projektion
+   modellbezogen an den vier Display-Innenkanten aus. */
+const VERSION = "2026-08-19-phone-models-v516-display-calibration";
 const loader = new GLTFLoader();
 const sceneCache = new Map();
 const sessions = new WeakMap();
@@ -238,7 +238,7 @@ async function mount(shell, { model, skin } = {}) {
   let bundle;
   try { bundle = mainRendererFor(frame); }
   catch (error) {
-    console.warn("JK.Games V514 phone WebGL konnte nicht gestartet werden.", error);
+    console.warn("JK.Games V516 phone WebGL konnte nicht gestartet werden.", error);
     return null;
   }
   const { canvas, renderer } = bundle;
@@ -259,7 +259,7 @@ async function mount(shell, { model, skin } = {}) {
     const h = Math.max(1, Math.round(rect.height));
     renderer.setSize(w, h, false);
     const aspect = w / h;
-    if (session.root) fitOrthographic(session.root, camera, aspect, 1.005);
+    if (session.root) fitOrthographic(session.root, camera, aspect, 1.001);
     renderSession(session);
   };
   session.resize = new ResizeObserver(resize);
@@ -275,12 +275,12 @@ async function mount(shell, { model, skin } = {}) {
     scene.add(root);
     centerModel(root);
     const rect = frame.getBoundingClientRect();
-    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.005);
+    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.001);
     root.rotation.y = session.currentY;
     setBackClass(session);
     renderSession(session);
   } catch (error) {
-    console.warn("JK.Games V514 phone GLB", model.asset, error);
+    console.warn("JK.Games V516 phone GLB", model.asset, error);
     canvas.classList.add("phone-model-load-error-v511");
   }
   return session;
@@ -307,7 +307,7 @@ async function mountShortcutPreview() {
   let bundle;
   try { bundle = shortcutRendererFor(host); }
   catch (error) {
-    console.warn("JK.Games V514 Dashboard-iPhone WebGL konnte nicht gestartet werden.", error);
+    console.warn("JK.Games V516 Dashboard-iPhone WebGL konnte nicht gestartet werden.", error);
     return;
   }
   const { canvas, renderer } = bundle;
@@ -344,7 +344,7 @@ async function mountShortcutPreview() {
     root.rotation.x = 0;
     render();
   } catch (error) {
-    console.warn("JK.Games V514 Dashboard-iPhone GLB", asset, error);
+    console.warn("JK.Games V516 Dashboard-iPhone GLB", asset, error);
   }
 }
 
