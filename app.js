@@ -327,16 +327,20 @@ const shopMarketCatalog = {
     { name: "Erkältungsmedizin", price: 14, effect: { energy: 9, health: 22, illness: -1 }, text: "Arzneimittel für schlechte Tage." }
   ],
   smartphone: [
-    { name: "Einsteiger-Smartphone", price: 1000000, item: "Smartphone", phoneModelV511: "iphone14", text: "iPhone-14-Design · schaltet ab V511 sofort sämtliche Smartphone-Funktionen und kompatiblen Apps frei. Das Gehäusedesign dieses Einstiegsmodells bleibt fest." },
-    { name: "Mittelklasse Smartphone", price: 25000000, item: "Mittelklasse Smartphone", phoneModelV511: "iphone16", text: "iPhone-16-Design · gleiche Funktionen wie das Einsteiger-Smartphone, aber hochwertigeres 3D-Gerät und anpassbare Rückseite." },
-    { name: "Pro Smartphone", price: 50000000, item: "Pro Smartphone", phoneModelV511: "iphone16pro", text: "iPhone-16-Pro-Design · reine Luxus-/Designstufe. Alle Smartphone-Funktionen sind bereits ab dem Einsteiger-Smartphone verfügbar." },
-    { name: "Ultra Smartphone", price: 100000000, item: "Ultra Smartphone", phoneModelV511: "iphone17pro", text: "iPhone-17-Pro-Design · 100 Mio. € Luxusgerät mit Dynamic Island und frei wählbaren Premium-Rückseiten." },
+    { name: "Einsteiger-Smartphone", price: 189, item: "Smartphone", text: "Schaltet Online-Shops, Bank-App, Börse und spätere Trading-Funktionen komfortabel frei." },
+    { name: "Mittelklasse Smartphone", price: 449, item: "Mittelklasse Smartphone", text: "Schneller, bessere Apps, stabiler für Online-Business." },
+    { name: "Pro Smartphone", price: 999, item: "Pro Smartphone", text: "Starkes Gerät für Business, Trading und hochwertige Apps." },
+    { name: "Ultra Smartphone", price: 1499, item: "Ultra Smartphone", text: "Luxusklasse mit maximaler Performance und Statuswert." },
     { name: "Powerbank", price: 39, item: "Powerbank", text: "Lädt dein Handy unterwegs wieder auf 100 Prozent." }
   ],
   phoneCredit: phoneCreditCards.filter((card) => card.credit <= 1000).map(phoneCreditCardItem),
-  // V511: Der Computermarkt ist entfernt. Alle früheren Geräte-Freischaltungen
-  // liegen ab dem Einsteiger-Smartphone direkt im Smartphone-System.
-  computer: [],
+  computer: [
+    { name: "Laptop gebraucht", price: 420, item: "Laptop gebraucht", text: "Gut für Bewerbungen, Online-Business und digitale Jobs." },
+    { name: "Office Laptop", price: 790, item: "Office Laptop", text: "Solider Arbeitslaptop für Gewerbe und Verwaltung. Schaltet den Erfolg Office-Arbeitsplatz frei." },
+    { name: "Creator Laptop", price: 1690, item: "Creator Laptop", text: "Stark für Design, Video, Online-Shop und Technik-Skills. Schaltet den Erfolg Creator-Setup frei." },
+    { name: "Gaming-PC", price: 1350, item: "Gaming-PC", text: "Starker Rechner für Games, Streaming und Technik-Skills." },
+    { name: "High-End Gaming-PC", price: 3490, item: "High-End Gaming-PC", text: "Sehr starke Performance für Games und spätere Tech-Aktionen." }
+  ],
   usedCars: [
     { name: "Kompakt ohne TÜV", price: 500, item: "Gebrauchtwagen Kompakt ohne TÜV", needItem: "Führerschein", vehicle: true, text: "Billiger Einstieg, aber später teuer in Reparatur und TÜV." },
     { name: "Kompakt mit TÜV", price: 8900, item: "Auto", needItem: "Führerschein", vehicle: true, text: "Schneller unterwegs, neue Jobs und Autohaus-Aktionen." },
@@ -534,8 +538,9 @@ shopMarketCatalog.clothing.forEach((item) => {
   if (index >= 0) shopItems.splice(index, 1);
 });
 shopItems.splice(4, 0,
-  { category: "Online-Markt KL", name: "Smartphone-Markt", market: "smartphone", text: "Smartphone-Designs von Einsteiger bis Ultra. Alle Funktionen sind bereits ab dem Einsteiger-Smartphone freigeschaltet; höhere Stufen sind reine Luxus-/Design-Upgrades." },
+  { category: "Online-Markt KL", name: "Smartphone-Markt", market: "smartphone", text: "Mehrere Smartphones von billig bis Ultra. Teurere Geräte bringen mehr Komfort und Status." },
   { category: "Online-Markt KL", name: "Handy-Guthaben", market: "phoneCredit", text: "Online sind Guthabenkarten mit 50, 200 und 1.000 Euro verfügbar." },
+  { category: "Online-Markt KL", name: "Computer-Markt", market: "computer", text: "Laptops und Gaming-PCs für Arbeit, Business, Games und Technik." },
   { category: "Online-Markt KL", name: "Rucksack-Markt", market: "backpacks", text: "Rucksäcke erhöhen dein Inventar von 8 bis maximal 500 Plätze." },
   { category: "Online-Markt KL", name: "Kleidungsmarkt", market: "clothing", text: "Kleidung, Schuhe und Accessoires für deinen Charakter." }
 );
@@ -2487,16 +2492,13 @@ function loadSettings() {
       phoneSounds: true,
       phoneHaptics: true,
       phoneBatterySaver: false,
-      highlightColor: "#6ee7ff",
-      phoneIslandMode: "bank",
-      phoneIslandEmoji: "🔥",
       ...JSON.parse(localStorage.getItem(SETTINGS_KEY))
     };
     loaded.musicEnabled = Boolean(loaded.musicEnabled) && loaded.musicSource === "youtube" && Boolean(String(loaded.customMusicLink || "").trim());
     loaded.musicSource = "youtube";
     return loaded;
   } catch {
-    return { customMusicLink: "", musicVolume: 45, effectVolume: 65, graphicsQuality: "high", musicEnabled: false, musicSource: "youtube", phoneAppearance: "dark", phoneBrightness: 88, phoneTextSize: "standard", phoneNotifications: true, phoneSounds: true, phoneHaptics: true, phoneBatterySaver: false, highlightColor: "#6ee7ff", phoneIslandMode: "bank", phoneIslandEmoji: "🔥" };
+    return { customMusicLink: "", musicVolume: 45, effectVolume: 65, graphicsQuality: "high", musicEnabled: false, musicSource: "youtube", phoneAppearance: "dark", phoneBrightness: 88, phoneTextSize: "standard", phoneNotifications: true, phoneSounds: true, phoneHaptics: true, phoneBatterySaver: false };
   }
 }
 
@@ -2508,10 +2510,6 @@ function saveSettings() {
 function migrateState(save) {
   if (!save) return null;
   save.homeCity ||= "Essen";
-  save.phoneBackSkinsUnlocked = Array.isArray(save.phoneBackSkinsUnlocked) ? [...new Set(save.phoneBackSkinsUnlocked.map(String))] : ["original"];
-  if (!save.phoneBackSkinsUnlocked.includes("original")) save.phoneBackSkinsUnlocked.unshift("original");
-  save.phoneBackSkin = String(save.phoneBackSkin || "original");
-  if (!save.phoneBackSkinsUnlocked.includes(save.phoneBackSkin)) save.phoneBackSkin = "original";
   save.gender = save.gender === "female" ? "female" : "male";
   save.birthdayGiftYears = Array.isArray(save.birthdayGiftYears)
     ? [...new Set(save.birthdayGiftYears.map(Number).filter((year) => Number.isInteger(year) && year >= 1900 && year <= 9999))]
@@ -3259,18 +3257,10 @@ function calculateAge(birthDate) {
 function applySettings() {
   document.body.classList.remove("gfx-minimum", "gfx-medium", "gfx-high", "gfx-diamond", "gfx-ultra");
   document.body.classList.add(`gfx-${settings.graphicsQuality || "high"}`);
-  const highlight = /^#[0-9a-f]{6}$/i.test(String(settings.highlightColor || "")) ? settings.highlightColor : "#6ee7ff";
-  settings.highlightColor = highlight;
-  document.documentElement.style.setProperty("--jkg-highlight", highlight);
-  const rgb = highlight.slice(1).match(/../g).map((part) => parseInt(part, 16)).join(",");
-  document.documentElement.style.setProperty("--jkg-highlight-rgb", rgb);
   if (els.customMusicLink) els.customMusicLink.value = settings.customMusicLink || "";
   if (els.musicVolume) els.musicVolume.value = settings.musicVolume;
   if (els.effectVolume) els.effectVolume.value = settings.effectVolume;
   if (els.graphicsQuality) els.graphicsQuality.value = settings.graphicsQuality;
-  const highlightCustom = document.getElementById("highlightColorCustom");
-  if (highlightCustom) highlightCustom.value = settings.highlightColor || "#6ee7ff";
-  document.querySelectorAll("[data-highlight-color]").forEach((button) => button.classList.toggle("active", button.dataset.highlightColor?.toLowerCase() === String(settings.highlightColor || "").toLowerCase()));
   updateMusicVolume();
   if (!settings.musicEnabled) {
     stopMenuMusic();
@@ -5290,47 +5280,10 @@ function updatePhoneShortcut() {
   const tier = phone ? String(deviceTier(phone)) : "-1";
   if (shortcut.dataset.phoneTier !== tier) shortcut.dataset.phoneTier = tier;
   shortcut.disabled = !phone;
-
-  if (!phone) {
-    shortcut.classList.remove("phone-shortcut-has-model-v512");
-    delete shortcut.dataset.phoneRealModelV512;
-    if (shortcut.dataset.phoneUiV512 !== "empty") {
-      shortcut.replaceChildren();
-      const span = document.createElement("span"); span.textContent = "Handy";
-      const title = document.createElement("b"); title.textContent = "Keins";
-      shortcut.append(span, title);
-      shortcut.dataset.phoneUiV512 = "empty";
-    }
-    updateHomeShortcut();
-    return;
-  }
-
-  const model = phoneModelMetaV511(phone);
-  shortcut.classList.add("phone-shortcut-has-model-v512");
-  shortcut.dataset.phoneRealModelV512 = "1";
-
-  let preview = shortcut.querySelector("[data-phone-shortcut-model-v511]");
-  if (!preview) {
-    shortcut.replaceChildren();
-    preview = document.createElement("i");
-    preview.className = "phone-shortcut-model-v511";
-    preview.dataset.phoneShortcutModelV511 = "1";
-    preview.setAttribute("aria-hidden", "true");
-    const info = document.createElement("span"); info.dataset.phoneShortcutInfoV512 = "1";
-    const title = document.createElement("b"); title.dataset.phoneShortcutTitleV512 = "1";
-    const meta = document.createElement("small"); meta.dataset.phoneShortcutMetaV512 = "1";
-    shortcut.append(preview, info, title, meta);
-  }
-
-  const nextAsset = String(model.asset || "");
-  if (preview.dataset.modelAssetV511 !== nextAsset) {
-    preview.dataset.modelAssetV511 = nextAsset;
-    window.dispatchEvent(new CustomEvent("jkgames-phone-shortcut-refresh-v512"));
-  }
-  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-info-v512]"), `Info ${phoneInfoCount()}`);
-  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-title-v512]"), model.label);
-  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-meta-v512]"), `${phone} · Akku ${Math.round(state.phoneBattery ?? 100)}% · ${euro.format(phoneCreditAmount())}`);
-  shortcut.dataset.phoneUiV512 = "model";
+  const html = phone
+    ? `<span>Info ${phoneInfoCount()}</span><b>${phone.replace(" Smartphone", "").replace("Basic Phone ", "Basic ")}</b><small>Akku ${Math.round(state.phoneBattery ?? 100)}% · ${euro.format(phoneCreditAmount())}</small>`
+    : `<span>Handy</span><b>Keins</b>`;
+  setHtmlIfChanged(shortcut, html);
   updateHomeShortcut();
 }
 
@@ -13115,8 +13068,8 @@ function gameRequirement(game) {
     return { locked: !ok, text: ok ? " Gerät: Smartphone." : " Benötigt: Smartphone." };
   }
   if (id === "kingdom") {
-    const ok = !!ownedPhoneItem();
-    return { locked: !ok, text: ok ? " Gerät: Einsteiger-Smartphone oder besser." : " Benötigt: Smartphone." };
+    const ok = ownsAnyComputerAtLeast("Gaming-PC");
+    return { locked: !ok, text: ok ? " Gerät: Gaming-PC." : " Benötigt: Gaming-PC." };
   }
   return { locked: false, text: "" };
 }
@@ -14006,15 +13959,9 @@ function phoneToneContext(event = null) {
   const AudioCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtor) return null;
 
-  // V514: WebAudio wird ausschließlich in einem echten CLICK oder KEYDOWN erzeugt/
-  // resumed. Automatische App-/Firebase-Aufrufe dürfen den Browser nicht mehr zum
-  // Starten eines AudioContext auffordern und erzeugen deshalb keine Autoplay-Warnung.
-  const trustedUnlock = event?.isTrusted === true
-    && (event.type === "click" || event.type === "keydown")
-    && navigator.userActivation?.isActive === true;
-
+  const mayUnlock = hasTransientUserGesture(event);
   if (!phoneToneAudioContext) {
-    if (!trustedUnlock) return null;
+    if (!mayUnlock) return null;
     try {
       phoneToneAudioContext = new AudioCtor();
     } catch {
@@ -14022,7 +13969,7 @@ function phoneToneContext(event = null) {
     }
   }
 
-  if (phoneToneAudioContext.state === "suspended" && trustedUnlock) {
+  if (phoneToneAudioContext.state === "suspended" && mayUnlock) {
     phoneToneAudioContext.resume().catch(() => {});
   }
   return phoneToneAudioContext.state === "closed" ? null : phoneToneAudioContext;
@@ -15186,59 +15133,6 @@ function phoneItems() {
   return ["Basic Phone KL-1", "Smartphone", "Einsteiger-Smartphone", "Mittelklasse Smartphone", "Mittelklasse-Smartphone", "Pro Smartphone", "Ultra Smartphone"];
 }
 
-const PHONE_MODELS_V511 = Object.freeze({
-  iphone14: Object.freeze({ id:"iphone14", label:"iPhone 14", asset:"assets/phones-v511/iphone-14-pro-max.glb", designLocked:true }),
-  iphone16: Object.freeze({ id:"iphone16", label:"iPhone 16", asset:"assets/phones-v511/iphone-16.glb", designLocked:false }),
-  iphone16pro: Object.freeze({ id:"iphone16pro", label:"iPhone 16 Pro", asset:"assets/phones-v511/iphone-16-pro-max.glb", designLocked:false }),
-  iphone17pro: Object.freeze({ id:"iphone17pro", label:"iPhone 17 Pro", asset:"assets/phones-v511/iphone-17-pro-max.glb", designLocked:false })
-});
-const PHONE_BACK_SKINS_V511 = Object.freeze([
-  Object.freeze({id:"original",label:"Original",price:0,color:"#d96827",finish:"original"}),
-  Object.freeze({id:"blue",label:"Titan Blau",price:250000,color:"#4d79a8",finish:"metal"}),
-  Object.freeze({id:"black",label:"Schwarz",price:300000,color:"#1a1b1d",finish:"metal"}),
-  Object.freeze({id:"matte-black",label:"Matt Schwarz",price:500000,color:"#111214",finish:"matte"}),
-  Object.freeze({id:"gloss-black",label:"Glanz Schwarz",price:750000,color:"#08090b",finish:"gloss"}),
-  Object.freeze({id:"red",label:"Rot",price:650000,color:"#8c2029",finish:"metal"}),
-  Object.freeze({id:"violet",label:"Violett",price:900000,color:"#563575",finish:"metal"}),
-  Object.freeze({id:"titanium",label:"Titan Natur",price:1500000,color:"#9b9286",finish:"metal"}),
-  Object.freeze({id:"real-gold",label:"Echtgold",price:10000000,color:"#d6aa43",finish:"gold"})
-]);
-function phoneModelMetaV511(item = ownedPhoneItem()) {
-  const tier = deviceTier(String(item || ""));
-  if (tier >= 4) return PHONE_MODELS_V511.iphone17pro;
-  if (tier >= 3) return PHONE_MODELS_V511.iphone16pro;
-  if (tier >= 2) return PHONE_MODELS_V511.iphone16;
-  return PHONE_MODELS_V511.iphone14;
-}
-function phoneIslandContentV511() {
-  const mode = String(settings.phoneIslandMode || "bank");
-  if (mode === "cash") return `💶 ${euro.format(Number(state?.cash || 0))}`;
-  if (mode === "level") return `★ Lv ${Math.max(1, Number(state?.level || 1))}`;
-  if (mode === "emoji") return String(settings.phoneIslandEmoji || "🔥").slice(0, 8);
-  if (mode === "none") return "";
-  return `€ ${euro.format(Number(state?.bank || 0))}`;
-}
-function currentPhoneSkinV511() {
-  const id = String(state?.phoneBackSkin || "original");
-  return PHONE_BACK_SKINS_V511.find((entry) => entry.id === id) || PHONE_BACK_SKINS_V511[0];
-}
-function ensureV511PhoneEntitlements() {
-  if (!state || !ownedPhoneItem()) return false;
-  state.installedPhoneApps = Array.isArray(state.installedPhoneApps) ? state.installedPhoneApps : [];
-  const before = state.installedPhoneApps.length;
-  for (const app of phoneAppStoreCatalog || []) if (app?.status === "available" && app.id && !state.installedPhoneApps.includes(app.id)) state.installedPhoneApps.push(app.id);
-  state.exchangeEnabled = true;
-  const changed = state.installedPhoneApps.length !== before;
-  if (changed) save();
-  return changed;
-}
-window.JKGamesPhoneV511Config = Object.freeze({
-  model: (item) => ({...phoneModelMetaV511(item)}),
-  skin: () => ({...currentPhoneSkinV511()}),
-  island: () => phoneIslandContentV511(),
-  skins: () => PHONE_BACK_SKINS_V511.map((entry) => ({...entry}))
-});
-
 function simTariffByName(name) {
   if (name === "Prepaid-Karte") return simKlTariffs[0];
   if (name === "City-SIM Datenpaket") return simKlTariffs[2];
@@ -15324,15 +15218,13 @@ function deviceTier(item) {
 }
 
 function deviceSpeedText(tier) {
-  // V511: Das erste Smartphone schaltet alle Smartphone-Funktionen frei.
-  // Höhere Stufen sind ausschließlich sichtbare 3D-/Luxus-Designs.
   return [
-    "Alle Funktionen · iPhone-14-Design.",
-    "Alle Funktionen · iPhone-14-Design.",
-    "Gleiche Funktionen · iPhone-16-Design + Gehäusefarben.",
-    "Gleiche Funktionen · iPhone-16-Pro-Design + Premium-Gehäuse.",
-    "Gleiche Funktionen · iPhone-17-Pro-Design + Ultra-Gehäuse."
-  ][clamp(Number(tier)||0,0,4)] || "Alle Smartphone-Funktionen verfügbar.";
+    "Sehr einfach: Notizen und Shop laufen.",
+    "Langsam: Online-Apps öffnen mit Wartezeit.",
+    "Solide: Alltag, Bank und Online-Shops laufen gut.",
+    "Schnell: Business, Trading und Multitasking laufen sauber.",
+    "Ultra: alles sofort, höchste App-Leistung und volle Features."
+  ][tier] || "Solide Leistung.";
 }
 
 function hasPhoneSim() {
@@ -17615,7 +17507,7 @@ function isPhoneAppInstalled(appId) {
 function appStoreRequirementText(app, item) {
   if (app.status === "locked") return "Gesperrt";
   const tier = deviceTier(item);
-  if (!phoneItems().includes(item) && tier < app.minTier) return app.minTier >= 3 ? "Pro-Smartphone benötigt" : "Besseres Gerät benötigt";
+  if (tier < app.minTier) return app.minTier >= 3 ? "Pro-Smartphone benötigt" : "Besseres Smartphone benötigt";
   return isPhoneAppInstalled(app.id) ? "Installiert" : "Bereit zum Download";
 }
 
@@ -17663,7 +17555,7 @@ function phoneAppStoreHtml(item) {
 function installPhoneApp(appId, item) {
   const app = phoneAppStoreCatalog.find((entry) => entry.id === appId);
   if (!app || app.status !== "available") return addFeed("Diese App ist derzeit gesperrt.");
-  if (!phoneItems().includes(item) && deviceTier(item) < app.minTier) return addFeed(`${app.label} benötigt ein besseres Gerät.`);
+  if (deviceTier(item) < app.minTier) return addFeed(`${app.label} benötigt ein Pro-Smartphone.`);
   if (isPhoneAppInstalled(appId)) return;
   state.installedPhoneApps.push(appId);
   persistInstalledPhoneAppsBackup(state.installedPhoneApps);
@@ -17700,7 +17592,6 @@ function uninstallPhoneApp(appId, item) {
 function deviceAppsFor(item) {
   const tier = deviceTier(item);
   const phoneDevice = phoneItems().includes(item);
-  if (phoneDevice) ensureV511PhoneEntitlements();
   const requiredDeviceLabel = (min) => min >= 3 ? "Pro-Smartphone" : min >= 2 ? "Mittelklasse-Smartphone" : "Einsteiger-Smartphone";
   // Feste System-Apps bleiben zuerst. Der App Store sitzt bewusst am Ende
   // der letzten System-App-Reihe; heruntergeladene Apps folgen erst darunter.
@@ -17733,8 +17624,8 @@ function deviceAppsFor(item) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
   }
   return apps.map((app) => {
-    const missingTier = !phoneDevice && tier < app.min;
-    const missingLevel = !phoneDevice && (state.level || 0) < (app.minLevel || 0);
+    const missingTier = tier < app.min;
+    const missingLevel = (state.level || 0) < (app.minLevel || 0);
     const missingSim = app.sim && !hasPhoneSim();
     const missingData = app.data && !hasPhoneSim();
     const missingCredit = app.phoneCredit && phoneCreditAmount() <= 0;
@@ -17764,8 +17655,8 @@ function deviceAppsFor(item) {
 
 function deviceDescription(item) {
   const tier = deviceTier(item);
-  if (phoneItems().includes(item)) return `${phoneModelMetaV511(item).label} · V511 Designstufe. Alle Smartphone-Funktionen sind bereits ab dem Einsteiger-Smartphone verfügbar; höhere Stufen ändern nur Gerät und Optik.`;
-  return `Altes Bestandsgerät. Neue Computer werden ab V511 nicht mehr verkauft; Smartphone-Funktionen ersetzen die früheren PC-Freischaltungen.`;
+  if (phoneItems().includes(item)) return `${deviceSpeedText(tier)} ${tier === 0 ? "Basic Phone: nur Notizen." : "Apps werden je nach Smartphone-Stufe und SIM freigeschaltet."}`;
+  return `${deviceSpeedText(tier)} Computer im Tablet-Look mit stärkerem Arbeits- und Business-Fokus.`;
 }
 
 function deviceBackAsset(item) {
@@ -18018,13 +17909,6 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     });
   });
   shell.querySelector("[data-phone-settings-quick]")?.addEventListener("click", () => openDeviceInterface(item, "settings", false));
-  // V511: Der iPhone-Home-Strich ist ein echter Zurück-Button. In einer App geht
-  // er zum Home-Screen; vom Home-Screen aus schließt er das Smartphone.
-  shell.querySelector(".device-home-bar")?.addEventListener("click", () => {
-    if (!isPhone) return;
-    if (selected?.id && selected.id !== "home") openDeviceInterface(item, "home", false);
-    else if (els.dialog?.open) { clearDialogDynamic(); els.dialog.close(); }
-  });
   shell.querySelectorAll("[data-appstore-install]").forEach((button) => {
     button.addEventListener("click", () => installPhoneApp(button.dataset.appstoreInstall, item));
   });
@@ -18272,52 +18156,13 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
     if (settings.phoneHaptics) safeVibrate(18);
     shell.classList.toggle("phone-battery-saver", !!settings.phoneBatterySaver);
   }));
-  shell.querySelectorAll("[data-phone-highlight-v511]").forEach((button) => button.addEventListener("click", () => {
-    settings.highlightColor = button.dataset.phoneHighlightV511 || "#6ee7ff";
-    saveSettings();
-    openDeviceInterface(item, "settings", false);
-  }));
-  shell.querySelector("[data-phone-highlight-custom-v511]")?.addEventListener("input", (event) => {
-    settings.highlightColor = event.currentTarget.value || "#6ee7ff";
-    saveSettings();
-  });
-  shell.querySelector("[data-phone-island-mode-v511]")?.addEventListener("change", (event) => {
-    settings.phoneIslandMode = event.currentTarget.value || "bank";
-    saveSettings();
-    openDeviceInterface(item, "settings", false);
-  });
-  shell.querySelector("[data-phone-island-emoji-v511]")?.addEventListener("change", (event) => {
-    settings.phoneIslandEmoji = String(event.currentTarget.value || "🔥").slice(0, 8);
-    saveSettings();
-    openDeviceInterface(item, "settings", false);
-  });
-  shell.querySelectorAll("[data-phone-skin-v511]").forEach((button) => button.addEventListener("click", () => {
-    const id = button.dataset.phoneSkinV511 || "original";
-    const skin = PHONE_BACK_SKINS_V511.find((entry) => entry.id === id);
-    const model = phoneModelMetaV511(item);
-    if (!skin || model.designLocked || deviceTier(item) < 2) return;
-    state.phoneBackSkinsUnlocked = Array.isArray(state.phoneBackSkinsUnlocked) ? state.phoneBackSkinsUnlocked : ["original"];
-    if (!state.phoneBackSkinsUnlocked.includes(id)) {
-      const price = Math.max(0, Number(skin.price || 0));
-      const funds = Math.max(0, Number(state.cash || 0)) + Math.max(0, Number(state.bank || 0));
-      if (funds < price) return addFeed(`Für ${skin.label} fehlen dir ${euro.format(price - funds)}.`);
-      let due = price;
-      const cashUse = Math.min(Math.max(0, Number(state.cash || 0)), due); state.cash -= cashUse; due -= cashUse;
-      if (due > 0) state.bank = Math.max(0, Number(state.bank || 0) - due);
-      state.phoneBackSkinsUnlocked.push(id);
-      addFeed(`${skin.label} für ${euro.format(price)} freigeschaltet.`);
-    }
-    state.phoneBackSkin = id;
-    save(); render();
-    openDeviceInterface(item, "settings", false);
-  }));
   shell.querySelector("[data-phone-open-game-settings]")?.addEventListener("click", () => {
     els.dialog.close();
     openSettingsOverlay();
   });
   shell.querySelector("[data-phone-reset-settings]")?.addEventListener("click", () => {
     if (!confirm("Handy-Einstellungen auf Standard zurücksetzen?")) return;
-    Object.assign(settings, { phoneAppearance: "dark", phoneBrightness: 88, phoneTextSize: "standard", phoneNotifications: true, phoneSounds: true, phoneHaptics: true, phoneBatterySaver: false, phoneIslandMode: "bank", phoneIslandEmoji: "🔥" });
+    Object.assign(settings, { phoneAppearance: "dark", phoneBrightness: 88, phoneTextSize: "standard", phoneNotifications: true, phoneSounds: true, phoneHaptics: true, phoneBatterySaver: false });
     saveSettings();
     openDeviceInterface(item, "settings", false);
   });
@@ -20059,19 +19904,6 @@ function phoneToggleRowHtml(key, title, text, icon) {
   return `<label class="ios-settings-row ios-settings-toggle"><span class="ios-settings-icon">${icon}</span><span><b>${escapeHtml(title)}</b><small>${escapeHtml(text)}</small></span><input type="checkbox" data-phone-setting-toggle="${key}" ${active ? "checked" : ""}><i></i></label>`;
 }
 
-function phoneBackDesignRowsV511(item = ownedPhoneItem()) {
-  const model = phoneModelMetaV511(item);
-  const tier = deviceTier(item);
-  if (model.designLocked || tier < 2) return `<section class="ios-settings-group phone-design-locked-v511"><div class="ios-settings-row"><span class="ios-settings-icon orange">◫</span><span><b>${escapeHtml(model.label)} · festes Design</b><small>Beim Einsteiger-Smartphone bleibt die Original-Rückseite unverändert.</small></span><strong>FIX</strong></div></section>`;
-  state.phoneBackSkinsUnlocked = Array.isArray(state.phoneBackSkinsUnlocked) ? state.phoneBackSkinsUnlocked : ["original"];
-  const active = String(state.phoneBackSkin || "original");
-  return `<section class="phone-skin-grid-v511">${PHONE_BACK_SKINS_V511.map((skin) => {
-    const owned = skin.price === 0 || state.phoneBackSkinsUnlocked.includes(skin.id);
-    const selected = active === skin.id;
-    return `<button type="button" class="phone-skin-card-v511 ${selected ? "active" : ""}" data-phone-skin-v511="${skin.id}" style="--skin:${skin.color}"><i></i><span><b>${escapeHtml(skin.label)}</b><small>${owned ? (selected ? "Aktiv" : "Besitzt du") : euro.format(skin.price)}</small></span><em>${selected ? "✓" : owned ? "Anwenden" : "Kaufen"}</em></button>`;
-  }).join("")}</section>`;
-}
-
 function phoneSettingsViewHtml() {
   const appearance = settings.phoneAppearance === "light" ? "light" : "dark";
   const textSize = ["compact", "standard", "large"].includes(settings.phoneTextSize) ? settings.phoneTextSize : "standard";
@@ -20094,24 +19926,6 @@ function phoneSettingsViewHtml() {
         ${phoneToggleRowHtml("phoneSounds", "Töne", "Klingel-, SMS- und App-Töne", "🔊")}
         ${phoneToggleRowHtml("phoneHaptics", "Haptik", "Kurzes Feedback bei Aktionen", "〰")}
       </section>
-      <h4 class="ios-settings-section-label">Dynamic Island</h4>
-      <section class="ios-settings-group phone-island-settings-v511" data-phone-island-settings-v511>
-        <div class="ios-settings-row ios-settings-choice-row"><span class="ios-settings-icon blue">●</span><span><b>Inhalt</b><small>Sehr klein direkt in der Dynamic Island</small></span><select data-phone-island-mode-v511>
-          <option value="bank" ${settings.phoneIslandMode === "bank" ? "selected" : ""}>Kontostand</option>
-          <option value="cash" ${settings.phoneIslandMode === "cash" ? "selected" : ""}>Bargeld</option>
-          <option value="level" ${settings.phoneIslandMode === "level" ? "selected" : ""}>Level</option>
-          <option value="emoji" ${settings.phoneIslandMode === "emoji" ? "selected" : ""}>Emoji / Icon</option>
-          <option value="none" ${settings.phoneIslandMode === "none" ? "selected" : ""}>Leer</option>
-        </select></div>
-        <label class="ios-settings-row"><span class="ios-settings-icon violet">☺</span><span><b>Emoji / Icon</b><small>Wird nur im Emoji-Modus benutzt</small></span><input class="phone-island-emoji-v511" data-phone-island-emoji-v511 maxlength="8" value="${escapeHtml(settings.phoneIslandEmoji || "🔥")}"></label>
-      </section>
-      <h4 class="ios-settings-section-label">JK.Games Highlighter · NEU</h4>
-      <section class="ios-settings-group phone-highlight-settings-v511">
-        <div class="phone-highlight-swatches-v511">${["#6ee7ff","#ff3b4f","#ffd84a","#55e77c","#b66cff","#ff7ab8","#ffffff"].map((color) => `<button type="button" data-phone-highlight-v511="${color}" style="--swatch:${color}" class="${String(settings.highlightColor).toLowerCase() === color ? "active" : ""}" aria-label="Highlighter ${color}"></button>`).join("")}</div>
-        <label class="ios-settings-row"><span class="ios-settings-icon teal">✦</span><span><b>Eigene Farbe</b><small>Bestehende Hover-Highlights + Heute/Arbeit</small></span><input type="color" data-phone-highlight-custom-v511 value="${escapeHtml(settings.highlightColor || "#6ee7ff")}"></label>
-      </section>
-      <h4 class="ios-settings-section-label">Gehäuse & Rückseite</h4>
-      ${phoneBackDesignRowsV511(ownedPhoneItem())}
       <h4 class="ios-settings-section-label">Batterie</h4>
       <section class="ios-settings-group">
         ${phoneToggleRowHtml("phoneBatterySaver", "Stromsparmodus", "Reduziert visuelle Effekte im Smartphone", "🔋")}
@@ -20451,10 +20265,10 @@ function achievementDefinitions() {
     { id: "finder-partner-perfect", name: "Perfektes Paar", text: "Beziehung und Partnerstimmung gleichzeitig auf 100 Prozent bringen.", done: () => !!state.finder?.relationshipId && Number(state.finder?.relationshipStats?.relationship || 0) >= 100 && Number(state.finder?.relationshipStats?.mood || 0) >= 100 },
     { id: "finder-right-one", name: "Finde die Richtige", text: "Ein erstes echtes Treffen über Finder.KL erleben.", done: () => (state.finder?.metProfiles || []).length > 0 },
     { id: "smartphone", name: "Online bereit", text: "Ein Smartphone besitzen.", done: () => ownsAnyPhoneAtLeast("Smartphone") },
-    { id: "office-laptop", name: "Mittelklasse-Design", text: "Das Mittelklasse-Smartphone besitzen.", done: () => ownsAnyPhoneAtLeast("Mittelklasse Smartphone") },
-    { id: "creator-laptop", name: "Pro-Design", text: "Das Pro-Smartphone besitzen.", done: () => ownsAnyPhoneAtLeast("Pro Smartphone") },
-    { id: "gaming-pc", name: "Ultra-Design", text: "Das Ultra-Smartphone besitzen.", done: () => ownsAnyPhoneAtLeast("Ultra Smartphone") },
-    { id: "high-end-pc", name: "Echtgold", text: "Die Echtgold-Rückseite freischalten.", done: () => (state.phoneBackSkinsUnlocked || []).includes("real-gold") },
+    { id: "office-laptop", name: "Office-Arbeitsplatz", text: "Einen Office Laptop besitzen.", done: () => ownsAnyComputerAtLeast("Office Laptop") },
+    { id: "creator-laptop", name: "Creator-Setup", text: "Einen Creator Laptop besitzen.", done: () => ownsAnyComputerAtLeast("Creator Laptop") },
+    { id: "gaming-pc", name: "Gaming-Station", text: "Einen Gaming-PC besitzen.", done: () => ownsAnyComputerAtLeast("Gaming-PC") },
+    { id: "high-end-pc", name: "High-End-System", text: "Einen High-End Gaming-PC besitzen.", done: () => ownsAnyComputerAtLeast("High-End Gaming-PC") },
     { id: "debtfree", name: "Schuldenfrei", text: "Keine Schulden haben.", done: () => (state.debt || 0) <= 0 && state.day > 1 },
     { id: "bank-10k", name: "10.000 Euro", text: "10.000 Euro auf Konto oder bar besitzen.", done: () => (state.bank || 0) + (state.cash || 0) >= 10000 },
     { id: "bank-100k", name: "100.000 Euro", text: "100.000 Euro auf Konto oder bar besitzen.", done: () => (state.bank || 0) + (state.cash || 0) >= 100000 },
@@ -27115,16 +26929,6 @@ els.effectVolume?.addEventListener("input", () => {
   settings.effectVolume = Number(els.effectVolume.value);
   saveSettings();
 });
-document.querySelectorAll("[data-highlight-color]").forEach((button) => button.addEventListener("click", () => {
-  settings.highlightColor = button.dataset.highlightColor || "#6ee7ff";
-  saveSettings();
-  document.querySelectorAll("[data-highlight-color]").forEach((row) => row.classList.toggle("active", row.dataset.highlightColor?.toLowerCase() === settings.highlightColor.toLowerCase()));
-  if (els.highlightColorCustom) els.highlightColorCustom.value = settings.highlightColor;
-}));
-document.getElementById("highlightColorCustom")?.addEventListener("input", (event) => {
-  settings.highlightColor = event.currentTarget.value || "#6ee7ff";
-  saveSettings();
-});
 els.graphicsQuality?.addEventListener("change", () => {
   const nextQuality = els.graphicsQuality.value;
   const previousQuality = settings.graphicsQuality;
@@ -30084,7 +29888,7 @@ function stabilizeMobileCharacterScroll(section = "") {
   // WebAudio genau einmal direkt innerhalb der ersten echten Benutzeraktion
   // entsperren. Die Listener werden gemeinsam entfernt, damit Pointer- und
   // Touch-Ereignis nicht doppelt denselben AudioContext starten.
-  const phoneAudioGestureEventsV56 = ["click", "keydown"];
+  const phoneAudioGestureEventsV56 = ["pointerdown", "touchend", "keydown"];
   const unlockPhoneAudioV56 = (event) => {
     if (!hasTransientUserGesture(event)) return;
     phoneAudioGestureEventsV56.forEach((eventName) => {
