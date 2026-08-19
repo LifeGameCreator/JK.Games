@@ -20321,3 +20321,23 @@ body.gfx-ultra .jk-exclusive-card.jk-exclusive-realgalaxy { box-shadow: inset 0 
   .phone-shortcut.phone-shortcut-has-model-v512{padding-top:102px}
   .phone-shortcut-model-v511{width:90px!important;height:102px!important;top:2px!important}
 }
+
+
+/* ==========================================================================
+   JK.Games V513 · echtes iPhone im Hauptmenü
+   Keine neue Dashboard-Struktur: nur die bestehende Handy-Kachel zeigt das
+   echte GLB größer und gerade von vorn.
+   ========================================================================== */
+.phone-shortcut.phone-shortcut-has-model-v512{
+  padding-top:128px!important;
+}
+.phone-shortcut-model-v511{
+  top:-4px!important;
+  width:122px!important;
+  height:136px!important;
+  filter:drop-shadow(0 8px 10px rgba(0,0,0,.34))!important;
+}
+@media(max-width:720px){
+  .phone-shortcut.phone-shortcut-has-model-v512{padding-top:112px!important}
+  .phone-shortcut-model-v511{top:-3px!important;width:106px!important;height:120px!important}
+}

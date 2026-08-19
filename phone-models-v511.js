@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-/* JK.Games V512 · exakt zwei wiederverwendete WebGL-Kontexte:
+/* JK.Games V513 · echtes iPhone ohne Zusatzrahmen, persistente freie Drehung.
+   Weiterhin exakt zwei wiederverwendete WebGL-Kontexte:
    1x Dashboard-Vorschau + 1x geöffnetes 3D-Handy. */
-const VERSION = "2026-08-19-phone-models-v512-shared-contexts";
+const VERSION = "2026-08-19-phone-models-v513-real-iphone-free-rotation";
 const loader = new GLTFLoader();
 const sceneCache = new Map();
 const sessions = new WeakMap();
@@ -13,6 +14,8 @@ let shortcutRendererBundle = null;
 let shortcutSession = null;
 let shortcutScheduled = false;
 let shortcutGeneration = 0;
+/* V513: Rotation bleibt auch erhalten, wenn Home/App-Wechsel die Telefon-Shell neu rendert. */
+let mainRotationY = 0;
 
 function sceneForAsset(asset) {
   const key = String(asset || "");
@@ -93,21 +96,30 @@ function fitModel(root, camera, scaleFactor = 2.05) {
 
 function setBackClass(session) {
   const normalized = ((session.currentY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-  const isBack = Math.abs(normalized - Math.PI) < Math.PI * .45;
+  const frontDistance = Math.min(normalized, Math.PI * 2 - normalized);
+  const backDistance = Math.abs(normalized - Math.PI);
+  const isBack = backDistance < Math.PI * .45;
+  /* Das HTML-Display ist eine 2D-Projektion auf die echte Front. Sobald das
+     Telefon deutlich seitlich oder rückwärts gedreht ist, wird diese Projektion
+     ausgeblendet, damit kein flaches UI neben dem 3D-iPhone schwebt. */
+  const screenHidden = frontDistance > Math.PI * .28;
   session.shell.classList.toggle("phone-back-visible-v511", isBack);
-  session.shell.dataset.phoneSideV511 = isBack ? "back" : "front";
+  session.shell.classList.toggle("phone-screen-hidden-v513", screenHidden);
+  session.shell.dataset.phoneSideV511 = isBack ? "back" : (screenHidden ? "side" : "front");
 }
 
 function renderSession(session) {
   if (!session || session.disposed || activeSession !== session) return;
   if (!session.shell?.isConnected) { disposeSession(session.shell); return; }
   if (session.root) session.root.rotation.y = session.currentY;
+  mainRotationY = session.currentY;
   session.renderer.render(session.scene, session.camera);
 }
 
 function disposeSession(shell) {
   const session = shell ? sessions.get(shell) : activeSession;
   if (!session) return;
+  mainRotationY = Number.isFinite(session.currentY) ? session.currentY : mainRotationY;
   session.disposed = true;
   if (session.raf) cancelAnimationFrame(session.raf);
   try { session.resize?.disconnect?.(); } catch {}
@@ -142,6 +154,7 @@ function animateSession(session) {
 function setTarget(session, target) {
   if (!session || session.disposed) return;
   session.targetY = target;
+  mainRotationY = target;
   session.animating = true;
   animateSession(session);
 }
@@ -149,7 +162,9 @@ function setTarget(session, target) {
 function toggleSide(shell) {
   const session = sessions.get(shell);
   if (!session) return;
-  setTarget(session, session.shell.dataset.phoneSideV511 === "back" ? 0 : Math.PI);
+  const normalized = ((session.currentY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const nearerBack = Math.abs(normalized - Math.PI) < Math.PI / 2;
+  setTarget(session, nearerBack ? 0 : Math.PI);
 }
 function front(shell) { const session = sessions.get(shell); if (session) setTarget(session, 0); }
 function back(shell) { const session = sessions.get(shell); if (session) setTarget(session, Math.PI); }
@@ -174,6 +189,7 @@ function wireDrag(session) {
       if (pointer !== event.pointerId) return;
       session.currentY = startY + (event.clientX - startX) * .012;
       session.targetY = session.currentY;
+      mainRotationY = session.currentY;
       setBackClass(session);
       renderSession(session);
       event.preventDefault();
@@ -182,8 +198,13 @@ function wireDrag(session) {
       if (pointer !== event.pointerId) return;
       pointer = null;
       try { rail.releasePointerCapture?.(event.pointerId); } catch {}
-      const normalized = ((session.currentY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-      setTarget(session, Math.abs(normalized - Math.PI) < Math.PI / 2 ? Math.PI : 0);
+      /* V513: KEIN automatisches Einrasten mehr. Die freie PC-Drehung bleibt exakt
+         dort stehen, wo der Nutzer die Maus losgelassen hat. */
+      session.targetY = session.currentY;
+      session.animating = false;
+      mainRotationY = session.currentY;
+      setBackClass(session);
+      renderSession(session);
     };
     rail.addEventListener("pointerup", done);
     rail.addEventListener("pointercancel", done);
@@ -218,7 +239,7 @@ async function mount(shell, { model, skin } = {}) {
   const key = new THREE.DirectionalLight(0xffffff, 3.0); key.position.set(3.5, 5, 6); scene.add(key);
   const rim = new THREE.DirectionalLight(0x8edfff, 1.85); rim.position.set(-5, 1, -5); scene.add(rim);
 
-  const session = { shell, frame, canvas, renderer, scene, camera, root: null, currentY: 0, targetY: 0, animating: false, disposed: false, resize: null, raf: 0, fingerprint };
+  const session = { shell, frame, canvas, renderer, scene, camera, root: null, currentY: mainRotationY, targetY: mainRotationY, animating: false, disposed: false, resize: null, raf: 0, fingerprint };
   sessions.set(shell, session);
   activeSession = session;
 
@@ -244,6 +265,10 @@ async function mount(shell, { model, skin } = {}) {
     prepareModel(root, skin);
     scene.add(root);
     fitModel(root, camera);
+    /* V513: echtes Gerät größer im verfügbaren Bereich, Vorder- und Rückseite identisch skaliert. */
+    camera.zoom = 1.24;
+    camera.updateProjectionMatrix();
+    root.rotation.y = session.currentY;
     setBackClass(session);
     renderSession(session);
   } catch (error) {
@@ -305,8 +330,11 @@ async function mountShortcutPreview() {
     prepareModel(root, null);
     scene.add(root);
     fitModel(root, camera, 2.18);
-    root.rotation.y = -.34;
-    root.rotation.x = .06;
+    /* V513: Dashboard zeigt die echte Vorderseite gerade und deutlich größer. */
+    camera.zoom = 1.34;
+    camera.updateProjectionMatrix();
+    root.rotation.y = 0;
+    root.rotation.x = 0;
     render();
   } catch (error) {
     console.warn("JK.Games V512 Dashboard-iPhone GLB", asset, error);

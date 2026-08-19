@@ -2690,11 +2690,11 @@
 
 
 /* ==========================================================================
-   JK.Games V512 · stabiles 3D-iPhone, Dynamic Island und Front/Rückseite
+   JK.Games V513 · echtes GLB-iPhone, Display-Overlay und freie Front/Rückseiten-Drehung
    ========================================================================== */
 (() => {
   "use strict";
-  const VERSION = "2026-08-19-phone-v512-context-stable-ui";
+  const VERSION = "2026-08-19-phone-v513-real-iphone-screen";
   const baseOpenV512 = openDeviceInterface;
 
   function bindIslandV512(island, item) {
@@ -2719,6 +2719,9 @@
   }
 
   function ensurePhoneControlsV512(shell, item, model) {
+    /* V513: der echte Home-Indikator des GLB bleibt sichtbar; der HTML-Bar ist nur
+       noch eine unsichtbare Klick-/Touch-Hitbox für Zurück/Home. */
+    shell.querySelector(".device-home-bar")?.classList.add("phone-home-hit-v513");
     const homeToolbar = shell.querySelector(".device-home-shell-v64 .ios-home-toolbar-v64");
     if (homeToolbar) {
       let label = homeToolbar.querySelector("[data-phone-model-label-v511]");
@@ -2774,7 +2777,7 @@
     if (!phoneItems().includes(item)) return;
     const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
     if (!shell) return;
-    shell.classList.add("device-phone-v511", "device-phone-v512");
+    shell.classList.add("device-phone-v511", "device-phone-v512", "device-phone-v513");
     shell.dataset.phoneActiveAppV512 = String(activeApp || "home");
 
     const model = window.JKGamesPhoneV511Config?.model?.(item) || { label: "Smartphone", asset: "" };
