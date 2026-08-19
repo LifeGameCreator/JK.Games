@@ -5290,11 +5290,47 @@ function updatePhoneShortcut() {
   const tier = phone ? String(deviceTier(phone)) : "-1";
   if (shortcut.dataset.phoneTier !== tier) shortcut.dataset.phoneTier = tier;
   shortcut.disabled = !phone;
-  const model = phone ? phoneModelMetaV511(phone) : null;
-  const html = phone
-    ? `<i class="phone-shortcut-model-v511" data-phone-shortcut-model-v511 data-model-asset-v511="${escapeHtml(model.asset)}" aria-hidden="true"></i><span>Info ${phoneInfoCount()}</span><b>${escapeHtml(model.label)}</b><small>${escapeHtml(phone)} · Akku ${Math.round(state.phoneBattery ?? 100)}% · ${euro.format(phoneCreditAmount())}</small>`
-    : `<span>Handy</span><b>Keins</b>`;
-  setHtmlIfChanged(shortcut, html);
+
+  if (!phone) {
+    shortcut.classList.remove("phone-shortcut-has-model-v512");
+    delete shortcut.dataset.phoneRealModelV512;
+    if (shortcut.dataset.phoneUiV512 !== "empty") {
+      shortcut.replaceChildren();
+      const span = document.createElement("span"); span.textContent = "Handy";
+      const title = document.createElement("b"); title.textContent = "Keins";
+      shortcut.append(span, title);
+      shortcut.dataset.phoneUiV512 = "empty";
+    }
+    updateHomeShortcut();
+    return;
+  }
+
+  const model = phoneModelMetaV511(phone);
+  shortcut.classList.add("phone-shortcut-has-model-v512");
+  shortcut.dataset.phoneRealModelV512 = "1";
+
+  let preview = shortcut.querySelector("[data-phone-shortcut-model-v511]");
+  if (!preview) {
+    shortcut.replaceChildren();
+    preview = document.createElement("i");
+    preview.className = "phone-shortcut-model-v511";
+    preview.dataset.phoneShortcutModelV511 = "1";
+    preview.setAttribute("aria-hidden", "true");
+    const info = document.createElement("span"); info.dataset.phoneShortcutInfoV512 = "1";
+    const title = document.createElement("b"); title.dataset.phoneShortcutTitleV512 = "1";
+    const meta = document.createElement("small"); meta.dataset.phoneShortcutMetaV512 = "1";
+    shortcut.append(preview, info, title, meta);
+  }
+
+  const nextAsset = String(model.asset || "");
+  if (preview.dataset.modelAssetV511 !== nextAsset) {
+    preview.dataset.modelAssetV511 = nextAsset;
+    window.dispatchEvent(new CustomEvent("jkgames-phone-shortcut-refresh-v512"));
+  }
+  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-info-v512]"), `Info ${phoneInfoCount()}`);
+  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-title-v512]"), model.label);
+  setTextIfChanged(shortcut.querySelector("[data-phone-shortcut-meta-v512]"), `${phone} · Akku ${Math.round(state.phoneBattery ?? 100)}% · ${euro.format(phoneCreditAmount())}`);
+  shortcut.dataset.phoneUiV512 = "model";
   updateHomeShortcut();
 }
 
@@ -20066,7 +20102,7 @@ function phoneSettingsViewHtml() {
       <h4 class="ios-settings-section-label">JK.Games Highlighter · NEU</h4>
       <section class="ios-settings-group phone-highlight-settings-v511">
         <div class="phone-highlight-swatches-v511">${["#6ee7ff","#ff3b4f","#ffd84a","#55e77c","#b66cff","#ff7ab8","#ffffff"].map((color) => `<button type="button" data-phone-highlight-v511="${color}" style="--swatch:${color}" class="${String(settings.highlightColor).toLowerCase() === color ? "active" : ""}" aria-label="Highlighter ${color}"></button>`).join("")}</div>
-        <label class="ios-settings-row"><span class="ios-settings-icon teal">✦</span><span><b>Eigene Farbe</b><small>Hover-Rahmen im gesamten Hauptmenü</small></span><input type="color" data-phone-highlight-custom-v511 value="${escapeHtml(settings.highlightColor || "#6ee7ff")}"></label>
+        <label class="ios-settings-row"><span class="ios-settings-icon teal">✦</span><span><b>Eigene Farbe</b><small>Bestehende Hover-Highlights + Heute/Arbeit</small></span><input type="color" data-phone-highlight-custom-v511 value="${escapeHtml(settings.highlightColor || "#6ee7ff")}"></label>
       </section>
       <h4 class="ios-settings-section-label">Gehäuse & Rückseite</h4>
       ${phoneBackDesignRowsV511(ownedPhoneItem())}

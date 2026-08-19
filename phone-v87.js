@@ -2689,47 +2689,62 @@
 })();
 
 
-/* ==========================================================================\n   JK.Games V511 · 3D phone decorator, Dynamic Island and back/front control\n   ========================================================================== */
+/* ==========================================================================
+   JK.Games V512 · stabiles 3D-iPhone, Dynamic Island und Front/Rückseite
+   ========================================================================== */
 (() => {
   "use strict";
-  const VERSION = "2026-08-19-phone-v511-3d-model-dynamic-island";
-  const baseOpenV511 = openDeviceInterface;
+  const VERSION = "2026-08-19-phone-v512-context-stable-ui";
+  const baseOpenV512 = openDeviceInterface;
 
-  function decorateV511(item, activeApp) {
-    if (!phoneItems().includes(item)) return;
-    const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
-    if (!shell) return;
-    shell.classList.add("device-phone-v511");
-    const model = window.JKGamesPhoneV511Config?.model?.(item) || {label:"Smartphone",asset:""};
-    const island = shell.querySelector(".device-island");
-    if (island) {
-      island.setAttribute("role", "button");
-      island.setAttribute("tabindex", "0");
-      island.setAttribute("title", "Dynamic Island anpassen");
-      island.textContent = window.JKGamesPhoneV511Config?.island?.() || "";
-      const openIslandSettings = () => {
-        openDeviceInterface(item, "settings", false);
-        requestAnimationFrame(() => els.dialog?.querySelector?.("[data-phone-island-settings-v511]")?.scrollIntoView?.({block:"center",behavior:"smooth"}));
-      };
-      island.addEventListener("click", openIslandSettings, {once:true});
-      island.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openIslandSettings(); } }, {once:true});
-    }
+  function bindIslandV512(island, item) {
+    if (!island) return;
+    island.setAttribute("role", "button");
+    island.setAttribute("tabindex", "0");
+    island.setAttribute("title", "Dynamic Island anpassen");
+    island.textContent = window.JKGamesPhoneV511Config?.island?.() || "";
+    if (island.dataset.phoneIslandBoundV512 === "1") return;
+    island.dataset.phoneIslandBoundV512 = "1";
+    const openIslandSettings = () => {
+      openDeviceInterface(item, "settings", false);
+      requestAnimationFrame(() => els.dialog?.querySelector?.("[data-phone-island-settings-v511]")?.scrollIntoView?.({ block: "center", behavior: "smooth" }));
+    };
+    island.addEventListener("click", openIslandSettings);
+    island.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openIslandSettings();
+      }
+    });
+  }
 
+  function ensurePhoneControlsV512(shell, item, model) {
     const homeToolbar = shell.querySelector(".device-home-shell-v64 .ios-home-toolbar-v64");
-    if (homeToolbar && !homeToolbar.querySelector("[data-phone-model-label-v511]")) {
-      const label = document.createElement("span");
-      label.className = "phone-model-label-v511";
-      label.dataset.phoneModelLabelV511 = "1";
+    if (homeToolbar) {
+      let label = homeToolbar.querySelector("[data-phone-model-label-v511]");
+      if (!label) {
+        label = document.createElement("span");
+        label.className = "phone-model-label-v511";
+        label.dataset.phoneModelLabelV511 = "1";
+        homeToolbar.prepend(label);
+      }
       label.innerHTML = `<b>${escapeHtml(model.label)}</b><small>${escapeHtml(item)} · 3D</small>`;
-      homeToolbar.prepend(label);
-      const flip = document.createElement("button");
-      flip.type = "button";
-      flip.className = "phone-flip-v511";
-      flip.dataset.phoneFlipV511 = "1";
-      flip.title = "Vorder-/Rückseite drehen";
-      flip.setAttribute("aria-label", "Vorder- oder Rückseite anzeigen");
-      flip.textContent = "↻";
-      homeToolbar.append(flip);
+
+      let flip = homeToolbar.querySelector("[data-phone-flip-v511]");
+      if (!flip) {
+        flip = document.createElement("button");
+        flip.type = "button";
+        flip.className = "phone-flip-v511";
+        flip.dataset.phoneFlipV511 = "1";
+        flip.title = "Vorder-/Rückseite drehen";
+        flip.setAttribute("aria-label", "Vorder- oder Rückseite anzeigen");
+        flip.textContent = "↻";
+        homeToolbar.append(flip);
+      }
+      if (flip.dataset.phoneFlipBoundV512 !== "1") {
+        flip.dataset.phoneFlipBoundV512 = "1";
+        flip.addEventListener("click", () => window.JKGamesPhone3DV511?.toggleSide?.(shell));
+      }
     }
 
     const frame = shell.querySelector(".device-frame");
@@ -2742,25 +2757,60 @@
         frame.append(rail);
       }
     }
+  }
 
-    const mount = () => {
-      const api = window.JKGamesPhone3DV511;
-      if (!api?.mount) return false;
-      api.mount(shell, { item, model, skin: window.JKGamesPhoneV511Config?.skin?.() || null });
-      shell.querySelector("[data-phone-flip-v511]")?.addEventListener("click", () => api.toggleSide?.(shell));
-      return true;
-    };
-    if (!mount()) {
+  function mountModelV512(shell, item, model) {
+    const api = window.JKGamesPhone3DV511;
+    if (!api?.mount) return false;
+    api.mount(shell, {
+      item,
+      model,
+      skin: window.JKGamesPhoneV511Config?.skin?.() || null
+    });
+    return true;
+  }
+
+  function decorateV512(item, activeApp) {
+    if (!phoneItems().includes(item)) return;
+    const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
+    if (!shell) return;
+    shell.classList.add("device-phone-v511", "device-phone-v512");
+    shell.dataset.phoneActiveAppV512 = String(activeApp || "home");
+
+    const model = window.JKGamesPhoneV511Config?.model?.(item) || { label: "Smartphone", asset: "" };
+    bindIslandV512(shell.querySelector(".device-island"), item);
+    ensurePhoneControlsV512(shell, item, model);
+
+    /* V512: API.mount ist idempotent. Bei derselben Shell/Modell-Kombination
+       wird KEIN neuer WebGLRenderer mehr angelegt. */
+    if (!mountModelV512(shell, item, model)) {
       let tries = 0;
-      const timer = setInterval(() => { tries += 1; if (mount() || tries > 30 || !document.body.contains(shell)) clearInterval(timer); }, 80);
+      const timer = setInterval(() => {
+        tries += 1;
+        if (mountModelV512(shell, item, model) || tries > 20 || !document.body.contains(shell)) clearInterval(timer);
+      }, 100);
+    }
+
+    if (els.dialog && els.dialog.dataset.phoneDisposeBoundV512 !== "1") {
+      els.dialog.dataset.phoneDisposeBoundV512 = "1";
+      els.dialog.addEventListener("close", () => {
+        const oldShell = els.dialog?.querySelector?.(".device-shell.device-phone");
+        if (oldShell) window.JKGamesPhone3DV511?.dispose?.(oldShell);
+      });
     }
   }
 
-  openDeviceInterface = function openDeviceInterfaceV511(item, activeApp = "home", activeUse = true) {
-    const result = baseOpenV511(item, activeApp, activeUse);
-    requestAnimationFrame(() => decorateV511(item, activeApp));
+  openDeviceInterface = function openDeviceInterfaceV512(item, activeApp = "home", activeUse = true) {
+    const result = baseOpenV512(item, activeApp, activeUse);
+    requestAnimationFrame(() => decorateV512(item, activeApp));
     return result;
   };
 
-  window.JKGamesPhoneV511 = Object.freeze({version:VERSION, refresh(){const item=ownedPhoneItem();if(item)openDeviceInterface(item,"home",false);}});
+  window.JKGamesPhoneV511 = Object.freeze({
+    version: VERSION,
+    refresh() {
+      const item = ownedPhoneItem();
+      if (item) openDeviceInterface(item, "home", false);
+    }
+  });
 })();
