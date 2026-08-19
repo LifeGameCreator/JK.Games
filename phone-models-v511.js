@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-/* JK.Games V514 · echtes iPhone als einzige sichtbare Hardware-Shell.
-   Orthografische Kamera verhindert Cropping/Verzerrung; weiterhin nur zwei
-   wiederverwendete WebGL-Kontexte (Dashboard + geöffnetes Handy). */
-const VERSION = "2026-08-19-phone-models-v514-native-shell-ortho";
+/* JK.Games V515 · iPhone Calibration Base.
+   Nur das echte GLB wird gezeigt; stabile Frontansicht für die anschließende
+   exakte Festlegung der vier Display-Eckpunkte. */
+const VERSION = "2026-08-19-phone-models-v515-iphone-only-calibration";
 const loader = new GLTFLoader();
 const sceneCache = new Map();
 const sessions = new WeakMap();
@@ -248,7 +248,7 @@ async function mount(shell, { model, skin } = {}) {
   const key = new THREE.DirectionalLight(0xffffff, 3.0); key.position.set(3.5, 5, 6); scene.add(key);
   const rim = new THREE.DirectionalLight(0x8edfff, 1.85); rim.position.set(-5, 1, -5); scene.add(rim);
 
-  const session = { shell, frame, canvas, renderer, scene, camera, root: null, currentY: mainRotationY, targetY: mainRotationY, animating: false, disposed: false, resize: null, raf: 0, fingerprint };
+  const session = { shell, frame, canvas, renderer, scene, camera, root: null, currentY: 0, targetY: 0, animating: false, disposed: false, resize: null, raf: 0, fingerprint };
   sessions.set(shell, session);
   activeSession = session;
 
@@ -259,7 +259,7 @@ async function mount(shell, { model, skin } = {}) {
     const h = Math.max(1, Math.round(rect.height));
     renderer.setSize(w, h, false);
     const aspect = w / h;
-    if (session.root) fitOrthographic(session.root, camera, aspect, 1.025);
+    if (session.root) fitOrthographic(session.root, camera, aspect, 1.005);
     renderSession(session);
   };
   session.resize = new ResizeObserver(resize);
@@ -275,7 +275,7 @@ async function mount(shell, { model, skin } = {}) {
     scene.add(root);
     centerModel(root);
     const rect = frame.getBoundingClientRect();
-    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.025);
+    fitOrthographic(root, camera, Math.max(.1, rect.width / Math.max(1, rect.height)), 1.005);
     root.rotation.y = session.currentY;
     setBackClass(session);
     renderSession(session);

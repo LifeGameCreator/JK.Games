@@ -2149,3 +2149,92 @@ dialog.device-dialog-v64:has(.device-phone-v514){
   .device-phone-v514 .device-home-shell-v64{padding:33px 8px 9px!important}
   .device-phone-v514 .ios-app-icon-v64:not(.ios-dock-app-v64){width:66px!important;min-width:66px!important;max-width:66px!important}
 }
+
+/* ========================================================================== 
+   JK.Games V515 · IPHONE ONLY / CALIBRATION BASE
+   Kein altes UI mehr. Nur das echte GLB-iPhone wird dargestellt.
+   ========================================================================== */
+#detailDialog.device-dialog-v64:has(.device-phone-v515)[open],
+#detailDialog.device-dialog-v65:has(.device-phone-v515)[open],
+dialog.device-dialog-v64:has(.device-phone-v515){
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100vw!important;
+  max-width:none!important;
+  height:100dvh!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:1dvh 1vw!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  backdrop-filter:none!important;
+}
+#detailDialog:has(.device-phone-v515)::backdrop{background:rgba(0,0,0,.72)!important}
+.device-phone-v515{
+  box-sizing:border-box!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v515 .device-frame{
+  position:relative!important;
+  display:block!important;
+  width:min(96vw,calc(96dvh * .488),520px)!important;
+  height:auto!important;
+  max-width:none!important;
+  max-height:96dvh!important;
+  aspect-ratio:.488!important;
+  margin:0!important;
+  padding:0!important;
+  overflow:visible!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.device-phone-v515 .phone-model-canvas-v511{
+  position:absolute!important;
+  inset:0!important;
+  z-index:1!important;
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  background:transparent!important;
+  filter:none!important;
+  pointer-events:none!important;
+}
+/* Harte Sicherung: Auch wenn ein älterer Wrapper kurzzeitig DOM aufbaut,
+   darf davon in V515 nichts sichtbar werden. */
+.device-phone-v515 .device-status,
+.device-phone-v515 .device-screen,
+.device-phone-v515 .device-home-bar,
+.device-phone-v515 .device-home-shell-v64,
+.device-phone-v515 .phone-flip-v511,
+.device-phone-v515 .phone-model-drag-rail-v511{
+  display:none!important;
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+.device-phone-v515::before,.device-phone-v515::after,
+.device-phone-v515 .device-frame::before,.device-phone-v515 .device-frame::after{
+  content:none!important;
+  display:none!important;
+}
+@media(max-width:600px){
+  .device-phone-v515 .device-frame{width:min(98vw,calc(96dvh * .488))!important}
+}

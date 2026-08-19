@@ -2810,3 +2810,58 @@
     }
   });
 })();
+
+/* ========================================================================== 
+   JK.Games V515 · iPhone Calibration Base
+   Das alte Smartphone-Layout ist bewusst vollständig ausgeblendet. Sichtbar
+   bleibt nur das echte GLB-iPhone in stabiler Frontansicht. Auf dieser Basis
+   werden die Display-Eckpunkte im nächsten Schritt neu festgelegt.
+   ========================================================================== */
+(() => {
+  "use strict";
+  const VERSION = "2026-08-19-phone-v515-iphone-only-calibration-base";
+  const baseOpenV514 = openDeviceInterface;
+
+  function stripPhoneUiV515(item) {
+    if (!phoneItems().includes(item)) return;
+    const shell = els.dialog?.querySelector?.(".device-shell.device-phone");
+    if (!shell) return;
+
+    shell.classList.remove("device-phone-v511", "device-phone-v512", "device-phone-v513", "device-phone-v514");
+    shell.classList.add("device-phone-v515");
+    shell.dataset.phoneCalibrationV515 = "1";
+
+    /* V515: Alle alten Software-Layer werden wirklich aus der geöffneten
+       Telefonansicht entfernt. Dadurch kann kein altes Layout, keine Homebar
+       und kein zweiter Zurück-Button mehr über dem GLB liegen. */
+    shell.querySelectorAll([
+      ".device-status",
+      ".device-screen",
+      ".device-home-bar",
+      ".device-home-shell-v64",
+      ".phone-flip-v511",
+      ".phone-model-drag-rail-v511"
+    ].join(",")).forEach((node) => node.remove());
+
+    /* Für die spätere Display-Kalibrierung bleibt das Telefon zunächst exakt
+       frontal stehen. Rotation kommt erst wieder dazu, wenn die Front sitzt. */
+    requestAnimationFrame(() => window.JKGamesPhone3DV511?.front?.(shell));
+    setTimeout(() => window.JKGamesPhone3DV511?.front?.(shell), 120);
+  }
+
+  openDeviceInterface = function openDeviceInterfaceV515(item, activeApp = "home", activeUse = true) {
+    const result = baseOpenV514(item, activeApp, activeUse);
+    requestAnimationFrame(() => stripPhoneUiV515(item));
+    setTimeout(() => stripPhoneUiV515(item), 0);
+    setTimeout(() => stripPhoneUiV515(item), 160);
+    return result;
+  };
+
+  window.JKGamesPhoneV515 = Object.freeze({
+    version: VERSION,
+    refresh() {
+      const item = ownedPhoneItem();
+      if (item) openDeviceInterface(item, "home", false);
+    }
+  });
+})();
