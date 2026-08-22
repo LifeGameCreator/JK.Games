@@ -2713,11 +2713,18 @@ function migrateState(save) {
   const persistentPhoneAppIds = new Set([
     "topgames", "finder", "finster", "onlinecasino", "fobile", "event",
     "dailygifts", "dailyquests", "ringpack-neon", "smspack-classic",
-    "aergermensch-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"
+    "aergermensch-kl"
   ]);
   save.installedPhoneApps = Array.isArray(save.installedPhoneApps)
     ? [...new Set(save.installedPhoneApps.filter((id) => typeof id === "string" && persistentPhoneAppIds.has(id)))]
     : [];
+  // V512 Cleanup: vollständig entfernte Spiele hinterlassen keine alten lokalen
+  // oder im allgemeinen JK.Games-Spielstand eingebetteten Restdaten.
+  if (Object.prototype.hasOwnProperty.call(save, "egoshootKL")) delete save.egoshootKL;
+  try {
+    localStorage.removeItem("jk-games-egoshoot-kl-v248");
+    localStorage.removeItem("weed-farm-kl-v497");
+  } catch {}
   save.finder = normalizeFinderSave(save.finder, save);
   save.starterHome ||= { city: save.homeCity || "Essen", type: "Einraumwohnung", rooms: ["Eingang", "Wohn-/Schlafraum", "Küche", "Bad"], rentable: false, active: true, dailyRent: 65, lastPaidDay: save.day || 1 };
   if (save.starterHome.active == null) save.starterHome.active = true;
@@ -17418,7 +17425,7 @@ const phoneAppStoreCatalog = [
     icon: "TG",
     minTier: 1,
     status: "available",
-    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Egoshoot.KL vollständig spielen."
+    description: "Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Escape.KL vollständig spielen."
   },
   {
     id: "finder",
@@ -17492,7 +17499,7 @@ function installedPhoneApps() {
   const knownPersistentIds = new Set([
     "topgames", "finder", "finster", "onlinecasino", "fobile", "event",
     "dailygifts", "dailyquests", "ringpack-neon", "smspack-classic",
-    "aergermensch-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"
+    "aergermensch-kl"
   ]);
   state.installedPhoneApps = [...new Set([...fromSave, ...fromBackup])]
     .filter((id) => knownPersistentIds.has(id) || phoneAppStoreCatalog.some((app) => app.id === id && app.status === "available"));
@@ -17618,7 +17625,7 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
-    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.KL, Weed Farm KL und Egoshoot.KL sind vollständig spielbar." });
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Escape.KL sind vollständig spielbar." });
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17963,14 +17970,6 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-escape-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.EscapeKL?.open?.(item);
-  });
-  shell.querySelector("[data-open-weed-farm-kl]")?.addEventListener("click", () => {
-    els.dialog.close();
-    window.WeedFarmKL?.open?.(item);
-  });
-  shell.querySelector("[data-open-egoshoot-kl]")?.addEventListener("click", () => {
-    els.dialog.close();
-    window.EgoShootKL?.open?.(item);
   });
   shell.querySelector("[data-device-open-games]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19955,8 +19954,6 @@ function openTopGamesJkInfo() {
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
         <article><b>Escape.KL</b><p>Escape.KL besitzt seine eigenen Wins-/Speed-Systeme und optionale JK/Coin-Inhalte.</p></article>
-        <article><b>Weed Farm KL</b><p>Weed Farm KL läuft in dieser ersten Version mit einem eigenen lokalen Money-/Tresor-Spielstand und besitzt keine JK/Coin-Käufe oder zufälligen JK/Coin-Drops.</p></article>
-        <article><b>Egoshoot.KL</b><p>Egoshoot.KL hat aktuell keine zufälligen Gratis-JK/Coin-Drops. Kills, Waffenlevel, Shield und Versorgung werden im Spiel erspielt; optionale Kill-Pakete findest du im JK/Coin-Spiele-Shop.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
     </div>`;
@@ -19970,7 +19967,7 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
-      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Escape.KL, Weed Farm KL und Egoshoot.KL sind vollständig spielbar.</p></div>
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl und Escape.KL sind vollständig spielbar.</p></div>
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -19980,8 +19977,6 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
         <button class="topgames-card escape" data-open-escape-kl><b>Escape.KL</b><small>Speed-Obby mit mehreren Welten, Wins, Rebirth, Pets und Race.</small></button>
-        <button class="topgames-card weedfarm" data-open-weed-farm-kl><b>Weed Farm KL</b><small>Ego-Farm • Grow House • Tresor • Autos • Bahnhof • Käufer • Polizei.</small></button>
-        <button class="topgames-card egoshoot" data-open-egoshoot-kl><b>Egoshoot.KL</b><small>Ego-/Third-Person-Shooter mit 20 Waffen, Online-Welt, 10 Bot-Gegnern, Kills, Shield und Waffenleveln.</small></button>
       </div>
     </div>`;
   if (appId === "jkcoin") return window.JKCoinApp?.html?.() || `<p class="device-hint">JK/Coin wird geladen …</p>`;
@@ -28038,7 +28033,6 @@ function stabilizeMobileCharacterScroll(section = "") {
     try { if (typeof snakeGame !== "undefined" && snakeGame) closeSnakeGame(false); } catch (error) { console.warn("Snake pause", error); }
     try { if (typeof kingdomGame !== "undefined" && kingdomGame) closeKingdomGame(false); } catch (error) { console.warn("Kingdom pause", error); }
     try { if (typeof kriegGame !== "undefined" && kriegGame) closeKriegGame(false); } catch (error) { console.warn("Krieg pause", error); }
-    try { window.LifeBuilderBattleHub?.suspend?.(); } catch (error) { console.warn("Battle Hub pause", error); }
     try { window.MRDNKL?.suspend?.(); } catch (error) { console.warn("MRDN pause", error); }
     try { window.WeedKL?.suspend?.(); } catch (error) { console.warn("Weed Business pause", error); }
   }

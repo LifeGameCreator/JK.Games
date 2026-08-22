@@ -1,5 +1,5 @@
 .device-app-view>p:empty{display:none}
-.device-active-mrdn-kl .device-app-view>h3+p,.device-active-aergermensch-kl .device-app-view>h3+p,.device-active-grundstueck-kampf .device-app-view>h3+p,.device-active-paket-chaos .device-app-view>h3+p,.device-active-reaktions-battle .device-app-view>h3+p{display:none}
+.device-active-mrdn-kl .device-app-view>h3+p,.device-active-aergermensch-kl .device-app-view>h3+p{display:none}
 .portrait-avatar-wrap{position:relative}
 .portrait-pet-quick{position:absolute;left:61%;bottom:20px;z-index:12;display:grid;place-items:center;width:44px;height:44px;padding:0;border:2px solid transparent;border-radius:50%;background:transparent;color:inherit;box-shadow:none;cursor:pointer;pointer-events:auto;touch-action:manipulation;transition:border-color .15s ease,background .15s ease,transform .15s ease}
 .portrait-avatar-wrap.with-partner .portrait-pet-quick{left:39%;bottom:20px}

@@ -1772,98 +1772,6 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
     }
 
-    // LifeBuilder Battle – Grundstück-Kampf, Paket-Chaos und Reaktions-Battle.
-    // Enthält ausschließlich Lobby-, Rundenscore- und Minispielwerte. Teilnehmer
-    // aktualisieren den Live-Zustand transaktional. Private Räume sind nur per
-    // konkretem sechsstelligen Code abrufbar; aufgelistet werden nur öffentliche Räume.
-    match /lifeBuilderBattleGames/{gameId} {
-      allow get: if signedIn();
-      allow list: if signedIn() && resource.data.visibility == 'public';
-
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'gameId', 'gameType', 'hostUid', 'hostName', 'visibility',
-          'maxPlayers', 'fillBots', 'status', 'settings', 'playerUids',
-          'players', 'gameState', 'winnerName', 'createdAtMs',
-          'updatedAtMs', 'version'
-        ])
-        && request.resource.data.gameId == gameId
-        && request.resource.data.gameId.matches('[A-Z0-9]{6}')
-        && request.resource.data.gameType in ['territory', 'packages', 'reaction']
-        && request.resource.data.hostUid == request.auth.uid
-        && request.resource.data.hostName is string
-        && request.resource.data.hostName.size() > 0
-        && request.resource.data.hostName.size() <= 40
-        && request.resource.data.visibility in ['public', 'private']
-        && request.resource.data.maxPlayers is int
-        && request.resource.data.maxPlayers >= 2
-        && request.resource.data.maxPlayers <= 4
-        && request.resource.data.fillBots is bool
-        && request.resource.data.status == 'lobby'
-        && request.resource.data.settings is map
-        && request.resource.data.playerUids is list
-        && request.resource.data.playerUids.size() == 1
-        && request.resource.data.playerUids[0] == request.auth.uid
-        && request.resource.data.players is list
-        && request.resource.data.players.size() == 1
-        && request.resource.data.players[0] is map
-        && request.resource.data.players[0].keys().hasOnly(['uid', 'name', 'isBot'])
-        && request.resource.data.players[0].uid == request.auth.uid
-        && request.resource.data.players[0].name is string
-        && request.resource.data.players[0].name.size() > 0
-        && request.resource.data.players[0].name.size() <= 40
-        && request.resource.data.players[0].isBot == false
-        && request.resource.data.gameState == null
-        && request.resource.data.createdAtMs is int
-        && request.resource.data.updatedAtMs is int
-        && request.resource.data.version is string;
-
-      allow update: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          'gameId', 'gameType', 'hostUid', 'hostName', 'visibility',
-          'maxPlayers', 'fillBots', 'status', 'settings', 'playerUids',
-          'players', 'gameState', 'winnerName', 'createdAtMs',
-          'updatedAtMs', 'version'
-        ])
-        && request.resource.data.gameId == resource.data.gameId
-        && request.resource.data.gameType == resource.data.gameType
-        && request.resource.data.hostUid == resource.data.hostUid
-        && request.resource.data.hostName == resource.data.hostName
-        && request.resource.data.createdAtMs == resource.data.createdAtMs
-        && request.resource.data.maxPlayers == resource.data.maxPlayers
-        && request.resource.data.visibility == resource.data.visibility
-        && request.resource.data.settings == resource.data.settings
-        && request.resource.data.version == resource.data.version
-        && request.resource.data.updatedAtMs is int
-        && request.resource.data.playerUids is list
-        && request.resource.data.playerUids.size() <= resource.data.maxPlayers
-        && request.resource.data.players is list
-        && request.resource.data.players.size() <= resource.data.maxPlayers
-        && request.resource.data.status in ['lobby', 'playing', 'finished']
-        && (
-          resource.data.hostUid == request.auth.uid
-          || resource.data.playerUids.hasAny([request.auth.uid])
-          || (
-            resource.data.status == 'lobby'
-            && request.resource.data.status == 'lobby'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['playerUids', 'players', 'updatedAtMs'])
-            && request.resource.data.playerUids == resource.data.playerUids.concat([request.auth.uid])
-            && request.resource.data.players.size() == resource.data.players.size() + 1
-            && request.resource.data.players[0:resource.data.players.size()] == resource.data.players
-            && request.resource.data.players[resource.data.players.size()] is map
-            && request.resource.data.players[resource.data.players.size()].keys().hasOnly(['uid', 'name', 'isBot'])
-            && request.resource.data.players[resource.data.players.size()].uid == request.auth.uid
-            && request.resource.data.players[resource.data.players.size()].name is string
-            && request.resource.data.players[resource.data.players.size()].name.size() > 0
-            && request.resource.data.players[resource.data.players.size()].name.size() <= 40
-            && request.resource.data.players[resource.data.players.size()].isBot == false
-          )
-        );
-
-      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
-    }
-
-
     // Arena.KL – Bot- und Online-Lobbys für 2 bis 4 angemeldete Spieler.
     // Öffentliche Räume sind suchbar; private Räume nur über ihren sechsstelligen Code.
     // Der Host veröffentlicht den autoritativen Live-Zustand. Teilnehmer dürfen
@@ -3097,211 +3005,6 @@ service cloud.firestore {
       allow delete: if jkSignedIn() && (request.auth.uid == uid || jkIsOwner());
     }
 
-    // V248: Egoshoot.KL Online-Welt. Presence bleibt pro Spieler auf einen
-    // kompakten Datensatz beschränkt. Treffer werden als kurzlebige Events unter
-    // dem Zielspieler abgelegt und können nur vom Ziel gelesen/entfernt werden.
-    function egoStaffRoleValue(value) {
-      return value == "owner" || value == "Owner" || value == "admin" || value == "Admin";
-    }
-
-    function egoIsStaff() {
-      return jkSignedIn()
-        && (
-          request.auth.token.get("owner", false) == true
-          || request.auth.token.get("admin", false) == true
-          || egoStaffRoleValue(request.auth.token.get("role", ""))
-          || (
-            exists(/databases/$(database)/documents/staffRoles/$(request.auth.uid))
-            && (
-              egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("role", ""))
-              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleKey", ""))
-              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("staffRole", ""))
-              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("teamRole", ""))
-              || egoStaffRoleValue(get(/databases/$(database)/documents/staffRoles/$(request.auth.uid)).data.get("roleLabel", ""))
-            )
-          )
-        );
-    }
-
-    function egoMeleeWeapon(value) {
-      return value == "knife" || value == "baseball" || value == "katana";
-    }
-
-    function egoSidearmWeapon(value) {
-      return value == "glock" || value == "sand-pistol" || value == "revolver"
-        || value == "desert-eagle" || value == "mini-uzi" || value == "uzi" || value == "ump9";
-    }
-
-    function egoLongWeapon(value) {
-      return value == "tommy" || value == "m4" || value == "ak12" || value == "an94"
-        || value == "scar" || value == "suppressed" || value == "ak47"
-        || value == "shotgun" || value == "barrett";
-    }
-
-    // Obergrenzen entsprechen der maximal legitimen Level-10-Trefferstaerke.
-    // Dadurch kann ein normaler Client nicht einfach 9999 Schaden als Glock-Treffer schreiben.
-    function egoBodyDamageLimit(value) {
-      return value == "knife" || value == "baseball" || value == "katana" ? 50
-        : value == "glock" ? 41
-        : value == "sand-pistol" ? 47
-        : value == "revolver" ? 66
-        : value == "desert-eagle" ? 77
-        : value == "mini-uzi" ? 24
-        : value == "uzi" ? 26
-        : value == "ump9" ? 30
-        : value == "tommy" ? 37
-        : value == "m4" ? 44
-        : value == "ak12" ? 48
-        : value == "an94" ? 49
-        : value == "scar" ? 54
-        : value == "suppressed" ? 51
-        : value == "ak47" ? 59
-        : value == "shotgun" ? 18
-        : value == "barrett" ? 126
-        : 0;
-    }
-
-    function egoHeadDamageLimit(value) {
-      return value == "knife" || value == "baseball" || value == "katana" ? 50
-        : value == "glock" ? 72
-        : value == "sand-pistol" ? 81
-        : value == "revolver" ? 115
-        : value == "desert-eagle" ? 134
-        : value == "mini-uzi" ? 38
-        : value == "uzi" ? 42
-        : value == "ump9" ? 49
-        : value == "tommy" ? 59
-        : value == "m4" ? 70
-        : value == "ak12" ? 77
-        : value == "an94" ? 79
-        : value == "scar" ? 85
-        : value == "suppressed" ? 81
-        : value == "ak47" ? 94
-        : value == "shotgun" ? 29
-        : value == "barrett" ? 257
-        : 0;
-    }
-
-    match /egoshootKlOnline/{uid} {
-      allow get, list: if jkSignedIn();
-      allow create, update: if jkSignedIn()
-        && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly([
-          "uid", "displayName", "gender", "x", "y", "z", "yaw", "speed",
-          "weaponId", "meleeId", "sidearmId", "longId", "activeSlot",
-          "hp", "shield", "alive", "vanish", "flight", "mapId", "gameMode", "updatedAtMs"
-        ])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() > 0
-        && request.resource.data.displayName.size() <= 50
-        && (request.resource.data.gender == "man" || request.resource.data.gender == "woman")
-        && request.resource.data.x is number
-        && request.resource.data.x >= -200
-        && request.resource.data.x <= 200
-        && request.resource.data.y is number
-        && request.resource.data.y >= 0
-        && request.resource.data.y <= 100
-        && request.resource.data.z is number
-        && request.resource.data.z >= -200
-        && request.resource.data.z <= 200
-        && request.resource.data.yaw is number
-        && request.resource.data.yaw >= -100
-        && request.resource.data.yaw <= 100
-        && request.resource.data.speed is number
-        && request.resource.data.speed >= 0
-        && request.resource.data.speed <= 100
-        && request.resource.data.weaponId is string
-        && request.resource.data.weaponId.size() > 0
-        && request.resource.data.weaponId.size() <= 32
-        && request.resource.data.meleeId is string
-        && request.resource.data.meleeId.size() > 0
-        && request.resource.data.meleeId.size() <= 32
-        && request.resource.data.sidearmId is string
-        && request.resource.data.sidearmId.size() > 0
-        && request.resource.data.sidearmId.size() <= 32
-        && request.resource.data.longId is string
-        && request.resource.data.longId.size() <= 32
-        && egoMeleeWeapon(request.resource.data.meleeId)
-        && egoSidearmWeapon(request.resource.data.sidearmId)
-        && (request.resource.data.longId == "" || egoLongWeapon(request.resource.data.longId))
-        && (egoMeleeWeapon(request.resource.data.weaponId)
-            || egoSidearmWeapon(request.resource.data.weaponId)
-            || egoLongWeapon(request.resource.data.weaponId))
-        && request.resource.data.activeSlot is string
-        && (request.resource.data.activeSlot == "melee"
-            || request.resource.data.activeSlot == "sidearm"
-            || request.resource.data.activeSlot == "long")
-        && request.resource.data.hp is int
-        && request.resource.data.hp >= 0
-        && request.resource.data.hp <= 100
-        && request.resource.data.shield is int
-        && request.resource.data.shield >= 0
-        && request.resource.data.shield <= 200
-        && request.resource.data.alive is bool
-        && request.resource.data.vanish is bool
-        && request.resource.data.flight is bool
-        && request.resource.data.mapId is string
-        && request.resource.data.mapId in ["dustline", "harbor", "metro"]
-        && request.resource.data.gameMode is string
-        && request.resource.data.gameMode in ["deathmatch", "gungame"]
-        && request.resource.data.updatedAtMs is int
-        && request.resource.data.updatedAtMs > 0
-        && (!request.resource.data.vanish || egoIsStaff())
-        && (!request.resource.data.flight || egoIsStaff());
-      allow delete: if jkSignedIn() && (request.auth.uid == uid || egoIsStaff());
-    }
-
-    match /egoshootKlHits/{targetUid}/events/{eventId} {
-      allow get, list: if jkSignedIn() && request.auth.uid == targetUid;
-      allow create: if jkSignedIn()
-        && request.resource.data.keys().hasOnly([
-          "shooterUid", "targetUid", "damage", "ignoreShield", "headshot", "weaponId", "createdAtMs"
-        ])
-        && request.resource.data.shooterUid == request.auth.uid
-        && request.resource.data.targetUid == targetUid
-        && targetUid != request.auth.uid
-        && request.resource.data.damage is int
-        && request.resource.data.damage >= 1
-        && request.resource.data.damage <= 9999
-        && (egoMeleeWeapon(request.resource.data.weaponId)
-            || egoSidearmWeapon(request.resource.data.weaponId)
-            || egoLongWeapon(request.resource.data.weaponId))
-        && request.resource.data.damage <= (request.resource.data.headshot
-            ? egoHeadDamageLimit(request.resource.data.weaponId)
-            : egoBodyDamageLimit(request.resource.data.weaponId))
-        && request.resource.data.ignoreShield is bool
-        && request.resource.data.headshot is bool
-        && request.resource.data.weaponId is string
-        && request.resource.data.weaponId.size() > 0
-        && request.resource.data.weaponId.size() <= 32
-        && request.resource.data.createdAtMs is int
-        && request.resource.data.createdAtMs > 0
-        && (!request.resource.data.ignoreShield
-            || request.resource.data.weaponId == "knife"
-            || request.resource.data.weaponId == "katana"
-            || request.resource.data.weaponId == "baseball");
-      allow delete: if jkSignedIn() && request.auth.uid == targetUid;
-    }
-
-    // Der getötete Spieler bestätigt dem Killer den Kill. Dadurch kann ein Client
-    // nicht einfach seine eigene Kill-Rangfolge über direkte Self-Writes erhöhen.
-    match /egoshootKlRewards/{killerUid}/events/{eventId} {
-      allow get, list, delete: if jkSignedIn() && request.auth.uid == killerUid;
-      allow create: if jkSignedIn()
-        && request.resource.data.keys().hasOnly([
-          "killerUid", "victimUid", "headshot", "weaponId", "createdAtMs"
-        ])
-        && request.resource.data.killerUid == killerUid
-        && request.resource.data.victimUid == request.auth.uid
-        && killerUid != request.auth.uid
-        && request.resource.data.headshot is bool
-        && request.resource.data.weaponId is string
-        && request.resource.data.weaponId.size() <= 32
-        && request.resource.data.createdAtMs is int
-        && request.resource.data.createdAtMs > 0;
-    }
-
     // V242: Speed Car.KL Open-Lobby. Ein einziger kompakter Presence-Datensatz
     // pro angemeldetem Spieler; jeder schreibt ausschließlich seine eigene Position.
     // Owner-Fahrzeuge, Flugmodus und extreme Größen bleiben serverseitig Owner-only.
@@ -3428,7 +3131,7 @@ service cloud.firestore {
     }
 
 
-    // ===== BIGCARDS.KL V510 FIRESTORE ACCESS =====
+    // ===== BIGCARDS.KL V511 FIRESTORE ACCESS =====
     // Privater Cloud-Spielstand: jeder Account liest und schreibt nur seine eigene UID.
     match /bigCardsSaves/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
@@ -3466,7 +3169,9 @@ service cloud.firestore {
     }
 
     match /bigCardsPayouts/{uid}/items/{itemId} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      // V511: explizites get/list, damit die pending-Abfrage des eigenen Accounts
+      // genauso eindeutig erlaubt ist wie ein einzelner Dokument-Lesezugriff.
+      allow get, list: if signedIn() && request.auth.uid == uid;
       allow create: if signedIn()
         && request.resource.data.sellerUid == uid
         && request.resource.data.buyerUid == request.auth.uid
@@ -3575,7 +3280,7 @@ service cloud.firestore {
         allow delete: if signedIn() && (request.auth.uid == uid || jkIsOwner());
       }
     }
-    // ===== BIGCARDS.KL V510 FIRESTORE ACCESS END =====
+    // ===== BIGCARDS.KL V511 FIRESTORE ACCESS END =====
 
     // ===== JK.GAMES JK/COIN REGELN END =====
 

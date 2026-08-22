@@ -6,7 +6,7 @@
   const OFFER_COUNT = 30;
   const OFFER_REFRESH_MS = 6 * 60 * 60 * 1000;
   const PET_XP_STEP = 50;
-  const GAME_IDS = new Set(["aergermensch-kl", "mrdn-kl", "grundstueck-kampf", "paket-chaos", "reaktions-battle"]);
+  const GAME_IDS = new Set(["aergermensch-kl", "mrdn-kl"]);
 
   const SHOP_CATEGORIES = [
     { id: "all", label: "Alle", icon: "▦" },

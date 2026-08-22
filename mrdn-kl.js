@@ -2257,12 +2257,6 @@
       amRefreshApp();
       return;
     }
-
-    if (button.matches("[data-am-battle-game]")) {
-      if (window.LifeBuilderBattleHub?.open) window.LifeBuilderBattleHub.open(button.dataset.amBattleGame);
-      else amToast("Battle Hub wird noch geladen. Bitte die App kurz schließen und erneut öffnen.");
-      return;
-    }
     if (button.matches("[data-am-start-local]")) {
       await amRunAppAction(button, () => amStartLocal(shell));
       return;
@@ -2318,58 +2312,7 @@
     shell.addEventListener("change", amAppDelegatedChange);
   }
 
-  const BATTLE_STANDALONE_APPS = [
-    {
-      id: "grundstueck-kampf",
-      gameType: "territory",
-      label: "Grundstück-Kampf",
-      icon: "▦",
-      accent: "#45e6b0",
-      eyebrow: "GEBIET · TAKTIK · TEMPO",
-      description: "Erobere ein quadratisches Spielfeld, verteidige Gebiete und setze Schutz, Frost, Bomben und Doppeleroberung taktisch ein."
-    },
-    {
-      id: "paket-chaos",
-      gameType: "packages",
-      label: "Paket-Chaos",
-      icon: "▣",
-      accent: "#ffbf4b",
-      eyebrow: "LOGISTIK · EXPRESS · CHAOS",
-      description: "Sortiere Pakete gleichzeitig nach Farbe und Zielort, schütze zerbrechliche Ware und störe deine Gegner mit Sonderkarten."
-    },
-    {
-      id: "reaktions-battle",
-      gameType: "reaction",
-      label: "Reaktions-Battle",
-      icon: "⚡",
-      accent: "#b876ff",
-      eyebrow: "REAKTION · FOKUS · DUELL",
-      description: "Tippen, wischen, halten und vergleichen: Wer falsch oder zu langsam reagiert, verliert ein Leben."
-    }
-  ];
-
-  function standaloneBattleDefinition(appId) {
-    return BATTLE_STANDALONE_APPS.find((entry) => entry.id === appId) || null;
-  }
-
-  function battleStandaloneAppHtml(appId) {
-    const app = standaloneBattleDefinition(appId);
-    if (!app) return "";
-    return `<div class="standalone-battle-app" style="--standalone-accent:${app.accent}">
-      <section class="standalone-battle-hero">
-        <span>${app.icon}</span>
-        <div><p>${app.eyebrow}</p><h4>${amEscape(app.label)}</h4><small>${amEscape(app.description)}</small></div>
-      </section>
-      <div class="standalone-battle-actions">
-        <button data-standalone-battle-local="${app.gameType}"><span>🤖</span><div><b>Gegen Bots</b><small>2, 3 oder 4 Spieler · Best-of-1/3/5</small></div><i>›</i></button>
-        <button data-standalone-battle-online="${app.gameType}"><span>🌐</span><div><b>Online spielen</b><small>Öffentliche Räume oder privat mit sechsstelligem Code</small></div><i>›</i></button>
-      </div>
-      <div class="standalone-battle-info"><span>Touch</span><span>Maus</span><span>Tastatur</span><span>Privatcode</span></div>
-      <p>Dieses Spiel ist eine eigenständige App und bleibt nach dem Neuladen installiert.</p>
-    </div>`;
-  }
-
-  // Jede Multiplayer-App wird als eigener Download im Life App Store geführt.
+  // MRDN.KL bleibt als eigenständige Multiplayer-App im Life App Store.
   const storeApps = [
     {
       id: AM_APP_ID,
@@ -2378,15 +2321,7 @@
       minTier: 1,
       status: "available",
       description: "Taktisches Brettspiel für 2–4 Spieler mit Bots, Online-Lobbys, Privatcodes, Points und Extras."
-    },
-    ...BATTLE_STANDALONE_APPS.map((app) => ({
-      id: app.id,
-      label: app.label,
-      icon: app.icon,
-      minTier: 1,
-      status: "available",
-      description: `${app.description} Gegen Bots oder online für 2–4 Spieler.`
-    }))
+    }
   ];
   storeApps.forEach((entry) => {
     const existing = phoneAppStoreCatalog.find((app) => app.id === entry.id);
@@ -2398,7 +2333,7 @@
   phoneAppStoreHtml = function amPhoneAppStoreHtml(item) {
     return amBasePhoneAppStoreHtml(item).replace(
       /<p class="device-hint">[\s\S]*?<\/p>\s*<\/div>\s*$/,
-      `<p class="device-hint">MRDN.KL, Grundstück-Kampf, Paket-Chaos und Reaktions-Battle werden einzeln installiert. Installationen bleiben nach dem Neuladen erhalten.</p></div>`
+      `<p class="device-hint">MRDN.KL wird einzeln installiert. Die Installation bleibt nach dem Neuladen erhalten.</p></div>`
     );
   };
 
@@ -2423,59 +2358,26 @@
         lockText: missingTier ? "Benötigt mindestens ein Einsteiger-Smartphone." : missingSim ? "Bot-Spiele funktionieren ohne SIM. Für Online-Lobbys wird eine SIM-Karte benötigt." : ""
       });
     }
-
-    BATTLE_STANDALONE_APPS.forEach((entry) => {
-      if (!isPhoneAppInstalled(entry.id) || apps.some((app) => app.id === entry.id)) return;
-      apps.push({
-        id: entry.id,
-        min: 1,
-        data: true,
-        label: entry.label,
-        icon: entry.icon,
-        text: entry.description,
-        layoutClass: `device-downloaded-app standalone-battle-icon standalone-battle-icon-${entry.gameType}`,
-        locked: missingTier,
-        lockText: missingTier ? "Benötigt mindestens ein Einsteiger-Smartphone." : missingSim ? "Bot-Spiele funktionieren ohne SIM. Für Online-Lobbys wird eine SIM-Karte benötigt." : ""
-      });
-    });
     return apps;
   };
 
   const amBaseDeviceAppActions = deviceAppActions;
   deviceAppActions = function amDeviceAppActions(appId, item) {
     if (appId === AM_APP_ID) return amAppHtml();
-    if (standaloneBattleDefinition(appId)) return battleStandaloneAppHtml(appId);
     return amBaseDeviceAppActions(appId, item);
   };
 
   const amBaseOpenDeviceAppDirect = openDeviceAppDirect;
   openDeviceAppDirect = function amOpenDeviceAppDirect(item, appId) {
     if (appId === AM_APP_ID) return openDeviceInterface(item, AM_APP_ID, false);
-    const battleApp = standaloneBattleDefinition(appId);
-    if (battleApp) {
-      document.querySelector("#detailDialog")?.close?.();
-      return window.LifeBuilderBattleHub?.openSingle?.(battleApp.gameType, "home");
-    }
     return amBaseOpenDeviceAppDirect(item, appId);
   };
-
-  function bindStandaloneBattleApp(shell) {
-    shell?.querySelectorAll("[data-standalone-battle-local]").forEach((button) => button.addEventListener("click", () => {
-      document.querySelector("#detailDialog")?.close?.();
-      window.LifeBuilderBattleHub?.openSingle?.(button.dataset.standaloneBattleLocal, "local");
-    }));
-    shell?.querySelectorAll("[data-standalone-battle-online]").forEach((button) => button.addEventListener("click", () => {
-      document.querySelector("#detailDialog")?.close?.();
-      window.LifeBuilderBattleHub?.openSingle?.(button.dataset.standaloneBattleOnline, "online");
-    }));
-  }
 
   const amBaseOpenDeviceInterface = openDeviceInterface;
   openDeviceInterface = function amOpenDeviceInterface(item, activeApp = "home", activeUse = true) {
     const result = amBaseOpenDeviceInterface(item, activeApp, activeUse);
     const shell = document.querySelector("#detailDialog .device-shell:last-of-type") || document.querySelector("#detailDialog .device-shell");
     if (activeApp === AM_APP_ID) amBindApp(shell);
-    if (standaloneBattleDefinition(activeApp)) bindStandaloneBattleApp(shell);
     return result;
   };
 
