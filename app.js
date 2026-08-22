@@ -17796,7 +17796,6 @@ function openDeviceAppDirect(item, appId) {
       return openDeviceInterface(item, "onlinecasino", false);
     }
     if (!state.casinoArrival) {
-      if (!confirm("Möchten Sie das Casino betreten?")) return;
       state.casinoReturnLocation = state.location || ((state.worldLocation || state.homeCity) === state.homeCity ? "home" : "world");
       state.homeDashboardActive = false;
       state.location = "casino-lounge";
@@ -26678,7 +26677,6 @@ document.querySelectorAll(".tabs button").forEach((button) => {
       return;
     }
     if (targetTab === "casino" && !state.casinoArrival) {
-      if (!confirm("Möchten Sie das Casino betreten?")) return;
       state.casinoReturnLocation = state.location || ((state.worldLocation || state.homeCity) === state.homeCity ? "home" : "world");
       state.homeDashboardActive = false;
       state.location = "casino-lounge";
@@ -26820,7 +26818,6 @@ document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
       return;
     }
     if (targetTab === "casino" && !state.casinoArrival) {
-      if (!confirm("Möchten Sie das Casino betreten?")) return;
       state.casinoReturnLocation = state.location || ((state.worldLocation || state.homeCity) === state.homeCity ? "home" : "world");
       state.homeDashboardActive = false;
       state.location = "casino-lounge";

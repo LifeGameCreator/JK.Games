@@ -43,6 +43,7 @@
     <link rel="stylesheet" href="bigcards-kl.css?v=20260814-bigcards-v439-mobile-auto-setup">
     <link rel="stylesheet" href="escape-kl.css?v=20260817-escape-kl-v473-instant-respawn-20jk">
     <link rel="stylesheet" href="mobile-fixes-v366.css?v=20260810-jkgames-v366-mobile-only-layout-fixes">
+    <link rel="stylesheet" href="dashboard-highlights-v520.css?v=20260822-jkgames-v520-individual-highlights">
   </head>
   <body class="jk-booting">
     <div id="jkBootSplash" class="jk-boot-splash" role="status" aria-live="polite" aria-label="JK.Games wird geladen">
@@ -165,6 +166,29 @@
                 <label><span>Eigene Farbe</span><input id="highlightColorCustom" type="color" value="#6ee7ff"></label>
               </div>
               <p class="settings-v511-new-hint settings-wide">Das ursprüngliche Hauptmenü-Design bleibt unverändert. Nur vorhandene Hover-Highlights sowie Heute/Arbeit benutzen deine gewählte Farbe.</p>
+              <div class="highlight-single-editor-v520 settings-wide">
+                <div class="highlight-single-head-v520">
+                  <div><b>Einzelne Bereiche</b><small>Optional: Überschreibe die globale Farbe nur für einen bestimmten Hauptmenü-Bereich.</small></div>
+                  <button id="highlightSingleToggle" class="secondary-button" type="button">Button verändern</button>
+                </div>
+                <div id="highlightSinglePanel" class="highlight-single-panel-v520" hidden>
+                  <div class="highlight-single-palette-v520" aria-label="Farbe für einzelnen Bereich">
+                    <button type="button" data-highlight-target-color="#6ee7ff" style="--swatch:#6ee7ff" aria-label="Cyan"></button>
+                    <button type="button" data-highlight-target-color="#ff3b4f" style="--swatch:#ff3b4f" aria-label="Rot"></button>
+                    <button type="button" data-highlight-target-color="#ffd84a" style="--swatch:#ffd84a" aria-label="Gelb"></button>
+                    <button type="button" data-highlight-target-color="#55e77c" style="--swatch:#55e77c" aria-label="Grün"></button>
+                    <button type="button" data-highlight-target-color="#b66cff" style="--swatch:#b66cff" aria-label="Violett"></button>
+                    <button type="button" data-highlight-target-color="#ff7ab8" style="--swatch:#ff7ab8" aria-label="Pink"></button>
+                    <button type="button" data-highlight-target-color="#ffffff" style="--swatch:#ffffff" aria-label="Weiß"></button>
+                    <label><span>Eigene Farbe</span><input id="highlightTargetColorCustom" type="color" value="#ff3b4f"></label>
+                  </div>
+                  <div class="highlight-single-actions-v520">
+                    <button id="highlightPickTargetBtn" class="primary-button" type="button">Bereich auswählen</button>
+                    <button id="highlightResetOverridesBtn" class="secondary-button" type="button">Einzelfarben zurücksetzen</button>
+                  </div>
+                  <p id="highlightSingleStatus" class="settings-v511-new-hint">Noch keine Einzelfarbe gesetzt. Beim Auswählen wird das Einstellungsfenster kurz geschlossen; der Klick auf den gewünschten Hauptmenü-Bereich dient nur zur Farbauswahl und führt seine normale Aktion nicht aus.</p>
+                </div>
+              </div>
             </section>
 
             <section class="settings-v62-group settings-wide">
@@ -428,7 +452,8 @@
 
   <script src="webrtc-config.js?v=20260729-jkgames-v88-unified-shop-design"></script>
   <script src="firebase-runtime.js?v=20260817-jkgames-v472-escape-online-presence"></script>
-  <script src="app.js?v=20260819-jkgames-v519-old-phone-layout-restore"></script>
+  <script src="app.js?v=20260822-jkgames-v520-casino-direct-load"></script>
+  <script src="dashboard-highlights-v520.js?v=20260822-jkgames-v520-individual-highlights"></script>
   <script src="jk-coin.js?v=20260818-jkcoin-v502-escape-third-pet-slot"></script>
   <script src="casino-v82.js?v=20260807-jkgames-v228-highlow-tie"></script>
   <script src="financial-crisis.js?v=20260729-jkgames-v87-finster-casino-trading-nosurvival"></script>

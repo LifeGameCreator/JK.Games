@@ -1,0 +1,202 @@
+/* JK.Games V520 · Hauptmenü-Highlighter
+   Bewusst keine Größen-, Grid-, Positions- oder Grunddesign-Änderungen am Dashboard. */
+
+body {
+  --jk-highlight-global: #6ee7ff;
+  --jk-highlight-global-contrast: #071113;
+  --jk-highlight-editor: #ff3b4f;
+}
+
+/* Alle gewünschten Hauptmenü-Ziele übernehmen global oder ihre individuelle Überschreibung. */
+[data-jk-highlight-target] {
+  --jk-highlight: var(--jk-highlight-global);
+  --jk-highlight-contrast: var(--jk-highlight-global-contrast);
+}
+
+.portrait[data-jk-highlight-target]:hover,
+.portrait[data-jk-highlight-target]:focus-visible,
+.meter.status-action[data-jk-highlight-target]:hover,
+.meter.status-action[data-jk-highlight-target]:focus-visible,
+.mini-stat.status-action[data-jk-highlight-target]:hover,
+.mini-stat.status-action[data-jk-highlight-target]:focus-visible,
+.home-shortcut[data-jk-highlight-target]:hover,
+.home-shortcut[data-jk-highlight-target]:focus-visible,
+.dashboard-shortcut[data-jk-highlight-target]:hover,
+.dashboard-shortcut[data-jk-highlight-target]:focus-visible,
+.phone-shortcut[data-jk-highlight-target]:not(:disabled):hover,
+.phone-shortcut[data-jk-highlight-target]:not(:disabled):focus-visible,
+.tabs button[data-jk-highlight-target]:hover,
+.tabs button[data-jk-highlight-target]:focus-visible {
+  border-color: var(--jk-highlight) !important;
+  outline-color: var(--jk-highlight) !important;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--jk-highlight) 26%, transparent),
+    0 0 18px color-mix(in srgb, var(--jk-highlight) 22%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,.05) !important;
+}
+
+/* Heute/Arbeit behalten Form, Höhe und Position. Nur die bestehende aktive Füllung folgt der gewählten Farbe. */
+.tabs button[data-jk-highlight-target].active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--jk-highlight) 78%, white),
+    var(--jk-highlight)
+  ) !important;
+  color: var(--jk-highlight-contrast) !important;
+  border-color: color-mix(in srgb, var(--jk-highlight) 72%, white) !important;
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--jk-highlight) 24%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,.18) !important;
+}
+
+/* Auswahlmodus: Vorschau der gerade gewählten Einzelfarbe. */
+body.jk-highlight-editing-v520 [data-jk-highlight-target] {
+  cursor: crosshair !important;
+}
+body.jk-highlight-editing-v520 [data-jk-highlight-target]:hover,
+body.jk-highlight-editing-v520 [data-jk-highlight-target]:focus-visible {
+  border-color: var(--jk-highlight-editor) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--jk-highlight-editor) 32%, transparent),
+    0 0 24px color-mix(in srgb, var(--jk-highlight-editor) 34%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,.08) !important;
+}
+
+/* Einstellungen – ergänzt nur den vorhandenen Highlighter-Bereich. */
+.settings-highlight-v511 .highlight-picker-v511,
+.highlight-single-palette-v520 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+.highlight-picker-v511 > button,
+.highlight-single-palette-v520 > button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid rgba(255,255,255,.16);
+  border-radius: 11px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.16);
+  cursor: pointer;
+}
+.highlight-picker-v511 > button.active,
+.highlight-single-palette-v520 > button.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.16), 0 0 15px color-mix(in srgb,var(--swatch) 45%,transparent);
+}
+.highlight-picker-v511 label,
+.highlight-single-palette-v520 label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 800;
+}
+.highlight-picker-v511 input[type="color"],
+.highlight-single-palette-v520 input[type="color"] {
+  width: 38px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.settings-v511-new-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: .69rem;
+  line-height: 1.45;
+}
+.highlight-single-editor-v520 {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.highlight-single-head-v520 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.highlight-single-head-v520 > div {
+  display: grid;
+  gap: 3px;
+}
+.highlight-single-head-v520 small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+.highlight-single-panel-v520 {
+  display: grid;
+  gap: 10px;
+}
+.highlight-single-panel-v520[hidden] { display: none !important; }
+.highlight-single-actions-v520 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.highlight-single-actions-v520 button,
+.highlight-single-head-v520 button {
+  width: auto;
+  min-width: 0;
+}
+
+.jk-highlight-picker-overlay-v520 {
+  position: fixed;
+  z-index: 2147483400;
+  left: 50%;
+  top: max(18px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(620px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb,var(--jk-highlight-editor) 70%,white);
+  border-radius: 14px;
+  background: rgba(7,14,12,.96);
+  box-shadow: 0 14px 38px rgba(0,0,0,.42), 0 0 20px color-mix(in srgb,var(--jk-highlight-editor) 18%,transparent);
+  color: var(--text);
+}
+.jk-highlight-picker-overlay-v520 i {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--jk-highlight-editor);
+  box-shadow: 0 0 14px color-mix(in srgb,var(--jk-highlight-editor) 40%,transparent);
+}
+.jk-highlight-picker-overlay-v520 div {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+.jk-highlight-picker-overlay-v520 b { font-size: .8rem; }
+.jk-highlight-picker-overlay-v520 small { color: var(--muted); font-size: .67rem; line-height: 1.3; }
+.jk-highlight-picker-overlay-v520 button {
+  width: auto;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.13);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  font-weight: 900;
+}
+
+@media (max-width: 560px) {
+  .highlight-single-head-v520 { align-items: stretch; flex-direction: column; }
+  .highlight-single-head-v520 button { width: 100%; }
+  .jk-highlight-picker-overlay-v520 { align-items: flex-start; }
+}
