@@ -60,3 +60,143 @@
 /* ===== CHAMBER.KL V3 END ===== */
 .chkl-owner-item-icon{width:70px;height:70px;border-radius:15px;display:grid;place-items:center;font-size:28px;background:linear-gradient(145deg,#252b2e,#111416);border:1px solid #ffffff18;color:#d8b878}.chkl-owner-item-icon.skin-military{background:#354234;color:#aab77d}.chkl-owner-item-icon.skin-noir{background:#101417;color:#b0b7bb}.chkl-owner-item-icon.skin-arcade{background:#282247;color:#ff72dc;box-shadow:inset 0 0 18px #4adfff33}.chkl-owner-item-icon.skin-desert{background:#655137;color:#e1bd7a}.chkl-owner-item-icon.skin-frost{background:#d4e8eb;color:#357f99}.chkl-owner-item-icon.skin-holo{background:#0e3035;color:#70fff3;box-shadow:0 0 13px #50fff53a}.chkl-owner-item-icon.skin-royal{background:#38270f;color:#f2cc6c}.chkl-owner-item-icon.skin-singularity{background:#1f102a;color:#db84ff;box-shadow:0 0 15px #bd3fff45}.chkl-owner-item-icon.skin-inferno{background:#3c140d;color:#ff7b39;box-shadow:0 0 15px #ff401f3a}.chkl-owner-item-icon.skin-aurora{background:linear-gradient(135deg,#17333a,#2b2c57);color:#a0ffdc}.chkl-owner-item-icon.skin-void{background:#0e0914;color:#c679ff;box-shadow:0 0 15px #8e27ff45}
 @media(max-width:850px){.chkl-seat-tags button.seat-2,.chkl-seat-tags button.seat-2:hover,.chkl-seat-tags button.seat-3,.chkl-seat-tags button.seat-3:hover{transform:none!important}}
+
+
+/* ===== CHAMBER.KL V4 GAMEPLAY / CAMERA / STABILITY ===== */
+/* Buttons never change geometry on hover: target/seat buttons keep their exact anchored position. */
+.chamber-kl-overlay button{
+  transition:filter .14s ease,border-color .14s ease,background-color .14s ease,box-shadow .14s ease,opacity .14s ease!important
+}
+.chamber-kl-overlay button:hover:not(:disabled){transform:none!important;filter:brightness(1.10)}
+.chkl-seat-tags button.seat-0,.chkl-seat-tags button.seat-0:hover{transform:translateX(-50%)!important}
+.chkl-seat-tags button.seat-1,.chkl-seat-tags button.seat-1:hover{transform:translateX(-50%)!important}
+.chkl-seat-tags button.seat-2,.chkl-seat-tags button.seat-2:hover{transform:translateY(-50%)!important}
+.chkl-seat-tags button.seat-3,.chkl-seat-tags button.seat-3:hover{transform:translateY(-50%)!important}
+
+.chkl-game-v4{
+  grid-template-rows:minmax(390px,1fr) auto;
+  gap:8px;
+  background:#080b0d
+}
+.chkl-game-v4 .chkl-v4-stage{
+  border-color:rgba(184,199,205,.18);
+  background:#141a1e;
+  box-shadow:inset 0 1px rgba(255,255,255,.045),0 16px 42px rgba(0,0,0,.28)
+}
+.chkl-game-v4 .chkl-scene-frame.game canvas{
+  display:block;width:100%!important;height:100%!important;
+  image-rendering:auto;filter:none!important
+}
+
+/* A compact, persistent turn banner is intentionally separate from the HUD. */
+.chkl-turn-callout{
+  position:absolute;left:50%;top:78px;z-index:8;
+  transform:translateX(-50%);
+  min-width:min(430px,calc(100% - 330px));max-width:640px;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:7px 14px;border:1px solid rgba(255,255,255,.15);border-radius:999px;
+  background:rgba(8,11,13,.88);backdrop-filter:blur(12px);
+  box-shadow:0 8px 24px rgba(0,0,0,.28);pointer-events:none
+}
+.chkl-turn-callout strong{font-size:10px;letter-spacing:.12em;white-space:nowrap}
+.chkl-turn-callout span{font-size:8px;color:#9ba5a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chkl-turn-callout.mine{border-color:rgba(238,190,91,.72);background:linear-gradient(90deg,rgba(73,52,19,.92),rgba(21,20,16,.92));box-shadow:0 0 0 2px rgba(238,190,91,.09),0 8px 25px #0006}
+.chkl-turn-callout.mine strong{color:#ffd77d}
+.chkl-turn-callout.resolving{border-color:rgba(236,87,67,.72);background:linear-gradient(90deg,rgba(78,25,20,.94),rgba(22,15,14,.92))}
+.chkl-turn-callout.resolving strong{color:#ff887a}
+.chkl-turn-callout.supply{border-color:rgba(111,205,220,.6);background:linear-gradient(90deg,rgba(17,51,57,.93),rgba(13,23,25,.92))}
+.chkl-turn-callout.supply strong{color:#92ebf5}
+
+.chkl-game-v4 .chkl-active.mine{
+  border-color:rgba(238,190,91,.7);
+  box-shadow:inset 0 0 22px rgba(224,169,67,.08),0 0 0 1px rgba(238,190,91,.12)
+}
+.chkl-game-v4 .chkl-seat-tags button.active{
+  border-color:rgba(244,198,100,.95);
+  background:rgba(34,28,17,.88);
+  box-shadow:0 0 0 2px rgba(244,198,100,.18),0 0 22px rgba(244,198,100,.18)
+}
+.chkl-game-v4 .chkl-seat-tags button.active:after{
+  content:"AM ZUG";position:absolute;right:8px;bottom:5px;
+  color:#f3c96f;font-size:6px;font-weight:1000;letter-spacing:.12em
+}
+.chkl-game-v4 .chkl-seat-tags button.target{
+  border-color:rgba(239,82,69,.96);
+  box-shadow:0 0 0 2px rgba(239,82,69,.16),0 0 18px rgba(239,82,69,.12)
+}
+
+/* V4 target selection is explicit. Both self-shot and opponent-shot are always visible on your turn. */
+.chkl-target-strip-v4{
+  padding:8px;border:1px solid rgba(255,255,255,.09);border-radius:12px;
+  background:rgba(8,11,12,.68)
+}
+.chkl-target-strip-v4>div{
+  display:grid!important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:7px;overflow:visible!important
+}
+.chkl-target-strip-v4 button{
+  min-width:0!important;flex:none!important;padding:8px 10px!important;
+  min-height:48px
+}
+.chkl-target-strip-v4 button.self{border-color:rgba(102,181,191,.32)}
+.chkl-target-strip-v4 button.active{box-shadow:inset 0 0 18px rgba(220,70,56,.08),0 0 0 1px rgba(225,75,61,.12)}
+.chkl-target-strip-v4 button.self.active{box-shadow:inset 0 0 18px rgba(91,188,198,.08),0 0 0 1px rgba(114,200,210,.12)}
+
+.chkl-ready-v4{gap:7px;padding:8px}
+.chkl-ready-v4 .chkl-v2-items{min-height:58px}
+.chkl-ready-v4 .chkl-v2-fire{padding-top:7px}
+.chkl-ready-v4 .chkl-v2-fire button{font-size:12px;letter-spacing:.04em}
+.chkl-shot-resolving{
+  min-height:92px!important;border-color:rgba(227,72,59,.28)!important;
+  background:radial-gradient(circle at 50% 0,rgba(177,48,36,.14),transparent 65%),#0b0e10!important
+}
+.chkl-shot-resolving b{color:#f2d3cb}
+.chkl-v3-supply{border-color:rgba(89,180,195,.25)!important}
+
+/* More usable on normal laptop heights: scene remains large, but items and trigger stay visible without hiding below fold. */
+@media(max-height:900px) and (min-width:851px){
+  .chkl-game-v4{grid-template-rows:minmax(350px,1fr) auto}
+  .chkl-game-v4 .chkl-v2-controls{padding:7px;gap:6px}
+  .chkl-game-v4 .chkl-v2-item{min-height:51px}
+  .chkl-game-v4 .chkl-v2-item>i{width:30px;height:30px}
+  .chkl-turn-callout{top:75px}
+}
+@media(max-width:850px){
+  .chkl-game-v4{grid-template-rows:minmax(500px,1fr) auto;overflow:auto}
+  .chkl-turn-callout{top:125px;min-width:calc(100% - 28px);max-width:calc(100% - 28px)}
+  .chkl-turn-callout span{display:none}
+  .chkl-seat-tags button.seat-2,.chkl-seat-tags button.seat-2:hover,
+  .chkl-seat-tags button.seat-3,.chkl-seat-tags button.seat-3:hover{transform:none!important}
+}
+@media(max-width:560px){
+  .chkl-game-v4{grid-template-rows:minmax(470px,1fr) auto}
+  .chkl-turn-callout{top:112px}
+  .chkl-target-strip-v4>div{grid-template-columns:1fr}
+}
+/* ===== CHAMBER.KL V4 END ===== */
+
+
+/* V4 seat labels use the same relative seat index as the 3D scene. */
+.chkl-game-v4 .chkl-seat-tags button.seats-2.seat-0,
+.chkl-game-v4 .chkl-seat-tags button.seats-3.seat-0,
+.chkl-game-v4 .chkl-seat-tags button.seats-4.seat-0{
+  left:50%;right:auto;top:auto;bottom:10px;transform:translateX(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-2.seat-1{
+  left:50%;right:auto;top:114px;bottom:auto;transform:translateX(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-3.seat-1{
+  left:auto;right:12px;top:37%;bottom:auto;transform:translateY(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-3.seat-2{
+  left:12px;right:auto;top:37%;bottom:auto;transform:translateY(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-4.seat-1{
+  left:auto;right:12px;top:50%;bottom:auto;transform:translateY(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-4.seat-2{
+  left:50%;right:auto;top:114px;bottom:auto;transform:translateX(-50%)!important
+}
+.chkl-game-v4 .chkl-seat-tags button.seats-4.seat-3{
+  left:12px;right:auto;top:50%;bottom:auto;transform:translateY(-50%)!important
+}
