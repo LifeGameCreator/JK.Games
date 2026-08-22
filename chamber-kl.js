@@ -1,13 +1,14 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260822-chamber-kl-v1";
+  const VERSION = "20260822-chamber-kl-v2";
   const ROOM_COLLECTION = "chamberKlRooms";
   const COMMAND_COLLECTION = "commands";
   const MAX_HP = 4;
   const TURN_MS = 25000;
   const DEALER_KEY_PREFIX = "jkgames-chamber-kl-dealer:";
-  const LOCAL_SETTLED_KEY = "jkgames-chamber-kl-settled-v1";
+  const LOCAL_SETTLED_KEY = "jkgames-chamber-kl-settled-v2";
+  const BOT_PREFIX = "chamber-bot:";
   const ITEM_DEFS = Object.freeze({
     scanner: { icon:"◉", name:"Scanner", text:"Zeigt dir geheim, ob die nächste Patrone scharf oder leer ist." },
     ejector: { icon:"↥", name:"Auswerfer", text:"Wirft die aktuelle Patrone sichtbar aus der Kammer." },
@@ -18,14 +19,53 @@
     plate: { icon:"⬡", name:"Schutzplatte", text:"Blockiert den nächsten scharfen Treffer vollständig." },
     reverse: { icon:"↻", name:"Richtungswechsel", text:"Dreht die Zugrichtung am Vierertisch um." }
   });
-  const SKINS = Object.freeze({
-    standard: { name:"Standard", className:"standard" },
-    carbon: { name:"Carbon", className:"carbon" },
-    redline: { name:"Redline", className:"redline" },
-    galaxy: { name:"Galaxy", className:"galaxy" },
-    gold: { name:"Gold", className:"gold" },
-    crystal: { name:"Crystal", className:"crystal" }
+  const SHOTGUN_SKINS = Object.freeze({
+    standard:{name:"Walnut",tier:"free",price:0,className:"standard",accent:"#b7844d"},
+    ash:{name:"Ashwood",tier:"chamber",price:220,className:"ash",accent:"#a7a19a"},
+    forest:{name:"Forest",tier:"chamber",price:380,className:"forest",accent:"#53775d"},
+    cobalt:{name:"Cobalt",tier:"chamber",price:520,className:"cobalt",accent:"#315f9e"},
+    ivory:{name:"Ivory",tier:"chamber",price:760,className:"ivory",accent:"#ded3bb"},
+    carbon:{name:"Carbon",tier:"jk",price:200,className:"carbon",accent:"#5a6670"},
+    redline:{name:"Redline",tier:"jk",price:200,className:"redline",accent:"#e0443c"},
+    galaxy:{name:"Galaxy",tier:"jk",price:350,className:"galaxy",accent:"#8b67ff"},
+    gold:{name:"Gold",tier:"jk",price:500,className:"gold",accent:"#e5bb55"},
+    crystal:{name:"Crystal",tier:"jk",price:650,className:"crystal",accent:"#7cecff"},
+    obsidian:{name:"Obsidian Core",tier:"jk",price:800,className:"obsidian",accent:"#ba6cff"},
+    inferno:{name:"Inferno",tier:"jk",price:900,className:"inferno",accent:"#ff5b25"}
   });
+  const SHELL_SKINS = Object.freeze({
+    live:{
+      standard:{name:"Signal Red",tier:"free",price:0,color:"#a92b25",metal:"#c99c55"},
+      ember:{name:"Ember",tier:"chamber",price:180,color:"#e25b24",metal:"#b9783f"},
+      toxic:{name:"Toxic",tier:"chamber",price:360,color:"#68a33c",metal:"#9b8d51"},
+      plasma:{name:"Plasma",tier:"jk",price:180,color:"#ff3b9d",metal:"#7bf4ff"},
+      royal:{name:"Royal",tier:"jk",price:240,color:"#562b9d",metal:"#e9c868"},
+      void:{name:"Void",tier:"jk",price:320,color:"#17151d",metal:"#a47cff"}
+    },
+    blank:{
+      standard:{name:"Midnight",tier:"free",price:0,color:"#11181d",metal:"#b08a51"},
+      slate:{name:"Slate",tier:"chamber",price:180,color:"#4b5962",metal:"#7d8588"},
+      frost:{name:"Frost",tier:"chamber",price:360,color:"#d9eef0",metal:"#7aa5b8"},
+      neon:{name:"Neon",tier:"jk",price:180,color:"#10333a",metal:"#67fff2"},
+      eclipse:{name:"Eclipse",tier:"jk",price:240,color:"#251832",metal:"#ff7ac9"},
+      phantom:{name:"Phantom",tier:"jk",price:320,color:"#dfe8ef",metal:"#8edfff"}
+    }
+  });
+  const ITEM_SKINS = Object.freeze({
+    standard:{name:"Field Kit",tier:"free",price:0,className:"standard"},
+    military:{name:"Military",tier:"chamber",price:300,className:"military"},
+    noir:{name:"Noir",tier:"chamber",price:520,className:"noir"},
+    arcade:{name:"Arcade",tier:"chamber",price:760,className:"arcade"},
+    holo:{name:"Hologram",tier:"jk",price:280,className:"holo"},
+    royal:{name:"Royal Vault",tier:"jk",price:420,className:"royal"},
+    singularity:{name:"Singularity",tier:"jk",price:650,className:"singularity"}
+  });
+  const BOT_DIFFICULTIES = Object.freeze({
+    easy:{name:"Leicht",xp:80,coins:30,think:[1100,1900]},
+    medium:{name:"Mittel",xp:140,coins:55,think:[800,1500]},
+    hard:{name:"Schwer",xp:220,coins:90,think:[500,1050]}
+  });
+  const SKINS = SHOTGUN_SKINS;
 
   const UI = {
     overlay:null,
@@ -47,7 +87,12 @@
     publicRooms:[],
     publicLoading:false,
     lastRoomSignature:"",
-    lastCommandResult:""
+    lastCommandResult:"",
+    botTimer:0,
+    botBusy:false,
+    sceneMounted:false,
+    selectedInventoryTab:"shotgun",
+    tutorialPage:0
   };
 
   function esc(value){return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));}
@@ -65,29 +110,37 @@
     if(!root)return null;
     root.chamberKL ||= {};
     const s=root.chamberKL;
-    s.ownedSkins = Array.isArray(s.ownedSkins) ? [...new Set(["standard",...s.ownedSkins.filter(id=>SKINS[id])])] : ["standard"];
-    s.equippedSkin = s.ownedSkins.includes(s.equippedSkin) ? s.equippedSkin : "standard";
-    s.stats ||= { matches:0,wins:0,shots:0,liveShots:0,blankShots:0,itemsUsed:0,eliminations:0,fourTableWins:0 };
-    s.stats.matches=Math.max(0,Math.floor(Number(s.stats.matches)||0));
-    s.stats.wins=Math.max(0,Math.floor(Number(s.stats.wins)||0));
-    s.stats.shots=Math.max(0,Math.floor(Number(s.stats.shots)||0));
-    s.stats.liveShots=Math.max(0,Math.floor(Number(s.stats.liveShots)||0));
-    s.stats.blankShots=Math.max(0,Math.floor(Number(s.stats.blankShots)||0));
-    s.stats.itemsUsed=Math.max(0,Math.floor(Number(s.stats.itemsUsed)||0));
-    s.stats.eliminations=Math.max(0,Math.floor(Number(s.stats.eliminations)||0));
-    s.stats.fourTableWins=Math.max(0,Math.floor(Number(s.stats.fourTableWins)||0));
+    s.coins=Math.max(0,Math.floor(Number(s.coins)||0));
+    s.level=Math.max(1,Math.floor(Number(s.level)||1));
+    s.xp=Math.max(0,Math.floor(Number(s.xp)||0));
+    s.ownedSkins=Array.isArray(s.ownedSkins)?[...new Set(["standard",...s.ownedSkins.filter(id=>SHOTGUN_SKINS[id])])]:["standard"];
+    s.equippedSkin=s.ownedSkins.includes(s.equippedSkin)?s.equippedSkin:"standard";
+    s.cosmetics ||= {};
+    s.cosmetics.ownedLiveShells=Array.isArray(s.cosmetics.ownedLiveShells)?[...new Set(["standard",...s.cosmetics.ownedLiveShells.filter(id=>SHELL_SKINS.live[id])])]:["standard"];
+    s.cosmetics.ownedBlankShells=Array.isArray(s.cosmetics.ownedBlankShells)?[...new Set(["standard",...s.cosmetics.ownedBlankShells.filter(id=>SHELL_SKINS.blank[id])])]:["standard"];
+    s.cosmetics.ownedItemSkins=Array.isArray(s.cosmetics.ownedItemSkins)?[...new Set(["standard",...s.cosmetics.ownedItemSkins.filter(id=>ITEM_SKINS[id])])]:["standard"];
+    s.cosmetics.liveShell=s.cosmetics.ownedLiveShells.includes(s.cosmetics.liveShell)?s.cosmetics.liveShell:"standard";
+    s.cosmetics.blankShell=s.cosmetics.ownedBlankShells.includes(s.cosmetics.blankShell)?s.cosmetics.blankShell:"standard";
+    s.cosmetics.itemSkin=s.cosmetics.ownedItemSkins.includes(s.cosmetics.itemSkin)?s.cosmetics.itemSkin:"standard";
+    s.stats ||= {matches:0,wins:0,shots:0,liveShots:0,blankShots:0,itemsUsed:0,eliminations:0,fourTableWins:0,botWins:0,hardBotWins:0};
+    for(const key of ["matches","wins","shots","liveShots","blankShots","itemsUsed","eliminations","fourTableWins","botWins","hardBotWins"])s.stats[key]=Math.max(0,Math.floor(Number(s.stats[key])||0));
+    s.tutorialSeen=!!s.tutorialSeen;
     return s;
   }
   function persist(){try{window.JKGamesPersistState?.();}catch(error){console.warn("Chamber.KL speichern",error);}}
-  function currentSkin(){return chamberState()?.equippedSkin || "standard";}
+  function xpNeeded(level){return 180+Math.max(0,Number(level||1)-1)*85;}
+  function grantChamberRewards(xp=0,coins=0){const s=chamberState();if(!s)return; s.xp+=Math.max(0,Math.round(xp));s.coins+=Math.max(0,Math.round(coins));while(s.level<100&&s.xp>=xpNeeded(s.level)){s.xp-=xpNeeded(s.level);s.level++;toast(`Chamber-Level ${s.level} erreicht.`,"good");}persist();}
+  function isOwner(){try{return !!(window.LifeBuilderSettingsMenu?.isOwner?.()||window.LifeBuilderSettingsMenu?.getRole?.()?.role==="owner");}catch{return false;}}
+  function isBotUid(uid){return String(uid||"").startsWith(BOT_PREFIX);}
+  function currentSkin(){return chamberState()?.equippedSkin||"standard";}
   function profileFromState(uid){
-    const root=rootState()||{};
-    const appearance=root.appearance||{};
+    const root=rootState()||{};const appearance=root.appearance||{};const s=chamberState()||{};
     const full=`${root.firstName||"Spieler"} ${root.lastName||""}`.trim().replace(/\s+/g," ").slice(0,60)||"Spieler";
     const hair=String(appearance.hairColor||appearance.hair||"#3b2b24").slice(0,24);
     const skin=String(appearance.skinColor||appearance.skinTone||"#d6a77f").slice(0,24);
-    return {uid,name:full,gender:root.gender==="female"?"female":"male",hairColor:hair,skinColor:skin,shotgunSkin:currentSkin()};
+    return {uid,name:full,gender:root.gender==="female"?"female":"male",hairColor:hair,skinColor:skin,shotgunSkin:currentSkin(),liveShellSkin:s.cosmetics?.liveShell||"standard",blankShellSkin:s.cosmetics?.blankShell||"standard",itemSkin:s.cosmetics?.itemSkin||"standard",seat:0,isBot:false,botDifficulty:""};
   }
+  function botProfile(uid,difficulty="easy",seat=1){const names={easy:["Milo","Nora","Ben","Lia"],medium:["Vega","Mara","Jax","Noah"],hard:["Nyx","Rook","Iris","Kane"]};const pool=names[difficulty]||names.easy;return {uid,name:`${pool[randomInt(pool.length)]} · BOT`,gender:randomInt(2)?"male":"female",hairColor:["#1e1b19","#402b21","#c3aa78","#6d4133"][randomInt(4)],skinColor:["#d6a77f","#b87c5d","#8e5c45","#efd0ad"][randomInt(4)],shotgunSkin:difficulty==="hard"?"redline":difficulty==="medium"?"cobalt":"standard",liveShellSkin:"standard",blankShellSkin:"standard",itemSkin:difficulty==="hard"?"noir":"standard",seat,isBot:true,botDifficulty:difficulty};}
 
   async function firebase(){
     const core=window.LifeBuilderFirebaseCore;
@@ -133,56 +186,71 @@
     setTimeout(()=>{if(UI.view==="loading")renderHome();},900);
   }
   function statsHtml(){
-    const s=chamberState();if(!s)return"";
-    return `<div class="chkl-stats-strip"><span><small>MATCHES</small><b>${s.stats.matches}</b></span><span><small>SIEGE</small><b>${s.stats.wins}</b></span><span><small>SCHÜSSE</small><b>${s.stats.shots}</b></span><span><small>ELIM.</small><b>${s.stats.eliminations}</b></span></div>`;
+    const s=chamberState();if(!s)return"";const need=xpNeeded(s.level);const pct=clamp((s.xp/Math.max(1,need))*100,0,100);
+    return `<div class="chkl-stats-strip v2"><span><small>CHAMBER LEVEL</small><b>${s.level}</b><em><i style="width:${pct}%"></i></em></span><span><small>CHAMBER COINS</small><b>◈ ${s.coins.toLocaleString("de-DE")}</b></span><span><small>SIEGE</small><b>${s.stats.wins}</b></span><span><small>ELIM.</small><b>${s.stats.eliminations}</b></span></div>`;
   }
+  function currencyLabel(meta){return meta.tier==="jk"?`${meta.price} JK/Coin`:meta.tier==="chamber"?`${meta.price} Chamber-Coins`:"Inklusive";}
   function renderHome(){
-    UI.view="home";UI.roomId="";UI.room=null;stopRoomListeners();
-    const skin=SKINS[currentSkin()]||SKINS.standard;
-    UI.shell.innerHTML=`${topbar("RISK TABLE")}
-      <main class="chkl-home">
-        <section class="chkl-hero"><div class="chkl-hero-copy"><small>2–4 SPIELER · ONLINE</small><h2>Niemand kennt die nächste Patrone.</h2><p>Setz dich an den Tisch, nutze deine Items und entscheide, ob du das Risiko gegen dich selbst oder gegen einen Gegner nimmst.</p><div class="chkl-hero-actions"><button class="primary" data-chkl-quick>⚡ Schnelles Duell</button><button data-chkl-public>Öffentliche Räume</button></div></div><div class="chkl-hero-gun"><div class="chkl-shotgun skin-${skin.className}"><i class="chkl-stock"></i><i class="chkl-body"></i><i class="chkl-barrel"></i></div><small>AKTIV</small><b>${esc(skin.name)}</b></div></section>
+    UI.view="home";UI.roomId="";UI.room=null;stopRoomListeners();destroyScene();
+    const skin=SHOTGUN_SKINS[currentSkin()]||SHOTGUN_SKINS.standard;const s=chamberState();
+    UI.shell.innerHTML=`${topbar("THE TABLE · V2")}
+      <main class="chkl-home chkl-home-v2">
+        <section class="chkl-v2-hero">
+          <div class="chkl-v2-hero-noise"></div><div class="chkl-v2-hero-copy"><small>JK.GAMES ORIGINAL · 1–4 SITZPLÄTZE</small><h2>Ein Tisch.<br><span>Eine unbekannte Kammer.</span></h2><p>Online gegen echte Spieler oder allein gegen bis zu drei Bots. Jede Entscheidung wird live synchronisiert, jede Patrone verändert den Tisch.</p><div class="chkl-hero-actions"><button class="primary" data-chkl-bot>GEGEN BOT SPIELEN</button><button data-chkl-quick>ONLINE-DUELL</button><button data-chkl-public>RÄUME</button></div></div>
+          <div class="chkl-v2-hero-visual"><div class="chkl-hero-chair far"></div><div class="chkl-hero-silhouette"><i></i><b></b></div><div class="chkl-hero-table"></div><div class="chkl-shotgun skin-${skin.className}"><i class="chkl-stock"></i><i class="chkl-body"></i><i class="chkl-barrel"></i><i class="chkl-trigger"></i></div><div class="chkl-hero-light"></div></div>
+        </section>
         ${statsHtml()}
-        <section class="chkl-home-grid">
-          <article><small>RAUM ERSTELLEN</small><h3>Eigener Tisch</h3><p>Öffentlich oder privat, für zwei bis vier Spieler.</p><div class="chkl-room-create-row"><select data-chkl-size><option value="2">2 Spieler</option><option value="3">3 Spieler</option><option value="4">4 Spieler</option></select><button data-chkl-create-public>Öffentlich</button><button data-chkl-create-private>Privat</button></div></article>
-          <article><small>PRIVATER CODE</small><h3>Freunden beitreten</h3><p>Sechsstelligen Chamber-Code eingeben.</p><div class="chkl-code-row"><input maxlength="6" data-chkl-code placeholder="ABC234" autocomplete="off"><button data-chkl-join-code>Beitreten</button></div></article>
-          <article><small>JK/COIN</small><h3>Shotgun-Designs</h3><p>Nur kosmetisch. Jede Shotgun besitzt exakt dieselbe Spielstärke.</p><div class="chkl-skin-preview-row">${Object.entries(SKINS).map(([id,meta])=>`<span class="skin-${meta.className} ${chamberState()?.ownedSkins.includes(id)?"owned":""}" title="${esc(meta.name)}"></span>`).join("")}</div><button data-chkl-skins>Skins verwalten</button></article>
-          <article><small>REGELN</small><h3>Vier Leben. Eine Kammer.</h3><p>Leere Patrone auf dich selbst: du bleibst dran. Scharfe Treffer kosten Leben. Nach leerer Kammer gibt es neue Items.</p><button data-chkl-rules>Items ansehen</button></article>
+        <section class="chkl-v2-dashboard">
+          <article class="chkl-launch-card"><small>EIGENER TISCH</small><h3>Match konfigurieren</h3><div class="chkl-config-grid"><label>Plätze<select data-chkl-size><option value="2">2 Plätze</option><option value="3">3 Plätze</option><option value="4">4 Plätze</option></select></label><label>Bots<select data-chkl-bots><option value="0">Keine</option><option value="1">1 Bot</option><option value="2">2 Bots</option><option value="3">3 Bots</option></select></label><label>Bot-Stärke<select data-chkl-bot-diff><option value="easy">Leicht</option><option value="medium">Mittel</option><option value="hard">Schwer</option></select></label></div><div class="chkl-card-actions"><button data-chkl-create-public>Öffentlich</button><button data-chkl-create-private>Privat</button></div></article>
+          <article><small>PRIVATE LOBBY</small><h3>Code beitreten</h3><p>Sechs Zeichen genügen. Private Räume erscheinen nie in der öffentlichen Liste.</p><div class="chkl-code-row"><input maxlength="6" data-chkl-code placeholder="ABC234" autocomplete="off"><button data-chkl-join-code>Beitreten</button></div></article>
+          <article><small>LOADOUT</small><h3>Skin-Inventar</h3><p>Shotgun, scharfe Patronen, leere Patronen und komplette Item-Sets getrennt ausrüsten.</p><div class="chkl-loadout-mini"><span class="gun skin-${skin.className}"></span><span class="shell live"></span><span class="shell blank"></span><span class="kit">◉</span></div><button data-chkl-skins>Inventar & Shop</button></article>
+          <article><small>TUTORIAL</small><h3>Den Tisch verstehen</h3><p>Patronen, Selbstschuss, Items, Bots, Chamber-Coins, XP und Multiplayer Schritt für Schritt erklärt.</p><button data-chkl-rules>Tutorial starten</button></article>
+          ${isOwner()?`<article class="owner"><small>OWNER ONLY</small><h3>Chamber Control</h3><p>Alle Cosmetics, Preise und Freischaltungen prüfen und dir zum Testen direkt geben.</p><button data-chkl-owner>Owner Mod-Menü</button></article>`:""}
         </section>
       </main>`;
     bindTopbar();
-    UI.shell.querySelector("[data-chkl-quick]")?.addEventListener("click",quickDuel);
-    UI.shell.querySelector("[data-chkl-public]")?.addEventListener("click",showPublicRooms);
-    UI.shell.querySelector("[data-chkl-create-public]")?.addEventListener("click",()=>createRoom("public",Number(UI.shell.querySelector("[data-chkl-size]")?.value)||2));
-    UI.shell.querySelector("[data-chkl-create-private]")?.addEventListener("click",()=>createRoom("private",Number(UI.shell.querySelector("[data-chkl-size]")?.value)||2));
-    UI.shell.querySelector("[data-chkl-join-code]")?.addEventListener("click",()=>joinByCode(UI.shell.querySelector("[data-chkl-code]")?.value));
-    UI.shell.querySelector("[data-chkl-code]")?.addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,"").slice(0,6));
-    UI.shell.querySelector("[data-chkl-code]")?.addEventListener("keydown",e=>{if(e.key==="Enter")joinByCode(e.target.value);});
-    UI.shell.querySelector("[data-chkl-skins]")?.addEventListener("click",renderSkins);
-    UI.shell.querySelector("[data-chkl-rules]")?.addEventListener("click",renderRules);
+    const size=()=>clamp(Number(UI.shell.querySelector("[data-chkl-size]")?.value)||2,2,4);const bots=()=>clamp(Number(UI.shell.querySelector("[data-chkl-bots]")?.value)||0,0,3);const diff=()=>String(UI.shell.querySelector("[data-chkl-bot-diff]")?.value||"easy");
+    UI.shell.querySelector("[data-chkl-quick]")?.addEventListener("click",quickDuel);UI.shell.querySelector("[data-chkl-bot]")?.addEventListener("click",()=>createRoom("private",2,{bots:1,difficulty:"medium",autoStart:true}));UI.shell.querySelector("[data-chkl-public]")?.addEventListener("click",showPublicRooms);
+    UI.shell.querySelector("[data-chkl-create-public]")?.addEventListener("click",()=>createRoom("public",size(),{bots:Math.min(bots(),size()-1),difficulty:diff()}));UI.shell.querySelector("[data-chkl-create-private]")?.addEventListener("click",()=>createRoom("private",size(),{bots:Math.min(bots(),size()-1),difficulty:diff()}));
+    UI.shell.querySelector("[data-chkl-join-code]")?.addEventListener("click",()=>joinByCode(UI.shell.querySelector("[data-chkl-code]")?.value));UI.shell.querySelector("[data-chkl-code]")?.addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z2-9]/g,"").slice(0,6));UI.shell.querySelector("[data-chkl-code]")?.addEventListener("keydown",e=>{if(e.key==="Enter")joinByCode(e.target.value);});
+    UI.shell.querySelector("[data-chkl-skins]")?.addEventListener("click",renderSkins);UI.shell.querySelector("[data-chkl-rules]")?.addEventListener("click",()=>renderTutorial(0));UI.shell.querySelector("[data-chkl-owner]")?.addEventListener("click",renderOwnerMenu);
   }
-  function renderRules(){
-    UI.view="rules";
-    UI.shell.innerHTML=`${topbar("SPIELREGELN")}<main class="chkl-page"><button class="chkl-back" data-chkl-back>← Zurück</button><section class="chkl-page-head"><small>VERSION 1</small><h2>Items & Tischregeln</h2><p>Alle Effekte sind Teil von Chamber.KL und verändern niemals dein LifeBuilder-Geld oder Inventar.</p></section><div class="chkl-item-guide">${Object.entries(ITEM_DEFS).map(([id,item])=>`<article><i>${item.icon}</i><div><b>${esc(item.name)}</b><p>${esc(item.text)}</p></div></article>`).join("")}</div><section class="chkl-rule-card"><b>Leere Patrone auf dich selbst</b><p>Du bleibst am Zug. Bei einem scharfen Treffer oder einem Schuss auf einen Gegner wechselt der Zug.</p></section><section class="chkl-rule-card"><b>Dealer</b><p>Die noch unbekannte Patronenreihenfolge wird nicht in das öffentlich lesbare Match-Dokument geschrieben. Firestore synchronisiert nur sichtbare Ergebnisse und Spielaktionen.</p></section></main>`;
-    bindTopbar();UI.shell.querySelector("[data-chkl-back]")?.addEventListener("click",renderHome);
-  }
-  function renderSkins(){
-    UI.view="skins";const s=chamberState();
-    UI.shell.innerHTML=`${topbar("SHOTGUN SKINS")}<main class="chkl-page"><button class="chkl-back" data-chkl-back>← Zurück</button><section class="chkl-page-head"><small>JK/COIN · NUR KOSMETIK</small><h2>Deine Shotgun</h2><p>Gekaufte Designs haben keinen Einfluss auf Schaden, Items oder Patronen.</p></section><div class="chkl-skin-grid">${Object.entries(SKINS).map(([id,meta])=>{const owned=s?.ownedSkins.includes(id);const active=s?.equippedSkin===id;return `<article class="${active?"active":""}"><div class="chkl-shotgun skin-${meta.className}"><i class="chkl-stock"></i><i class="chkl-body"></i><i class="chkl-barrel"></i></div><small>${id==="standard"?"INKLUSIVE":"JK/COIN"}</small><h3>${esc(meta.name)}</h3>${owned?`<button data-chkl-equip="${id}" ${active?"disabled":""}>${active?"Ausgerüstet":"Ausrüsten"}</button>`:`<button data-chkl-open-jk="${id}">Im JK/Coin-Shop ansehen</button>`}</article>`;}).join("")}</div></main>`;
-    bindTopbar();UI.shell.querySelector("[data-chkl-back]")?.addEventListener("click",renderHome);
-    UI.shell.querySelectorAll("[data-chkl-equip]").forEach(btn=>btn.addEventListener("click",()=>{const id=btn.dataset.chklEquip;if(!s?.ownedSkins.includes(id))return;s.equippedSkin=id;persist();renderSkins();}));
-    UI.shell.querySelectorAll("[data-chkl-open-jk]").forEach(btn=>btn.addEventListener("click",()=>window.JKCoinApp?.openForGame?.("chamber")));
-  }
+  const TUTORIAL_PAGES=[
+    {k:"01",title:"Das Prinzip",text:"Zu Beginn siehst du nur, wie viele scharfe und leere Patronen geladen werden. Ihre Reihenfolge bleibt verborgen. Reduziere alle Gegner auf 0 Leben und bleib als Letzter am Tisch.",tips:["Scharf = Schaden","Leer = kein Schaden","4 Leben pro Spieler"]},
+    {k:"02",title:"Dein Zug",text:"Wähle einen lebenden Spieler oder dich selbst als Ziel. Schießt du auf dich und die Patrone ist leer, bleibst du am Zug. Bei einem scharfen Selbsttreffer oder jedem Schuss auf einen Gegner wechselt der Zug.",tips:["25 Sekunden pro Zug","Ziel durch Klick auf Spieler wählen","Leerer Selbstschuss kann Tempo geben"]},
+    {k:"03",title:"Special Items",text:"Nach neuen Kammern erhältst du zusätzliche Items. Scanner, Auswerfer, Doppelladung, Verband, Störsender, Diebstahl, Schutzplatte und Richtungswechsel erzeugen taktische Kombinationen.",tips:["Scanner-Ergebnis sieht nur der Nutzer","Schutzplatte stoppt einen Treffer","Items sind nicht Teil des LifeBuilder-Inventars"]},
+    {k:"04",title:"Bots",text:"Du kannst mit einem bis drei Bots spielen. Leichte Bots handeln ungenau, mittlere Bots nutzen sichtbare Wahrscheinlichkeiten und schwere Bots kombinieren Items aggressiver. Sie lesen die geheime Reihenfolge nicht einfach aus.",tips:["Leicht: +80 Chamber-XP Bonus","Mittel: +140 Chamber-XP Bonus","Schwer: +220 Chamber-XP Bonus"]},
+    {k:"05",title:"Belohnungen",text:"Matches geben Chamber-XP und Chamber-Coins. Siege geben mehr. Ein Sieg gibt zusätzlich 100 XP an deinen normalen JK.Games-Hauptcharakter. Cosmetics sind rein optisch und niemals Pay-to-Win.",tips:["Chamber-Coins durch Spielen","JK/Coin = Premium-Cosmetics","Level bis 100"]},
+    {k:"06",title:"Online & Firebase",text:"Räume, sichtbare Tischdaten und Aktionen werden über Firebase synchronisiert. Gäste senden Aktionen an den Host-Dealer. Die noch unbekannte Patronenreihenfolge steht nicht als lesbares Feld im Match-Dokument.",tips:["Öffentliche und private Räume","6-stelliger Raumcode","Reconnect über denselben Raumzustand"]}
+  ];
+  function renderRules(){renderTutorial(0);}
+  function renderTutorial(page=0){UI.view="tutorial";UI.tutorialPage=clamp(page,0,TUTORIAL_PAGES.length-1);const t=TUTORIAL_PAGES[UI.tutorialPage];UI.shell.innerHTML=`${topbar("TUTORIAL")}<main class="chkl-page chkl-tutorial"><button class="chkl-back" data-chkl-back>← Zurück</button><section class="chkl-tutorial-card"><aside><small>KAPITEL ${t.k}</small><div class="chkl-tutorial-progress">${TUTORIAL_PAGES.map((_,i)=>`<i class="${i<=UI.tutorialPage?"on":""}"></i>`).join("")}</div><b>${UI.tutorialPage+1}/${TUTORIAL_PAGES.length}</b></aside><div><small>CHAMBER.KL ACADEMY</small><h2>${esc(t.title)}</h2><p>${esc(t.text)}</p><ul>${t.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><div class="chkl-card-actions"><button data-chkl-prev ${UI.tutorialPage===0?"disabled":""}>Zurück</button><button class="primary" data-chkl-next>${UI.tutorialPage===TUTORIAL_PAGES.length-1?"Tutorial abschließen":"Weiter"}</button></div></div></section></main>`;bindTopbar();UI.shell.querySelector("[data-chkl-back]")?.addEventListener("click",renderHome);UI.shell.querySelector("[data-chkl-prev]")?.addEventListener("click",()=>renderTutorial(UI.tutorialPage-1));UI.shell.querySelector("[data-chkl-next]")?.addEventListener("click",()=>{if(UI.tutorialPage>=TUTORIAL_PAGES.length-1){const s=chamberState();if(s){s.tutorialSeen=true;persist();}renderHome();}else renderTutorial(UI.tutorialPage+1);});}
+  function ownedFor(kind,id,s=chamberState()){if(!s)return false;if(kind==="shotgun")return s.ownedSkins.includes(id);if(kind==="live")return s.cosmetics.ownedLiveShells.includes(id);if(kind==="blank")return s.cosmetics.ownedBlankShells.includes(id);if(kind==="items")return s.cosmetics.ownedItemSkins.includes(id);return false;}
+  function equippedFor(kind,s=chamberState()){if(kind==="shotgun")return s?.equippedSkin||"standard";if(kind==="live")return s?.cosmetics?.liveShell||"standard";if(kind==="blank")return s?.cosmetics?.blankShell||"standard";return s?.cosmetics?.itemSkin||"standard";}
+  function grantCosmetic(kind,id){const s=chamberState();if(!s)return false;if(kind==="shotgun"&&SHOTGUN_SKINS[id]){if(!s.ownedSkins.includes(id))s.ownedSkins.push(id);return true;}if(kind==="live"&&SHELL_SKINS.live[id]){if(!s.cosmetics.ownedLiveShells.includes(id))s.cosmetics.ownedLiveShells.push(id);return true;}if(kind==="blank"&&SHELL_SKINS.blank[id]){if(!s.cosmetics.ownedBlankShells.includes(id))s.cosmetics.ownedBlankShells.push(id);return true;}if(kind==="items"&&ITEM_SKINS[id]){if(!s.cosmetics.ownedItemSkins.includes(id))s.cosmetics.ownedItemSkins.push(id);return true;}return false;}
+  function equipCosmetic(kind,id){const s=chamberState();if(!ownedFor(kind,id,s))return false;if(kind==="shotgun")s.equippedSkin=id;else if(kind==="live")s.cosmetics.liveShell=id;else if(kind==="blank")s.cosmetics.blankShell=id;else s.cosmetics.itemSkin=id;persist();return true;}
+  function catalogFor(kind){return kind==="shotgun"?SHOTGUN_SKINS:kind==="live"?SHELL_SKINS.live:kind==="blank"?SHELL_SKINS.blank:ITEM_SKINS;}
+  function previewCosmetic(kind,id,meta){if(kind==="shotgun")return `<div class="chkl-shotgun skin-${meta.className}"><i class="chkl-stock"></i><i class="chkl-body"></i><i class="chkl-barrel"></i><i class="chkl-trigger"></i></div>`;if(kind==="live"||kind==="blank")return `<div class="chkl-big-shell ${kind}" style="--shell:${meta.color};--metal:${meta.metal}"><i></i></div>`;return `<div class="chkl-item-set-preview skin-${meta.className}">${Object.values(ITEM_DEFS).slice(0,4).map(x=>`<i>${x.icon}</i>`).join("")}</div>`;}
+  function renderSkins(tab=UI.selectedInventoryTab||"shotgun"){UI.view="skins";UI.selectedInventoryTab=tab;const s=chamberState();const catalog=catalogFor(tab);const label={shotgun:"Shotgun",live:"Scharfe Patronen",blank:"Leere Patronen",items:"Special Items"}[tab];UI.shell.innerHTML=`${topbar("LOADOUT & SKINS")}<main class="chkl-page chkl-inventory"><button class="chkl-back" data-chkl-back>← Zurück</button><section class="chkl-inventory-head"><div><small>CHAMBER ARMORY</small><h2>${label}</h2><p>Chamber-Coins erspielst du. JK/Coin-Cosmetics sind Premium und bleiben trotzdem rein kosmetisch.</p></div><div class="chkl-wallet"><span><small>CHAMBER</small><b>◈ ${s.coins.toLocaleString("de-DE")}</b></span><span><small>LEVEL</small><b>${s.level}</b></span></div></section><nav class="chkl-inventory-tabs">${[["shotgun","Shotgun"],["live","Scharf"],["blank","Leer"],["items","Items"]].map(([id,n])=>`<button class="${tab===id?"active":""}" data-chkl-tab="${id}">${n}</button>`).join("")}</nav><div class="chkl-cosmetic-grid">${Object.entries(catalog).map(([id,meta])=>{const owned=ownedFor(tab,id,s),active=equippedFor(tab,s)===id;return `<article class="${active?"active":""} tier-${meta.tier}">${previewCosmetic(tab,id,meta)}<div class="chkl-cosmetic-copy"><small>${meta.tier==="jk"?"JK/COIN PREMIUM":meta.tier==="chamber"?"CHAMBER REWARD":"STANDARD"}</small><h3>${esc(meta.name)}</h3><span>${currencyLabel(meta)}</span></div>${owned?`<button data-chkl-equip-kind="${tab}" data-chkl-equip-id="${id}" ${active?"disabled":""}>${active?"Ausgerüstet":"Ausrüsten"}</button>`:meta.tier==="chamber"?`<button data-chkl-buy-cc="${tab}:${id}">Für ${meta.price} ◈ kaufen</button>`:`<button data-chkl-open-jk="${tab}:${id}">JK/Coin-Shop</button>`}</article>`;}).join("")}</div></main>`;bindTopbar();UI.shell.querySelector("[data-chkl-back]")?.addEventListener("click",renderHome);UI.shell.querySelectorAll("[data-chkl-tab]").forEach(b=>b.addEventListener("click",()=>renderSkins(b.dataset.chklTab)));UI.shell.querySelectorAll("[data-chkl-equip-kind]").forEach(b=>b.addEventListener("click",()=>{equipCosmetic(b.dataset.chklEquipKind,b.dataset.chklEquipId);renderSkins(tab);}));UI.shell.querySelectorAll("[data-chkl-buy-cc]").forEach(b=>b.addEventListener("click",()=>{const [kind,id]=b.dataset.chklBuyCc.split(":");const meta=catalogFor(kind)[id];if(!meta||meta.tier!=="chamber")return;if(s.coins<meta.price)return toast(`Dir fehlen ${meta.price-s.coins} Chamber-Coins.`,"error");s.coins-=meta.price;grantCosmetic(kind,id);persist();toast(`${meta.name} freigeschaltet.`,"good");renderSkins(tab);}));UI.shell.querySelectorAll("[data-chkl-open-jk]").forEach(b=>b.addEventListener("click",()=>window.JKCoinApp?.openForGame?.("chamber")));}
+  function renderOwnerMenu(){if(!isOwner())return renderHome();UI.view="owner";const groups=[["shotgun","SHOTGUN",SHOTGUN_SKINS],["live","SCHARFE PATRONEN",SHELL_SKINS.live],["blank","LEERE PATRONEN",SHELL_SKINS.blank],["items","SPECIAL ITEMS",ITEM_SKINS]];UI.shell.innerHTML=`${topbar("OWNER CONTROL")}<main class="chkl-page chkl-owner-page"><button class="chkl-back" data-chkl-back>← Zurück</button><section class="chkl-page-head"><small>OWNER ONLY · TESTWERKZEUG</small><h2>Chamber Control</h2><p>Alle V2-Cosmetics, Preise und Währungen. Freischalten wirkt nur auf deinen aktiven JK.Games-Spielstand.</p></section><div class="chkl-owner-actions"><button data-owner-coins="1000">+1.000 Chamber-Coins</button><button data-owner-xp="500">+500 Chamber-XP</button></div>${groups.map(([kind,title,cat])=>`<section class="chkl-owner-group"><h3>${title}</h3><div>${Object.entries(cat).map(([id,m])=>`<article>${previewCosmetic(kind,id,m)}<span><b>${esc(m.name)}</b><small>${currencyLabel(m)}</small></span><button data-owner-grant="${kind}:${id}">${ownedFor(kind,id)?"Besitzt":"Geben"}</button></article>`).join("")}</div></section>`).join("")}</main>`;bindTopbar();UI.shell.querySelector("[data-chkl-back]")?.addEventListener("click",renderHome);UI.shell.querySelectorAll("[data-owner-grant]").forEach(b=>b.addEventListener("click",()=>{const [kind,id]=b.dataset.ownerGrant.split(":");grantCosmetic(kind,id);persist();renderOwnerMenu();}));UI.shell.querySelector("[data-owner-coins]")?.addEventListener("click",()=>{grantChamberRewards(0,1000);renderOwnerMenu();});UI.shell.querySelector("[data-owner-xp]")?.addEventListener("click",()=>{grantChamberRewards(500,0);renderOwnerMenu();});}
 
   async function uniqueRoomId(fb){for(let i=0;i<12;i++){const id=randomRoomId();const snap=await fb.getDoc(roomRef(fb,id));if(!snap.exists())return id;}throw new Error("Kein freier Raumcode gefunden.");}
   function emptyRoom(id,hostUid,profile,visibility,maxPlayers){
     return {roomId:id,hostUid,visibility,maxPlayers,currentPlayers:1,playerUids:[hostUid],profiles:{[hostUid]:{...profile,seat:0}},status:"waiting",phase:"waiting",round:0,turnOrder:[],activeUid:"",turnStartedAtMs:0,direction:1,hp:{},items:{},effects:{},shellLive:0,shellBlank:0,shellTotal:0,eventSeq:0,lastEvent:{id:"",type:"waiting",actorUid:"",targetUid:"",itemId:"",shell:"",damage:0,text:"Warteraum geöffnet",atMs:now()},winnerUid:"",winnerName:"",dealerEpoch:0,createdAtMs:now(),updatedAtMs:now(),version:VERSION};
   }
-  async function createRoom(visibility="public",maxPlayers=2){
+  async function createRoom(visibility="public",maxPlayers=2,options={}){
     if(UI.lobbyBusy)return;UI.lobbyBusy=true;setBusy(true);
-    try{const {fb,user}=await firebase();const id=await uniqueRoomId(fb);const data=emptyRoom(id,user.uid,profileFromState(user.uid),visibility,clamp(Math.floor(maxPlayers),2,4));await fb.setDoc(roomRef(fb,id),data);openRoom(id);}
-    catch(error){toast(error.message||error,"error");}finally{UI.lobbyBusy=false;setBusy(false);}
+    try{
+      const {fb,user}=await firebase();const id=await uniqueRoomId(fb);const size=clamp(Math.floor(maxPlayers),2,4);const data=emptyRoom(id,user.uid,profileFromState(user.uid),visibility,size);await fb.setDoc(roomRef(fb,id),data);
+      const count=clamp(Number(options.bots||0),0,size-1);if(count){const uids=[user.uid],profiles={...data.profiles};for(let i=0;i<count;i++){const botUid=`${BOT_PREFIX}${id}:${i}:${randomInt(9999)}`;uids.push(botUid);profiles[botUid]=botProfile(botUid,String(options.difficulty||"easy"),uids.length-1);}await fb.updateDoc(roomRef(fb,id),{playerUids:uids,profiles,currentPlayers:uids.length,updatedAtMs:now()});}
+      openRoom(id);if(options.autoStart)autoStartWhenReady(id);
+    }catch(error){toast(error.message||error,"error");}finally{UI.lobbyBusy=false;setBusy(false);}
   }
+  function autoStartWhenReady(roomId,attempt=0){if(UI.roomId!==roomId)return;if(UI.room?.status==="waiting"&&Number(UI.room.currentPlayers||0)>=2){startMatch().catch(()=>{});return;}if(attempt<10)setTimeout(()=>autoStartWhenReady(roomId,attempt+1),300);}
+  async function addBotToLobby(difficulty="easy"){
+    const room=UI.room;if(!room||!isHost(room)||room.status!=="waiting"||room.currentPlayers>=room.maxPlayers)return false;setBusy(true);try{const {fb}=await firebase();const uid=`${BOT_PREFIX}${room.roomId}:${now()}:${randomInt(9999)}`;const uids=[...(room.playerUids||[]),uid],profiles={...(room.profiles||{}),[uid]:botProfile(uid,difficulty,uids.length-1)};await fb.updateDoc(roomRef(fb,room.roomId),{playerUids:uids,profiles,currentPlayers:uids.length,updatedAtMs:now()});return true;}catch(error){toast(error.message||error,"error");return false;}finally{setBusy(false);}
+  }
+  async function removeBotFromLobby(uid){const room=UI.room;if(!room||!isHost(room)||!isBotUid(uid)||room.status!=="waiting")return false;setBusy(true);try{const {fb}=await firebase();const uids=(room.playerUids||[]).filter(x=>x!==uid),profiles={...(room.profiles||{})};delete profiles[uid];uids.forEach((id,i)=>{if(profiles[id])profiles[id].seat=i;});await fb.updateDoc(roomRef(fb,room.roomId),{playerUids:uids,profiles,currentPlayers:uids.length,updatedAtMs:now()});return true;}catch(error){toast(error.message||error,"error");return false;}finally{setBusy(false);}}
   async function quickDuel(){
     if(UI.lobbyBusy)return;UI.lobbyBusy=true;setBusy(true);
     try{
@@ -226,6 +294,7 @@
     for(const unsub of UI.ownCommandUnsubs.values())try{unsub();}catch{}
     UI.ownCommandUnsubs.clear();
     clearInterval(UI.ticker);UI.ticker=0;
+    clearTimeout(UI.botTimer);UI.botTimer=0;UI.botBusy=false;
     if(UI._hostWatch){clearInterval(UI._hostWatch);UI._hostWatch=0;}
   }
   async function openRoom(roomId){
@@ -242,12 +311,17 @@
   }
   function characterHtml(profile,alive=true){
     const hair=/^#/.test(profile?.hairColor||"")?profile.hairColor:"#30231d";const skin=/^#/.test(profile?.skinColor||"")?profile.skinColor:"#d2a278";
-    return `<div class="chkl-character ${profile?.gender==="female"?"female":"male"} ${alive?"":"out"}" style="--hair:${esc(hair)};--skin:${esc(skin)}"><i class="hair"></i><i class="head"></i><i class="body"></i></div>`;
+    return `<div class="chkl-character ${profile?.gender==="female"?"female":"male"} ${alive?"":"out"}" style="--hair:${esc(hair)};--skin:${esc(skin)}"><i class="chair"></i><i class="hair"></i><i class="head"></i><i class="torso"></i><i class="arm left"></i><i class="arm right"></i><i class="leg left"></i><i class="leg right"></i></div>`;
   }
+  function destroyScene(){try{window.ChamberKLScene?.destroy?.();}catch{}UI.sceneMounted=false;}
+  function sceneCosmetics(room){const active=roomPlayer(room,room?.activeUid||room?.hostUid);return {shotgunSkin:active.shotgunSkin||"standard",liveShellSkin:active.liveShellSkin||"standard",blankShellSkin:active.blankShellSkin||"standard",itemSkin:active.itemSkin||"standard"};}
+  function mountScene(room,mode="game"){
+    const host=UI.shell?.querySelector("[data-chkl-scene]");if(!host)return;const api=window.ChamberKLScene;if(!api?.mount)return;try{api.mount(host,{room,mode,ownUid:ownUid(),cosmetics:sceneCosmetics(room),onSelectTarget:(uid)=>{if(UI.room?.status==="playing"&&UI.room.activeUid===ownUid()&&Number(UI.room.hp?.[uid]||0)>0){UI.selectedTarget=uid;renderGame();}}});UI.sceneMounted=true;}catch(error){console.warn("Chamber.KL 3D",error);}}
   function renderLobby(){
-    const room=UI.room;if(!room||!UI.shell)return;UI.view="lobby";
-    UI.shell.innerHTML=`${topbar(room.visibility==="private"?"PRIVATER TISCH":"ÖFFENTLICHER TISCH")}<main class="chkl-lobby"><section class="chkl-lobby-code"><small>RAUMCODE</small><strong>${esc(room.roomId)}</strong><span>${room.visibility==="private"?"Nur mit Code beitretbar":"Öffentlich sichtbar"}</span></section><section class="chkl-lobby-table"><div class="chkl-table-surface"><div class="chkl-table-logo">CHAMBER.KL</div>${Array.from({length:room.maxPlayers},(_,seat)=>{const uid=room.playerUids?.[seat];const p=uid?roomPlayer(room,uid):null;return `<article class="chkl-lobby-seat seat-${seat} ${uid?"filled":"empty"}">${p?`${characterHtml(p,true)}<b>${esc(p.name)}</b><small>${uid===room.hostUid?"HOST":"BEREIT"}</small>`:`<span>+</span><b>Freier Platz</b>`}</article>`;}).join("")}</div></section><section class="chkl-lobby-controls"><div><b>${room.currentPlayers}/${room.maxPlayers} Spieler am Tisch</b><small>${room.currentPlayers<2?"Mindestens zwei Spieler werden benötigt.":"Der Host kann das Match starten."}</small></div>${isHost(room)?`<button class="primary" data-chkl-start ${room.currentPlayers<2?"disabled":""}>Match starten</button>`:`<span class="chkl-waiting">Warte auf den Host …</span>`}<button data-chkl-leave>Raum verlassen</button></section></main>`;
-    bindTopbar();UI.shell.querySelector("[data-chkl-start]")?.addEventListener("click",startMatch);UI.shell.querySelector("[data-chkl-leave]")?.addEventListener("click",leaveRoom);
+    const room=UI.room;if(!room||!UI.shell)return;UI.view="lobby";destroyScene();
+    const botCount=(room.playerUids||[]).filter(isBotUid).length;
+    UI.shell.innerHTML=`${topbar(room.visibility==="private"?"PRIVATER TISCH":"ÖFFENTLICHER TISCH")}<main class="chkl-lobby chkl-lobby-v2"><section class="chkl-lobby-scene"><div class="chkl-scene-frame" data-chkl-scene><div class="chkl-scene-fallback"><span>3D TABLE</span></div></div><div class="chkl-room-badge"><small>RAUMCODE</small><strong>${esc(room.roomId)}</strong><span>${room.visibility==="private"?"PRIVAT":"ÖFFENTLICH"}</span></div><div class="chkl-lobby-roster">${Array.from({length:room.maxPlayers},(_,seat)=>{const uid=room.playerUids?.[seat],p=uid?roomPlayer(room,uid):null;return `<article class="${uid?"filled":"empty"}">${p?`${characterHtml(p,true)}<div><small>${uid===room.hostUid?"HOST":isBotUid(uid)?`BOT · ${String(p.botDifficulty||"easy").toUpperCase()}`:"SPIELER"}</small><b>${esc(p.name)}</b></div>${isHost(room)&&isBotUid(uid)?`<button data-chkl-remove-bot="${esc(uid)}">×</button>`:""}`:`<i>+</i><div><small>SITZ ${seat+1}</small><b>Frei</b></div>`}</article>`;}).join("")}</div></section><aside class="chkl-lobby-panel"><small>CHAMBER.KL · V2</small><h2>${room.currentPlayers}/${room.maxPlayers} am Tisch</h2><p>${room.currentPlayers<2?"Füge einen Bot hinzu oder warte auf einen Spieler.":"Der Tisch ist bereit. Die Patronen werden erst beim Matchstart erzeugt."}</p>${isHost(room)?`<div class="chkl-bot-box"><b>Bots hinzufügen</b><select data-chkl-lobby-bot-diff><option value="easy">Leicht</option><option value="medium">Mittel</option><option value="hard">Schwer</option></select><button data-chkl-add-bot ${room.currentPlayers>=room.maxPlayers?"disabled":""}>+ Bot auf freien Sitz</button><small>${botCount} Bot${botCount===1?"":"s"} aktiv</small></div><button class="primary massive" data-chkl-start ${room.currentPlayers<2?"disabled":""}>MATCH STARTEN</button>`:`<div class="chkl-waiting"><span></span>Warte auf den Host …</div>`}<button data-chkl-leave>Tisch verlassen</button></aside></main>`;
+    bindTopbar();mountScene(room,"lobby");UI.shell.querySelector("[data-chkl-start]")?.addEventListener("click",startMatch);UI.shell.querySelector("[data-chkl-leave]")?.addEventListener("click",leaveRoom);UI.shell.querySelector("[data-chkl-add-bot]")?.addEventListener("click",()=>addBotToLobby(UI.shell.querySelector("[data-chkl-lobby-bot-diff]")?.value||"easy"));UI.shell.querySelectorAll("[data-chkl-remove-bot]").forEach(b=>b.addEventListener("click",()=>removeBotFromLobby(b.dataset.chklRemoveBot)));
   }
   async function deleteRoomTree(fb,room,userUid=ownUid()){
     if(!room||room.hostUid!==userUid)return false;
@@ -312,42 +386,27 @@
     catch(error){toast(error.message||error,"error");}finally{setBusy(false);}
   }
 
-  function shotgunHtml(room){const active=roomPlayer(room,room.activeUid);const skin=SKINS[active.shotgunSkin]||SKINS.standard;const shells=[...Array(Math.max(0,Number(room.shellLive)||0)).fill("live"),...Array(Math.max(0,Number(room.shellBlank)||0)).fill("blank")];return `<div class="chkl-shotgun-stage" data-chkl-gun-stage><div class="chkl-reload-shells" aria-hidden="true">${shells.map((type,index)=>`<i class="${type}" style="--i:${index}"></i>`).join("")}</div><div class="chkl-shotgun skin-${skin.className}" data-chkl-shotgun><i class="chkl-stock"></i><i class="chkl-body"></i><i class="chkl-barrel"></i><i class="chkl-trigger"></i></div><div class="chkl-shell-counter"><span class="live"><i></i>${room.shellLive} scharf</span><span class="blank"><i></i>${room.shellBlank} leer</span></div></div>`;}
   function hpHtml(hp){return `<div class="chkl-hp">${Array.from({length:MAX_HP},(_,i)=>`<i class="${i<hp?"on":""}">♥</i>`).join("")}</div>`;}
-  function seatHtml(room,uid,index){const p=roomPlayer(room,uid),hp=Number(room.hp?.[uid]||0),alive=hp>0,active=room.activeUid===uid,own=uid===ownUid(),target=UI.selectedTarget===uid;const effect=room.effects?.[uid]||{};return `<button type="button" class="chkl-seat seat-${index} ${alive?"alive":"out"} ${active?"active":""} ${own?"own":""} ${target?"target":""}" data-chkl-target="${esc(uid)}" ${alive?"":"disabled"}>${characterHtml(p,alive)}<div class="chkl-seat-copy"><small>${own?"DU":uid===room.hostUid?"HOST":"SPIELER"}</small><b>${esc(p.name)}</b>${hpHtml(hp)}<div class="chkl-effect-row">${effect.plate?"<span title='Schutzplatte'>⬡</span>":""}${effect.doubleNext?"<span title='Doppelladung'>Ⅱ</span>":""}${effect.jammed?"<span title='Störsender'>⌁</span>":""}</div></div></button>`;}
-  function lastEventText(room){const e=room.lastEvent||{};if(e.type==="shot-live")return `${roomPlayer(room,e.actorUid).name} feuert auf ${roomPlayer(room,e.targetUid).name}: ${e.damage>0?`${e.damage} Schaden`:"Schutzplatte blockiert"}.`;if(e.type==="shot-blank")return `${roomPlayer(room,e.actorUid).name}: KLICK – leere Patrone.`;if(e.type==="reload")return e.text||"Neue Kammer wird geladen.";if(e.type==="item")return e.text||"Item eingesetzt.";if(e.type==="eject")return `${roomPlayer(room,e.actorUid).name} wirft eine ${e.shell==="live"?"scharfe":"leere"} Patrone aus.`;if(e.type==="eliminated")return e.text||"Spieler ausgeschieden.";if(e.type==="timeout")return e.text||"Zug übersprungen.";return e.text||"Match läuft.";}
-  function itemsHtml(room){const uid=ownUid(),items=room.items?.[uid]||[],jammed=!!room.effects?.[uid]?.jammed;return `<div class="chkl-items"><div class="chkl-panel-title"><div><small>DEINE ITEMS</small><b>${jammed?"Störsender aktiv":"Beliebig vor dem Schuss nutzen"}</b></div><span>${items.length}/8</span></div><div class="chkl-item-row">${items.length?items.map((id,index)=>{const item=ITEM_DEFS[id]||{icon:"?",name:id,text:""};return `<button data-chkl-item="${esc(id)}" data-chkl-item-index="${index}" ${jammed?"disabled":""} title="${esc(item.text)}"><i>${item.icon}</i><b>${esc(item.name)}</b></button>`;}).join(""):`<div class="chkl-no-items">Keine Items</div>`}</div></div>`;}
-  function actionHtml(room){const uid=ownUid(),alive=Number(room.hp?.[uid]||0)>0,ownTurn=room.activeUid===uid&&alive,active=roomPlayer(room,room.activeUid);const target=UI.selectedTarget&&Number(room.hp?.[UI.selectedTarget]||0)>0?UI.selectedTarget:"";if(room.phase==="reloading")return `<section class="chkl-action-panel waiting"><div class="chkl-turn-info"><small>KAMMER</small><b>Neue Patronen werden geladen</b><span>…</span></div><div class="chkl-watch"><span class="pulse"></span><p>Die Shotgun wird neu bestückt. Danach läuft der Zug automatisch weiter.</p></div></section>`;return `<section class="chkl-action-panel ${ownTurn?"ready":"waiting"}"><div class="chkl-turn-info"><small>${ownTurn?"DEIN ZUG":"AKTUELL AM ZUG"}</small><b>${ownTurn?"Ziel wählen und entscheiden":esc(active.name)}</b><span data-chkl-timer>--</span></div>${ownTurn?`${itemsHtml(room)}<div class="chkl-shoot-row"><div><small>AUSGEWÄHLTES ZIEL</small><b>${target?esc(roomPlayer(room,target).name):"Noch niemand"}</b><em>${target===uid?"Leere Patrone = du bleibst dran":"Scharfer Treffer = Leben verlieren"}</em></div><button class="primary danger" data-chkl-shoot ${target?"":"disabled"}>SHOTGUN AUSLÖSEN</button></div>`:`<div class="chkl-watch"><span class="pulse"></span><p>Du siehst jede Aktion dieses Spielers live über Firebase.</p></div>`}</section>`;}
+  function lastEventText(room){const e=room.lastEvent||{};if(e.type==="shot-live")return `${roomPlayer(room,e.actorUid).name} → ${roomPlayer(room,e.targetUid).name}: ${e.damage>0?`${e.damage} Schaden`:"Schutzplatte blockiert"}`;if(e.type==="shot-blank")return `${roomPlayer(room,e.actorUid).name}: KLICK — leer`;if(e.type==="reload")return e.text||"Neue Kammer wird geladen";if(e.type==="item")return e.text||"Item eingesetzt";if(e.type==="eject")return `${roomPlayer(room,e.actorUid).name} wirft eine ${e.shell==="live"?"scharfe":"leere"} Patrone aus`;if(e.type==="eliminated")return e.text||"Spieler ausgeschieden";if(e.type==="timeout")return e.text||"Zug übersprungen";return e.text||"Match läuft";}
+  function itemCard(room,id,index){const item=ITEM_DEFS[id]||{icon:"?",name:id,text:""};const skin=roomPlayer(room,ownUid()).itemSkin||chamberState()?.cosmetics?.itemSkin||"standard";return `<button class="chkl-v2-item skin-${esc(skin)}" data-chkl-item="${esc(id)}" data-chkl-item-index="${index}" title="${esc(item.text)}"><i>${item.icon}</i><span><b>${esc(item.name)}</b><small>${esc(item.text)}</small></span></button>`;}
+  function targetStrip(room){const own=ownUid();return `<div class="chkl-target-strip"><small>ZIEL AUSWÄHLEN</small><div>${aliveUids(room).map(uid=>{const p=roomPlayer(room,uid),hp=Number(room.hp?.[uid]||0),sel=UI.selectedTarget===uid;return `<button class="${sel?"active":""} ${uid===own?"self":""}" data-chkl-target="${esc(uid)}"><span>${uid===own?"DU":isBotUid(uid)?"BOT":"SPIELER"}</span><b>${esc(p.name)}</b>${hpHtml(hp)}</button>`;}).join("")}</div></div>`;}
+  function matchHud(room){const active=roomPlayer(room,room.activeUid),own=ownUid();return `<div class="chkl-game-hud"><div class="chkl-round"><small>RUNDE</small><b>${room.round}</b></div><div class="chkl-event"><small>LETZTE AKTION</small><b>${esc(lastEventText(room))}</b></div><div class="chkl-ammo"><span class="live"><i></i><b>${room.shellLive}</b><small>SCHARF</small></span><span class="blank"><i></i><b>${room.shellBlank}</b><small>LEER</small></span></div><div class="chkl-active"><small>${room.activeUid===own?"DEIN ZUG":"AM ZUG"}</small><b>${esc(active.name)}</b><span data-chkl-timer>--</span></div></div>`;}
+  function actionHtml(room){const uid=ownUid(),alive=Number(room.hp?.[uid]||0)>0,ownTurn=room.activeUid===uid&&alive,target=UI.selectedTarget&&Number(room.hp?.[UI.selectedTarget]||0)>0?UI.selectedTarget:"",items=room.items?.[uid]||[],jammed=!!room.effects?.[uid]?.jammed;if(room.phase==="reloading")return `<section class="chkl-v2-controls reload"><div><small>KAMMER OFFEN</small><b>Patronen werden geladen …</b><span>Du siehst die Anzahl, nicht die Reihenfolge.</span></div></section>`;if(!alive)return `<section class="chkl-v2-controls spectate"><div><small>AUSGESCHIEDEN</small><b>Du beobachtest den restlichen Tisch live.</b></div></section>`;if(!ownTurn)return `<section class="chkl-v2-controls spectate"><div><small>LIVE TABLE</small><b>${esc(roomPlayer(room,room.activeUid).name)} entscheidet.</b><span>Alle Aktionen werden über Firebase synchronisiert.</span></div></section>`;return `<section class="chkl-v2-controls ready">${targetStrip(room)}<div class="chkl-v2-item-drawer"><div class="chkl-panel-title"><div><small>DEINE SPECIAL ITEMS</small><b>${jammed?"STÖRSENDER — ITEMS GESPERRT":"Vor dem Schuss einsetzbar"}</b></div><span>${items.length}/8</span></div><div class="chkl-v2-items">${items.length?items.map((id,i)=>itemCard(room,id,i)).join(""):`<div class="chkl-no-items">Keine Items mehr</div>`}</div></div><div class="chkl-v2-fire"><div><small>AUSGEWÄHLT</small><b>${target?esc(roomPlayer(room,target).name):"Noch kein Ziel"}</b><span>${target===uid?"Leere Patrone: du bleibst am Zug":"Ziel kann Schaden erhalten"}</span></div><button class="primary danger" data-chkl-shoot ${target?"":"disabled"}><i></i>ABZIEHEN</button></div></section>`;}
   function renderGame(){
-    const room=UI.room;if(!room||!UI.shell)return;UI.view="game";
-    const living=aliveUids(room);if(!UI.selectedTarget||!living.includes(UI.selectedTarget)){const own=ownUid();UI.selectedTarget=living.find(uid=>uid!==own)||living[0]||"";}
-    if(room.status==="finished")return renderFinished();
-    UI.shell.innerHTML=`${topbar(`RUNDE ${room.round}`)}<main class="chkl-game"><section class="chkl-table-wrap"><div class="chkl-table"><div class="chkl-table-center">${shotgunHtml(room)}<div class="chkl-event-feed" data-chkl-event>${esc(lastEventText(room))}</div></div>${(room.turnOrder||room.playerUids||[]).map((uid,index)=>seatHtml(room,uid,index)).join("")}</div></section>${actionHtml(room)}</main>`;
-    bindTopbar();
-    UI.shell.querySelectorAll("[data-chkl-target]").forEach(btn=>btn.addEventListener("click",()=>{if(UI.room?.activeUid!==ownUid())return;UI.selectedTarget=btn.dataset.chklTarget;renderGame();}));
-    UI.shell.querySelector("[data-chkl-shoot]")?.addEventListener("click",()=>sendAction("shoot",{targetUid:UI.selectedTarget}));
-    UI.shell.querySelectorAll("[data-chkl-item]").forEach(btn=>btn.addEventListener("click",()=>{const id=btn.dataset.chklItem,item=ITEM_DEFS[id];if(item?.target&&(!UI.selectedTarget||UI.selectedTarget===ownUid()))return toast("Wähle zuerst einen anderen lebenden Spieler als Ziel.","error");sendAction("item",{itemId:id,targetUid:item?.target?UI.selectedTarget:""});}));
-    startTicker();
+    const room=UI.room;if(!room||!UI.shell)return;UI.view="game";destroyScene();const living=aliveUids(room);if(!UI.selectedTarget||!living.includes(UI.selectedTarget)){const own=ownUid();UI.selectedTarget=living.find(uid=>uid!==own)||living[0]||"";}if(room.status==="finished")return renderFinished();
+    UI.shell.innerHTML=`${topbar(`RUNDE ${room.round}`)}<main class="chkl-game chkl-game-v2"><section class="chkl-v2-stage"><div class="chkl-scene-frame game" data-chkl-scene><div class="chkl-scene-fallback"><span>3D TABLE</span></div></div>${matchHud(room)}<div class="chkl-seat-tags">${(room.turnOrder||room.playerUids||[]).map((uid,index)=>{const p=roomPlayer(room,uid),hp=Number(room.hp?.[uid]||0),eff=room.effects?.[uid]||{};return `<button class="seat-${index} ${room.activeUid===uid?"active":""} ${UI.selectedTarget===uid?"target":""} ${hp<=0?"out":""}" data-chkl-target="${esc(uid)}" ${hp<=0?"disabled":""}><small>${uid===ownUid()?"DU":isBotUid(uid)?`BOT · ${String(p.botDifficulty||"easy").toUpperCase()}`:uid===room.hostUid?"HOST":"SPIELER"}</small><b>${esc(p.name)}</b>${hpHtml(hp)}<span>${eff.plate?"⬡":""}${eff.doubleNext?"Ⅱ":""}${eff.jammed?"⌁":""}</span></button>`;}).join("")}</div></section>${actionHtml(room)}</main>`;
+    bindTopbar();mountScene(room,"game");UI.shell.querySelectorAll("[data-chkl-target]").forEach(btn=>btn.addEventListener("click",()=>{if(UI.room?.activeUid!==ownUid())return;UI.selectedTarget=btn.dataset.chklTarget;renderGame();}));UI.shell.querySelector("[data-chkl-shoot]")?.addEventListener("click",()=>sendAction("shoot",{targetUid:UI.selectedTarget}));UI.shell.querySelectorAll("[data-chkl-item]").forEach(btn=>btn.addEventListener("click",()=>{const id=btn.dataset.chklItem,item=ITEM_DEFS[id];if(UI.room?.effects?.[ownUid()]?.jammed)return toast("Der Störsender blockiert deine Items in diesem Zug.","error");if(item?.target&&(!UI.selectedTarget||UI.selectedTarget===ownUid()))return toast("Wähle zuerst einen anderen lebenden Spieler als Ziel.","error");sendAction("item",{itemId:id,targetUid:item?.target?UI.selectedTarget:""});}));startTicker();
   }
   function startTicker(){clearInterval(UI.ticker);const update=()=>{const node=UI.shell?.querySelector("[data-chkl-timer]");if(!node||!UI.room)return;const left=Math.max(0,TURN_MS-(now()-Number(UI.room.turnStartedAtMs||now())));node.textContent=`${Math.ceil(left/1000)}s`;node.classList.toggle("urgent",left<6000);};update();UI.ticker=setInterval(update,500);}
+  function rewardForRoom(room,won){const botProfiles=(room.playerUids||[]).filter(isBotUid).map(uid=>roomPlayer(room,uid));const rank={easy:1,medium:2,hard:3};let hardest="";for(const p of botProfiles)if((rank[p.botDifficulty]||0)>(rank[hardest]||0))hardest=p.botDifficulty;const bot=hardest?BOT_DIFFICULTIES[hardest]:null;let xp=35,coins=12;if(won){xp+=130;coins+=85;if(bot){xp+=bot.xp+Math.max(0,botProfiles.length-1)*35;coins+=bot.coins+Math.max(0,botProfiles.length-1)*18;}else{xp+=90;coins+=45;}if(Number(room.maxPlayers||0)===4){xp+=70;coins+=35;}}return {xp,coins,hardest,botCount:botProfiles.length};}
   function renderFinished(){
-    const room=UI.room;if(!room)return;settleLocalStats(room);
-    const winner=roomPlayer(room,room.winnerUid);const ownWin=room.winnerUid===ownUid();
-    UI.shell.innerHTML=`${topbar("MATCH BEENDET")}<main class="chkl-finished"><div class="chkl-winner-glow"></div>${characterHtml(winner,true)}<small>${ownWin?"DU GEWINNST":"GEWINNER"}</small><h2>${esc(winner.name)}</h2><p>${room.currentPlayers>=4?"Vierertisch beendet":"Duell beendet"} · Runde ${room.round}</p><div class="chkl-finish-actions"><button class="primary" data-chkl-home>Zurück zu Chamber.KL</button><button data-chkl-topgames>Top Games</button></div>${statsHtml()}</main>`;
-    bindTopbar();UI.shell.querySelector("[data-chkl-home]")?.addEventListener("click",async()=>{const finished=UI.room;if(finished&&isHost(finished)){try{const {fb,user}=await firebase();await deleteRoomTree(fb,finished,user.uid);}catch{}}renderHome();});UI.shell.querySelector("[data-chkl-topgames]")?.addEventListener("click",requestClose);
+    const room=UI.room;if(!room)return;destroyScene();const reward=settleLocalStats(room);const winner=roomPlayer(room,room.winnerUid);const ownWin=room.winnerUid===ownUid();
+    UI.shell.innerHTML=`${topbar("MATCH BEENDET")}<main class="chkl-finished chkl-finished-v2"><div class="chkl-finish-stage" data-chkl-scene></div><div class="chkl-finish-card"><small>${ownWin?"VICTORY":"MATCH COMPLETE"}</small><h2>${ownWin?"Du kontrollierst den Tisch.":`${esc(winner.name)} gewinnt.`}</h2><p>${room.currentPlayers>=4?"Vierertisch":"Duell"} · Runde ${room.round}</p>${reward?`<div class="chkl-reward-grid"><span><small>CHAMBER XP</small><b>+${reward.xp}</b></span><span><small>CHAMBER COINS</small><b>+${reward.coins} ◈</b></span>${ownWin?`<span><small>HAUPTCHARAKTER</small><b>+100 XP</b></span>`:""}</div>`:""}<div class="chkl-finish-actions"><button class="primary" data-chkl-home>Weiter in Chamber.KL</button><button data-chkl-topgames>Top Games</button></div>${statsHtml()}</div></main>`;
+    bindTopbar();mountScene(room,"finish");UI.shell.querySelector("[data-chkl-home]")?.addEventListener("click",async()=>{const finished=UI.room;if(finished&&isHost(finished)){try{const {fb,user}=await firebase();await deleteRoomTree(fb,finished,user.uid);}catch{}}renderHome();});UI.shell.querySelector("[data-chkl-topgames]")?.addEventListener("click",requestClose);
   }
   function settledSet(){try{return new Set(JSON.parse(localStorage.getItem(LOCAL_SETTLED_KEY)||"[]"));}catch{return new Set();}}
-  function settleLocalStats(room){
-    const set=settledSet();if(set.has(room.roomId))return;set.add(room.roomId);try{localStorage.setItem(LOCAL_SETTLED_KEY,JSON.stringify([...set].slice(-80)));}catch{}
-    const s=chamberState();if(!s)return;s.stats.matches++;if(room.winnerUid===ownUid()){s.stats.wins++;if(Number(room.maxPlayers||0)===4)s.stats.fourTableWins++;try{window.JKGamesAwardTopGameXp?.("chamber",60,"Chamber.KL Sieg",{eventKey:`chamber:${room.roomId}`});}catch{}}persist();
-  }
-
-  function animateEvent(event){
-    if(!UI.overlay||UI.view!=="game")return;const stage=UI.overlay.querySelector("[data-chkl-gun-stage]"),gun=UI.overlay.querySelector("[data-chkl-shotgun]");if(!stage||!gun)return;
-    stage.classList.remove("reload","fire","blank","item");void stage.offsetWidth;
-    if(event.type==="reload")stage.classList.add("reload");else if(event.type==="shot-live")stage.classList.add("fire");else if(event.type==="shot-blank")stage.classList.add("blank");else stage.classList.add("item");
-    setTimeout(()=>stage?.classList.remove("reload","fire","blank","item"),1200);
-  }
+  function settleLocalStats(room){const set=settledSet();if(set.has(room.roomId))return null;set.add(room.roomId);try{localStorage.setItem(LOCAL_SETTLED_KEY,JSON.stringify([...set].slice(-100)));}catch{}const s=chamberState();if(!s)return null;const won=room.winnerUid===ownUid(),reward=rewardForRoom(room,won);s.stats.matches++;if(won){s.stats.wins++;if(Number(room.maxPlayers||0)===4)s.stats.fourTableWins++;const bots=(room.playerUids||[]).filter(isBotUid);if(bots.length){s.stats.botWins++;if(bots.some(uid=>roomPlayer(room,uid).botDifficulty==="hard"))s.stats.hardBotWins++;}try{if(window.JKGamesAwardExactMainXp)window.JKGamesAwardExactMainXp(100,"Chamber.KL Sieg",{eventKey:`chamber-v2:${room.roomId}`});else window.JKGamesAwardTopGameXp?.("chamber",100,"Chamber.KL Sieg",{eventKey:`chamber-v2:${room.roomId}`});}catch{}}grantChamberRewards(reward.xp,reward.coins);persist();return reward;}
+  function animateEvent(event){if(!UI.overlay||UI.view!=="game")return;try{window.ChamberKLScene?.playEvent?.(event,UI.room);}catch(error){console.warn("Chamber.KL scene event",error);}const feed=UI.overlay.querySelector(".chkl-event b");if(feed){feed.classList.remove("flash");void feed.offsetWidth;feed.classList.add("flash");}}
 
   async function sendAction(action,payload={}){
     if(UI.actionBusy||!UI.room||UI.room.status!=="playing")return false;if(UI.room.phase!=="playing")return toast("Die Kammer wird gerade neu geladen.","error");const uid=ownUid();if(UI.room.activeUid!==uid&&action!=="leave")return toast("Du bist gerade nicht am Zug.","error");setBusy(true);
@@ -383,12 +442,34 @@
     if(!UI.commandUnsub)startHostCommandListener();
     if(!UI.ticker)startTicker();
     if(!UI._hostWatch){UI._hostWatch=setInterval(()=>hostTimeoutCheck().catch(()=>{}),1000);}
+    maybeScheduleBotTurn();
   }
+  function botOpponentTarget(room,uid,difficulty="easy"){
+    const alive=aliveUids(room).filter(x=>x!==uid);if(!alive.length)return uid;if(difficulty==="easy")return alive[randomInt(alive.length)];return [...alive].sort((a,b)=>Number(room.hp?.[a]||0)-Number(room.hp?.[b]||0))[0]||alive[0];
+  }
+  function botItemTarget(room,uid){return botOpponentTarget(room,uid,"hard");}
+  async function runBotTurn(uid){
+    if(UI.botBusy||!UI.room||!isHost(UI.room)||UI.room.activeUid!==uid||!isBotUid(uid)||UI.room.phase!=="playing")return;UI.botBusy=true;
+    try{
+      let room=UI.room;const p=roomPlayer(room,uid),difficulty=String(p.botDifficulty||"easy");const items=[...(room.items?.[uid]||[])];const hp=Number(room.hp?.[uid]||0),total=Math.max(1,Number(room.shellTotal||1)),liveChance=Number(room.shellLive||0)/total;let knownShell="";
+      const use=async(id,targetUid="")=>{if(!items.includes(id))return null;const result=await hostProcessCommand({id:`bot-${now()}-${randomInt(9999)}`,uid,action:"item",targetUid,itemId:id,createdAtMs:now(),status:"pending"},true);const idx=items.indexOf(id);if(idx>=0)items.splice(idx,1);return result;};
+      if(hp<MAX_HP&&items.includes("bandage")&&(difficulty!=="easy"||randomInt(100)<60))await use("bandage");
+      if(items.includes("scanner")&&((difficulty==="hard"&&randomInt(100)<72)||(difficulty==="medium"&&randomInt(100)<42))){const r=await use("scanner");knownShell=String(r?.privateResult||"").includes("SCHARF")?"live":String(r?.privateResult||"").includes("LEER")?"blank":"";}
+      if(!knownShell&&items.includes("ejector")&&difficulty!=="easy"&&liveChance>.68&&hp<=2&&randomInt(100)<50)await use("ejector");
+      if(items.includes("plate")&&!room.effects?.[uid]?.plate&&((difficulty==="hard"&&randomInt(100)<52)||(difficulty==="medium"&&randomInt(100)<28)))await use("plate");
+      if(items.includes("double")&&(knownShell==="live"||(difficulty==="hard"&&liveChance>.56)||(difficulty==="medium"&&liveChance>.68)))await use("double");
+      if(items.includes("jammer")&&difficulty==="hard"&&randomInt(100)<38)await use("jammer",botItemTarget(room,uid));else if(items.includes("steal")&&difficulty!=="easy"&&randomInt(100)<35)await use("steal",botItemTarget(room,uid));else if(items.includes("reverse")&&Number(room.maxPlayers||0)>=3&&difficulty!=="easy"&&randomInt(100)<25)await use("reverse");
+      const latest=UI.room&&UI.room.activeUid===uid?UI.room:room;let target=botOpponentTarget(latest,uid,difficulty);
+      if(knownShell==="blank")target=uid;else if(!knownShell){if(difficulty==="easy"&&randomInt(100)<24)target=uid;else if(difficulty==="medium"&&liveChance<.38&&randomInt(100)<65)target=uid;else if(difficulty==="hard"&&liveChance<.43)target=uid;}
+      await hostProcessCommand({id:`bot-shot-${now()}-${randomInt(9999)}`,uid,action:"shoot",targetUid:target,itemId:"",createdAtMs:now(),status:"pending"},true);
+    }catch(error){console.warn("Chamber.KL Bot",error);}finally{UI.botBusy=false;clearTimeout(UI.botTimer);UI.botTimer=0;}
+  }
+  function maybeScheduleBotTurn(){const room=UI.room;if(!room||!isHost(room)||room.status!=="playing"||room.phase!=="playing"||!isBotUid(room.activeUid)){if(UI.botTimer){clearTimeout(UI.botTimer);UI.botTimer=0;}return;}if(UI.botBusy||UI.botTimer)return;const p=roomPlayer(room,room.activeUid),cfg=BOT_DIFFICULTIES[p.botDifficulty]||BOT_DIFFICULTIES.easy;const captured=room.activeUid,delay=cfg.think[0]+randomInt(Math.max(1,cfg.think[1]-cfg.think[0]));UI.botTimer=setTimeout(()=>{UI.botTimer=0;if(UI.room?.activeUid===captured)runBotTurn(captured);},delay);}
   async function startHostCommandListener(){
     try{const {fb}=await firebase();const q=fb.query(fb.collection(fb.db,ROOM_COLLECTION,UI.roomId,COMMAND_COLLECTION),fb.where("status","==","pending"),fb.limit(25));UI.commandUnsub=fb.onSnapshot(q,snap=>{for(const change of snap.docChanges()){if(change.type!=="added"&&change.type!=="modified")continue;const data=change.doc.data();if(data.status!=="pending")continue;UI.hostQueue=UI.hostQueue.then(()=>hostProcessCommand({id:change.doc.id,...data},false)).catch(error=>console.warn("Chamber.KL Host Command",error));}},error=>console.warn("Chamber.KL Commands",error));}
     catch(error){console.warn("Chamber.KL Host Listener",error);}
   }
-  async function resolveCommandDoc(fb,cmd,status,result=""){if(cmd.id.startsWith("local-"))return;try{await fb.updateDoc(commandRef(fb,UI.roomId,cmd.id),{status,result:String(result||"").slice(0,120),resolvedAtMs:now()});}catch(error){console.warn("Chamber.KL Command resolve",error);}}
+  async function resolveCommandDoc(fb,cmd,status,result=""){if(cmd.id.startsWith("local-")||cmd.id.startsWith("bot-"))return;try{await fb.updateDoc(commandRef(fb,UI.roomId,cmd.id),{status,result:String(result||"").slice(0,120),resolvedAtMs:now()});}catch(error){console.warn("Chamber.KL Command resolve",error);}}
   function validTarget(room,uid){return !!uid&&Array.isArray(room.playerUids)&&room.playerUids.includes(uid)&&Number(room.hp?.[uid]||0)>0;}
   function nextTurn(room,currentUid){const order=room.turnOrder||[];if(!order.length)return currentUid;const direction=Number(room.direction||1)>=0?1:-1;let index=order.indexOf(currentUid);for(let step=1;step<=order.length;step++){const next=order[(index+direction*step+order.length*10)%order.length];if(Number(room.hp?.[next]||0)>0)return next;}return currentUid;}
   function cloneMap(value){return value&&typeof value==="object"&&!Array.isArray(value)?JSON.parse(JSON.stringify(value)):{};}
@@ -475,10 +556,9 @@
     const {fb}=await firebase();const snap=await fb.getDoc(roomRef(fb,room.roomId));if(!snap.exists())return;const latest={id:snap.id,...snap.data()};if(latest.status!=="playing"||latest.phase!=="playing"||now()-Number(latest.turnStartedAtMs||now())<TURN_MS)return;const state=roomUpdateBase(latest);state.effects[state.activeUid] ||= {doubleNext:false,plate:false,jammed:false};state.effects[state.activeUid].jammed=false;const actor=state.activeUid;state.activeUid=nextTurn(latest,actor);state.turnStartedAtMs=now();const event=makeEvent(state,"timeout",actor,"",{text:`${roomPlayer(latest,actor).name}s Zug wurde wegen Zeitüberschreitung beendet.`});await fb.updateDoc(roomRef(fb,room.roomId),{activeUid:state.activeUid,turnStartedAtMs:state.turnStartedAtMs,effects:state.effects,eventSeq:state.eventSeq,lastEvent:event,updatedAtMs:now()});
   }
 
-  function grantJkCoinPurchase(kind,amount=1){
-    const id=String(kind||"").replace(/^skin:/,"");if(!SKINS[id]||id==="standard")return false;const s=chamberState();if(!s)return false;if(!s.ownedSkins.includes(id))s.ownedSkins.push(id);persist();if(UI.view==="skins")renderSkins();return true;
-  }
-  function isJkPurchaseOwned(kind){const id=String(kind||"").replace(/^skin:/,"");return !!chamberState()?.ownedSkins?.includes(id);}
+  function parseGrantKind(kind){const raw=String(kind||"");if(raw.startsWith("skin:"))return ["shotgun",raw.slice(5)];const parts=raw.split(":");if(parts[0]==="shotgun")return ["shotgun",parts[1]||""];if(parts[0]==="shellLive")return ["live",parts[1]||""];if(parts[0]==="shellBlank")return ["blank",parts[1]||""];if(parts[0]==="itemSet")return ["items",parts[1]||""];return ["shotgun",raw];}
+  function grantJkCoinPurchase(kind,amount=1){const [type,id]=parseGrantKind(kind);const meta=catalogFor(type)?.[id];if(!meta||meta.tier!=="jk")return false;const ok=grantCosmetic(type,id);if(!ok)return false;persist();if(UI.view==="skins")renderSkins(UI.selectedInventoryTab);if(UI.view==="owner")renderOwnerMenu();return true;}
+  function isJkPurchaseOwned(kind){const [type,id]=parseGrantKind(kind);return ownedFor(type,id);}
   function getState(){const s=chamberState();return s?JSON.parse(JSON.stringify(s)):null;}
 
   function open(phoneItem=""){
@@ -486,8 +566,8 @@
     const overlay=document.createElement("div");overlay.className="chamber-kl-overlay";overlay.dataset.chamberKl="1";document.body.append(overlay);UI.overlay=overlay;renderBase();renderLoading();return true;
   }
   function close(){
-    stopRoomListeners();if(UI._hostWatch){clearInterval(UI._hostWatch);UI._hostWatch=0;}try{UI.overlay?.remove();}catch{}UI.overlay=null;UI.shell=null;UI.room=null;UI.roomId="";UI.view="";const phone=UI.phoneItem;UI.phoneItem="";setTimeout(()=>window.JKGamesOpenTopGames?.(phone),40);
+    stopRoomListeners();destroyScene();if(UI._hostWatch){clearInterval(UI._hostWatch);UI._hostWatch=0;}try{UI.overlay?.remove();}catch{}UI.overlay=null;UI.shell=null;UI.room=null;UI.roomId="";UI.view="";const phone=UI.phoneItem;UI.phoneItem="";setTimeout(()=>window.JKGamesOpenTopGames?.(phone),40);
   }
 
-  window.ChamberKL=Object.freeze({version:VERSION,open,close,getState,grantJkCoinPurchase,isJkPurchaseOwned,items:ITEM_DEFS,skins:SKINS});
+  window.ChamberKL=Object.freeze({version:VERSION,open,close,getState,grantJkCoinPurchase,isJkPurchaseOwned,items:ITEM_DEFS,skins:SHOTGUN_SKINS,shellSkins:SHELL_SKINS,itemSkins:ITEM_SKINS,botDifficulties:BOT_DIFFICULTIES});
 })();

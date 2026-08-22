@@ -4393,6 +4393,26 @@ function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = 
 }
 
 window.JKGamesAwardMainGameXp = awardTopGameMainXp;
+// V522: Exakte Hauptcharakter-EP für Spiele, deren Regelwerk eine feste Belohnung verlangt.
+// Nutzt dieselbe Event-Key-Sperre wie Top-Game-EP, aber bewusst ohne Level-Multiplikator.
+window.JKGamesAwardExactMainXp = (amount, reason = "Top Games", options = {}) => {
+  if (!state) return 0;
+  const earned = Math.max(0, Math.min(250, Math.floor(Number(amount) || 0)));
+  if (!earned) return 0;
+  const day = Math.max(1, Number(state.day || 1));
+  const ledger = state.topGamesMainXp && typeof state.topGamesMainXp === "object" ? state.topGamesMainXp : {};
+  if (Number(ledger.day || 0) !== day) { ledger.day = day; ledger.total = 0; ledger.byGame = {}; ledger.recentKeys = []; }
+  ledger.byGame ||= {}; ledger.recentKeys = Array.isArray(ledger.recentKeys) ? ledger.recentKeys.slice(-120) : [];
+  const eventKey = String(options.eventKey || "").slice(0, 140);
+  if (eventKey && ledger.recentKeys.includes(eventKey)) return 0;
+  ledger.total = Math.max(0, Number(ledger.total || 0)) + earned;
+  ledger.byGame.chamber = Math.max(0, Number(ledger.byGame.chamber || 0)) + earned;
+  if (eventKey) ledger.recentKeys.push(eventKey);
+  state.topGamesMainXp = ledger;
+  const result = awardGameXp(earned, `${reason} · Hauptcharakter`, { toast: options.toast !== false, feed: options.feed === true });
+  save();
+  return result;
+};
 window.JKGamesTopGameXpStatus = () => {
   const ledger = state?.topGamesMainXp || {};
   return {
@@ -19956,7 +19976,7 @@ function openTopGamesJkInfo() {
         <article><b>Dungeon.KL</b><p>Beim Öffnen einer Dungeon-Kiste: ca. 0,01 % für 100 JK/Coin. Besiegte Dungeon-Bosse geben zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
-        <article><b>Chamber.KL</b><p>Chamber.KL ist ein 2–4-Spieler-Risikospiel. JK/Coin dient dort ausschließlich für kosmetische Shotgun-Designs ohne Spielvorteil.</p></article>
+        <article><b>Chamber.KL</b><p>Chamber.KL ist ein 1–4-Spieler-Risikospiel mit Online-Tischen, Bots, Chamber-Level und eigenem Cosmetic-Inventar. JK/Coin dient ausschließlich für Premium-Cosmetics ohne Spielvorteil.</p></article>
         <article><b>Escape.KL</b><p>Escape.KL besitzt seine eigenen Wins-/Speed-Systeme und optionale JK/Coin-Inhalte.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
@@ -19980,7 +20000,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card dungeon" data-open-dungeon-kl><b>Dungeon.KL</b><small>Solo- und Gruppen-Dungeons mit Tank, DD, Heiler, Bossen, Beute, Händler und Auktionshaus.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
-        <button class="topgames-card chamber" data-open-chamber-kl><b>Chamber.KL</b><small>2–4 Spieler · verdeckte Kammer · Items · Risiko · Online-Tisch.</small></button>
+        <button class="topgames-card chamber" data-open-chamber-kl><b>Chamber.KL</b><small>1–4 Sitze · 3D-Tisch · Bots · Chamber-Coins · Items · Online.</small></button>
         <button class="topgames-card escape" data-open-escape-kl><b>Escape.KL</b><small>Speed-Obby mit mehreren Welten, Wins, Rebirth, Pets und Race.</small></button>
       </div>
     </div>`;

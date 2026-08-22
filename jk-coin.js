@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "2026-08-22-jkcoin-v521-chamber-kl-shop";
+  const VERSION = "2026-08-22-jkcoin-v522-chamber-kl-v2-armory";
   const PURCHASE_COLLECTION = "jkCoinPurchaseRequests";
   const GRANT_COLLECTION = "jkCoinGrants";
   const HYPE_COLLECTION = "jkHypeLeaderboard";
@@ -286,11 +286,22 @@
     { game:"escape", id:"escape-demon-galaxy", name:"Dämon Galaxy-Upgrade", cost:1000, text:"Galaxy-Upgrade für die Dämonenverwandlung auf +2,5 % Speed und +2,5 % Wins.", grant:{kind:"character:demon-galaxy",amount:1} },
     { game:"escape", id:"escape-power-boost", name:"+50 % Power · 15 Min.", cost:180, text:"Temporärer +50-%-Bonus auf Lauf- und Laufband-Power in Escape.kl.", grant:{kind:"speedBoost:2",amount:1} },
 
-    { game:"chamber", id:"chamber-carbon", name:"Carbon Shotgun", cost:200, text:"Dunkles Carbon-Design für deine Chamber.KL-Shotgun. Rein kosmetisch.", grant:{kind:"skin:carbon",amount:1} },
-    { game:"chamber", id:"chamber-redline", name:"Redline Shotgun", cost:200, text:"Rot-schwarzes Redline-Design für Chamber.KL. Rein kosmetisch.", grant:{kind:"skin:redline",amount:1} },
-    { game:"chamber", id:"chamber-galaxy", name:"Galaxy Shotgun", cost:350, text:"Kosmisches Galaxy-Design mit violett-türkisem Glow. Rein kosmetisch.", grant:{kind:"skin:galaxy",amount:1} },
-    { game:"chamber", id:"chamber-gold", name:"Gold Shotgun", cost:500, text:"Goldenes Premium-Design für Chamber.KL. Rein kosmetisch.", grant:{kind:"skin:gold",amount:1} },
-    { game:"chamber", id:"chamber-crystal", name:"Crystal Shotgun", cost:650, text:"Kristall-Design mit hellem Cyan-Glow für Chamber.KL. Rein kosmetisch.", grant:{kind:"skin:crystal",amount:1} },
+    { game:"chamber", id:"chamber-carbon", name:"Carbon Shotgun", cost:200, text:"Dunkles Carbon-Design für deine Chamber.KL-Shotgun. Rein kosmetisch.", grant:{kind:"shotgun:carbon",amount:1} },
+    { game:"chamber", id:"chamber-redline", name:"Redline Shotgun", cost:200, text:"Rot-schwarzes Redline-Design für Chamber.KL. Rein kosmetisch.", grant:{kind:"shotgun:redline",amount:1} },
+    { game:"chamber", id:"chamber-galaxy", name:"Galaxy Shotgun", cost:350, text:"Kosmisches Galaxy-Design mit violett-türkisem Glow. Rein kosmetisch.", grant:{kind:"shotgun:galaxy",amount:1} },
+    { game:"chamber", id:"chamber-gold", name:"Gold Shotgun", cost:500, text:"Goldenes Premium-Design für Chamber.KL. Rein kosmetisch.", grant:{kind:"shotgun:gold",amount:1} },
+    { game:"chamber", id:"chamber-crystal", name:"Crystal Shotgun", cost:650, text:"Kristall-Design mit hellem Cyan-Glow für Chamber.KL. Rein kosmetisch.", grant:{kind:"shotgun:crystal",amount:1} },
+    { game:"chamber", id:"chamber-obsidian", name:"Obsidian Core Shotgun", cost:800, text:"Schwarz-violette Premium-Shotgun mit leuchtendem Kern. Rein kosmetisch.", grant:{kind:"shotgun:obsidian",amount:1} },
+    { game:"chamber", id:"chamber-inferno", name:"Inferno Shotgun", cost:900, text:"Glühendes Inferno-Finish für die Chamber.KL-Shotgun. Rein kosmetisch.", grant:{kind:"shotgun:inferno",amount:1} },
+    { game:"chamber", id:"chamber-live-plasma", name:"Plasma Live Shells", cost:180, text:"Premium-Skin für scharfe Patronen mit Plasma-Farben.", grant:{kind:"shellLive:plasma",amount:1} },
+    { game:"chamber", id:"chamber-live-royal", name:"Royal Live Shells", cost:240, text:"Violett-goldene Premium-Hülsen für scharfe Patronen.", grant:{kind:"shellLive:royal",amount:1} },
+    { game:"chamber", id:"chamber-live-void", name:"Void Live Shells", cost:320, text:"Fast schwarze scharfe Patronen mit violettem Metallrand.", grant:{kind:"shellLive:void",amount:1} },
+    { game:"chamber", id:"chamber-blank-neon", name:"Neon Blank Shells", cost:180, text:"Cyan leuchtende Premium-Hülsen für leere Patronen.", grant:{kind:"shellBlank:neon",amount:1} },
+    { game:"chamber", id:"chamber-blank-eclipse", name:"Eclipse Blank Shells", cost:240, text:"Dunkel-violette Premium-Hülsen für leere Patronen.", grant:{kind:"shellBlank:eclipse",amount:1} },
+    { game:"chamber", id:"chamber-blank-phantom", name:"Phantom Blank Shells", cost:320, text:"Helles Phantom-Finish für leere Patronen.", grant:{kind:"shellBlank:phantom",amount:1} },
+    { game:"chamber", id:"chamber-items-holo", name:"Hologram Item Set", cost:280, text:"Alle Chamber-Special-Items erhalten das Hologramm-Design.", grant:{kind:"itemSet:holo",amount:1} },
+    { game:"chamber", id:"chamber-items-royal", name:"Royal Vault Item Set", cost:420, text:"Goldenes Royal-Vault-Design für alle Special Items.", grant:{kind:"itemSet:royal",amount:1} },
+    { game:"chamber", id:"chamber-items-singularity", name:"Singularity Item Set", cost:650, text:"Violett leuchtendes Singularity-Design für alle Special Items.", grant:{kind:"itemSet:singularity",amount:1} },
 
     { game:"weed", id:"weed-grow", name:"Galaxy-Growlicht", cost:250, text:"Exklusives Growlicht für das Weed-Business.", grant:{kind:"growLight",amount:1} },
     { game:"weed", id:"weed-grow-5", name:"5 Galaxy-Growlichter", cost:950, text:"Großes Growlicht-Paket für mehrere Plätze.", grant:{kind:"growLight",amount:5} },
