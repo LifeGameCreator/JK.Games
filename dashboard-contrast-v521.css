@@ -1,0 +1,132 @@
+/* JK.Games V521 · Dashboard contrast / washed-out UI fix
+   Only visual contrast changes. No dimensions, grids, positions or interaction logic. */
+
+/* Scope the stronger palette to the normal JK.Games main screen only. */
+#gameScreen {
+  --panel: #172a22;
+  --panel-2: #20382d;
+  --line: rgba(255,255,255,.18);
+  --text: #fbfff9;
+  --muted: #c8d2ca;
+  --accent: #70e6ac;
+  --gold: #f2d477;
+  --blue: #91c3ff;
+  color: var(--text);
+  background: linear-gradient(180deg,#0f1b16 0%,#0b1511 44%,#09110e 100%);
+}
+
+/* Avoid the milky glass look on the two sticky dashboard bars. */
+#gameScreen .topbar {
+  background: rgba(12,23,18,.97);
+  border-bottom-color: rgba(255,255,255,.16);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+#gameScreen .tabs {
+  background: rgba(11,21,17,.98);
+}
+
+/* Main dashboard cards: more opaque surfaces + clearer separation. */
+#gameScreen .portrait,
+#gameScreen .meter,
+#gameScreen .mini-stat,
+#gameScreen .home-shortcut,
+#gameScreen .dashboard-shortcut,
+#gameScreen .compact-money-card,
+#gameScreen .compact-work-card {
+  background-color: #172820;
+  border-color: rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 7px 18px rgba(0,0,0,.18);
+}
+
+#gameScreen .portrait {
+  border-color: rgba(242,212,119,.28);
+}
+
+#gameScreen .portrait-job,
+#gameScreen .portrait-debt,
+#gameScreen .portrait-badge,
+#gameScreen .health-panel.mini {
+  background: rgba(5,14,10,.91);
+  border-color: rgba(255,255,255,.14);
+}
+
+/* Text was the biggest source of the washed-out impression. */
+#gameScreen .meter,
+#gameScreen .meter > span,
+#gameScreen .mini-stat span,
+#gameScreen .portrait-job span,
+#gameScreen .portrait-debt span,
+#gameScreen .portrait-badge small,
+#gameScreen .phone-shortcut span,
+#gameScreen .health-label span,
+#gameScreen .action-card p,
+#gameScreen .item-card p,
+#gameScreen .skill-card p,
+#gameScreen .bank-card p {
+  color: #cbd6ce;
+}
+
+#gameScreen .portrait-job strong,
+#gameScreen .health-label b,
+#gameScreen .topbar,
+#gameScreen .action-card h3,
+#gameScreen .item-card h3,
+#gameScreen .skill-card h3 {
+  color: #fbfff9;
+}
+
+#gameScreen .mini-stat strong,
+#gameScreen .portrait-badge b,
+#gameScreen .portrait-debt strong {
+  color: #f4d979;
+  text-shadow: 0 0 10px rgba(244,217,121,.10);
+}
+
+/* Phone panel was especially grey/blue and low contrast in the screenshot. */
+#gameScreen .phone-shortcut {
+  background:
+    radial-gradient(circle at 50% 16%,rgba(126,190,255,.25),transparent 34%),
+    linear-gradient(180deg,#1b302a 0%,#0e1c17 100%);
+  border-color: rgba(145,195,255,.34);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 8px 20px rgba(0,0,0,.2);
+}
+#gameScreen .phone-shortcut b { color:#a8d0ff; }
+
+/* Tabs stay exactly where they are; only idle contrast is raised. */
+#gameScreen .tabs button:not(.active) {
+  background: #182922;
+  color: #d5ddd7;
+  border-color: rgba(255,255,255,.14);
+}
+
+/* Content cards below Today/Work. */
+#gameScreen .action-card,
+#gameScreen .item-card,
+#gameScreen .skill-card,
+#gameScreen .bank-card {
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.055),rgba(0,0,0,.025)),
+    #172820;
+  border-color: rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04),0 10px 24px rgba(0,0,0,.20);
+}
+
+/* Health/status bars stay crisp instead of grey. */
+#gameScreen progress {
+  filter: none !important;
+  opacity: 1 !important;
+}
+#gameScreen .health-bar {
+  background: rgba(255,255,255,.13);
+  border-color: rgba(255,255,255,.16);
+}
+
+/* Ultra graphics may enhance avatar art, but must never wash out dashboard UI. */
+body.gfx-ultra #gameScreen,
+body.gfx-diamond #gameScreen,
+body.gfx-high #gameScreen,
+body.gfx-medium #gameScreen {
+  opacity: 1 !important;
+  filter: none !important;
+}
