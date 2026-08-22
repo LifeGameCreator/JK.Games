@@ -479,7 +479,7 @@
     return {shotgunSkin:active.shotgunSkin||"standard",sawedSkin:active.sawedSkin||"standard",sawedActive,liveShellSkin:active.liveShellSkin||"standard",blankShellSkin:active.blankShellSkin||"standard",itemSkins:own.itemSkins||{},itemSkin:own.itemSkin||"standard",tableSkin:host.tableSkin||"standard",crateSkin:host.crateSkin||"standard"};
   }
   function mountScene(room,mode="game"){
-    const host=UI.shell?.querySelector("[data-chkl-scene]");if(!host)return;const api=window.ChamberKLScene;if(!api?.mount)return;try{api.mount(host,{room,mode,ownUid:ownUid(),cosmetics:sceneCosmetics(room),crateRevealStep:UI.crateRevealStep,onCrateTap:revealNextCrateItem,onSelectTarget:(uid)=>{if(UI.room?.status==="playing"&&UI.room.activeUid===ownUid()&&Number(UI.room.hp?.[uid]||0)>0){UI.selectedTarget=uid;renderGame();}}});UI.sceneMounted=true;}catch(error){console.warn("Chamber.KL 3D",error);}}
+    const host=UI.shell?.querySelector("[data-chkl-scene]");if(!host)return;const api=window.ChamberKLScene;if(!api?.mount)return;try{api.mount(host,{room,mode,ownUid:ownUid(),selectedTarget:UI.selectedTarget,cosmetics:sceneCosmetics(room),crateRevealStep:UI.crateRevealStep,onCrateTap:revealNextCrateItem,onSelectTarget:(uid)=>{if(UI.room?.status==="playing"&&UI.room.activeUid===ownUid()&&Number(UI.room.hp?.[uid]||0)>0){UI.selectedTarget=uid;renderGame();}}});UI.sceneMounted=true;}catch(error){console.warn("Chamber.KL 3D",error);}}
   function renderLobby(){
     const room=UI.room;if(!room||!UI.shell)return;UI.view="lobby";destroyScene();
     const botCount=(room.playerUids||[]).filter(isBotUid).length;
