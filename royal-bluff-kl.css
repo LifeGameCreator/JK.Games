@@ -46,3 +46,10 @@
 @media(max-width:680px){
   .rbkl-mode-picker{padding:12px}.rbkl-mode-picker>header{display:block}.rbkl-mode-picker>header h2{font-size:20px;margin-top:3px}.rbkl-mode-picker button{min-height:78px;padding:10px}.rbkl-deck-center{top:34%;gap:18px;transform:translate(-50%,-50%) scale(.78)}.rbkl-pile{top:62%;width:78%;height:124px;gap:3px;overflow:hidden}.rbkl-pile-play{width:75px;flex-basis:75px;height:114px;padding:5px}.rbkl-pile-label b{font-size:8px}.rbkl-pile-label span{font-size:6.5px}.rbkl-pile-cards{transform:scale(.82);transform-origin:top center}.rbkl-player{width:166px}.rbkl-opponent-hand{height:40px}.rbkl-opponent-hand .rbkl-card{transform:scale(.45);--deal-end-scale:.45;margin-left:-33px}.seat-bottom{bottom:-39px}.seat-top{top:-31px}.seat-left{left:-61px}.seat-right{right:-61px}.rbkl-action-buttons{grid-template-columns:1fr}.rbkl-action-buttons button.expose{grid-column:auto}.rbkl-revolver-spin{grid-template-columns:68px 1fr;padding:6px}.rbkl-revolver-wheel{width:58px;height:58px;border-width:6px}.rbkl-revolver-wheel i{transform:rotate(calc(var(--c) * 60deg)) translateY(-19px);width:10px;height:10px;margin:-5px}
 }
+
+/* Royal Bluff.KL V4 · Royal Wins economy */
+.rbkl-inline-wins{display:inline-flex;align-items:center;gap:6px;margin:2px 0 7px;padding:6px 10px;border:1px solid #e2c66f38;border-radius:999px;background:#b08d2320;color:#f2d477;font-size:12px;letter-spacing:.06em}
+.rbkl-win-info{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:18px 0 4px;padding:12px 14px;border:1px solid #ffffff12;border-radius:16px;background:#0d1010;color:#aeb4af;font-size:11px}.rbkl-win-info b{color:#f1d171;letter-spacing:.12em}.rbkl-win-info span{padding-left:12px;border-left:1px solid #ffffff14}
+.rbkl-buy-options{display:grid;gap:7px;min-width:112px}.rbkl-buy-options button{width:100%}.rbkl-buy-options button.coin{background:#202726;color:#dce3df;border:1px solid #ffffff18}
+.rbkl-shop-item>button[disabled]{opacity:.62;cursor:default}
+@media(max-width:680px){.rbkl-buy-options{grid-column:1/-1;width:100%}.rbkl-win-info{align-items:flex-start;flex-direction:column}.rbkl-win-info span{padding-left:0;border-left:0}}

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260823-royal-bluff-v3-bonus-last-card";
+  const VERSION = "20260823-royal-bluff-v4-wins-seven-swap";
   const COLLECTION = "royalBluffKlRooms";
   const MAX_PLAYERS = 4;
   const MAX_CARDS_TOTAL = 5;
@@ -20,7 +20,7 @@
   const GAME_MODES = Object.freeze({
     normal: { id: "normal", short: "NORMAL", name: "ROYAL BLUFF", desc: "Das klassische Bluff-Spiel ohne Bonuskarten.", bonus5: false, bonus7: false },
     one: { id: "one", short: "ONE BONUS", name: "ROYAL BLUFF · ONE BONUS", desc: "Eine offene 5 kann den aktuellen Table sofort wechseln.", bonus5: true, bonus7: false },
-    two: { id: "two", short: "TWO BONUS", name: "ROYAL BLUFF · TWO BONUS", desc: "Die offene 5 wechselt den Table; die offene 7 tauscht deine restliche Hand.", bonus5: true, bonus7: true }
+    two: { id: "two", short: "TWO BONUS", name: "ROYAL BLUFF · TWO BONUS", desc: "Die offene 5 wechselt den Table; zwei offene 7er tauschen deine komplette aktuelle Hand inklusive der 7.", bonus5: true, bonus7: true }
   });
   const RISK_BY_LIVES = Object.freeze({ 6: .01, 5: .05, 4: .15, 3: .25, 2: .50, 1: 1 });
   const BOT_LEVELS = Object.freeze({
@@ -29,18 +29,18 @@
     hard: { id: "hard", name: "Schwer", challenge: .62, hiddenChallenge: .28, bluff: .23, hiddenBluff: .14, think: 620 }
   });
   const CARD_SKINS = Object.freeze([
-    { id: "bronze", name: "Bronze", price: 0, desc: "Warme Kupferprägung." },
-    { id: "silver", name: "Silber", price: 0, desc: "Kühle Metallkante." },
-    { id: "gold", name: "Gold", price: 0, desc: "Royal-Gold mit schwarzem Kern." },
-    { id: "diamond", name: "Diamant", price: 0, desc: "Kristalloptik mit Eisglanz." },
-    { id: "platinum", name: "Platin", price: 150, desc: "Animierter Premium-Rand für JK/Coin." }
+    { id: "bronze", name: "Bronze", winsPrice: 0, coinPrice: 0, desc: "Warme Kupferprägung · Startdesign." },
+    { id: "silver", name: "Silber", winsPrice: 5, coinPrice: 0, desc: "Kühle Metallkante." },
+    { id: "gold", name: "Gold", winsPrice: 15, coinPrice: 0, desc: "Royal-Gold mit schwarzem Kern." },
+    { id: "diamond", name: "Diamant", winsPrice: 30, coinPrice: 0, desc: "Kristalloptik mit Eisglanz." },
+    { id: "platinum", name: "Platin", winsPrice: 50, coinPrice: 150, desc: "Animierter Premium-Rand · mit Wins oder JK/Coin kaufbar." }
   ]);
   const TABLE_SKINS = Object.freeze([
-    { id: "velvet", name: "Black Velvet", price: 0, desc: "Dunkler klassischer Bluff-Tisch." },
-    { id: "oak", name: "Royal Oak", price: 0, desc: "Dunkles Holz mit grünem Filz." },
-    { id: "silver", name: "Silver Hall", price: 0, desc: "Kühles Metall und anthrazitfarbener Filz." },
-    { id: "diamond", name: "Diamond Night", price: 0, desc: "Blaues Licht auf schwarzem Filz." },
-    { id: "platinum", name: "Platinum Vault", price: 250, desc: "Premium-Tisch mit wanderndem Platinlicht." }
+    { id: "velvet", name: "Black Velvet", winsPrice: 0, coinPrice: 0, desc: "Dunkler klassischer Bluff-Tisch · Startdesign." },
+    { id: "oak", name: "Royal Oak", winsPrice: 5, coinPrice: 0, desc: "Dunkles Holz mit grünem Filz." },
+    { id: "silver", name: "Silver Hall", winsPrice: 15, coinPrice: 0, desc: "Kühles Metall und anthrazitfarbener Filz." },
+    { id: "diamond", name: "Diamond Night", winsPrice: 30, coinPrice: 0, desc: "Blaues Licht auf schwarzem Filz." },
+    { id: "platinum", name: "Platinum Vault", winsPrice: 50, coinPrice: 250, desc: "Premium-Tisch · mit Wins oder JK/Coin kaufbar." }
   ]);
 
   let overlay = null;
@@ -74,18 +74,36 @@
 
   function cosmeticState() {
     const root = appState();
-    if (!root) return { cardSkin: "bronze", tableSkin: "velvet", ownedCardSkins: ["bronze", "silver", "gold", "diamond"], ownedTableSkins: ["velvet", "oak", "silver", "diamond"], stats: {} };
+    if (!root) return { cardSkin: "bronze", tableSkin: "velvet", ownedCardSkins: ["bronze"], ownedTableSkins: ["velvet"], wins: 0, stats: {} };
     root.royalBluffKl ||= {};
     const data = root.royalBluffKl;
-    data.ownedCardSkins = Array.isArray(data.ownedCardSkins) ? data.ownedCardSkins : ["bronze", "silver", "gold", "diamond"];
-    data.ownedTableSkins = Array.isArray(data.ownedTableSkins) ? data.ownedTableSkins : ["velvet", "oak", "silver", "diamond"];
-    ["bronze", "silver", "gold", "diamond"].forEach((id) => { if (!data.ownedCardSkins.includes(id)) data.ownedCardSkins.push(id); });
-    ["velvet", "oak", "silver", "diamond"].forEach((id) => { if (!data.ownedTableSkins.includes(id)) data.ownedTableSkins.push(id); });
+    data.stats ||= {};
+
+    // V4-Wins-Shop: Frühere Versionen schalteten Silber/Gold/Diamant kostenlos frei.
+    // Beim einmaligen Wechsel auf die Wins-Ökonomie werden diese Gratis-Freischaltungen
+    // zurückgesetzt. Bereits mit JK/Coin gekauftes Platin bleibt selbstverständlich erhalten.
+    if (Number(data.shopEconomyVersion || 0) < 2) {
+      const oldCards = Array.isArray(data.ownedCardSkins) ? data.ownedCardSkins : [];
+      const oldTables = Array.isArray(data.ownedTableSkins) ? data.ownedTableSkins : [];
+      const keepCardPlatinum = oldCards.includes("platinum");
+      const keepTablePlatinum = oldTables.includes("platinum");
+      data.ownedCardSkins = ["bronze", ...(keepCardPlatinum ? ["platinum"] : [])];
+      data.ownedTableSkins = ["velvet", ...(keepTablePlatinum ? ["platinum"] : [])];
+      data.cardSkin = keepCardPlatinum && data.cardSkin === "platinum" ? "platinum" : "bronze";
+      data.tableSkin = keepTablePlatinum && data.tableSkin === "platinum" ? "platinum" : "velvet";
+      data.shopEconomyVersion = 2;
+    }
+
+    data.ownedCardSkins = Array.isArray(data.ownedCardSkins) ? data.ownedCardSkins : ["bronze"];
+    data.ownedTableSkins = Array.isArray(data.ownedTableSkins) ? data.ownedTableSkins : ["velvet"];
+    if (!data.ownedCardSkins.includes("bronze")) data.ownedCardSkins.unshift("bronze");
+    if (!data.ownedTableSkins.includes("velvet")) data.ownedTableSkins.unshift("velvet");
     data.cardSkin = data.ownedCardSkins.includes(data.cardSkin) ? data.cardSkin : "bronze";
     data.tableSkin = data.ownedTableSkins.includes(data.tableSkin) ? data.tableSkin : "velvet";
-    data.stats ||= {};
+    data.wins = Math.max(0, Math.floor(Number(data.wins) || 0));
     data.stats.matches = Math.max(0, Number(data.stats.matches) || 0);
-    data.stats.wins = Math.max(0, Number(data.stats.wins) || 0);
+    data.stats.matchWins = Math.max(0, Number(data.stats.matchWins ?? data.stats.wins) || 0);
+    data.stats.wins = data.stats.matchWins; // Legacy-Anzeige kompatibel halten.
     data.stats.exposes = Math.max(0, Number(data.stats.exposes) || 0);
     data.stats.jokerSaves = Math.max(0, Number(data.stats.jokerSaves) || 0);
     return data;
@@ -190,7 +208,9 @@
     for (let i = 0; i < 3; i += 1) deck.push({ id: `JK-${i}-${randomId("c")}`, rank: "JK", suit: "★", joker: true, special: "" });
     const mode = modeConfig(modeId);
     if (mode.bonus5) deck.push({ id: `B5-${randomId("c")}`, rank: "5", suit: "✦", joker: false, special: "tableShift" });
-    if (mode.bonus7) deck.push({ id: `B7-${randomId("c")}`, rank: "7", suit: "↻", joker: false, special: "handSwap" });
+    if (mode.bonus7) {
+      for (let i = 0; i < 2; i += 1) deck.push({ id: `B7-${i}-${randomId("c")}`, rank: "7", suit: "↻", joker: false, special: "handSwap" });
+    }
     return deck;
   }
 
@@ -507,15 +527,21 @@
       throw new Error("Wähle die Bonuskarte 5.");
     }
 
-    // Sonderregel V3: Ist die offene 5 die letzte Handkarte, gewinnt der Spieler sofort.
-    // Eine eventuell separat liegende persönliche verdeckte Karte ändert daran nichts:
-    // Entscheidend ist, dass nach dem Ausspielen der 5 keine Handkarte mehr übrig ist.
+    // ROYAL FIVE: Ist die offene 5 die letzte Handkarte, gewinnt der Spieler sofort.
+    // Danach muss jeder andere noch lebende Spieler genau EINMAL am Royal Revolver drehen.
+    // Eine separat liegende persönliche verdeckte Karte verhindert den Royal-Five-Sieg nicht.
     if (player.hand.length === 0) {
       state.pile.push({ id: randomId("bonus5win"), actorIndex, count: 1, kind: "bonus5", openRank: "5", instantWin: true, fromRank: state.tableRank, toRank: state.tableRank });
       state.pile = state.pile.slice(-22);
       state.lastPlay = null;
+      const risks = [];
+      state.players.forEach((other, index) => {
+        if (index !== actorIndex && other && !other.eliminated) risks.push(applyRisk(state, index, 1, "Royal Five · Verlierer-Dreh"));
+      });
       state.lastResolution = {
-        id: randomId("res"), type: "bonus5-win", title: "ROYAL FIVE", text: `${player.name} legt die 5 als letzte Handkarte und gewinnt sofort.`, actorIndex, at: Date.now()
+        id: randomId("res"), type: "bonus5-win", title: "ROYAL FIVE",
+        text: `${player.name} hält die 5 bis zur letzten Handkarte und gewinnt sofort. Alle anderen drehen einmal am Royal Revolver.`,
+        actorIndex, risks, rewards: [], revealed: [card], hiddenRevealed: null, at: Date.now()
       };
       finishMatch(state, actorIndex, `${player.name} legt die 5 als letzte Handkarte – ROYAL FIVE. Sofortiger Sieg!`);
       return;
@@ -546,26 +572,26 @@
       throw new Error("Wähle die Bonuskarte 7.");
     }
     const returned = player.hand.splice(0);
-    state.deck = shuffle([...(state.deck || []), ...returned]);
 
-    // Normal: 7 ablegen, Resthand zurückmischen und dieselbe Anzahl neu ziehen.
-    // Sonderfall: War die 7 die letzte Handkarte, gibt sie keinen Sieg. Stattdessen
-    // zieht der Spieler genau EINE neue Karte und bleibt im Match.
-    const targetCount = returned.length === 0
-      ? 1
-      : Math.max(0, Math.min(returned.length, MAX_CARDS_TOTAL - 1 - (player.hidden ? 1 : 0)));
+    // V4: Die 7 tauscht die KOMPLETTE aktuelle Hand und wird selbst mit eingemischt.
+    // Beispiel: 5 Handkarten inklusive 7 -> alle 5 zurück ins Deck -> 5 neue Karten.
+    // Ist die 7 die einzige Handkarte, wird auch sie zurückgemischt und genau 1 neue gezogen.
+    const allReturned = [card, ...returned];
+    state.deck = shuffle([...(state.deck || []), ...allReturned]);
+    const capacity = Math.max(0, MAX_CARDS_TOTAL - (player.hidden ? 1 : 0));
+    const targetCount = Math.min(allReturned.length, capacity);
     while (player.hand.length < targetCount && state.deck.length) player.hand.push(state.deck.shift());
     state.deckCount = state.deck.length;
-    state.pile.push({ id: randomId("bonus7"), actorIndex, count: 1, kind: "bonus7", openRank: "7", swapped: returned.length, drawn: player.hand.length, lastCardRescue: returned.length === 0 });
+    state.pile.push({ id: randomId("bonus7"), actorIndex, count: 1, kind: "bonus7", openRank: "7", swapped: allReturned.length, drawn: player.hand.length, lastCardRescue: allReturned.length === 1 });
     state.pile = state.pile.slice(-22);
     state.lastPlay = null;
-    if (returned.length === 0) {
-      addLog(state, `${player.name} spielt die 7 als letzte Handkarte: kein Sieg – 1 neue Karte gezogen.`, "bonus");
+    if (allReturned.length === 1) {
+      addLog(state, `${player.name} spielt die 7 als letzte Handkarte: die 7 wird mit eingemischt und 1 neue Karte gezogen.`, "bonus");
       state.lastResolution = {
-        id: randomId("res"), type: "bonus7-rescue", title: "SEVEN RESCUE", text: `${player.name} hatte nur noch die 7. Die 7 verhindert den Sieg und gibt genau 1 neue Karte.`, actorIndex, at: Date.now()
+        id: randomId("res"), type: "bonus7-rescue", title: "SEVEN RESET", text: `${player.name} hatte nur noch die 7. Sie wird selbst zurückgemischt und durch genau 1 neue Karte ersetzt.`, actorIndex, at: Date.now()
       };
     } else {
-      addLog(state, `${player.name} spielt die 7 offen: ${returned.length} Restkarte${returned.length === 1 ? "" : "n"} zurück ins Deck, ${player.hand.length} neu gezogen.`, "bonus");
+      addLog(state, `${player.name} spielt die 7 offen: komplette Hand inklusive 7 (${allReturned.length} Karten) zurück ins Deck, ${player.hand.length} neue Karten gezogen.`, "bonus");
     }
     advanceTurn(state, actorIndex);
   }
@@ -792,7 +818,7 @@
   }
 
   function modePickerHtml() {
-    return `<section class="rbkl-mode-picker"><header><small>SPIELMODUS</small><h2>Wähle deine Royal-Bluff-Variante</h2></header><div>${Object.values(GAME_MODES).map((mode) => `<button type="button" class="${selectedGameMode === mode.id ? "active" : ""}" data-rbkl-mode="${mode.id}"><b>${esc(mode.name)}</b><span>${esc(mode.desc)}</span><small>${mode.id === "normal" ? "43 KARTEN" : mode.id === "one" ? "44 KARTEN · +5" : "45 KARTEN · +5 · +7"}</small></button>`).join("")}</div></section>`;
+    return `<section class="rbkl-mode-picker"><header><small>SPIELMODUS</small><h2>Wähle deine Royal-Bluff-Variante</h2></header><div>${Object.values(GAME_MODES).map((mode) => `<button type="button" class="${selectedGameMode === mode.id ? "active" : ""}" data-rbkl-mode="${mode.id}"><b>${esc(mode.name)}</b><span>${esc(mode.desc)}</span><small>${mode.id === "normal" ? "43 KARTEN" : mode.id === "one" ? "44 KARTEN · +5" : "46 KARTEN · +5 · +7 · +7"}</small></button>`).join("")}</div></section>`;
   }
 
   function menuHtml() {
@@ -803,7 +829,7 @@
         <article class="rbkl-menu-card primary"><small>SOFORT SPIELEN</small><h2>Gegen Bots</h2><p>1 gegen 1 oder ein voller Tisch mit bis zu vier Spielern.</p><label>Spieler am Tisch<select data-rbkl-player-count>${[2,3,4].map((n) => `<option value="${n}" ${n === selectedPlayers ? "selected" : ""}>${n} Spieler</option>`).join("")}</select></label><label>Bot-Stärke<select data-rbkl-bot-level>${Object.values(BOT_LEVELS).map((d) => `<option value="${d.id}" ${d.id === selectedBotDifficulty ? "selected" : ""}>${d.name}</option>`).join("")}</select></label><button type="button" data-rbkl-start-bots>BOT-MATCH STARTEN</button></article>
         <article class="rbkl-menu-card online"><small>FIREBASE MULTIPLAYER</small><h2>Online</h2><p>Erstelle einen Raum, teile den sechsstelligen Code oder suche einen öffentlichen Tisch. Freie Plätze können Bots übernehmen.</p><button type="button" data-rbkl-online>ONLINE-LOBBY</button></article>
         <article class="rbkl-menu-card rules"><small>SPIELPRINZIP</small><h2>Joker-Bluff</h2><p>Jeder Spieler kann genau eine persönliche Karte verdeckt als „Joker“ deklarieren. Ein falscher Joker kostet beim Expose zwei Risiken.</p><button type="button" class="ghost" data-rbkl-rules>REGELN ANSEHEN</button></article>
-        <article class="rbkl-menu-card shop"><small>JK/COIN · COSMETICS</small><h2>Royal Shop</h2><p>Aktiv: ${esc(CARD_SKINS.find((s) => s.id === cosmetics.cardSkin)?.name || "Bronze")} · ${esc(TABLE_SKINS.find((s) => s.id === cosmetics.tableSkin)?.name || "Black Velvet")}</p><button type="button" class="gold" data-rbkl-shop>DESIGNS ÖFFNEN</button></article>
+        <article class="rbkl-menu-card shop"><small>ROYAL WINS · COSMETICS</small><h2>Royal Shop</h2><p><strong class="rbkl-inline-wins">♛ ${cosmetics.wins} WINS</strong><br>Aktiv: ${esc(CARD_SKINS.find((s) => s.id === cosmetics.cardSkin)?.name || "Bronze")} · ${esc(TABLE_SKINS.find((s) => s.id === cosmetics.tableSkin)?.name || "Black Velvet")}</p><button type="button" class="gold" data-rbkl-shop>DESIGNS ÖFFNEN</button></article>
       </section></div>`;
   }
 
@@ -818,48 +844,74 @@
         <article><b>5 · Normaler Expose</b><p>Zuerst werden ausschließlich die gerade gelegten Table-Karten aufgedeckt. Waren sie korrekt, trägt der Challenger ein Revolver-Risiko. Die persönliche verdeckte Karte des Beschuldigten bleibt komplett geheim und die neue Runde beginnt.</p></article>
         <article><b>6 · Doppel-Bluff</b><p>Waren die Table-Karten falsch, trägt der Lügner zuerst 1 Risiko. Nur dann wird zusätzlich seine persönliche verdeckte Karte geprüft. Kein Joker: +2 Risiken, also bis zu 3 direkt hintereinander. Echter Joker: +1 Leben, maximal 6.</p></article>
         <article><b>7 · Joker direkt exposen</b><p>Eine persönliche verdeckte Karte kann gezielt exposed werden. Ist sie falsch, trägt ihr Besitzer 2 Risiken. Ist sie ein echter Joker, bekommt der Besitzer +1 Leben und der Challenger trägt 1 Risiko.</p></article>
-        <article><b>8 · ONE BONUS · Karte 5</b><p>One Bonus fügt genau eine offene 5 ins Deck ein. Hast du sie, kannst du deinen gesamten Zug dafür verwenden: 5 offen spielen → sofort eine neue Table-Karte aus dem Deck bestimmen → dein Zug endet. <strong>Ist die 5 deine letzte Handkarte, gewinnst du stattdessen sofort das Match.</strong></p></article>
-        <article><b>9 · TWO BONUS · Karte 7</b><p>Two Bonus enthält die 5 und zusätzlich genau eine 7. Spielst du die 7 offen, geht die 7 aus deiner Hand; alle übrigen Handkarten werden zurück ins Deck gemischt und du ziehst dieselbe Resthand neu. Mit fünf Handkarten sind das exakt vier neue Karten. <strong>Ist die 7 deine letzte Handkarte, gewinnst du nicht: Du ziehst genau 1 neue Karte und spielst weiter.</strong> Liegt bereits deine persönliche verdeckte Karte, bleiben maximal fünf Karten insgesamt.</p></article>
+        <article><b>8 · ONE BONUS · Karte 5</b><p>One Bonus fügt genau eine offene 5 ins Deck ein. Hast du sie, kannst du deinen gesamten Zug dafür verwenden: 5 offen spielen → sofort eine neue Table-Karte aus dem Deck bestimmen → dein Zug endet. <strong>Hältst du die 5 bis zu deiner letzten Handkarte, gewinnst du sofort.</strong> Danach muss jeder andere noch lebende Spieler einmal am Royal Revolver drehen.</p></article>
+        <article><b>9 · TWO BONUS · zwei Karten 7</b><p>Two Bonus enthält genau eine 5 und <strong>zwei 7er</strong>. Spielst du eine 7 offen, wird deine <strong>komplette aktuelle Hand inklusive der gespielten 7</strong> zurück ins Deck gemischt und durch gleich viele neue Handkarten ersetzt. Mit fünf Handkarten wechselst du also wirklich alle fünf. Ist die 7 deine letzte Handkarte, wird auch sie eingemischt und du ziehst genau 1 neue Karte. Eine separat liegende verdeckte Karte bleibt liegen und zählt weiter zum 5-Karten-Maximum.</p></article>
         <article><b>10 · Bonuskarte oder Bluff?</b><p>5 und 7 müssen nur für ihren Bonus offen gespielt werden. Du darfst sie stattdessen auch als normale falsche Table-Karte oder als persönliche verdeckte „Joker“-Behauptung benutzen. Dann gilt kein Bonus – dafür kann der Bluff stärker sein.</p></article>
-        <article><b>11 · Royal Revolver</b><p>Die Ausscheidungsgefahr steigt mit verlorenen Leben: 6 Leben = 1 %, 5 = 5 %, 4 = 15 %, 3 = 25 %, 2 = 50 %, 1 = 100 %. Jeder Dreh ist für den ganzen Tisch sichtbar. Grün bedeutet überlebt, Rot bedeutet ausgeschieden.</p></article>
-        <article><b>12 · Rundenende</b><p>Nach einem Expose wird neu gemischt und ausgeteilt. Bleibt deine persönliche verdeckte Karte durch einen korrekten Table-Zug geschützt, wird sie nicht gezeigt. Endet eine Runde natürlich ohne Expose, gibt eine unangetastete verdeckte Karte +1 Leben und verschwindet danach.</p></article>
+        <article><b>11 · Royal Wins & Shop</b><p>Siege geben Royal Wins für Kartendesigns und Tischdesigns. Bot-Sieg: Leicht = 1 Win, Mittel = 5 Wins, Schwer = 10 Wins. Online: 1v1 = 3 Wins, 3 Spieler = 5 Wins, 4 Spieler = 10 Wins. Royal Oak kostet 5 Wins. Platin kann mit Wins oder alternativ mit JK/Coin gekauft werden.</p></article>
+        <article><b>12 · Royal Revolver</b><p>Die Ausscheidungsgefahr steigt mit verlorenen Leben: 6 Leben = 1 %, 5 = 5 %, 4 = 15 %, 3 = 25 %, 2 = 50 %, 1 = 100 %. Jeder Dreh ist für den ganzen Tisch sichtbar. Grün bedeutet überlebt, Rot bedeutet ausgeschieden.</p></article>
+        <article><b>13 · Rundenende</b><p>Nach einem Expose wird neu gemischt und ausgeteilt. Bleibt deine persönliche verdeckte Karte durch einen korrekten Table-Zug geschützt, wird sie nicht gezeigt. Endet eine Runde natürlich ohne Expose, gibt eine unangetastete verdeckte Karte +1 Leben und verschwindet danach.</p></article>
       </div><footer><button type="button" data-rbkl-back>ZURÜCK</button></footer></div>`;
+  }
+
+  function shopPriceHtml(item, owned, active, kind) {
+    if (active) return `<button type="button" disabled>AKTIV</button>`;
+    if (owned) return `<button type="button" data-rbkl-equip-${kind}="${item.id}">AUSRÜSTEN</button>`;
+    if (!item.winsPrice) return `<button type="button" data-rbkl-buy-${kind}="${item.id}" data-currency="wins">KOSTENLOS</button>`;
+    const winButton = `<button type="button" data-rbkl-buy-${kind}="${item.id}" data-currency="wins">${item.winsPrice} WINS</button>`;
+    if (!item.coinPrice) return winButton;
+    return `<div class="rbkl-buy-options">${winButton}<button type="button" class="coin" data-rbkl-buy-${kind}="${item.id}" data-currency="coin">${item.coinPrice} JK/COIN</button></div>`;
   }
 
   function shopHtml() {
     const data = cosmeticState();
-    const balance = window.JKCoinApp?.coinState?.()?.balance ?? 0;
     const cards = CARD_SKINS.map((skin) => {
       const owned = data.ownedCardSkins.includes(skin.id);
       const active = data.cardSkin === skin.id;
-      return `<article class="rbkl-shop-item skin-${skin.id}"><div class="rbkl-shop-preview">${cardHtml({ id: "preview", rank: "K", suit: "♠", joker: false }, { skin: skin.id })}</div><div><small>KARTENDESIGN</small><h3>${esc(skin.name)}</h3><p>${esc(skin.desc)}</p></div><button type="button" data-rbkl-buy-card="${skin.id}" ${active ? "disabled" : ""}>${active ? "AKTIV" : owned ? "AUSRÜSTEN" : `${skin.price} JK/Coin`}</button></article>`;
+      return `<article class="rbkl-shop-item skin-${skin.id}"><div class="rbkl-shop-preview">${cardHtml({ id: "preview", rank: "K", suit: "♠", joker: false }, { skin: skin.id })}</div><div><small>KARTENDESIGN</small><h3>${esc(skin.name)}</h3><p>${esc(skin.desc)}</p></div>${shopPriceHtml(skin, owned, active, "card")}</article>`;
     }).join("");
     const tables = TABLE_SKINS.map((skin) => {
       const owned = data.ownedTableSkins.includes(skin.id);
       const active = data.tableSkin === skin.id;
-      return `<article class="rbkl-shop-item"><div class="rbkl-table-swatch table-${skin.id}"><span>♛</span></div><div><small>TISCHDESIGN</small><h3>${esc(skin.name)}</h3><p>${esc(skin.desc)}</p></div><button type="button" data-rbkl-buy-table="${skin.id}" ${active ? "disabled" : ""}>${active ? "AKTIV" : owned ? "AUSRÜSTEN" : `${skin.price} JK/Coin`}</button></article>`;
+      return `<article class="rbkl-shop-item"><div class="rbkl-table-swatch table-${skin.id}"><span>♛</span></div><div><small>TISCHDESIGN</small><h3>${esc(skin.name)}</h3><p>${esc(skin.desc)}</p></div>${shopPriceHtml(skin, owned, active, "table")}</article>`;
     }).join("");
-    return `<div class="rbkl-shell rbkl-shop"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>ROYAL SHOP</small><h1>Designs</h1></div><strong>${Number(balance).toLocaleString("de-DE")} JK/Coin</strong></header><h2>Kartendesigns</h2><div class="rbkl-shop-grid">${cards}</div><h2>Tischdesigns</h2><div class="rbkl-shop-grid">${tables}</div></div>`;
+    return `<div class="rbkl-shell rbkl-shop"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>ROYAL SHOP</small><h1>Designs</h1></div><strong>♛ ${Number(data.wins).toLocaleString("de-DE")} WINS</strong></header><div class="rbkl-win-info"><b>WINS VERDIENEN</b><span>Bot: Leicht 1 · Mittel 5 · Schwer 10</span><span>Online: 1v1 3 · 3 Spieler 5 · 4 Spieler 10</span></div><h2>Kartendesigns</h2><div class="rbkl-shop-grid">${cards}</div><h2>Tischdesigns</h2><div class="rbkl-shop-grid">${tables}</div></div>`;
   }
 
-  async function buyCosmetic(kind, id) {
+  async function buyCosmetic(kind, id, currency = "wins") {
     const data = cosmeticState();
     const list = kind === "card" ? CARD_SKINS : TABLE_SKINS;
     const ownedKey = kind === "card" ? "ownedCardSkins" : "ownedTableSkins";
     const activeKey = kind === "card" ? "cardSkin" : "tableSkin";
     const item = list.find((entry) => entry.id === id);
     if (!item) return;
+
     if (!data[ownedKey].includes(id)) {
-      if (item.price > 0) {
+      if (currency === "coin") {
+        if (!item.coinPrice) return toast("Dieses Design ist nur mit Royal Wins erhältlich.");
         const coin = window.JKCoinApp;
         if (!coin?.spend) return toast("JK/Coin ist noch nicht geladen.");
         const balance = Number(coin.coinState?.()?.balance || 0);
-        if (balance < item.price) return toast(`Du brauchst ${item.price} JK/Coin.`);
-        if (!window.confirm(`${item.name} für ${item.price} JK/Coin kaufen?`)) return;
-        if (!coin.spend(item.price, `Royal Bluff.KL · ${item.name}`)) return toast("Kauf konnte nicht abgeschlossen werden.");
+        if (balance < item.coinPrice) return toast(`Du brauchst ${item.coinPrice} JK/Coin.`);
+        if (!window.confirm(`${item.name} für ${item.coinPrice} JK/Coin kaufen?`)) return;
+        if (!coin.spend(item.coinPrice, `Royal Bluff.KL · ${item.name}`)) return toast("Kauf konnte nicht abgeschlossen werden.");
+      } else {
+        const price = Math.max(0, Number(item.winsPrice) || 0);
+        if (data.wins < price) return toast(`Du brauchst ${price} Royal Wins. Aktuell: ${data.wins}.`);
+        if (price > 0 && !window.confirm(`${item.name} für ${price} Royal Wins kaufen?`)) return;
+        data.wins = Math.max(0, data.wins - price);
       }
       data[ownedKey].push(id);
     }
+    data[activeKey] = id;
+    persist();
+    renderShop();
+  }
+
+  function equipCosmetic(kind, id) {
+    const data = cosmeticState();
+    const ownedKey = kind === "card" ? "ownedCardSkins" : "ownedTableSkins";
+    const activeKey = kind === "card" ? "cardSkin" : "tableSkin";
+    if (!data[ownedKey].includes(id)) return;
     data[activeKey] = id;
     persist();
     renderShop();
@@ -890,8 +942,10 @@
     ensureOverlay();
     overlay.innerHTML = shopHtml();
     overlay.querySelector("[data-rbkl-back]")?.addEventListener("click", renderMenu);
-    overlay.querySelectorAll("[data-rbkl-buy-card]").forEach((button) => button.addEventListener("click", () => buyCosmetic("card", button.dataset.rbklBuyCard)));
-    overlay.querySelectorAll("[data-rbkl-buy-table]").forEach((button) => button.addEventListener("click", () => buyCosmetic("table", button.dataset.rbklBuyTable)));
+    overlay.querySelectorAll("[data-rbkl-buy-card]").forEach((button) => button.addEventListener("click", () => buyCosmetic("card", button.dataset.rbklBuyCard, button.dataset.currency || "wins")));
+    overlay.querySelectorAll("[data-rbkl-buy-table]").forEach((button) => button.addEventListener("click", () => buyCosmetic("table", button.dataset.rbklBuyTable, button.dataset.currency || "wins")));
+    overlay.querySelectorAll("[data-rbkl-equip-card]").forEach((button) => button.addEventListener("click", () => equipCosmetic("card", button.dataset.rbklEquipCard)));
+    overlay.querySelectorAll("[data-rbkl-equip-table]").forEach((button) => button.addEventListener("click", () => equipCosmetic("table", button.dataset.rbklEquipTable)));
   }
 
   function bindCommon() {
@@ -961,12 +1015,27 @@
     if (node) requestAnimationFrame(() => node.classList.add("show"));
   }
 
+  function royalWinReward(state = game) {
+    if (!state) return 0;
+    if (!state.online) {
+      const diff = state.players.find((player) => player?.bot)?.difficulty || selectedBotDifficulty || "medium";
+      return diff === "easy" ? 1 : diff === "hard" ? 10 : 5;
+    }
+    const seats = clamp(Number(state.players?.length) || 2, 2, 4);
+    return seats >= 4 ? 10 : seats === 3 ? 5 : 3;
+  }
+
   function handleLocalWinOnce() {
     if (!game || game.rewardedMatchId === game.matchId) return;
     game.rewardedMatchId = game.matchId;
     const own = localPlayerIndex();
     if (game.winnerIndex === own) {
-      cosmeticState().stats.wins += 1;
+      const data = cosmeticState();
+      const reward = royalWinReward(game);
+      data.stats.matchWins += 1;
+      data.stats.wins = data.stats.matchWins;
+      data.wins += reward;
+      toast(`SIEG · +${reward} ROYAL WIN${reward === 1 ? "" : "S"}`);
       awardXp(100, "Royal Bluff.KL · Sieg");
       try { window.JKCoinApp?.addFragments?.(8, "Royal Bluff.KL Sieg", `royal-bluff-win:${game.matchId}`); } catch {}
     } else awardXp(25, "Royal Bluff.KL · Match beendet");
