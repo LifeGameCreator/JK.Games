@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260823-royal-bluff-v1";
+  const VERSION = "20260823-royal-bluff-v2-bonus-games";
   const COLLECTION = "royalBluffKlRooms";
   const MAX_PLAYERS = 4;
   const MAX_CARDS_TOTAL = 5;
@@ -17,6 +17,12 @@
   ]);
   const RANK_BY_ID = Object.freeze(Object.fromEntries(RANKS.map((rank) => [rank.id, rank])));
   const SUITS = Object.freeze(["♠", "♥", "♦", "♣"]);
+  const GAME_MODES = Object.freeze({
+    normal: { id: "normal", short: "NORMAL", name: "ROYAL BLUFF", desc: "Das klassische Bluff-Spiel ohne Bonuskarten.", bonus5: false, bonus7: false },
+    one: { id: "one", short: "ONE BONUS", name: "ROYAL BLUFF · ONE BONUS", desc: "Eine offene 5 kann den aktuellen Table sofort wechseln.", bonus5: true, bonus7: false },
+    two: { id: "two", short: "TWO BONUS", name: "ROYAL BLUFF · TWO BONUS", desc: "Die offene 5 wechselt den Table; die offene 7 tauscht deine restliche Hand.", bonus5: true, bonus7: true }
+  });
+  const RISK_BY_LIVES = Object.freeze({ 6: .01, 5: .05, 4: .15, 3: .25, 2: .50, 1: 1 });
   const BOT_LEVELS = Object.freeze({
     easy: { id: "easy", name: "Leicht", challenge: .24, hiddenChallenge: .10, bluff: .42, hiddenBluff: .30, think: 1050 },
     medium: { id: "medium", name: "Mittel", challenge: .42, hiddenChallenge: .18, bluff: .32, hiddenBluff: .22, think: 820 },
@@ -43,6 +49,7 @@
   let selectedCards = new Set();
   let selectedPlayers = 2;
   let selectedBotDifficulty = "medium";
+  let selectedGameMode = "normal";
   let onlineLobby = null;
   let botTimer = 0;
   let pendingTimer = 0;
@@ -169,14 +176,21 @@
     }
   }
 
-  function buildDeck() {
+  function modeConfig(modeId = game?.gameMode || selectedGameMode) {
+    return GAME_MODES[modeId] || GAME_MODES.normal;
+  }
+
+  function buildDeck(modeId = "normal") {
     const deck = [];
     RANKS.forEach((rank) => {
       for (let copy = 0; copy < 2; copy += 1) {
-        SUITS.forEach((suit, suitIndex) => deck.push({ id: `${rank.id}-${copy}-${suitIndex}-${randomId("c")}`, rank: rank.id, suit, joker: false }));
+        SUITS.forEach((suit, suitIndex) => deck.push({ id: `${rank.id}-${copy}-${suitIndex}-${randomId("c")}`, rank: rank.id, suit, joker: false, special: "" }));
       }
     });
-    for (let i = 0; i < 3; i += 1) deck.push({ id: `JK-${i}-${randomId("c")}`, rank: "JK", suit: "★", joker: true });
+    for (let i = 0; i < 3; i += 1) deck.push({ id: `JK-${i}-${randomId("c")}`, rank: "JK", suit: "★", joker: true, special: "" });
+    const mode = modeConfig(modeId);
+    if (mode.bonus5) deck.push({ id: `B5-${randomId("c")}`, rank: "5", suit: "✦", joker: false, special: "tableShift" });
+    if (mode.bonus7) deck.push({ id: `B7-${randomId("c")}`, rank: "7", suit: "↻", joker: false, special: "handSwap" });
     return deck;
   }
 
@@ -189,8 +203,26 @@
     return copy;
   }
 
+  function removeReservedHiddenCards(deck, state) {
+    const working = deck.slice();
+    (state?.players || []).forEach((player) => {
+      const held = player?.hidden?.card;
+      if (!held || player.eliminated) return;
+      const index = working.findIndex((card) => {
+        if (held.joker) return !!card.joker;
+        if (held.special) return card.special === held.special;
+        return !card.joker && !card.special && card.rank === held.rank && card.suit === held.suit;
+      });
+      if (index >= 0) working.splice(index, 1);
+    });
+    return working;
+  }
+
   function rankLabel(card) {
-    return card?.joker ? "JOKER" : (RANK_BY_ID[card?.rank]?.label || "?");
+    if (card?.joker) return "JOKER";
+    if (card?.special === "tableShift") return "5";
+    if (card?.special === "handSwap") return "7";
+    return RANK_BY_ID[card?.rank]?.label || "?";
   }
 
   function cardHtml(card, { back = false, small = false, selectable = false, selected = false, index = 0, deal = false, skin = "bronze" } = {}) {
@@ -206,6 +238,14 @@
     const style = deal ? ` style="--deal-delay:${Math.min(1500, index * 95)}ms"` : "";
     if (back) return `<button type="button" class="${classes.join(" ")}"${attrs}${style} aria-label="Verdeckte Karte"><span class="rbkl-card-back-mark">RB</span><i>ROYAL<br>BLUFF</i></button>`;
     if (card?.joker) return `<button type="button" class="${classes.join(" ")}"${attrs}${style}><span class="rbkl-corner">★</span><strong>JOKER</strong><em>♛</em><span class="rbkl-corner bottom">★</span></button>`;
+    if (card?.special === "tableShift") {
+      classes.push("bonus-card", "bonus-five");
+      return `<button type="button" class="${classes.join(" ")}"${attrs}${style}><span class="rbkl-corner">5<small>✦</small></span><strong>5</strong><em>TABLE</em><span class="rbkl-corner bottom">5<small>✦</small></span></button>`;
+    }
+    if (card?.special === "handSwap") {
+      classes.push("bonus-card", "bonus-seven");
+      return `<button type="button" class="${classes.join(" ")}"${attrs}${style}><span class="rbkl-corner">7<small>↻</small></span><strong>7</strong><em>SWAP</em><span class="rbkl-corner bottom">7<small>↻</small></span></button>`;
+    }
     return `<button type="button" class="${classes.join(" ")}"${attrs}${style}><span class="rbkl-corner">${esc(rankLabel(card))}<small>${esc(card?.suit || "")}</small></span><strong>${esc(rankLabel(card))}</strong><em>${esc(card?.suit || "")}</em><span class="rbkl-corner bottom">${esc(rankLabel(card))}<small>${esc(card?.suit || "")}</small></span></button>`;
   }
 
@@ -230,11 +270,13 @@
   }
 
   function newMatch(players, meta = {}) {
+    const gameMode = GAME_MODES[meta.gameMode] ? meta.gameMode : "normal";
     const state = {
       version: VERSION,
       matchId: randomId("match"),
       online: !!meta.online,
       roomId: meta.roomId || "",
+      gameMode,
       phase: "playing",
       round: 0,
       turn: 0,
@@ -244,6 +286,7 @@
       tableCard: null,
       pile: [],
       lastPlay: null,
+      deck: [],
       deckCount: 0,
       log: [],
       lastResolution: null,
@@ -275,25 +318,30 @@
     state.log = state.log.slice(0, 14);
   }
 
-  function drawTableCard(deck) {
+  function drawTableCard(deck, modeId = game?.gameMode || "normal", excludeRank = "") {
     let tries = 0;
-    let working = deck;
-    while (tries < 12) {
-      if (!working.length) working = shuffle(buildDeck());
+    let working = Array.isArray(deck) ? deck.slice() : [];
+    const isTableMarker = (card) => !!card && !card.joker && !card.special && !!RANK_BY_ID[card.rank] && (!excludeRank || card.rank !== excludeRank);
+    while (tries < 24) {
+      if (!working.length) working = shuffle(buildDeck(modeId));
       const card = working.shift();
-      if (!card?.joker) {
+      if (isTableMarker(card)) {
         const marker = { ...card, id: `table-${card.id}` };
         working.push(card);
         working = shuffle(working);
         return { card: marker, deck: working, reshuffles: tries };
       }
-      working.push(card);
+      if (card) working.push(card);
       working = shuffle(working);
       tries += 1;
     }
-    const fallback = working.findIndex((card) => !card.joker);
-    const [card] = working.splice(Math.max(0, fallback), 1);
-    return { card, deck: working, reshuffles: tries };
+    const fallback = working.findIndex(isTableMarker);
+    if (fallback < 0) throw new Error("Kein gültiger Table-Marker im Deck.");
+    const [card] = working.splice(fallback, 1);
+    const marker = { ...card, id: `table-${card.id}` };
+    working.push(card);
+    working = shuffle(working);
+    return { card: marker, deck: working, reshuffles: tries };
   }
 
   function beginRound(state, { reason = "round", natural = false } = {}) {
@@ -314,12 +362,12 @@
     state.phase = "playing";
     state.pile = [];
     state.lastPlay = null;
-    let deck = shuffle(buildDeck());
-    const table = drawTableCard(deck);
+    let deck = shuffle(removeReservedHiddenCards(buildDeck(state.gameMode), state));
+    const table = drawTableCard(deck, state.gameMode);
     deck = table.deck;
     state.tableCard = table.card;
     state.tableRank = table.card.rank;
-    if (table.reshuffles > 0) addLog(state, `Joker als erste Karte: ${table.reshuffles}× neu gemischt.`, "joker");
+    if (table.reshuffles > 0) addLog(state, `Joker/Bonuskarte als Table-Marker: ${table.reshuffles}× neu gemischt.`, "joker");
 
     state.players.forEach((player) => {
       if (player.eliminated) { player.hand = []; return; }
@@ -328,6 +376,7 @@
       player.hiddenUsedRound = player.hidden ? state.round : 0;
       while (player.hand.length < targetHand && deck.length) player.hand.push(deck.shift());
     });
+    state.deck = deck;
     state.deckCount = deck.length;
     const aliveIndexes = state.players.map((p, i) => !p.eliminated ? i : -1).filter((i) => i >= 0);
     state.activeIndex = aliveIndexes[(state.round - 1) % aliveIndexes.length] ?? aliveIndexes[0] ?? 0;
@@ -364,18 +413,20 @@
     const player = state.players[playerIndex];
     const spins = [];
     for (let i = 0; i < count && player && !player.eliminated; i += 1) {
-      const before = Math.max(1, player.lives);
-      const hit = Math.random() < (1 / before);
+      const before = clamp(Math.round(Number(player.lives) || 1), 1, START_LIVES);
+      const chance = RISK_BY_LIVES[before] ?? 1;
+      const roll = Math.random();
+      const hit = roll < chance;
       if (hit) {
         player.lives = 0;
         player.eliminated = true;
         player.hand = [];
-        spins.push({ before, hit: true });
-        addLog(state, `${player.name}: Risiko ${i + 1}/${count} – ausgeschieden.`, "danger");
+        spins.push({ before, chance, hit: true, roll });
+        addLog(state, `${player.name}: Royal Revolver ${Math.round(chance * 100)} % – ROT. Ausgeschieden.`, "danger");
       } else {
         player.lives = Math.max(1, before - 1);
-        spins.push({ before, hit: false, after: player.lives });
-        addLog(state, `${player.name}: Risiko ${i + 1}/${count} überlebt. ${player.lives} Leben verbleiben.`, "safe");
+        spins.push({ before, chance, hit: false, roll, after: player.lives });
+        addLog(state, `${player.name}: Royal Revolver ${Math.round(chance * 100)} % – GRÜN. ${player.lives} Leben verbleiben.`, "safe");
       }
     }
     return { playerIndex, playerName: player?.name || "", reason, spins };
@@ -437,6 +488,52 @@
     player.hiddenUsedRound = state.round;
     state.lastPlay = null;
     addLog(state, `${player.name} legt eine persönliche Karte verdeckt ab und behauptet: „Joker“.`, "joker");
+    advanceTurn(state, actorIndex);
+  }
+
+  function playBonusFive(state, actorIndex, id) {
+    const mode = modeConfig(state.gameMode);
+    if (!mode.bonus5) throw new Error("Die offene 5 gibt es nur in One Bonus und Two Bonus.");
+    const player = state.players[actorIndex];
+    const cards = removeCardsFromHand(player, [id]);
+    const card = cards[0];
+    if (!card || card.special !== "tableShift") {
+      if (card) player.hand.push(card);
+      throw new Error("Wähle die Bonuskarte 5.");
+    }
+    const previousRank = state.tableRank;
+    const table = drawTableCard(state.deck, state.gameMode, previousRank);
+    state.deck = table.deck;
+    state.deckCount = state.deck.length;
+    state.tableCard = table.card;
+    state.tableRank = table.card.rank;
+    state.pile.push({ id: randomId("bonus5"), actorIndex, count: 1, kind: "bonus5", openRank: "5", fromRank: previousRank, toRank: state.tableRank });
+    state.pile = state.pile.slice(-22);
+    state.lastPlay = null;
+    addLog(state, `${player.name} spielt die 5 offen: ${RANK_BY_ID[previousRank]?.table || previousRank} → ${RANK_BY_ID[state.tableRank]?.table || state.tableRank}.`, "bonus");
+    if (table.reshuffles > 0) addLog(state, `Beim Table-Wechsel wurden ${table.reshuffles} Joker/Bonuskarten übersprungen und neu gemischt.`, "joker");
+    advanceTurn(state, actorIndex);
+  }
+
+  function playBonusSeven(state, actorIndex, id) {
+    const mode = modeConfig(state.gameMode);
+    if (!mode.bonus7) throw new Error("Die offene 7 gibt es nur in Two Bonus.");
+    const player = state.players[actorIndex];
+    const cards = removeCardsFromHand(player, [id]);
+    const card = cards[0];
+    if (!card || card.special !== "handSwap") {
+      if (card) player.hand.push(card);
+      throw new Error("Wähle die Bonuskarte 7.");
+    }
+    const returned = player.hand.splice(0);
+    state.deck = shuffle([...(state.deck || []), ...returned]);
+    const targetCount = Math.max(0, MAX_CARDS_TOTAL - 1 - (player.hidden ? 1 : 0));
+    while (player.hand.length < targetCount && state.deck.length) player.hand.push(state.deck.shift());
+    state.deckCount = state.deck.length;
+    state.pile.push({ id: randomId("bonus7"), actorIndex, count: 1, kind: "bonus7", openRank: "7", swapped: returned.length, drawn: player.hand.length });
+    state.pile = state.pile.slice(-22);
+    state.lastPlay = null;
+    addLog(state, `${player.name} spielt die 7 offen: ${returned.length} Restkarte${returned.length === 1 ? "" : "n"} zurück ins Deck, ${player.hand.length} neu gezogen.`, "bonus");
     advanceTurn(state, actorIndex);
   }
 
@@ -519,6 +616,8 @@
     if (actor.eliminated) throw new Error("Du bist bereits ausgeschieden.");
     if (type === "play") playCards(state, actorIndex, Array.isArray(payload.cardIds) ? payload.cardIds : []);
     else if (type === "hidden") playHidden(state, actorIndex, String(payload.cardId || ""));
+    else if (type === "bonus5") playBonusFive(state, actorIndex, String(payload.cardId || ""));
+    else if (type === "bonus7") playBonusSeven(state, actorIndex, String(payload.cardId || ""));
     else if (type === "challengePlay") challengePlay(state, actorIndex);
     else if (type === "challengeHidden") challengeHidden(state, actorIndex, Number(payload.targetIndex));
     else throw new Error("Unbekannte Aktion.");
@@ -571,15 +670,21 @@
 
   function tablePileHtml() {
     const skin = cosmeticState().cardSkin;
-    if (!game.pile.length) return `<div class="rbkl-empty-pile"><span>♛</span><small>Hier landen die Table-Karten</small></div>`;
-    const cards = [];
-    let idx = 0;
-    game.pile.forEach((play) => {
-      for (let i = 0; i < play.count; i += 1) {
-        cards.push(`<div class="rbkl-pile-card" style="--pile-i:${idx++}">${cardHtml({ id: `pile-${idx}` }, { back: true, small: true, skin })}</div>`);
+    if (!game.pile.length) return `<div class="rbkl-empty-pile"><span>♛</span><small>Hier siehst du jeden gelegten Zug</small></div>`;
+    return game.pile.slice(-5).map((play, groupIndex) => {
+      const actor = game.players[play.actorIndex];
+      if (play.kind === "bonus5") {
+        const card = { id: play.id, rank: "5", suit: "✦", special: "tableShift" };
+        return `<div class="rbkl-pile-play bonus"><div class="rbkl-pile-label"><b>${esc(actor?.name || "Spieler")}</b><span>5 · TABLE WECHSEL</span></div><div class="rbkl-pile-cards open">${cardHtml(card, { small: true, skin })}</div></div>`;
       }
-    });
-    return cards.join("");
+      if (play.kind === "bonus7") {
+        const card = { id: play.id, rank: "7", suit: "↻", special: "handSwap" };
+        return `<div class="rbkl-pile-play bonus"><div class="rbkl-pile-label"><b>${esc(actor?.name || "Spieler")}</b><span>7 · HANDTAUSCH</span></div><div class="rbkl-pile-cards open">${cardHtml(card, { small: true, skin })}</div></div>`;
+      }
+      const count = clamp(Number(play.count) || 0, 1, MAX_PLAY_CARDS);
+      const cards = Array.from({ length: count }, (_, i) => `<div class="rbkl-pile-card" style="--card-i:${i}">${cardHtml({ id: `pile-${play.id}-${i}` }, { back: true, small: true, skin })}</div>`).join("");
+      return `<div class="rbkl-pile-play ${groupIndex === game.pile.slice(-5).length - 1 ? "latest" : ""}"><div class="rbkl-pile-label"><b>${esc(actor?.name || "Spieler")}</b><span>${count} ${count === 1 ? "KARTE" : "KARTEN"}</span></div><div class="rbkl-pile-cards">${cards}</div></div>`;
+    }).join("");
   }
 
   function ownHandHtml() {
@@ -600,14 +705,20 @@
     if (!mine) return `<div class="rbkl-actions waiting"><b>${esc(game.players[game.activeIndex]?.name || "Spieler")} ist dran</b><small>Beobachte den Bluff – deine verdeckte Karte kann weiterhin Ziel eines Expose werden.</small></div>`;
     const canHidden = !own.hidden && own.hiddenUsedRound !== game.round && own.hand.length > 0;
     const canPlay = selectedCards.size >= 1 && selectedCards.size <= MAX_PLAY_CARDS;
+    const selectedCard = selectedCards.size === 1 ? own.hand.find((card) => selectedCards.has(card.id)) : null;
+    const mode = modeConfig(game.gameMode);
+    const canBonus5 = !!(mode.bonus5 && selectedCard?.special === "tableShift");
+    const canBonus7 = !!(mode.bonus7 && selectedCard?.special === "handSwap");
     return `<div class="rbkl-actions">
       <div class="rbkl-turn-badge"><span>DEIN ZUG</span><b>${selectedCards.size ? `${selectedCards.size} ausgewählt` : "Wähle Karten oder expose"}</b></div>
       <div class="rbkl-action-buttons">
         <button type="button" data-rbkl-play ${canPlay ? "" : "disabled"}>${selectedCards.size ? `${selectedCards.size} KARTE${selectedCards.size > 1 ? "N" : ""} LEGEN` : "1–3 KARTEN LEGEN"}</button>
         <button type="button" class="joker" data-rbkl-hidden ${canHidden && selectedCards.size === 1 ? "" : "disabled"}>1 KARTE VERDECKT · „JOKER“</button>
+        ${mode.bonus5 ? `<button type="button" class="bonus five" data-rbkl-bonus-five ${canBonus5 ? "" : "disabled"}>5 OFFEN · TABLE WECHSELN</button>` : ""}
+        ${mode.bonus7 ? `<button type="button" class="bonus seven" data-rbkl-bonus-seven ${canBonus7 ? "" : "disabled"}>7 OFFEN · RESTHAND TAUSCHEN</button>` : ""}
         <button type="button" class="expose" data-rbkl-challenge-play ${game.lastPlay ? "" : "disabled"}>LETZTEN TABLE-ZUG EXPOSEN</button>
       </div>
-      <small>Eine Aktion pro Zug: normale Table-Karten <b>oder</b> eine persönliche verdeckte Karte.</small>
+      <small>Immer genau eine Aktion: Table-Karten, persönlicher verdeckter Bluff oder – im Bonusmodus – eine Bonuskarte offen ausspielen.</small>
     </div>`;
   }
 
@@ -616,10 +727,13 @@
     const skin = cosmeticState().cardSkin;
     const revealCards = (resolution.revealed || []).map((card) => cardHtml(card, { small: true, skin })).join("");
     const hidden = resolution.hiddenRevealed ? `<div class="rbkl-resolution-hidden"><small>VERDECKTE KARTE</small>${cardHtml(resolution.hiddenRevealed, { small: true, skin })}</div>` : "";
-    const risks = (resolution.risks || []).map((risk) => `<div class="rbkl-risk-sequence"><b>${esc(risk.playerName)}</b>${(risk.spins || []).map((spin, i) => `<span class="${spin.hit ? "hit" : "safe"}">${i + 1}. ${spin.hit ? "AUSGESCHIEDEN" : `SAFE · ${spin.after}/6`}</span>`).join("")}</div>`).join("");
-    const lastSpin = (resolution.risks || []).flatMap((risk) => risk.spins || []).slice(-1)[0];
-    const cylinder = risks ? `<div class="rbkl-cylinder ${lastSpin?.hit ? "hit" : "safe"}"><div>${Array.from({ length: 6 }, (_, i) => `<i class="${lastSpin && i >= Number(lastSpin.before || 6) ? "spent" : ""}"></i>`).join("")}</div><b>ROYAL CYLINDER</b><small>${lastSpin?.hit ? "AUSGESCHIEDEN" : "RISIKO ÜBERLEBT"}</small></div>` : "";
-    return `<div class="rbkl-resolution" data-rbkl-resolution="${esc(resolution.id)}"><div class="rbkl-resolution-card"><small>EXPOSE-AUFLÖSUNG</small><h2>${esc(resolution.title || "AUFGELÖST")}</h2><p>${esc(resolution.text || "")}</p>${revealCards ? `<div class="rbkl-reveal-row">${revealCards}</div>` : ""}${hidden}${cylinder}${risks}<button type="button" data-rbkl-resolution-close>WEITER</button></div></div>`;
+    let globalSpin = 0;
+    const revolvers = (resolution.risks || []).map((risk) => `<section class="rbkl-revolver-block"><header><b>${esc(risk.playerName)}</b><small>${esc(risk.reason || "Royal Revolver")}</small></header>${(risk.spins || []).map((spin, i) => {
+      const delay = globalSpin++ * 1.15;
+      const pct = Math.round(Number(spin.chance || 0) * 100);
+      return `<div class="rbkl-revolver-spin ${spin.hit ? "hit" : "safe"}" style="--spin-delay:${delay}s"><div class="rbkl-revolver-wheel">${Array.from({ length: 6 }, (_, chamber) => `<i style="--c:${chamber}"></i>`).join("")}<span>▲</span></div><div><b>${i + 1}. DREHUNG · ${pct}% ROT</b><small>${spin.hit ? "ROT · AUSGESCHIEDEN" : `GRÜN · ÜBERLEBT · ${spin.after}/6 LEBEN`}</small></div></div>`;
+    }).join("")}</section>`).join("");
+    return `<div class="rbkl-resolution" data-rbkl-resolution="${esc(resolution.id)}"><div class="rbkl-resolution-card"><small>EXPOSE-AUFLÖSUNG</small><h2>${esc(resolution.title || "AUFGELÖST")}</h2><p>${esc(resolution.text || "")}</p>${revealCards ? `<div class="rbkl-reveal-row">${revealCards}</div>` : ""}${hidden}${revolvers ? `<div class="rbkl-revolver-stage"><h3>ROYAL REVOLVER</h3><p>Der Zylinder dreht für alle sichtbar. Grün = überlebt, Rot = ausgeschieden.</p>${revolvers}</div>` : ""}<button type="button" data-rbkl-resolution-close>WEITER</button></div></div>`;
   }
 
   function gameHtml() {
@@ -627,12 +741,13 @@
     const table = RANK_BY_ID[game.tableRank] || RANKS[0];
     const ownIndex = localPlayerIndex();
     const winner = game.phase === "finished" ? game.players[game.winnerIndex] : null;
+    const mode = modeConfig(game.gameMode);
     return `<div class="rbkl-game table-${esc(cosmetics.tableSkin)}" data-rbkl-game>
-      <header class="rbkl-game-top"><button type="button" class="rbkl-icon-button" data-rbkl-menu>‹</button><div><small>ROYAL BLUFF.KL · RUNDE ${game.round}</small><h2>${esc(table.table)}</h2></div><div class="rbkl-top-meta"><span>${game.online ? "ONLINE" : "BOTS"}</span><button type="button" class="rbkl-icon-button" data-rbkl-rules>?</button></div></header>
+      <header class="rbkl-game-top"><button type="button" class="rbkl-icon-button" data-rbkl-menu>‹</button><div><small>ROYAL BLUFF.KL · ${esc(mode.short)} · RUNDE ${game.round}</small><h2>${esc(table.table)}</h2></div><div class="rbkl-top-meta"><span>${game.online ? "ONLINE" : "BOTS"}</span><button type="button" class="rbkl-icon-button" data-rbkl-rules>?</button></div></header>
       <main class="rbkl-table-wrap">
         <div class="rbkl-table">
           <div class="rbkl-table-glow"></div>
-          <div class="rbkl-deck-center"><div class="rbkl-deck-stack">${cardHtml({ id: "deck" }, { back: true, small: true, skin: cosmetics.cardSkin })}<span>${game.deckCount}</span></div><div class="rbkl-table-card">${cardHtml(game.tableCard, { small: true, skin: cosmetics.cardSkin })}<b>${esc(table.table)}</b></div></div>
+          <div class="rbkl-deck-center"><div class="rbkl-deck-stack">${cardHtml({ id: "deck" }, { back: true, skin: cosmetics.cardSkin })}<span>${game.deckCount}</span></div><div class="rbkl-table-card">${cardHtml(game.tableCard, { skin: cosmetics.cardSkin })}<b>${esc(table.table)}</b></div></div>
           <div class="rbkl-pile">${tablePileHtml()}</div>
           ${game.players.map(playerSeatHtml).join("")}
           ${winner ? `<div class="rbkl-winner"><small>ROYAL SURVIVOR</small><b>${esc(winner.name)}</b><span>gewinnt das Match</span></div>` : ""}
@@ -643,9 +758,14 @@
     </div>`;
   }
 
+  function modePickerHtml() {
+    return `<section class="rbkl-mode-picker"><header><small>SPIELMODUS</small><h2>Wähle deine Royal-Bluff-Variante</h2></header><div>${Object.values(GAME_MODES).map((mode) => `<button type="button" class="${selectedGameMode === mode.id ? "active" : ""}" data-rbkl-mode="${mode.id}"><b>${esc(mode.name)}</b><span>${esc(mode.desc)}</span><small>${mode.id === "normal" ? "43 KARTEN" : mode.id === "one" ? "44 KARTEN · +5" : "45 KARTEN · +5 · +7"}</small></button>`).join("")}</div></section>`;
+  }
+
   function menuHtml() {
     const cosmetics = cosmeticState();
-    return `<div class="rbkl-shell"><header class="rbkl-hero"><button type="button" class="rbkl-close" data-rbkl-close>×</button><div class="rbkl-logo"><span>♛</span><div><small>JK.GAMES · TOP GAME</small><h1>ROYAL BLUFF.KL</h1><p>Bluff. Expose. Survive.</p></div></div><div class="rbkl-hero-cards"><span>K</span><span>A</span><span>JOKER</span></div></header>
+    return `<div class="rbkl-shell"><header class="rbkl-hero"><button type="button" class="rbkl-close" data-rbkl-close>×</button><div class="rbkl-logo"><span>♛</span><div><small>JK.GAMES · TOP GAME</small><h1>ROYAL BLUFF.KL</h1><p>Bluff. Expose. Survive.</p></div></div><div class="rbkl-hero-cards"><span>K</span><span>5</span><span>7</span></div></header>
+      ${modePickerHtml()}
       <section class="rbkl-menu-grid">
         <article class="rbkl-menu-card primary"><small>SOFORT SPIELEN</small><h2>Gegen Bots</h2><p>1 gegen 1 oder ein voller Tisch mit bis zu vier Spielern.</p><label>Spieler am Tisch<select data-rbkl-player-count>${[2,3,4].map((n) => `<option value="${n}" ${n === selectedPlayers ? "selected" : ""}>${n} Spieler</option>`).join("")}</select></label><label>Bot-Stärke<select data-rbkl-bot-level>${Object.values(BOT_LEVELS).map((d) => `<option value="${d.id}" ${d.id === selectedBotDifficulty ? "selected" : ""}>${d.name}</option>`).join("")}</select></label><button type="button" data-rbkl-start-bots>BOT-MATCH STARTEN</button></article>
         <article class="rbkl-menu-card online"><small>FIREBASE MULTIPLAYER</small><h2>Online</h2><p>Erstelle einen Raum, teile den sechsstelligen Code oder suche einen öffentlichen Tisch. Freie Plätze können Bots übernehmen.</p><button type="button" data-rbkl-online>ONLINE-LOBBY</button></article>
@@ -655,17 +775,22 @@
   }
 
   function rulesHtml() {
-    return `<div class="rbkl-shell rbkl-doc"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>ROYAL BLUFF.KL</small><h1>Regeln</h1></div></header><div class="rbkl-rule-grid">
-      <article><b>1 · Deck & Table</b><p>Das Deck enthält 8 Asse, 8 Könige, 8 Damen, 8 Buben, 8 Zehnen und 3 Joker – nach diesen Kartenwerten also 43 Karten. Zuerst wird gemischt. Die erste offene Nicht-Joker-Karte bestimmt den Table. Ein zuerst gezogener Joker löst sofort ein neues Mischen aus. Die Table-Karte kommt danach zurück in den gemischten Stapel; dadurch bleiben z. B. beim King's Table alle 8 Könige + 3 Joker = maximal 11 gültige Karten verfügbar.</p></article>
-      <article><b>2 · Hand</b><p>Jeder Spieler besitzt maximal fünf Karten insgesamt. Liegt bereits deine persönliche verdeckte Karte vor dir, erhältst du beim neuen Austeilen nur vier Handkarten.</p></article>
-      <article><b>3 · Normaler Zug</b><p>Du legst 1 bis 3 Karten verdeckt in die Mitte und behauptest, dass sie zum aktuellen Table passen. Beim King's Table sind Könige und Joker wahr. Alle anderen Karten sind ein Bluff.</p></article>
-      <article><b>4 · Persönliche verdeckte Karte</b><p>Statt Table-Karten darfst du genau eine Handkarte separat verdeckt vor dir ablegen und behaupten: „Das ist ein Joker.“ Jeder Spieler kann seine eigene solche Karte besitzen, aber niemals zwei gleichzeitig und nur einmal pro Runde.</p></article>
-      <article><b>5 · Normaler Expose</b><p>Beim Expose des letzten Table-Zugs werden ZUERST ausschließlich dessen gerade gelegte Table-Karten aufgedeckt. Sind sie korrekt, trägt der Challenger 1 Risiko und die persönliche verdeckte Karte des Spielers bleibt vollständig geheim.</p></article>
-      <article><b>6 · Doppel-Bluff</b><p>Waren die Table-Karten falsch, trägt der Lügner 1 Risiko. Hat er zusätzlich eine persönliche verdeckte Karte, wird erst jetzt auch diese aufgedeckt. Kein Joker: +2 weitere Risiken, also maximal 3 hintereinander. Echter Joker: +1 Leben bis maximal 6.</p></article>
-      <article><b>7 · Joker direkt exposen</b><p>Die persönliche verdeckte Karte kann in einem späteren eigenen Zug direkt challenged werden. Ist sie kein Joker, trägt ihr Besitzer 2 Risiken. Ist sie ein echter Joker, erhält der Besitzer +1 Leben und der falsche Challenger trägt 1 Risiko.</p></article>
-      <article><b>8 · Risiko-System</b><p>Du startest mit 6 Leben. Beim ersten Risiko beträgt die Ausscheidungsgefahr 1/6. Überlebst du, bleiben 5 Leben und das nächste Risiko liegt bei 1/5. Danach 1/4, 1/3, 1/2 und bei einem Leben 100 %. Ein Joker kann bis maximal 6 auffüllen.</p></article>
-      <article><b>9 · Rundenende</b><p>Nach jedem Expose wird neu gemischt und ausgeteilt. Eine persönliche verdeckte Karte bleibt verborgen, wenn sie durch einen korrekten Table-Zug geschützt wurde. Endet eine Runde dagegen natürlich ohne Expose und die Karte wurde nie geprüft, gibt sie +1 Leben und wird abgelegt.</p></article>
-    </div><footer><button type="button" data-rbkl-back>ZURÜCK</button></footer></div>`;
+    return `<div class="rbkl-shell rbkl-doc"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>ROYAL BLUFF.KL · TUTORIAL</small><h1>Regeln & Bonuskarten</h1></div></header>
+      <section class="rbkl-tutorial-lead"><b>Das Grundspiel bleibt in allen drei Modi gleich.</b><p>Du bluffst Table-Karten, kannst pro Runde eine persönliche Karte verdeckt als „Joker“ behaupten und entscheidest ständig: weiterspielen oder exposen?</p></section>
+      <div class="rbkl-rule-grid">
+        <article><b>1 · Deck & Table</b><p>Normal enthält 43 Karten: je 8 Asse, Könige, Damen, Buben und Zehnen plus 3 Joker. Zu Rundenbeginn wird gemischt und eine gültige Table-Karte aufgedeckt. Joker und Bonuskarten dürfen nie selbst Table-Marker sein; sie werden zurückgemischt, bis K, A, Q, J oder 10 erscheint.</p></article>
+        <article><b>2 · Hand</b><p>Jeder Spieler besitzt maximal fünf Karten insgesamt. Liegt bereits deine persönliche verdeckte Karte vor dir, bekommst du beim Austeilen entsprechend nur vier Handkarten.</p></article>
+        <article><b>3 · Normaler Zug</b><p>Lege 1 bis 3 Karten verdeckt in die Mitte und behaupte, sie passen zum aktuellen Table. Beim King's Table sind nur Könige und Joker wahr. Bonuskarten 5/7 zählen als normale falsche Karte, wenn du sie verdeckt als Table-Karte bluffst.</p></article>
+        <article><b>4 · Persönliche verdeckte Karte</b><p>Statt Table-Karten darf jeder Spieler genau eine eigene Karte separat verdeckt legen und behaupten: „Joker“. Es darf niemals eine zweite gleichzeitig liegen. Diese Karte kann wirklich ein Joker sein – oder jede andere Karte, auch 5 oder 7.</p></article>
+        <article><b>5 · Normaler Expose</b><p>Zuerst werden ausschließlich die gerade gelegten Table-Karten aufgedeckt. Waren sie korrekt, trägt der Challenger ein Revolver-Risiko. Die persönliche verdeckte Karte des Beschuldigten bleibt komplett geheim und die neue Runde beginnt.</p></article>
+        <article><b>6 · Doppel-Bluff</b><p>Waren die Table-Karten falsch, trägt der Lügner zuerst 1 Risiko. Nur dann wird zusätzlich seine persönliche verdeckte Karte geprüft. Kein Joker: +2 Risiken, also bis zu 3 direkt hintereinander. Echter Joker: +1 Leben, maximal 6.</p></article>
+        <article><b>7 · Joker direkt exposen</b><p>Eine persönliche verdeckte Karte kann gezielt exposed werden. Ist sie falsch, trägt ihr Besitzer 2 Risiken. Ist sie ein echter Joker, bekommt der Besitzer +1 Leben und der Challenger trägt 1 Risiko.</p></article>
+        <article><b>8 · ONE BONUS · Karte 5</b><p>One Bonus fügt genau eine offene 5 ins Deck ein. Hast du sie, kannst du deinen gesamten Zug dafür verwenden: 5 offen spielen → sofort eine neue Table-Karte aus dem Deck bestimmen → dein Zug endet. Das Match und die vorhandenen Hände laufen normal weiter.</p></article>
+        <article><b>9 · TWO BONUS · Karte 7</b><p>Two Bonus enthält die 5 und zusätzlich genau eine 7. Spielst du die 7 offen, geht die 7 aus deiner Hand; alle übrigen Handkarten werden zurück ins Deck gemischt und du ziehst dieselbe Resthand neu. Mit fünf Handkarten sind das exakt vier neue Karten. Liegt bereits deine persönliche verdeckte Karte, bleiben maximal fünf Karten insgesamt.</p></article>
+        <article><b>10 · Bonuskarte oder Bluff?</b><p>5 und 7 müssen nur für ihren Bonus offen gespielt werden. Du darfst sie stattdessen auch als normale falsche Table-Karte oder als persönliche verdeckte „Joker“-Behauptung benutzen. Dann gilt kein Bonus – dafür kann der Bluff stärker sein.</p></article>
+        <article><b>11 · Royal Revolver</b><p>Die Ausscheidungsgefahr steigt mit verlorenen Leben: 6 Leben = 1 %, 5 = 5 %, 4 = 15 %, 3 = 25 %, 2 = 50 %, 1 = 100 %. Jeder Dreh ist für den ganzen Tisch sichtbar. Grün bedeutet überlebt, Rot bedeutet ausgeschieden.</p></article>
+        <article><b>12 · Rundenende</b><p>Nach einem Expose wird neu gemischt und ausgeteilt. Bleibt deine persönliche verdeckte Karte durch einen korrekten Table-Zug geschützt, wird sie nicht gezeigt. Endet eine Runde natürlich ohne Expose, gibt eine unangetastete verdeckte Karte +1 Leben und verschwindet danach.</p></article>
+      </div><footer><button type="button" data-rbkl-back>ZURÜCK</button></footer></div>`;
   }
 
   function shopHtml() {
@@ -714,6 +839,7 @@
     clearTimeout(botTimer);
     overlay.innerHTML = menuHtml();
     bindCommon();
+    overlay.querySelectorAll("[data-rbkl-mode]").forEach((button) => button.addEventListener("click", () => { selectedGameMode = GAME_MODES[button.dataset.rbklMode] ? button.dataset.rbklMode : "normal"; renderMenu(); }));
     overlay.querySelector("[data-rbkl-player-count]")?.addEventListener("change", (event) => { selectedPlayers = clamp(Number(event.target.value) || 2, 2, 4); });
     overlay.querySelector("[data-rbkl-bot-level]")?.addEventListener("change", (event) => { selectedBotDifficulty = BOT_LEVELS[event.target.value] ? event.target.value : "medium"; });
     overlay.querySelector("[data-rbkl-start-bots]")?.addEventListener("click", startBotMatch);
@@ -742,7 +868,7 @@
 
   function startBotMatch() {
     const humans = [{ uid: "local-player", name: profileName() }];
-    game = newMatch(makePlayers(humans, selectedPlayers, selectedBotDifficulty), { online: false });
+    game = newMatch(makePlayers(humans, selectedPlayers, selectedBotDifficulty), { online: false, gameMode: selectedGameMode });
     cosmeticState().stats.matches += 1;
     persist();
     awardXp(12, "Royal Bluff.KL · Match gestartet");
@@ -776,6 +902,14 @@
     overlay.querySelector("[data-rbkl-hidden]")?.addEventListener("click", () => {
       if (selectedCards.size !== 1) return toast("Wähle genau eine Karte für den verdeckten Joker-Bluff.");
       performLocalAction("hidden", { cardId: [...selectedCards][0] });
+    });
+    overlay.querySelector("[data-rbkl-bonus-five]")?.addEventListener("click", () => {
+      if (selectedCards.size !== 1) return toast("Wähle die 5 aus.");
+      performLocalAction("bonus5", { cardId: [...selectedCards][0] });
+    });
+    overlay.querySelector("[data-rbkl-bonus-seven]")?.addEventListener("click", () => {
+      if (selectedCards.size !== 1) return toast("Wähle die 7 aus.");
+      performLocalAction("bonus7", { cardId: [...selectedCards][0] });
     });
     overlay.querySelector("[data-rbkl-challenge-play]")?.addEventListener("click", () => performLocalAction("challengePlay", {}));
     overlay.querySelectorAll("[data-rbkl-challenge-hidden]").forEach((button) => button.addEventListener("click", () => performLocalAction("challengeHidden", { targetIndex: Number(button.dataset.rbklChallengeHidden) })));
@@ -850,6 +984,13 @@
       return challengeHidden(game, index, target.i);
     }
 
+    const mode = modeConfig(game.gameMode);
+    const bonus7 = mode.bonus7 ? bot.hand.find((card) => card.special === "handSwap") : null;
+    const currentTruth = bot.hand.filter((card) => cardIsTableTruth(card, game)).length;
+    if (bonus7 && bot.hand.length >= 4 && currentTruth <= 1 && Math.random() < .62) return playBonusSeven(game, index, bonus7.id);
+    const bonus5 = mode.bonus5 ? bot.hand.find((card) => card.special === "tableShift") : null;
+    if (bonus5 && (currentTruth === 0 || Math.random() < .18)) return playBonusFive(game, index, bonus5.id);
+
     if (!bot.hidden && bot.hiddenUsedRound !== game.round && bot.hand.length && Math.random() < .18) {
       const joker = bot.hand.find((card) => card.joker);
       const card = joker && Math.random() > config.hiddenBluff ? joker : bot.hand[Math.floor(Math.random() * bot.hand.length)];
@@ -921,7 +1062,7 @@
   }
 
   function onlineMenuHtml(message = "") {
-    return `<div class="rbkl-shell rbkl-online"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>FIREBASE MULTIPLAYER</small><h1>Online-Lobby</h1></div></header>${message ? `<p class="rbkl-online-message">${esc(message)}</p>` : ""}<div class="rbkl-online-grid">
+    return `<div class="rbkl-shell rbkl-online"><header><button type="button" class="rbkl-icon-button" data-rbkl-back>‹</button><div><small>FIREBASE MULTIPLAYER</small><h1>Online-Lobby</h1></div></header>${message ? `<p class="rbkl-online-message">${esc(message)}</p>` : ""}${modePickerHtml()}<div class="rbkl-online-grid">
       <article><small>RAUM ERSTELLEN</small><h2>Eigener Tisch</h2><label>Plätze<select data-rbkl-online-seats>${[2,3,4].map((n) => `<option value="${n}" ${n === selectedPlayers ? "selected" : ""}>${n}</option>`).join("")}</select></label><label>Bot-Stärke<select data-rbkl-online-diff>${Object.values(BOT_LEVELS).map((d) => `<option value="${d.id}" ${d.id === selectedBotDifficulty ? "selected" : ""}>${d.name}</option>`).join("")}</select></label><label class="rbkl-check"><input type="checkbox" data-rbkl-fill-bots checked><span>Freie Plätze beim Start mit Bots auffüllen</span></label><button type="button" data-rbkl-create-public>ÖFFENTLICH ERSTELLEN</button><button type="button" class="ghost" data-rbkl-create-private>PRIVATEN CODE ERSTELLEN</button></article>
       <article><small>BEITRETEN</small><h2>Raumcode</h2><input type="text" maxlength="6" placeholder="ABC123" data-rbkl-room-code><button type="button" data-rbkl-join-code>CODE BEITRETEN</button><hr><button type="button" class="gold" data-rbkl-quick-join>SCHNELLBEITRITT</button></article>
     </div></div>`;
@@ -933,6 +1074,7 @@
     ensureOverlay();
     overlay.innerHTML = onlineMenuHtml(message);
     overlay.querySelector("[data-rbkl-back]")?.addEventListener("click", renderMenu);
+    overlay.querySelectorAll("[data-rbkl-mode]").forEach((button) => button.addEventListener("click", () => { selectedGameMode = GAME_MODES[button.dataset.rbklMode] ? button.dataset.rbklMode : "normal"; renderOnlineMenu(message); }));
     overlay.querySelector("[data-rbkl-online-seats]")?.addEventListener("change", (event) => { selectedPlayers = clamp(Number(event.target.value) || 2, 2, 4); });
     overlay.querySelector("[data-rbkl-online-diff]")?.addEventListener("change", (event) => { selectedBotDifficulty = BOT_LEVELS[event.target.value] ? event.target.value : "medium"; });
     overlay.querySelector("[data-rbkl-create-public]")?.addEventListener("click", () => createOnlineRoom("public"));
@@ -950,7 +1092,7 @@
       const now = Date.now();
       await identity.fb.setDoc(roomRef, {
         hostUid: identity.uid, status: "waiting", visibility, maxPlayers: selectedPlayers, currentPlayers: 1,
-        playerUids: [identity.uid], playerNames: { [identity.uid]: identity.name }, fillBots, botDifficulty: selectedBotDifficulty,
+        playerUids: [identity.uid], playerNames: { [identity.uid]: identity.name }, fillBots, botDifficulty: selectedBotDifficulty, gameMode: selectedGameMode,
         createdAtMs: now, updatedAtMs: now, version: VERSION
       });
       await enterOnlineLobby(identity, id, true);
@@ -982,7 +1124,7 @@
       const identity = await onlineIdentity();
       const q = identity.fb.query(identity.fb.collection(identity.fb.db, COLLECTION), identity.fb.where("status", "==", "waiting"), identity.fb.where("visibility", "==", "public"), identity.fb.limit(10));
       const snap = await identity.fb.getDocs(q);
-      const candidate = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).find((room) => (room.playerUids || []).length < Number(room.maxPlayers || 4));
+      const candidate = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).find((room) => (room.gameMode || "normal") === selectedGameMode && (room.playerUids || []).length < Number(room.maxPlayers || 4));
       if (!candidate) return renderOnlineMenu("Aktuell ist kein freier öffentlicher Tisch verfügbar. Erstelle selbst einen.");
       await joinOnlineRoom(candidate.id);
     } catch (error) { renderOnlineMenu(error?.message || String(error)); }
@@ -1021,7 +1163,8 @@
     const names = (room.playerUids || []).map((uid, index) => `<li><span>${index + 1}</span><b>${esc(room.playerNames?.[uid] || "Spieler")}</b><small>${uid === room.hostUid ? "HOST" : "ONLINE"}</small></li>`).join("");
     const botCount = room.fillBots ? Math.max(0, Number(room.maxPlayers) - Number(room.currentPlayers)) : 0;
     const privacyReady = !onlineLobby.isHost || (room.playerUids || []).every((uid) => !!onlineLobby.handKeys?.[uid]);
-    overlay.innerHTML = `<div class="rbkl-shell rbkl-lobby"><header><button type="button" class="rbkl-icon-button" data-rbkl-leave>‹</button><div><small>${esc(room.visibility === "private" ? "PRIVATER TISCH" : "ÖFFENTLICHER TISCH")}</small><h1>${esc(onlineLobby.roomId)}</h1></div><button type="button" class="rbkl-code-copy" data-rbkl-copy>${esc(onlineLobby.roomId)} · KOPIEREN</button></header><section><div class="rbkl-lobby-info"><b>${room.currentPlayers}/${room.maxPlayers} Menschen</b><span>${botCount ? `+ ${botCount} Bot${botCount > 1 ? "s" : ""} beim Start` : "Keine Bots"}</span></div><ol>${names}${Array.from({ length: botCount }, (_, i) => `<li class="bot"><span>${Number(room.currentPlayers) + i + 1}</span><b>${esc(BOT_NAMES[i] || `Bot ${i + 1}`)}</b><small>BOT · ${esc(BOT_LEVELS[room.botDifficulty]?.name || "Mittel")}</small></li>`).join("")}</ol>${onlineLobby.isHost ? `${!privacyReady ? `<p class="rbkl-privacy-wait">Sichere Handkarten-Schlüssel der Online-Spieler werden vorbereitet …</p>` : ""}<button type="button" class="rbkl-start-online" data-rbkl-start-online ${(privacyReady && (room.fillBots || room.currentPlayers >= 2)) ? "" : "disabled"}>MATCH STARTEN</button>` : `<div class="rbkl-waiting"><span></span><b>Host startet das Match …</b></div>`}</section></div>`;
+    const roomMode = modeConfig(room.gameMode || "normal");
+    overlay.innerHTML = `<div class="rbkl-shell rbkl-lobby"><header><button type="button" class="rbkl-icon-button" data-rbkl-leave>‹</button><div><small>${esc(room.visibility === "private" ? "PRIVATER TISCH" : "ÖFFENTLICHER TISCH")}</small><h1>${esc(onlineLobby.roomId)}</h1></div><button type="button" class="rbkl-code-copy" data-rbkl-copy>${esc(onlineLobby.roomId)} · KOPIEREN</button></header><section><div class="rbkl-lobby-mode"><small>MODUS</small><b>${esc(roomMode.name)}</b><span>${esc(roomMode.desc)}</span></div><div class="rbkl-lobby-info"><b>${room.currentPlayers}/${room.maxPlayers} Menschen</b><span>${botCount ? `+ ${botCount} Bot${botCount > 1 ? "s" : ""} beim Start` : "Keine Bots"}</span></div><ol>${names}${Array.from({ length: botCount }, (_, i) => `<li class="bot"><span>${Number(room.currentPlayers) + i + 1}</span><b>${esc(BOT_NAMES[i] || `Bot ${i + 1}`)}</b><small>BOT · ${esc(BOT_LEVELS[room.botDifficulty]?.name || "Mittel")}</small></li>`).join("")}</ol>${onlineLobby.isHost ? `${!privacyReady ? `<p class="rbkl-privacy-wait">Sichere Handkarten-Schlüssel der Online-Spieler werden vorbereitet …</p>` : ""}<button type="button" class="rbkl-start-online" data-rbkl-start-online ${(privacyReady && (room.fillBots || room.currentPlayers >= 2)) ? "" : "disabled"}>MATCH STARTEN</button>` : `<div class="rbkl-waiting"><span></span><b>Host startet das Match …</b></div>`}</section></div>`;
     overlay.querySelector("[data-rbkl-leave]")?.addEventListener("click", leaveOnline);
     overlay.querySelector("[data-rbkl-copy]")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(onlineLobby.roomId); toast("Raumcode kopiert."); } catch { toast(onlineLobby.roomId); } });
     overlay.querySelector("[data-rbkl-start-online]")?.addEventListener("click", startOnlineHostMatch);
@@ -1035,7 +1178,7 @@
       const humans = (room.playerUids || []).map((uid) => ({ uid, name: room.playerNames?.[uid] || "Spieler" }));
       const total = room.fillBots ? Number(room.maxPlayers || 2) : humans.length;
       if (total < 2) throw new Error("Mindestens zwei Spieler werden benötigt.");
-      game = newMatch(makePlayers(humans, total, room.botDifficulty || "medium"), { online: true, roomId: onlineLobby.roomId });
+      game = newMatch(makePlayers(humans, total, room.botDifficulty || "medium"), { online: true, roomId: onlineLobby.roomId, gameMode: room.gameMode || "normal" });
       cosmeticState().stats.matches += 1;
       persist();
       await onlineLobby.fb.updateDoc(onlineLobby.roomRef, { status: "running", currentPlayers: humans.length, startedAtMs: Date.now(), updatedAtMs: Date.now() });
@@ -1066,7 +1209,7 @@
       declaredRank: state.lastPlay.declaredRank, turn: state.lastPlay.turn, at: state.lastPlay.at
     } : null;
     return {
-      version: state.version, matchId: state.matchId, online: true, roomId: state.roomId,
+      version: state.version, matchId: state.matchId, online: true, roomId: state.roomId, gameMode: state.gameMode || "normal",
       phase: state.phase, round: state.round, turn: state.turn, players: publicPlayers,
       encryptedHands, activeIndex: state.activeIndex, tableRank: state.tableRank, tableCard: state.tableCard,
       pile: state.pile, lastPlay, deckCount: state.deckCount, log: state.log,
