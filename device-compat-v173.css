@@ -71,9 +71,6 @@
     margin:0!important;
   }
 }
-/* Dungeon-Namensfeld */
-.dkl-name-hint{display:block;margin:-5px 0 8px;color:#8fa9ae;font-size:10px;line-height:1.35}
-.dkl-mod-page input[data-dkl-mod-name],.dkl-character-name{width:100%;min-height:44px}
 
 
 /* V213 – alle Spiele unter Dynamic Island / Notch und über Home-Indikator halten. */
