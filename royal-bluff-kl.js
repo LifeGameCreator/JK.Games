@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260823-royal-bluff-v2-bonus-games";
+  const VERSION = "20260823-royal-bluff-v3-bonus-last-card";
   const COLLECTION = "royalBluffKlRooms";
   const MAX_PLAYERS = 4;
   const MAX_CARDS_TOTAL = 5;
@@ -386,13 +386,18 @@
     if (reason === "match-start") addLog(state, "Deck gemischt. Karten werden aus der Mitte ausgeteilt.", "deal");
   }
 
-  function finishMatch(state) {
-    const winnerIndex = state.players.findIndex((player) => !player.eliminated);
+  function finishMatch(state, forcedWinnerIndex = -1, reason = "") {
+    const winnerIndex = Number.isInteger(forcedWinnerIndex) && forcedWinnerIndex >= 0
+      ? forcedWinnerIndex
+      : state.players.findIndex((player) => !player.eliminated);
     state.winnerIndex = winnerIndex;
     state.phase = "finished";
     state.activeIndex = -1;
     state.updatedAtMs = Date.now();
-    if (winnerIndex >= 0) addLog(state, `${state.players[winnerIndex].name} gewinnt Royal Bluff.KL.`, "win");
+    if (winnerIndex >= 0) {
+      const winner = state.players[winnerIndex];
+      addLog(state, reason || `${winner.name} gewinnt Royal Bluff.KL.`, "win");
+    }
   }
 
   function cardIsTableTruth(card, state = game) {
@@ -501,6 +506,21 @@
       if (card) player.hand.push(card);
       throw new Error("Wähle die Bonuskarte 5.");
     }
+
+    // Sonderregel V3: Ist die offene 5 die letzte Handkarte, gewinnt der Spieler sofort.
+    // Eine eventuell separat liegende persönliche verdeckte Karte ändert daran nichts:
+    // Entscheidend ist, dass nach dem Ausspielen der 5 keine Handkarte mehr übrig ist.
+    if (player.hand.length === 0) {
+      state.pile.push({ id: randomId("bonus5win"), actorIndex, count: 1, kind: "bonus5", openRank: "5", instantWin: true, fromRank: state.tableRank, toRank: state.tableRank });
+      state.pile = state.pile.slice(-22);
+      state.lastPlay = null;
+      state.lastResolution = {
+        id: randomId("res"), type: "bonus5-win", title: "ROYAL FIVE", text: `${player.name} legt die 5 als letzte Handkarte und gewinnt sofort.`, actorIndex, at: Date.now()
+      };
+      finishMatch(state, actorIndex, `${player.name} legt die 5 als letzte Handkarte – ROYAL FIVE. Sofortiger Sieg!`);
+      return;
+    }
+
     const previousRank = state.tableRank;
     const table = drawTableCard(state.deck, state.gameMode, previousRank);
     state.deck = table.deck;
@@ -527,13 +547,26 @@
     }
     const returned = player.hand.splice(0);
     state.deck = shuffle([...(state.deck || []), ...returned]);
-    const targetCount = Math.max(0, MAX_CARDS_TOTAL - 1 - (player.hidden ? 1 : 0));
+
+    // Normal: 7 ablegen, Resthand zurückmischen und dieselbe Anzahl neu ziehen.
+    // Sonderfall: War die 7 die letzte Handkarte, gibt sie keinen Sieg. Stattdessen
+    // zieht der Spieler genau EINE neue Karte und bleibt im Match.
+    const targetCount = returned.length === 0
+      ? 1
+      : Math.max(0, Math.min(returned.length, MAX_CARDS_TOTAL - 1 - (player.hidden ? 1 : 0)));
     while (player.hand.length < targetCount && state.deck.length) player.hand.push(state.deck.shift());
     state.deckCount = state.deck.length;
-    state.pile.push({ id: randomId("bonus7"), actorIndex, count: 1, kind: "bonus7", openRank: "7", swapped: returned.length, drawn: player.hand.length });
+    state.pile.push({ id: randomId("bonus7"), actorIndex, count: 1, kind: "bonus7", openRank: "7", swapped: returned.length, drawn: player.hand.length, lastCardRescue: returned.length === 0 });
     state.pile = state.pile.slice(-22);
     state.lastPlay = null;
-    addLog(state, `${player.name} spielt die 7 offen: ${returned.length} Restkarte${returned.length === 1 ? "" : "n"} zurück ins Deck, ${player.hand.length} neu gezogen.`, "bonus");
+    if (returned.length === 0) {
+      addLog(state, `${player.name} spielt die 7 als letzte Handkarte: kein Sieg – 1 neue Karte gezogen.`, "bonus");
+      state.lastResolution = {
+        id: randomId("res"), type: "bonus7-rescue", title: "SEVEN RESCUE", text: `${player.name} hatte nur noch die 7. Die 7 verhindert den Sieg und gibt genau 1 neue Karte.`, actorIndex, at: Date.now()
+      };
+    } else {
+      addLog(state, `${player.name} spielt die 7 offen: ${returned.length} Restkarte${returned.length === 1 ? "" : "n"} zurück ins Deck, ${player.hand.length} neu gezogen.`, "bonus");
+    }
     advanceTurn(state, actorIndex);
   }
 
@@ -785,8 +818,8 @@
         <article><b>5 · Normaler Expose</b><p>Zuerst werden ausschließlich die gerade gelegten Table-Karten aufgedeckt. Waren sie korrekt, trägt der Challenger ein Revolver-Risiko. Die persönliche verdeckte Karte des Beschuldigten bleibt komplett geheim und die neue Runde beginnt.</p></article>
         <article><b>6 · Doppel-Bluff</b><p>Waren die Table-Karten falsch, trägt der Lügner zuerst 1 Risiko. Nur dann wird zusätzlich seine persönliche verdeckte Karte geprüft. Kein Joker: +2 Risiken, also bis zu 3 direkt hintereinander. Echter Joker: +1 Leben, maximal 6.</p></article>
         <article><b>7 · Joker direkt exposen</b><p>Eine persönliche verdeckte Karte kann gezielt exposed werden. Ist sie falsch, trägt ihr Besitzer 2 Risiken. Ist sie ein echter Joker, bekommt der Besitzer +1 Leben und der Challenger trägt 1 Risiko.</p></article>
-        <article><b>8 · ONE BONUS · Karte 5</b><p>One Bonus fügt genau eine offene 5 ins Deck ein. Hast du sie, kannst du deinen gesamten Zug dafür verwenden: 5 offen spielen → sofort eine neue Table-Karte aus dem Deck bestimmen → dein Zug endet. Das Match und die vorhandenen Hände laufen normal weiter.</p></article>
-        <article><b>9 · TWO BONUS · Karte 7</b><p>Two Bonus enthält die 5 und zusätzlich genau eine 7. Spielst du die 7 offen, geht die 7 aus deiner Hand; alle übrigen Handkarten werden zurück ins Deck gemischt und du ziehst dieselbe Resthand neu. Mit fünf Handkarten sind das exakt vier neue Karten. Liegt bereits deine persönliche verdeckte Karte, bleiben maximal fünf Karten insgesamt.</p></article>
+        <article><b>8 · ONE BONUS · Karte 5</b><p>One Bonus fügt genau eine offene 5 ins Deck ein. Hast du sie, kannst du deinen gesamten Zug dafür verwenden: 5 offen spielen → sofort eine neue Table-Karte aus dem Deck bestimmen → dein Zug endet. <strong>Ist die 5 deine letzte Handkarte, gewinnst du stattdessen sofort das Match.</strong></p></article>
+        <article><b>9 · TWO BONUS · Karte 7</b><p>Two Bonus enthält die 5 und zusätzlich genau eine 7. Spielst du die 7 offen, geht die 7 aus deiner Hand; alle übrigen Handkarten werden zurück ins Deck gemischt und du ziehst dieselbe Resthand neu. Mit fünf Handkarten sind das exakt vier neue Karten. <strong>Ist die 7 deine letzte Handkarte, gewinnst du nicht: Du ziehst genau 1 neue Karte und spielst weiter.</strong> Liegt bereits deine persönliche verdeckte Karte, bleiben maximal fünf Karten insgesamt.</p></article>
         <article><b>10 · Bonuskarte oder Bluff?</b><p>5 und 7 müssen nur für ihren Bonus offen gespielt werden. Du darfst sie stattdessen auch als normale falsche Table-Karte oder als persönliche verdeckte „Joker“-Behauptung benutzen. Dann gilt kein Bonus – dafür kann der Bluff stärker sein.</p></article>
         <article><b>11 · Royal Revolver</b><p>Die Ausscheidungsgefahr steigt mit verlorenen Leben: 6 Leben = 1 %, 5 = 5 %, 4 = 15 %, 3 = 25 %, 2 = 50 %, 1 = 100 %. Jeder Dreh ist für den ganzen Tisch sichtbar. Grün bedeutet überlebt, Rot bedeutet ausgeschieden.</p></article>
         <article><b>12 · Rundenende</b><p>Nach einem Expose wird neu gemischt und ausgeteilt. Bleibt deine persönliche verdeckte Karte durch einen korrekten Table-Zug geschützt, wird sie nicht gezeigt. Endet eine Runde natürlich ohne Expose, gibt eine unangetastete verdeckte Karte +1 Leben und verschwindet danach.</p></article>
@@ -987,7 +1020,7 @@
     const mode = modeConfig(game.gameMode);
     const bonus7 = mode.bonus7 ? bot.hand.find((card) => card.special === "handSwap") : null;
     const currentTruth = bot.hand.filter((card) => cardIsTableTruth(card, game)).length;
-    if (bonus7 && bot.hand.length >= 4 && currentTruth <= 1 && Math.random() < .62) return playBonusSeven(game, index, bonus7.id);
+    if (bonus7 && (bot.hand.length === 1 || (bot.hand.length >= 4 && currentTruth <= 1 && Math.random() < .62))) return playBonusSeven(game, index, bonus7.id);
     const bonus5 = mode.bonus5 ? bot.hand.find((card) => card.special === "tableShift") : null;
     if (bonus5 && (currentTruth === 0 || Math.random() < .18)) return playBonusFive(game, index, bonus5.id);
 
