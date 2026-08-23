@@ -4358,7 +4358,7 @@ function awardGameXp(amount, reason = "Game", options = {}) {
 }
 
 
-// V248: Gemeinsame Hauptcharakter-EP für alle acht Top Games.
+// V521: Gemeinsame Hauptcharakter-EP für alle Top Games inklusive Chamber.KL.
 // Die jeweiligen Spiele vergeben weiterhin ihre eigenen internen Belohnungen.
 // Zusätzlich erhält der übergeordnete JK.Games-Hauptcharakter echte EP.
 // Event-Keys verhindern doppelte Gutschriften desselben Ergebnisses; ein
@@ -4393,6 +4393,26 @@ function awardTopGameMainXp(gameId, baseAmount, reason = "Top Games", options = 
 }
 
 window.JKGamesAwardMainGameXp = awardTopGameMainXp;
+// V522: Exakte Hauptcharakter-EP für Spiele, deren Regelwerk eine feste Belohnung verlangt.
+// Nutzt dieselbe Event-Key-Sperre wie Top-Game-EP, aber bewusst ohne Level-Multiplikator.
+window.JKGamesAwardExactMainXp = (amount, reason = "Top Games", options = {}) => {
+  if (!state) return 0;
+  const earned = Math.max(0, Math.min(250, Math.floor(Number(amount) || 0)));
+  if (!earned) return 0;
+  const day = Math.max(1, Number(state.day || 1));
+  const ledger = state.topGamesMainXp && typeof state.topGamesMainXp === "object" ? state.topGamesMainXp : {};
+  if (Number(ledger.day || 0) !== day) { ledger.day = day; ledger.total = 0; ledger.byGame = {}; ledger.recentKeys = []; }
+  ledger.byGame ||= {}; ledger.recentKeys = Array.isArray(ledger.recentKeys) ? ledger.recentKeys.slice(-120) : [];
+  const eventKey = String(options.eventKey || "").slice(0, 140);
+  if (eventKey && ledger.recentKeys.includes(eventKey)) return 0;
+  ledger.total = Math.max(0, Number(ledger.total || 0)) + earned;
+  ledger.byGame.chamber = Math.max(0, Number(ledger.byGame.chamber || 0)) + earned;
+  if (eventKey) ledger.recentKeys.push(eventKey);
+  state.topGamesMainXp = ledger;
+  const result = awardGameXp(earned, `${reason} · Hauptcharakter`, { toast: options.toast !== false, feed: options.feed === true });
+  save();
+  return result;
+};
 window.JKGamesTopGameXpStatus = () => {
   const ledger = state?.topGamesMainXp || {};
   return {
@@ -17625,7 +17645,11 @@ function deviceAppsFor(item) {
     apps.push({ id: "finster", min: 1, data: true, layoutClass: "device-downloaded-app", label: "Finster.KL", icon: "f", text: "Bilder posten, Live-Feed ansehen, liken, kommentieren und anderen JK.Games-Spielern schreiben." });
   }
   if (phoneDevice && isPhoneAppInstalled("topgames")) {
+<<<<<<< HEAD
     apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Money.KL, BigCards.kl und Escape.KL sind vollständig spielbar." });
+=======
+    apps.push({ id: "topgames", min: 1, data: false, layoutClass: "device-downloaded-app topgames-app-icon", label: "Top Games", icon: "TG", text: "JK.Games: Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Chamber.KL und Escape.KL sind vollständig spielbar." });
+>>>>>>> 59fd18f25bdd22fa2595bff3322cbc0fa8ea7581
   }
   if (phoneDevice && isPhoneAppInstalled("onlinecasino")) {
     apps.push({ id: "onlinecasino", min: 2, data: false, layoutClass: "device-downloaded-app", label: "Casino", icon: "●", text: "Casino Entertainment direkt über dein Smartphone öffnen." });
@@ -17960,6 +17984,10 @@ function openDeviceInterface(item, activeApp = "home", activeUse = true) {
   shell.querySelector("[data-open-bigcards-kl]")?.addEventListener("click", () => {
     els.dialog.close();
     window.BigCardsKL?.open?.(item);
+  });
+  shell.querySelector("[data-open-chamber-kl]")?.addEventListener("click", () => {
+    els.dialog.close();
+    window.ChamberKL?.open?.(item);
   });
   shell.querySelector("[data-open-escape-kl]")?.addEventListener("click", () => {
     els.dialog.close();
@@ -19946,6 +19974,7 @@ function openTopGamesJkInfo() {
         <article><b>Fight.KL</b><p>Bei jedem Hauptboss auf Welle 10, 20, 30 …: ca. 1 % für 50 JK/Coin und 0,01 % für 100. Jeder Hauptboss gibt zusätzlich 10 JK-Fragmente.</p></article>
         <article><b>Money.KL</b><p>Nur bei einem echten manuellen „Alles einsammeln“. Wegen der schnellen Klickmöglichkeit ist der Versuch gegen Spam begrenzt: ca. 0,02 % für 10 JK/Coin, 0,002 % für 50 und 0,0002 % für 100.</p></article>
         <article><b>BigCards.kl</b><p>BigCards.kl vergibt moderate Hauptcharakter-XP für Packs, Collects und Rebirths. JK/Coin dient dort für optionale Packs, Komfort, Auras und Bindungen; interne Bindungen beeinflussen ausschließlich das BigCards-Level.</p></article>
+        <article><b>Chamber.KL</b><p>Chamber.KL ist ein 1–4-Spieler-Risikospiel mit Online-Tischen, Bots, Chamber-Level und eigenem Cosmetic-Inventar. JK/Coin dient ausschließlich für Premium-Cosmetics ohne Spielvorteil.</p></article>
         <article><b>Escape.KL</b><p>Escape.KL besitzt seine eigenen Wins-/Speed-Systeme und optionale JK/Coin-Inhalte.</p></article>
       </div>
       <small class="topgames-jk-info-foot">100 JK-Fragmente werden automatisch zu 1 JK/Coin. Weitere Fragment-Quellen findest du in JK/Coin → Fragmente.</small>
@@ -19960,7 +19989,11 @@ function openTopGamesJkInfo() {
 function deviceAppActions(appId, item = ownedPhoneItem()) {
   if (appId === "topgames") return `
     <div class="topgames-launcher">
+<<<<<<< HEAD
       <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Money.KL, BigCards.kl und Escape.KL sind vollständig spielbar.</p></div>
+=======
+      <div class="topgames-hero"><div class="topgames-kicker-row"><small>JK.GAMES</small><button type="button" class="topgames-info-button" data-topgames-jk-info aria-label="Infos zu kostenlosen JK/Coin-Drops">i</button></div><h3>Top Games</h3><p>Runner.KL, City.KL, Match.KL, Fight.KL, Dungeon.KL, Money.KL, BigCards.kl, Chamber.KL und Escape.KL sind vollständig spielbar.</p></div>
+>>>>>>> 59fd18f25bdd22fa2595bff3322cbc0fa8ea7581
       <div class="topgames-grid">
         <button class="topgames-card runner" data-open-runner-kl><b>Runner.KL</b><small>Endloslauf durch die Spremberger Straße.</small></button>
         <button class="topgames-card city" data-open-city-kl><b>City.KL</b><small>Straßen kaufen, Häuser bauen, Miete kassieren und gegen Bots gewinnen.</small></button>
@@ -19968,6 +20001,7 @@ function deviceAppActions(appId, item = ownedPhoneItem()) {
         <button class="topgames-card fight" data-open-fight-kl><b>Fight.KL</b><small>Endlose Upgrade-Arena mit Seltenheits-Merges, Arsenal, Specials, Bossen und Online-Scores.</small></button>
         <button class="topgames-card money" data-open-money-kl><b>Money.KL</b><small>Starte kostenlos auf 2×2, erweitere auf 4×4, 6×6, 8×8 und maximal 10×10. Baue dein Imperium mit 500 normalen Makern, Stufen 1–5, JK Makern, JK/Coin-Power-Ups und Online-Topliste.</small></button>
         <button class="topgames-card bigcards" data-open-bigcards-kl><b>BigCards.kl</b><small>Sammeln • Upgraden • Stockwerke • Rebirth • 6.500 Kartenvarianten.</small></button>
+        <button class="topgames-card chamber" data-open-chamber-kl><b>Chamber.KL</b><small>1–4 Sitze · 3D-Tisch · Bots · Chamber-Coins · Items · Online.</small></button>
         <button class="topgames-card escape" data-open-escape-kl><b>Escape.KL</b><small>Speed-Obby mit mehreren Welten, Wins, Rebirth, Pets und Race.</small></button>
       </div>
     </div>`;
