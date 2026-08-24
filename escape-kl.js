@@ -4,12 +4,12 @@ import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v512-galaxy-presence-platform';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v513-performance-galaxy';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V512 · Galaxy centering/platform + Presence rules/retry */
-const VERSION = '2026-08-24-v512-galaxy-presence-platform';
+/* Escape.kl – JK.Games Top Game V513 · Galaxy performance + lazy GLB loading */
+const VERSION = '2026-08-24-v513-performance-galaxy';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -51,6 +51,27 @@ const ESCAPE_ONLINE_HEARTBEAT_MS = 10000;
 const ESCAPE_ONLINE_STALE_MS = 18000;
 const ESCAPE_ONLINE_LIMIT = 16;
 const ESCAPE_ONLINE_FALLBACK_POLL_MS = 2600;
+
+// V513 PERFORMANCE: mobile Safari/iPhone should not pay desktop GPU costs.
+// Galaxy World contains a 50k point cloud, so we use an adaptive budget while
+// preserving the same physical world size and centered composition.
+function escapeLowPowerDevice(){
+  const ua=String(navigator?.userAgent||'');
+  const appleMobile=/iPhone|iPad|iPod/i.test(ua);
+  const coarse=globalThis.matchMedia?.('(pointer: coarse)')?.matches===true;
+  const cores=Math.max(1,Number(navigator?.hardwareConcurrency)||8);
+  const memory=Number(navigator?.deviceMemory)||8;
+  return appleMobile||coarse||cores<=4||memory<=4;
+}
+function escapeRenderPixelRatio(){
+  const dpr=Math.max(1,Number(window.devicePixelRatio)||1);
+  return Math.min(dpr,escapeLowPowerDevice()?1.0:1.25);
+}
+function escapePointBudget(requested=0){
+  const n=Math.max(0,Math.floor(Number(requested)||0));
+  if(!n)return 0;
+  return Math.min(n,escapeLowPowerDevice()?14000:26000);
+}
 
 const STEP_BUTTONS = Object.freeze([
   {tier:0,name:'+1 Power / Bewegung',cost:0,gain:1},
@@ -221,7 +242,7 @@ const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
   player:null, playerRoot:null, character:null, trail:null, trailPoints:[],trailParticles:[],trailEmitCarry:0,auraGroup:null, auraRings:[],specialFxGroup:null, petVisuals:[], petLoadSeq:0, formModel:null, formWrapper:null, formMixer:null, formActions:null, formAction:null, formLoadSeq:0, gltfLoader:null,
-  externalWorldModels:[],
+  externalWorldModels:[],lazyWorldGlbHolders:[],dayLightMode:'',
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[], hazards:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
@@ -240,7 +261,7 @@ const G = {
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
   onlineFb:null,onlineUser:null,onlineSessionId:'',onlineUnsub:null,onlineWorld:'',onlineTickTimer:0,onlinePollTimer:0,onlineReconnectTimer:0,
   onlineLastWriteAt:0,onlineLastKey:'',onlineWriteInFlight:false,onlineStatus:'offline',onlineLastError:'',remotePlayers:new Map(),
-  tmpV:new THREE.Vector3(), tmpV2:new THREE.Vector3(),tmpV3:new THREE.Vector3()
+  tmpV:new THREE.Vector3(), tmpV2:new THREE.Vector3(),tmpV3:new THREE.Vector3(),onlinePred:new THREE.Vector3()
 };
 
 
@@ -428,7 +449,7 @@ async function connectEscapeMultiplayer(){
     G.onlineFb=fb;G.onlineUser=user;G.onlineSessionId=crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`;
     await publishEscapePresence(true,true);subscribeEscapePresenceWorld();
     if(G.onlineTickTimer)clearInterval(G.onlineTickTimer);
-    G.onlineTickTimer=setInterval(()=>publishEscapePresence(false,true),250);
+    G.onlineTickTimer=setInterval(()=>publishEscapePresence(false,true),500);
     setEscapeOnlineHud('online',1,'Firebase Online-Multiplayer verbunden');return true;
   }catch(error){
     G.onlineLastError=String(error?.message||error||'');console.warn('Escape.kl Multiplayer konnte nicht starten',error);setEscapeOnlineHud('offline',1,'Escape startet offline · Firebase wird beim nächsten Öffnen erneut versucht');return false;
@@ -451,7 +472,7 @@ function stopEscapeMultiplayer(markOffline=true){
   G.onlineFb=null;G.onlineUser=null;G.onlineWorld='';G.onlineLastKey='';G.onlineLastWriteAt=0;G.onlineWriteInFlight=false;G.onlineStatus='offline';
 }
 function updateEscapeRemotePlayers(dt,t){
-  const nowPerf=performance.now(),now=Date.now(),pred=new THREE.Vector3();
+  const nowPerf=performance.now(),now=Date.now(),pred=G.onlinePred;
   for(const [uid,remote] of [...G.remotePlayers]){
     if(now-remote.serverUpdatedAt>ESCAPE_ONLINE_STALE_MS){removeEscapeRemotePlayer(uid);continue}
     const age=Math.max(0,Math.min(1.0,(nowPerf-remote.receivedAt)/1000));pred.copy(remote.target).addScaledVector(remote.velocity,age*.72);
@@ -958,7 +979,7 @@ function signTexture(key,text,color=0x58ddff){
   x.textAlign='center';x.textBaseline='middle';x.shadowColor=hex;x.shadowBlur=18;x.fillStyle='#f6fbff';x.fillText(text,512,130);x.shadowBlur=0;
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;G.textures.set(key,t);return t;
 }
-function disposeAll(){for(const root of G.externalWorldModels||[])disposeExternalObject(root);G.externalWorldModels=[];for(const v of G.geometries.values())v.dispose?.();for(const v of G.materials.values())v.dispose?.();for(const v of G.textures.values())v.dispose?.();G.geometries.clear();G.materials.clear();G.textures.clear();}
+function disposeAll(){for(const root of G.externalWorldModels||[])disposeExternalObject(root);G.externalWorldModels=[];G.lazyWorldGlbHolders=[];for(const v of G.geometries.values())v.dispose?.();for(const v of G.materials.values())v.dispose?.();for(const v of G.textures.values())v.dispose?.();G.geometries.clear();G.materials.clear();G.textures.clear();}
 
 function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoint=0,stage=0,finish=false,winReward=0,winStage=0,motion=null,blink=false,kind='key',hub=false,jumpBoost=0,speedGate=0,requiredSpeed=0,collapseDelayMs=0,collapseRespawnMs=0}){
   const sharedSide=mat(`side-${color}`,{color:new THREE.Color(color).multiplyScalar(.62),roughness:.68,metalness:.1});const side=blink?sharedSide.clone():sharedSide;if(blink)G.materials.set(`blink-side-${color}-${G.platforms.length}`,side);
@@ -970,14 +991,17 @@ function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoi
 function tagScope(object,scope=G.buildScope){if(object?.userData)object.userData.escapeScope=scope;return object;}
 function addWorldGlbModel({
   url='',name='escape-world-model',position={x:0,y:0,z:0},rotation={x:0,y:0,z:0},
-  scale=1,fitWidth=0,centerX=false,centerY=false,centerZ=false,floorY=null,textureZoom=1,pointSize=0,
-  doubleSide=true,frustumCulled=true,castShadow=false,receiveShadow=false
+  scale=1,fitWidth=0,centerX=false,centerY=false,centerZ=false,floorY=null,textureZoom=1,pointSize=0,pointBudget=0,
+  doubleSide=true,frustumCulled=true,castShadow=false,receiveShadow=false,lazy=false
 }={}){
   const scope=G.buildScope,holder=tagScope(new THREE.Group(),scope);holder.name=`${name}-holder`;
   holder.position.set(Number(position?.x)||0,Number(position?.y)||0,Number(position?.z)||0);
   G.scene.add(holder);G.decorative.push(holder);
   if(!url)return holder;
-  createSharedLoader().load(url,gltf=>{
+  const loadModel=()=>{
+    if(holder.userData.escapeModelLoaded||holder.userData.escapeModelLoading)return holder;
+    holder.userData.escapeModelLoading=true;
+    createSharedLoader().load(url,gltf=>{
     if(!G.scene||holder.parent!==G.scene)return;
     const root=gltf?.scene||gltf?.scenes?.[0];if(!root)return;
     root.name=name;
@@ -995,6 +1019,11 @@ function addWorldGlbModel({
         if(obj.isPoints&&Number(pointSize)>0&&'size' in material){
           material.size=Math.max(.1,Number(pointSize)||1);
           if('sizeAttenuation' in material)material.sizeAttenuation=false;
+        }
+        if(obj.isPoints&&Number(pointBudget)>0&&obj.geometry?.attributes?.position){
+          const available=Math.max(0,Number(obj.geometry.attributes.position.count)||0);
+          const budget=Math.min(available,escapePointBudget(pointBudget));
+          if(budget>0&&budget<available)obj.geometry.setDrawRange(0,budget);
         }
         const zoom=Math.max(1,Number(textureZoom)||1);
         if(material.map&&zoom>1.0001){
@@ -1027,8 +1056,19 @@ function addWorldGlbModel({
       root.updateMatrixWorld(true);
     }
     tagScope(root,scope);holder.add(root);G.externalWorldModels.push(root);
-  },undefined,error=>console.warn(`Escape.kl GLB konnte nicht geladen werden: ${url}`,error?.message||error));
+    holder.userData.escapeModelLoaded=true;holder.userData.escapeModelLoading=false;
+  },undefined,error=>{holder.userData.escapeModelLoading=false;console.warn(`Escape.kl GLB konnte nicht geladen werden: ${url}`,error?.message||error)});
+    return holder;
+  };
+  holder.userData.escapeLoadModel=loadModel;
+  if(lazy){G.lazyWorldGlbHolders.push(holder);if(scope===G.world)loadModel();}
+  else loadModel();
   return holder;
+}
+function activateLazyWorldModels(scope=G.world){
+  for(const holder of G.lazyWorldGlbHolders||[]){
+    if(holder?.userData?.escapeScope===scope)holder.userData.escapeLoadModel?.();
+  }
 }
 function addSign(text,pos,color=0x58ddff,scale=1){
   const width=Math.max(3.3,Math.min(9.6,2.6+String(text).length*.18))*scale,height=1.02*scale;
@@ -1248,16 +1288,27 @@ function buildHubSky(){
   const sunDisc=tagScope(new THREE.Mesh(geo('hub-sun-disc-v480',()=>new THREE.SphereGeometry(6.8,20,14)),sunMat),'hub');sunDisc.position.set(-64,58,-92);G.scene.add(sunDisc);G.decorative.push(sunDisc);G.hubSun=sunDisc;
   G.hubStars=null;G.hubMoon=null;G.hubAuroraMats=[];
 }
-function updateDayNight(){
-  // V480: dauerhaft klarer Tag in Hub, Welten, Race und SKYRUN.
-  const sky=new THREE.Color(0xb9e3ff);
-  G.lastDayNightMode='daylight-v480';
-  if(G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.copy(sky);
-  if(G.scene){G.scene.background.copy(sky);if(G.scene.fog)G.scene.fog.color.set(0xa7cfe6);}
+function updateDayNight(force=false){
+  // V513: daylight is static. Older Escape versions rewrote scene/light/color
+  // properties every animation frame, creating needless main-thread work.
+  const galaxy=G.world==='world-5',mode=galaxy?'galaxy':'daylight';
+  if(!force&&G.dayLightMode===mode)return;
+  G.dayLightMode=mode;
+  if(galaxy){
+    G.lastDayNightMode='galaxy-v513';
+    if(G.scene){G.scene.background.setHex(0x02030a);if(G.scene.fog)G.scene.fog.color.setHex(0x050616);}
+    if(G.sunLight){G.sunLight.intensity=.18;G.sunLight.color.set(0x8f86ff);}
+    if(G.hemiLight){G.hemiLight.intensity=.52;G.hemiLight.color.set(0x8da0ff);G.hemiLight.groundColor?.set?.(0x12091f);}
+    if(G.renderer){G.renderer.toneMappingExposure=1.06;G.renderer.shadowMap.enabled=false;}
+    return;
+  }
+  G.lastDayNightMode='daylight-v513';
+  if(G.hubSkyDome?.material?.color)G.hubSkyDome.material.color.setHex(0xb9e3ff);
+  if(G.scene){G.scene.background.setHex(0xb9e3ff);if(G.scene.fog)G.scene.fog.color.setHex(0xa7cfe6);}
   if(G.sunLight){G.sunLight.intensity=2.85;G.sunLight.color.set(0xfff3d5);G.sunLight.position.set(-36,62,28);}
   if(G.hemiLight){G.hemiLight.intensity=2.15;G.hemiLight.color.set(0xf1fbff);G.hemiLight.groundColor?.set?.(0x73835d);}
   if(G.hubSun?.material)G.hubSun.material.opacity=.92;
-  if(G.renderer)G.renderer.toneMappingExposure=1.28;
+  if(G.renderer){G.renderer.toneMappingExposure=1.28;G.renderer.shadowMap.enabled=true;}
 }
 
 function addHubBuilding({x,z,w=10,d=7,h=6,wall=0xd8d1c5,trim=0xffffff,roof=0x46515a,accent=0x4d97c7,label=''}){
@@ -1325,11 +1376,16 @@ function buildWorldPetEggStation(worldId){
 }
 
 function prewarmEscapeScenes(){
+  // V513: never compile every Escape world at once. That old prewarm path became
+  // especially expensive after Galaxy World added a large point cloud.
+  if(escapeLowPowerDevice())return;
   try{
-    for(const p of G.platforms)p.mesh.visible=true;for(const d of G.decorative)d.visible=true;for(const f of G.portalFx)f.visible=true;
-    G.scene.updateMatrixWorld(true);G.renderer.compile(G.scene,G.camera);
+    applyWorldVisibility();
+    G.scene.updateMatrixWorld(true);
+    G.renderer.compile(G.scene,G.camera);
   }catch(error){console.debug('Escape.kl prewarm übersprungen',error?.message||error)}
 }
+
 function refreshHubWorldPortalStatus(){
   if(!G.state||!G.decorative?.length)return;
   for(const obj of G.decorative){
@@ -1349,14 +1405,14 @@ function refreshHubWorldPortalStatus(){
 function setupScene(){
   const canvas=G.overlay.querySelector('canvas');
   G.renderer=new THREE.WebGLRenderer({canvas,antialias:(window.devicePixelRatio||1)<2,powerPreference:'high-performance'});
-  G.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.28;
-  G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
+  G.renderer.setPixelRatio(escapeRenderPixelRatio());G.renderer.outputColorSpace=THREE.SRGBColorSpace;G.renderer.toneMapping=THREE.ACESFilmicToneMapping;G.renderer.toneMappingExposure=1.28;
+  G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=escapeLowPowerDevice()?THREE.BasicShadowMap:THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
-  G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
+  G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(escapeLowPowerDevice()?512:1024,escapeLowPowerDevice()?512:1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
   const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,addWorldGlbModel,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='duel-race';buildDuelRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);buildWorldPetEggStation('keyboard-lab');G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);buildWorldPetEggStation('candy-keys');G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);buildWorldPetEggStation('toxic-keyboard');G.buildScope='world-4';buildWaterWorld(worldApi);buildWorldPetEggStation('world-4');G.buildScope='world-5';buildGalaxyWorld(worldApi);
-  G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
+  G.buildScope='hub';createPlayer();resize();applyWorldVisibility();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
 }
 function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();}
 function applyWorldVisibility(){
@@ -2260,7 +2316,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(0x1b0c08);G.scene.fog.color.setHex(0x1b0c08);
     toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2000);
   }
-  resetHazardsForWorld(id);applyWorldVisibility();if(id==='world-5')stabilizeGalaxyWorldSpawn();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
+  resetHazardsForWorld(id);applyWorldVisibility();activateLazyWorldModels(id);updateDayNight(true);if(id==='world-5')stabilizeGalaxyWorldSpawn();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
 }
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
@@ -3417,7 +3473,7 @@ function bindInput(){
   const sprint=G.overlay.querySelector('[data-ekl-sprint]');if(sprint){const on=e=>{e.preventDefault();ensureAudio();G.mobileSprint=true;sprint.classList.add('active')},off=e=>{e.preventDefault();G.mobileSprint=false;sprint.classList.remove('active')};sprint.addEventListener('pointerdown',on,{passive:false});sprint.addEventListener('pointerup',off,{passive:false});sprint.addEventListener('pointercancel',off,{passive:false});}
 }
 function resize(){if(!G.renderer||!G.camera||!G.overlay)return;const r=G.overlay.getBoundingClientRect(),vv=window.visualViewport;const w=Math.max(1,Math.round(vv?.width||r.width)),h=Math.max(1,Math.round(vv?.height||r.height));G.overlay.style.setProperty('--ekl-vw',`${w}px`);G.overlay.style.setProperty('--ekl-vh',`${h}px`);G.overlay.classList.toggle('ekl-landscape',w>h);G.renderer.setSize(r.width,r.height,false);G.camera.aspect=r.width/Math.max(1,r.height);G.camera.updateProjectionMatrix();}
-function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updateDayNight(t);updatePlatforms(t,dt);processMovement(dt,t);updateSummonedVendingDistance();const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);if(!G.ownerFlyActive)G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);if(!G.ownerFlyActive){updateTrail(dt);updateAura(t);}updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
+function loop(){if(!G.overlay)return;const now=performance.now(),dt=Math.min(.034,Math.max(.001,(now-(G.lastFrameAt||now-16))/1000)),t=now/1000;G.lastFrameAt=now;updatePlatforms(t,dt);processMovement(dt,t);updateSummonedVendingDistance();const planarSpeed=Math.hypot(G.moveVel.x,G.moveVel.z);if(!G.ownerFlyActive)G.character?.update?.({grounded:G.grounded,verticalVelocity:G.vel.y,planarSpeed,sprint:G.sprint||isOnTraining(),moving:planarSpeed>.12,treadmill:isOnTraining(),animationRate:characterAnimationRate()},dt,t);updateEscapeRemotePlayers(dt,t);detectInteraction();updateCamera(dt);if(!G.ownerFlyActive){updateTrail(dt);updateAura(t);}updateCustomVisuals(dt,t);updateHitboxDebug();G.hudClock+=dt;if(G.hudClock>.12){G.hudClock=0;updateHud()}G.renderer.render(G.scene,G.camera);G.raf=requestAnimationFrame(loop);}
 
 function open(sourceDevice=''){
   if(G.overlay)return;
@@ -3430,7 +3486,7 @@ function open(sourceDevice=''){
   G.resizeHandler=()=>requestAnimationFrame(resize);G.orientationHandler=()=>setTimeout(resize,90);window.addEventListener('resize',G.resizeHandler,{passive:true});window.addEventListener('orientationchange',G.orientationHandler,{passive:true});window.visualViewport?.addEventListener('resize',G.resizeHandler,{passive:true});
   G.lastFrameAt=performance.now();G.raf=requestAnimationFrame(loop);connectEscapeMultiplayer().catch(()=>{});setTimeout(()=>window.JKCoinApp?.applyPendingGameEntitlements?.(),500);console.info(`Escape.kl ${VERSION} aktiv`);
 }
-function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);if(G.inputBlurHandler)window.removeEventListener('blur',G.inputBlurHandler);if(G.visibilityHandler)document.removeEventListener('visibilitychange',G.visibilityHandler);G.inputBlurHandler=null;G.visibilityHandler=null;window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;if(G.duelRaceShieldVisual){G.duelRaceShieldVisual.removeFromParent?.();G.duelRaceShieldVisual=null;}G.duelRacePhase='idle';G.duelRaceMode='solo';G.duelRaceHits=0;G.duelShieldInvulnerableUntil=0;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.physicalMoveKeys.clear();G.movementRepressRequired=false;G.mobileMoveHeld=false;G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;}
+function close(){if(!G.overlay)return;stopEscapeMultiplayer(true);cancelReviveOffer(false);removeSummonedTreadmill();removeSummonedVending();clearTimeout(G.persistTimer);if(G.dirty)syncProgressToMain(true);cancelAnimationFrame(G.raf);document.removeEventListener('keydown',G.keyDown);document.removeEventListener('keyup',G.keyUp);if(G.inputBlurHandler)window.removeEventListener('blur',G.inputBlurHandler);if(G.visibilityHandler)document.removeEventListener('visibilitychange',G.visibilityHandler);G.inputBlurHandler=null;G.visibilityHandler=null;window.removeEventListener('resize',G.resizeHandler);window.removeEventListener('orientationchange',G.orientationHandler);window.visualViewport?.removeEventListener('resize',G.resizeHandler);if(G.stickMove){window.removeEventListener('pointermove',G.stickMove);window.removeEventListener('pointerup',G.stickUp);window.removeEventListener('pointercancel',G.stickUp)}if(G.stickTouchMove){window.removeEventListener('touchmove',G.stickTouchMove);window.removeEventListener('touchend',G.stickTouchEnd);window.removeEventListener('touchcancel',G.stickTouchEnd)}if(G.lookTouchMove){window.removeEventListener('touchmove',G.lookTouchMove);window.removeEventListener('touchend',G.lookTouchEnd);window.removeEventListener('touchcancel',G.lookTouchEnd)}G.lookPointer=null;G.lookTouchId=null;closeModal();G.overlay.querySelector('[data-ekl-complete]')?.remove();disposeHitboxDebug();G.renderer?.dispose();clearWorldObjects();clearCustomVisuals();G.character?.dispose?.();if(G.trail)G.scene?.remove(G.trail);G.trailParticles=[];disposeAll();try{G.audioCtx?.close?.()}catch{}G.overlay.remove();document.body.classList.remove('escape-kl-open');G.overlay=null;G.scene=null;G.camera=null;G.renderer=null;G.player=null;G.playerRoot=null;G.character=null;G.trail=null;G.petVisuals=[];G.formWrapper=null;G.formModel=null;G.formMixer=null;G.formActions=null;G.formAction=null;G.ownerPetPreviewId='';G.ownerPetPreviewWrapper=null;G.ownerPetPreviewRig=null;if(G.duelRaceShieldVisual){G.duelRaceShieldVisual.removeFromParent?.();G.duelRaceShieldVisual=null;}G.duelRacePhase='idle';G.duelRaceMode='solo';G.duelRaceHits=0;G.duelShieldInvulnerableUntil=0;clearOwnerFlightVisual();G.ownerFlyActive=false;G.ownerVanish=false;G.ownerFlyVertical=0;G.audioCtx=null;G.keys.clear();G.physicalMoveKeys.clear();G.movementRepressRequired=false;G.mobileMoveHeld=false;G.mobileX=G.mobileY=0;G.mobileSprint=false;G.jumpHeld=false;G.jumpQueuedUntil=0;G.moveVel.set(0,0,0);G.paused=false;G.modalOpen=false;G.dayLightMode='';}
 function returnToTopGames(){const source=G.sourceDevice||'';close();requestAnimationFrame(()=>window.JKGamesOpenTopGames?.(source));}
 function getState(){if(!G.state)loadProgress();return JSON.parse(JSON.stringify(G.state));}
 function grantAdminSpeed(amount,worldId=progressWorldId()){
