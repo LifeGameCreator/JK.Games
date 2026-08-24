@@ -1,6 +1,7 @@
-/* Escape.kl World 5 – GALAXY WORLD preview.
-   The supplied Inside Galaxy GLB is a non-colliding shell around the player.
-   The supplied Space Laufweg GLB is the only visible walkable platform in this first preview. */
+/* Escape.kl World 5 – GALAXY WORLD preview V512.
+   Inside Galaxy is the huge non-colliding outer shell.
+   Space Laufweg is the centered star/galaxy volume you run through.
+   One real solid platform is always under the spawn. */
 export function buildGalaxyWorld(api){
   const {
     addPlatform,
@@ -12,36 +13,61 @@ export function buildGalaxyWorld(api){
   }=api;
 
   const startZ=-70;
-  const platformCenterZ=-82;
-  const platformTop=.30;
-
-  // One and only gameplay platform for this preview. It stays invisible so the
-  // supplied Space Laufweg model is what the player actually sees.
-  const collision=addPlatform({
-    x:0,y:.15,z:platformCenterZ,
-    w:16,h:.30,d:19,
-    color:0x070711,
+  const galaxyCenterZ=-82;
+  // Exactly ONE gameplay platform. It deliberately spans far behind and far
+  // in front of the spawn so the player cannot start over empty space.
+  const platform=addPlatform({
+    x:0,y:.18,z:galaxyCenterZ,
+    w:32,h:.64,d:68,
+    color:0x171027,
     label:'',
     stage:1,
     kind:'galaxy-space-platform'
   });
-  const mats=Array.isArray(collision?.mesh?.material)?collision.mesh.material:[collision?.mesh?.material];
+
+  // The platform is intentionally visible and solid even before either GLB has
+  // finished loading. This is gameplay collision, not decorative GLB collision.
+  const mats=Array.isArray(platform?.mesh?.material)?platform.mesh.material:[platform?.mesh?.material];
   for(const material of mats){
     if(!material)continue;
-    material.transparent=true;
-    material.opacity=0;
-    material.depthWrite=false;
-    material.colorWrite=false;
+    material.transparent=false;
+    material.opacity=1;
+    material.depthWrite=true;
+    material.roughness=.42;
+    material.metalness=.18;
+    if(material.emissive?.setHex){
+      material.emissive.setHex(0x321b67);
+      material.emissiveIntensity=.48;
+    }
     material.needsUpdate=true;
   }
 
-  // Galaxy shell: purely visual. It surrounds the complete preview area and has
-  // deliberately no collision entry in Escape.kl.
+  // Huge outside sphere. No Escape collider is created for this model.
+  // It is centered on exactly the same point as the inner star galaxy.
   addWorldGlbModel({
-    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v510-galaxy-world5',
+    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v512-galaxy-centered-platform',
     name:'world5-inside-galaxy-shell',
-    position:{x:0,y:0,z:platformCenterZ},
-    fitWidth:220,
+    position:{x:0,y:0,z:galaxyCenterZ},
+    fitWidth:520,
+    centerX:true,
+    centerY:true,
+    centerZ:true,
+    textureZoom:1.72,
+    doubleSide:true,
+    frustumCulled:false,
+    castShadow:false,
+    receiveShadow:false
+  });
+
+  // IMPORTANT: Space Laufweg is a point/star volume, not the physical floor.
+  // V511 wrongly kept it close to floor-size. V512 makes it a large centered
+  // Galaxy inside the outer sphere so the player visibly runs through it.
+  addWorldGlbModel({
+    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v512-galaxy-centered-platform',
+    name:'world5-space-galaxy',
+    position:{x:0,y:0,z:galaxyCenterZ},
+    fitWidth:380,
+    pointSize:2.15,
     centerX:true,
     centerY:true,
     centerZ:true,
@@ -51,27 +77,11 @@ export function buildGalaxyWorld(api){
     receiveShadow:false
   });
 
-  // Visible Space Laufweg. The actual walking collision is the single invisible
-  // platform above, so decorative parts of the GLB can never trap the player.
-  addWorldGlbModel({
-    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v510-galaxy-world5',
-    name:'world5-space-laufweg',
-    position:{x:0,y:0,z:platformCenterZ},
-    fitWidth:16,
-    centerX:true,
-    centerZ:true,
-    floorY:platformTop,
-    doubleSide:true,
-    frustumCulled:true,
-    castShadow:false,
-    receiveShadow:true
-  });
+  addSign('WORLD 5 · GALAXY WORLD',{x:0,y:6.8,z:startZ-1.0},0xb98cff,.72);
+  addSign('PREVIEW · 1 SICHERE GALAXY-PLATTFORM',{x:0,y:5.70,z:startZ-1.02},0xe9ddff,.34);
+  addSign('↩ HINTER DIR · ZURÜCK ZUM HUB',{x:0,y:4.78,z:startZ-1.04},0xa9d8ff,.28);
 
-  addSign('WORLD 5 · GALAXY WORLD',{x:0,y:6.6,z:startZ-1.2},0xb98cff,.72);
-  addSign('PREVIEW · 1 SPACE-PLATTFORM',{x:0,y:5.55,z:startZ-1.22},0xe9ddff,.34);
-  addSign('↩ HINTER DIR · ZURÜCK ZUM HUB',{x:0,y:4.62,z:startZ-1.24},0xa9d8ff,.28);
-
-  // Walk a little behind the spawn to return. No second platform is created.
-  addAutoTrigger('galaxy-world-return-hub',0,startZ+3.0,10,2.4,returnHub);
-  addAutoTrigger('galaxy-world-preview-toast',0,startZ-5.0,13,3.0,()=>worldToast('🌌 GALAXY WORLD · erste Vorschau · eine Space-Plattform','good',2400));
+  // Walk behind the spawn to return. No second platform is created.
+  addAutoTrigger('galaxy-world-return-hub',0,startZ+7.5,16,2.4,returnHub);
+  addAutoTrigger('galaxy-world-preview-toast',0,startZ-5.0,24,3.0,()=>worldToast('🌌 GALAXY WORLD · große Außenkugel · große mittige Sternen-Galaxy · sichere Plattform','good',2600));
 }

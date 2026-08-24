@@ -119,8 +119,19 @@
     return onlineWriteBackoffUntil;
   }
 
+  function runtimeWriteWaitV525() {
+    try { return Math.max(0, Number(window.LifeBuilderFirebaseCore?.getWriteBackoffRemainingMs?.() || 0)); } catch { return 0; }
+  }
+
+  function isRuntimeWriteBackoffV525(error) {
+    const text = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
+    return String(error?.code || "") === "firestore-write-backoff"
+      || text.includes("firestore-write-backoff")
+      || text.includes("firestore-schreibpause aktiv");
+  }
+
   function onlineWriteWaitV377() {
-    return Math.max(0, Number(onlineWriteBackoffUntil || 0) - Date.now());
+    return Math.max(0, Number(onlineWriteBackoffUntil || 0) - Date.now(), runtimeWriteWaitV525());
   }
 
 
@@ -1649,9 +1660,13 @@
       // zwei Profil-Writes gleichzeitig in den Firestore-Stream gestellt.
       for (const [ref, payload] of writes) {
         try { await fb.setDoc(ref, payload, { merge: true }); }
-        catch (error) { rejected.push({ reason: error }); if (isResourceExhaustedV377(error)) break; }
+        catch (error) { rejected.push({ reason: error }); if (isRuntimeWriteBackoffV525(error) || isResourceExhaustedV377(error)) break; }
       }
-      if (rejected.some((entry) => isResourceExhaustedV377(entry.reason))) {
+      if (rejected.some((entry) => isRuntimeWriteBackoffV525(entry.reason))) {
+        // V525: die globale Runtime hat bereits eine gezielte Retry-Zeit. Das ist
+        // beim Reload kein Player-Sync-Fehler und wird nicht als Warnung ausgegeben.
+        playerSyncDirty = true;
+      } else if (rejected.some((entry) => isResourceExhaustedV377(entry.reason))) {
         playerSyncDirty = true;
         activateOnlineWriteBackoffV377(rejected.find((entry) => isResourceExhaustedV377(entry.reason))?.reason, "player-profile-sync");
       } else if (rejected.length) {
@@ -1675,7 +1690,8 @@
     playerSyncTimer = setTimeout(() => {
       playerSyncTimer = null;
       syncPlayerOnline().catch((error) => {
-        if (isResourceExhaustedV377(error)) activateOnlineWriteBackoffV377(error, "player-sync-timer");
+        if (isRuntimeWriteBackoffV525(error)) { playerSyncDirty = true; schedulePlayerSync(Math.max(1000, onlineWriteWaitV377())); }
+        else if (isResourceExhaustedV377(error)) activateOnlineWriteBackoffV377(error, "player-sync-timer");
         else console.warn("Player sync", error);
       });
     }, wait + 50);

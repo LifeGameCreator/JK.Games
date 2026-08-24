@@ -88,6 +88,44 @@
     return `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
   }
 
+  // V524: Safari/iOS can close Firebase Auth's IndexedDB connection while the
+  // document is becoming hidden. Firebase may then surface its internal
+  // "Database is closing/hidden" persistence retry as an unhandled rejection
+  // even though the session itself remains usable. Swallow only this exact
+  // transient Auth/IndexedDB condition and let Auth re-check its state after the
+  // page becomes visible again. Other IndexedDB/Auth errors remain untouched.
+  function isAuthHiddenDatabaseError(error) {
+    const text = errorText(error);
+    return text.includes("database is closing/hidden")
+      || (text.includes("indexeddb") && text.includes("closing/hidden"));
+  }
+
+  function installAuthVisibilityPersistenceGuard() {
+    if (window.__jkGamesAuthVisibilityPersistenceGuard) return;
+    window.__jkGamesAuthVisibilityPersistenceGuard = true;
+    let hiddenDbIssue = false;
+
+    window.addEventListener("unhandledrejection", (event) => {
+      if (!isAuthHiddenDatabaseError(event?.reason)) return;
+      hiddenDbIssue = true;
+      event.preventDefault();
+    }, true);
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || !hiddenDbIssue) return;
+      hiddenDbIssue = false;
+      window.setTimeout(() => {
+        const ready = runtime?.auth?.authStateReady;
+        if (typeof ready !== "function") return;
+        Promise.resolve(ready.call(runtime.auth)).catch((error) => {
+          if (!isAuthHiddenDatabaseError(error)) console.warn("Firebase Auth Sichtbarkeits-Recovery", error);
+        });
+      }, 120);
+    }, { passive: true });
+  }
+
+  installAuthVisibilityPersistenceGuard();
+
   function isTargetCollisionError(error) {
     const text = errorText(error);
     return text.includes("target id already exists") || (text.includes("already-exists") && text.includes("target"));
@@ -408,13 +446,24 @@
     return runWithLocalStorageLease(run);
   }
 
-  async function waitForFirestoreWriteWindow() {
+  function firestoreWriteBackoffRemainingMs() {
     syncSharedFirestoreState();
-    const now = Date.now();
-    if (firestoreWriteBackoffUntil > now) {
-      const error = new Error(`Firestore-Schreibpause aktiv. In ${Math.max(1, Math.ceil((firestoreWriteBackoffUntil - now) / 1000))}s erneut versuchen.`);
+    return Math.max(0, Number(firestoreWriteBackoffUntil || 0) - Date.now());
+  }
+
+  function isFirestoreWriteBackoffError(error) {
+    const text = errorText(error);
+    return String(error?.code || "") === "firestore-write-backoff"
+      || text.includes("firestore-write-backoff")
+      || text.includes("firestore-schreibpause aktiv");
+  }
+
+  async function waitForFirestoreWriteWindow() {
+    const remaining = firestoreWriteBackoffRemainingMs();
+    if (remaining > 0) {
+      const error = new Error(`Firestore-Schreibpause aktiv. In ${Math.max(1, Math.ceil(remaining / 1000))}s erneut versuchen.`);
       error.code = "firestore-write-backoff";
-      error.retryAfterMs = firestoreWriteBackoffUntil - now;
+      error.retryAfterMs = remaining;
       error.transient = true;
       throw error;
     }
@@ -1114,7 +1163,7 @@
   }, true);
 
   window.LifeBuilderFirebaseCore = {
-    version: "2026-08-17-v472-escape-presence-rest",
+    version: "2026-08-24-v525-reload-backoff-visibility",
     sdkVersion: FIREBASE_SDK_VERSION,
     load,
     waitForAuth,
@@ -1126,6 +1175,8 @@
     isRecoverableFirestoreError,
     isTargetCollisionError,
     isResourceExhaustedError,
+    isWriteBackoffError: isFirestoreWriteBackoffError,
+    getWriteBackoffRemainingMs: firestoreWriteBackoffRemainingMs,
     runWrite: queueFirestoreWrite,
     setWriteBackoff: setFirestoreWriteBackoff,
     getWriteGateStatus: () => ({ queueDepth: firestoreWriteQueueDepth, maxQueueDepth: FIRESTORE_MAX_APP_QUEUE, coalescedDepth: firestoreCoalescedWrites.size, lastWriteAt: firestoreWriteLastAt, backoffUntil: firestoreWriteBackoffUntil, minGapMs: FIRESTORE_WRITE_GAP_MS, resourceStrike: firestoreResourceStrike, sdkDrainActive: !!firestoreSdkDrainPromise, sdkDrainLastAt: firestoreSdkDrainLastAt }),
@@ -1153,5 +1204,5 @@
   window.JKFirestoreDiagnostics = printFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsPrevious = printPreviousFirestoreDiagnostics;
   window.JKFirestoreDiagnosticsClear = clearFirestoreDiagnostics;
-  console.info("JK.Games Firebase Runtime V472 aktiv · Save-Write-Drain + BigCards REST-Recovery + Escape Presence REST-Lane.");
+  console.info("JK.Games Firebase Runtime V525 aktiv · Reload-Backoff ruhig + iOS Auth-Guard + Escape Presence REST-Lane.");
 })();

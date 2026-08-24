@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v510-galaxy-world5';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v512-galaxy-presence-platform';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v510-galaxy-world5';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v512-galaxy-presence-platform';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V510 · Galaxy World 5 preview */
-const VERSION = '2026-08-24-v510-galaxy-world5';
+/* Escape.kl – JK.Games Top Game V512 · Galaxy centering/platform + Presence rules/retry */
+const VERSION = '2026-08-24-v512-galaxy-presence-platform';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -284,7 +284,9 @@ function escapeOnlinePresenceKey(payload){
 async function publishEscapePresence(force=false,online=true){
   if(!G.overlay||!G.onlineFb||!G.onlineUser?.uid||G.onlineWriteInFlight)return false;
   const now=Date.now();
-  if(!force&&now<Number(G.onlinePermissionRetryAt||0))return false;
+  // V512: permission-denied is not a transient movement change. Even a forced
+  // world refresh must respect the retry window or one denied rule can spam REST PATCHes.
+  if(now<Number(G.onlinePermissionRetryAt||0))return false;
   const fb=G.onlineFb;if(typeof fb.presenceSetRest!=='function')return false;
   const payload=escapeOnlinePresencePayload(online),key=escapeOnlinePresenceKey(payload),activePeers=G.remotePlayers.size>0;
   const minGap=activePeers?ESCAPE_ONLINE_ACTIVE_WRITE_MS:ESCAPE_ONLINE_SOLO_WRITE_MS;
@@ -299,13 +301,13 @@ async function publishEscapePresence(force=false,online=true){
     G.onlineLastError=String(error?.message||error||'');
     const denied=/403|permission[_ -]?denied|missing or insufficient permissions/i.test(G.onlineLastError);
     if(denied){
-      G.onlinePermissionRetryAt=Date.now()+30000;
+      G.onlinePermissionRetryAt=Date.now()+60000;
       const last=Number(G.onlinePermissionWarnAt||0);
       if(Date.now()-last>28000){
         G.onlinePermissionWarnAt=Date.now();
-        console.warn('Escape.kl Multiplayer: Firestore-Presence ist in Datenbank gamekl noch nicht freigeschaltet. Bitte V474 firestore.rules fuer gamekl veroeffentlichen.');
+        console.warn('Escape.kl Multiplayer: Firestore-Presence fuer diese Welt ist in Datenbank gamekl nicht freigeschaltet. Bitte die aktuellen V512 firestore.rules fuer gamekl veroeffentlichen.');
       }
-      setEscapeOnlineHud('offline',1+G.remotePlayers.size,'Firebase-Regel fuer Escape Presence fehlt/ist noch nicht aktiv · neuer Versuch in 30 s');
+      setEscapeOnlineHud('offline',1+G.remotePlayers.size,'Firebase-Regel fuer Escape Presence fehlt/ist noch nicht aktiv · neuer Versuch in 60 s');
     }else if(!/abort|offline|network/i.test(G.onlineLastError))console.warn('Escape.kl Presence schreiben',error);
     return false;
   }finally{G.onlineWriteInFlight=false}
@@ -968,7 +970,7 @@ function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoi
 function tagScope(object,scope=G.buildScope){if(object?.userData)object.userData.escapeScope=scope;return object;}
 function addWorldGlbModel({
   url='',name='escape-world-model',position={x:0,y:0,z:0},rotation={x:0,y:0,z:0},
-  scale=1,fitWidth=0,centerX=false,centerY=false,centerZ=false,floorY=null,
+  scale=1,fitWidth=0,centerX=false,centerY=false,centerZ=false,floorY=null,textureZoom=1,pointSize=0,
   doubleSide=true,frustumCulled=true,castShadow=false,receiveShadow=false
 }={}){
   const scope=G.buildScope,holder=tagScope(new THREE.Group(),scope);holder.name=`${name}-holder`;
@@ -982,12 +984,29 @@ function addWorldGlbModel({
     root.rotation.set(Number(rotation?.x)||0,Number(rotation?.y)||0,Number(rotation?.z)||0);
     root.scale.setScalar(Math.max(.0001,Number(scale)||1));
     root.traverse(obj=>{
-      if(!obj?.isMesh)return;
+      if(!obj?.isMesh&&!obj?.isPoints)return;
       obj.castShadow=!!castShadow;obj.receiveShadow=!!receiveShadow;obj.frustumCulled=!!frustumCulled;
       const materials=Array.isArray(obj.material)?obj.material:[obj.material];
       for(const material of materials){
         if(!material)continue;
-        if(doubleSide)material.side=THREE.DoubleSide;
+        if(doubleSide&&obj.isMesh)material.side=THREE.DoubleSide;
+        // V512: Space Laufweg is a GLTF POINTS cloud. Older code only configured
+        // meshes, so the star field ignored visibility/point-size settings.
+        if(obj.isPoints&&Number(pointSize)>0&&'size' in material){
+          material.size=Math.max(.1,Number(pointSize)||1);
+          if('sizeAttenuation' in material)material.sizeAttenuation=false;
+        }
+        const zoom=Math.max(1,Number(textureZoom)||1);
+        if(material.map&&zoom>1.0001){
+          const original=material.map,copy=original.clone(),factor=1/zoom;
+          copy.repeat.set(original.repeat.x*factor,original.repeat.y*factor);
+          copy.offset.set(
+            original.offset.x+(original.repeat.x-copy.repeat.x)*.5,
+            original.offset.y+(original.repeat.y-copy.repeat.y)*.5
+          );
+          copy.needsUpdate=true;
+          material.map=copy;
+        }
         material.needsUpdate=true;
       }
     });
@@ -2202,6 +2221,20 @@ function registerRunLanding(p){
   const dx=Math.abs(G.pos.x-p.mesh.position.x),dz=Math.abs(G.pos.z-p.mesh.position.z),perfect=dx<=Math.max(.2,p.w*.18)&&dz<=Math.max(.2,p.d*.18);
   if(perfect&&!G.perfectLandingClaims.has(key)){G.perfectLandingClaims.add(key);const bonus=Math.max(1,Math.round(levelPowerPerRunPoint()*(.20+Math.min(10,G.runCombo)*.05)));addLevelPower(bonus,true,G.world);toast(`🎯 PERFECT LANDING · COMBO ×${G.runCombo} · +${fmt(bonus)} Power`,'good',1050);}
 }
+function stabilizeGalaxyWorldSpawn(){
+  if(G.world!=='world-5')return false;
+  const p=G.platforms.find(item=>item?.scope==='world-5'&&item?.kind==='galaxy-space-platform'&&item?.mesh);
+  if(!p)return false;
+  const w=escapeWorldById('world-5');
+  const x=Number(w?.start?.x)||0,z=Number(w?.start?.z)||-70,top=p.mesh.position.y+p.h/2;
+  // V512: snap the initial player center to the actual gameplay platform top.
+  // This removes any dependence on the first animation-frame gravity/collision order.
+  G.pos.set(x,top+PLAYER_HALF+.035,z);G.vel.set(0,0,0);G.moveVel.set(0,0,0);
+  G.grounded=true;G.support=p;G.lastSupport=p;G.lastGroundPos.copy(G.pos);
+  G.reviveAnchor.copy(G.pos);G.reviveSupport=p;G.reviveStage=1;
+  if(G.playerRoot)G.playerRoot.position.copy(G.pos);
+  return true;
+}
 function setWorld(id,initial=false){
   cancelReviveOffer(true);G.reviveGraceUntil=0;G.reviveStabilizeUntil=0;G.reviveStabilizeSupport=null;removeSummonedTreadmill();removeSummonedVending();
   G.world=id;G.runFinished=false;G.activeInteractable=null;closeModal();G.yaw=0;G.jumpQueuedUntil=0;G.jumpHeld=false;G.stageClaims.clear();resetRunTech();G.trainingStreakSeconds=0;G.trainingStreakTier=0;
@@ -2214,7 +2247,8 @@ function setWorld(id,initial=false){
     G.state.activeTrainingWorld=w.id;queuePersist(700);
     G.stage=1;G.deaths=0;G.runStartedAt=performance.now();G.runFurthestZ=Number(w.start?.z)||-70;G.checkpoint=null;
     teleport(Number(w.start?.x)||0,Number(w.start?.y)||1.5,Number(w.start?.z)||-70);G.reviveAnchor.copy(G.pos);G.reviveSupport=null;G.reviveStage=1;G.reviveYaw=0;G.reviveStageClaims=new Set();
-    G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);G.scene.fog.near=38;G.scene.fog.far=225;
+    G.scene.background.setHex(Number(w.background)||0x07111d);G.scene.fog.color.setHex(Number(w.fog)||Number(w.background)||0x07111d);
+    if(w.id==='world-5'){G.scene.fog.near=110;G.scene.fog.far=680;}else{G.scene.fog.near=38;G.scene.fog.far=225;}
     toast(`${w.name} · Speed ${Math.round(currentSpeedStat(w.id))}/300 · Bei einem Fall hast du 5 Sekunden für JK/Coin-Revive.`,'good',2400);
   }else if(id==='duel-race'){
     G.duelRacePhase='lobby';G.duelRaceMode='solo';G.duelRaceHits=0;G.duelShieldInvulnerableUntil=0;G.stage=1;G.deaths=0;G.runStartedAt=0;G.runFurthestZ=29;G.runFinished=false;G.checkpoint={x:0,y:1.52,z:29};G.stageClaims.clear();teleport(0,1.52,29);G.scene.background.setHex(0x071823);G.scene.fog.color.setHex(0x071823);G.scene.fog.near=48;G.scene.fog.far=245;toast(`1 VS 1 SPEED RACE Lobby · bester Speed ${Math.round(bestDuelRaceSpeed())} · Vending hier vor dem Start nutzbar.`,'good',2600);updateDuelRaceShieldVisual();
@@ -2226,7 +2260,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(0x1b0c08);G.scene.fog.color.setHex(0x1b0c08);
     toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2000);
   }
-  resetHazardsForWorld(id);applyWorldVisibility();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
+  resetHazardsForWorld(id);applyWorldVisibility();if(id==='world-5')stabilizeGalaxyWorldSpawn();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
 }
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;

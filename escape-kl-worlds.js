@@ -112,7 +112,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     accent:0xa978ff,
     background:0x03020a,
     fog:0x05030d,
-    start:{x:0,y:1.20,z:-70},
+    start:{x:0,y:1.50,z:-70},
     laneHalfWidth:16,
     backtrackAllowance:5,
     time2:0,
@@ -121,8 +121,8 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     stageRewards:Object.freeze([0]),
     ownerOnly:false,
     locked:false,
-    difficulty:'GALAXY PREVIEW',
-    description:'Welt 5 · Galaxy World. Freischaltung ab Water World Level 1000. Diese erste Vorschau besteht bewusst aus einer einzigen Space-Plattform innerhalb der Galaxy-Hülle.'
+    difficulty:'GALAXY PREVIEW · CENTERED SPACE',
+    description:'Welt 5 · Galaxy World. Freischaltung ab Water World Level 1000. Diese Vorschau besitzt genau eine sichere Plattform. Außenhülle und innere Sternen-Galaxy sind gemeinsam mittig ausgerichtet.'
   })
 ]);
 

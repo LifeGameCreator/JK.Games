@@ -14228,9 +14228,19 @@ async function loadFirebasePhoneRuntime() {
   return firebasePhoneRuntimePromise;
 }
 
+function phoneFirestoreWriteBackoffWait(error = null) {
+  const core = window.LifeBuilderFirebaseCore;
+  const runtimeWait = Math.max(0, Number(core?.getWriteBackoffRemainingMs?.() || 0));
+  const code = String(error?.code || "");
+  const text = `${code} ${error?.message || error || ""}`.toLowerCase();
+  const isPause = code === "firestore-write-backoff" || text.includes("firestore-write-backoff") || text.includes("firestore-schreibpause aktiv");
+  return isPause || runtimeWait > 0 ? Math.max(runtimeWait, Number(error?.retryAfterMs || 0), isPause ? 1000 : 0) : 0;
+}
+
 function isPhoneFirestoreOfflineError(error) {
   const text = `${error?.code || ""} ${error?.message || error || ""}`.toLowerCase();
-  return text.includes("failed to get document because the client is offline")
+  return phoneFirestoreWriteBackoffWait(error) > 0
+    || text.includes("failed to get document because the client is offline")
     || text.includes("client is offline")
     || text.includes("network-request-failed")
     || text.includes("unavailable")
@@ -14286,6 +14296,9 @@ async function phoneFirestoreRequestWithRecovery(factory, label = "Telefon-Fireb
       return await onlineFirebaseTimeout(Promise.resolve().then(factory), 10000, label);
     } catch (error) {
       lastError = error;
+      // V525: eine aktive globale Schreibpause ist kein Transportdefekt. Nicht
+      // reconnecten und nicht fünfmal denselben Write erneut anstoßen.
+      if (phoneFirestoreWriteBackoffWait(error) > 0) throw error;
       if (!isPhoneFirestoreOfflineError(error) || navigator.onLine === false || attempt >= attempts - 1) throw error;
       const fb = await loadFirebasePhoneRuntime().catch(() => null);
       await recoverPhoneFirestoreTransport(fb, `${label}-retry-${attempt + 1}`, 600 + attempt * 350);
@@ -14650,6 +14663,13 @@ function resetPhoneBackgroundRealtime() {
 async function ensurePhoneBackgroundRealtime() {
   if (!state || !state.phoneSim || !ownedPhoneItem()) return;
   if (navigator.onLine === false) return false;
+  const initialBackoff = phoneFirestoreWriteBackoffWait();
+  if (initialBackoff > 0) {
+    // V525: beim Reload keine Phone-Registrierung während der zentralen
+    // Firestore-Schreibpause starten. Ein einziger Retry nach Ablauf reicht.
+    schedulePhoneListenerRestart(initialBackoff + 350);
+    return false;
+  }
   if (phoneBackgroundStarting) return phoneBackgroundStarting;
   phoneBackgroundStarting = (async () => {
     try {
@@ -14664,6 +14684,11 @@ async function ensurePhoneBackgroundRealtime() {
       await Promise.all([startIncomingCallListener(), startGlobalSmsListener()]);
       return true;
     } catch (error) {
+      const backoffWait = phoneFirestoreWriteBackoffWait(error);
+      if (backoffWait > 0 && navigator.onLine !== false) {
+        schedulePhoneListenerRestart(backoffWait + 350);
+        return false;
+      }
       if (isPhoneFirestoreOfflineError(error) && navigator.onLine !== false) {
         schedulePhoneRealtimeRecovery(2200, "phone-background-offline");
         return false;
