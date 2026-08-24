@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v517-centered-rebuild';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v518-inside-galaxy-course';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v517-centered-rebuild';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v518-inside-galaxy-course';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V517 · centered Galaxy World rebuild */
-const VERSION = '2026-08-24-v517-centered-rebuild';
+/* Escape.kl – JK.Games Top Game V518 · Galaxy course inside shell + final Wins claim */
+const VERSION = '2026-08-24-v518-inside-galaxy-course';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -2902,9 +2902,9 @@ function enforceGalaxyWorldBoundary(){
   if(G.world!=='world-5')return false;
   // The visible shell is ~520 units wide. Keep the player safely inside it with
   // a small visual margin, even if extreme Speed or a jump would cross the sphere.
-  // V517: exact center of the rebuilt Galaxy shell and Level-5 boss arena.
-  // The whole playable course stays well inside this radius.
-  const cx=0,cy=90,cz=-338,maxRadius=252;
+  // V518: visible Galaxy shell is centered around the full five-level course.
+  // The raised platforms stay safely inside this radius.
+  const cx=0,cy=90,cz=-260,maxRadius=252;
   const dx=G.pos.x-cx,dy=G.pos.y-cy,dz=G.pos.z-cz,dist=Math.hypot(dx,dy,dz);
   if(!Number.isFinite(dist)||dist<=maxRadius)return false;
   const scale=maxRadius/Math.max(.001,dist);
@@ -2958,6 +2958,22 @@ function claimStageWin(p){
   G.stageClaims.add(claimKey);const reward=awardWins(p.winReward,`${w.name} Stage ${p.winStage}`,true);
   awardMainXp(Math.min(8,2+Math.floor(p.winStage/3)),`Escape.kl · ${w.name} Stage ${p.winStage}`,`escape-${w.id}-stage-${p.winStage}-${Date.now()}`);
   soundCheckpoint();
+  // V518 Galaxy World: there are NO per-level payouts. The single final golden
+  // pad is a deliberate claim point after the boss. Collecting it records the
+  // win and starts a fresh Galaxy run in the World-5 lobby instead of sending
+  // the player to the global Hub.
+  if(w.id==='world-5'&&p.winStage>=Number(w.stageCount||0)){
+    const sec=Math.max(0,(performance.now()-G.runStartedAt)/1000);
+    const previous=Number(G.state.bestTimes[w.id]||0);
+    if(!previous||sec<previous)G.state.bestTimes[w.id]=sec;
+    G.state.completions[w.id]=Math.max(0,Number(G.state.completions[w.id]||0))+1;
+    let stars=1;if(sec<=Number(w.time2||9999))stars++;if(G.deaths===0&&sec<=Number(w.time3||9999))stars++;
+    G.state.worldStars[w.id]=Math.max(Number(G.state.worldStars[w.id]||0),stars);
+    queuePersist(50);soundFinish();
+    setWorld(w.id);
+    toast(`🏆 GALAXY WORLD GEWONNEN · +${reward.toLocaleString('de-DE')} WINS ABGEHOLT · NEUER RUN`,'good',4200);
+    return true;
+  }
   // Das letzte WIN-Pad beendet die Welt vollständig: Stage-Wins kassieren,
   // Finish registrieren, Folge-Welt prüfen und direkt zurück in den Hub.
   if(p.winStage>=Number(w.stageCount||0)){

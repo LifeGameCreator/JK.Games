@@ -1,6 +1,6 @@
-/* Escape.KL World 5 – GALAXY WORLD V517.
-   Rebuilt playable course: all five levels stay centered inside the Galaxy sphere,
-   the whole course is raised, and Level 5 finishes at the visual sphere center. */
+/* Escape.KL World 5 – GALAXY WORLD V518.
+   Course lifted deep into the visible Galaxy, signage cleaned up, and Wins are
+   claimed only once after defeating Level 5. */
 export function buildGalaxyWorld(api){
   const {
     addPlatform,
@@ -13,7 +13,6 @@ export function buildGalaxyWorld(api){
     addHazardBox,
     addWorldGlbModel=()=>null,
     worldToast=()=>{},
-    awardStage=()=>0,
     teleportPlayer=()=>{},
     getCurrentWorldSpeed=()=>0,
     onWorldEnter=()=>{},
@@ -23,24 +22,24 @@ export function buildGalaxyWorld(api){
   // V517: the entire playable course lives in the middle volume of the sphere.
   // Level 1 starts high enough to be clearly visible; Level 5 ends at the exact
   // visual Galaxy center instead of near the shell edge.
-  const WORLD_BASE_Y=60;
+  const WORLD_BASE_Y=180;
   const FLOOR_Y=WORLD_BASE_Y+.25;
   const GALAXY_CENTER_X=0;
   const GALAXY_CENTER_Y=90;
-  const GALAXY_CENTER_Z=-338;
+  const GALAXY_CENTER_Z=-260;
 
-  const LEVEL_REWARDS=[8_000_000_000,14_000_000_000,24_000_000_000,40_000_000_000,65_000_000_000];
+  const FINAL_WIN_REWARD=65_000_000_000;
   const LEVEL_SPEEDS=[50,70,85,100,120];
 
   addWorldGlbModel({
-    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v517-centered-rebuild',
+    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v518-inside-galaxy-course',
     name:'world5-inside-galaxy-shell',
     position:{x:GALAXY_CENTER_X,y:GALAXY_CENTER_Y,z:GALAXY_CENTER_Z},
     fitWidth:520,centerX:true,centerY:true,centerZ:true,textureZoom:1.82,doubleSide:true,
     frustumCulled:true,castShadow:false,receiveShadow:false,lazy:true
   });
   addWorldGlbModel({
-    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v517-centered-rebuild',
+    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v518-inside-galaxy-course',
     name:'world5-space-galaxy',
     position:{x:GALAXY_CENTER_X,y:GALAXY_CENTER_Y,z:GALAXY_CENTER_Z},
     fitWidth:470,pointSize:2.85,pointBudget:26000,centerX:true,centerY:true,centerZ:true,
@@ -48,8 +47,7 @@ export function buildGalaxyWorld(api){
   });
 
   const levelHeader=(level,z,y,speed,required=false)=>{
-    addSign(`LEVEL ${level} · ${required?'SPEED BENÖTIGT':'SPEED EMPFOHLEN'} ${speed}`,{x:0,y:y+5.0,z},0xc99cff,.52);
-    addSign(`${LEVEL_REWARDS[level-1].toLocaleString('de-DE')} WINS`,{x:0,y:y+4.05,z:z+.01},0xffd86b,.30);
+    addSign(`LEVEL ${level} · SPEED ${required?'BENÖTIGT':'EMPFOHLEN'} ${speed}`,{x:0,y:y+4.25,z},0xc99cff,.42);
   };
 
   // ---------------------------------------------------------------------------
@@ -73,7 +71,7 @@ export function buildGalaxyWorld(api){
   // overlaps the start pad so there is no invisible gap or height mismatch.
   addPlatform({x:0,y:FLOOR_Y,z:-187,w:13,h:.72,d:58,color:0x21133d,label:'',stage:1,kind:'galaxy-level1-runway'});
   levelHeader(1,-160,FLOOR_Y,LEVEL_SPEEDS[0]);
-  addSign('GERADE · HINDERNISSE ÜBERSPRINGEN',{x:0,y:FLOOR_Y+3.15,z:-164},0xe9ddff,.29);
+  addSign('GERADE · HINDERNISSE ÜBERSPRINGEN',{x:0,y:FLOOR_Y+2.65,z:-164},0xe9ddff,.25);
 
   const l1Obstacles=[
     {z:-171,w:10.7,h:.72},{z:-181,w:8.8,h:1.00},{z:-191,w:11.0,h:.78},
@@ -84,7 +82,6 @@ export function buildGalaxyWorld(api){
       color:i%2?0xd451ff:0x8a55ff,emissive:i%2?0xa624e8:0x6238db,kind:'galaxy-l1-obstacle'});
     addRingDeco(i%2===1?(i===1?-1.2:1.2):0,FLOOR_Y+2.25,o.z,1.45,.09,0xd9b8ff,Math.PI/2);
   });
-  addAutoTrigger('galaxy-level1-complete',0,-216,12.5,3.2,()=>awardStage(1,LEVEL_REWARDS[0],'LEVEL 1'));
 
   // ---------------------------------------------------------------------------
   // LEVEL 2 · real ascending long jumps. Large landing pads + growing gaps make
@@ -94,7 +91,7 @@ export function buildGalaxyWorld(api){
   let l2Y=FLOOR_Y+.35;
   let l2Z=l2StartZ;
   levelHeader(2,l2StartZ+1,l2Y,LEVEL_SPEEDS[1]);
-  addSign('LANGE SPRÜNGE · IMMER HÖHER',{x:0,y:l2Y+4.15,z:l2StartZ-1},0xaee7ff,.30);
+  addSign('LANGE SPRÜNGE · IMMER HÖHER',{x:0,y:l2Y+2.70,z:l2StartZ-1.5},0xaee7ff,.25);
 
   const l2Pads=[];
   const l2Xs=[0,1.4,-1.5,1.7,-1.7,1.2,0];
@@ -108,7 +105,6 @@ export function buildGalaxyWorld(api){
   const l2End=l2Pads.at(-1);
   // A safe connector platform leads naturally into the spiral entrance.
   addPlatform({x:0,y:l2Y+.35,z:-258.2,w:7.0,h:.62,d:5.2,color:0x304c73,label:'',stage:2,kind:'galaxy-level2-exit'});
-  addAutoTrigger('galaxy-level2-complete',0,-258.2,7.0,4.8,()=>awardStage(2,LEVEL_REWARDS[1],'LEVEL 2'));
 
   // ---------------------------------------------------------------------------
   // LEVEL 3 · compact double spiral, centered around X=0. It rises through the
@@ -123,7 +119,7 @@ export function buildGalaxyWorld(api){
   const angleStart=Math.PI/2;
   const angleStep=(Math.PI*3)/(spiralCount-1); // 1.5 turns: entrance front, exit rear.
   levelHeader(3,-258,spiralY,LEVEL_SPEEDS[2]);
-  addSign('DOPPELSPIRALE · LASERN AUSWEICHEN',{x:0,y:spiralY+4.2,z:-260},0xff8cdd,.29);
+  addSign('SPIRALE · LASERN AUSWEICHEN',{x:0,y:spiralY+2.75,z:-261.5},0xff8cdd,.25);
 
   let lastSpiral=null;
   for(let i=0;i<spiralCount;i++){
@@ -147,7 +143,6 @@ export function buildGalaxyWorld(api){
     if(i%5===0)addGlowLight(x,spiralY+2.1,z,0xa35cff,.52,7);
   }
   addPlatform({x:0,y:spiralY+.25,z:-286,w:8,h:.62,d:6,color:0x402b67,label:'',stage:3,kind:'galaxy-level3-exit'});
-  addAutoTrigger('galaxy-level3-complete',0,-286,7.5,5.0,()=>awardStage(3,LEVEL_REWARDS[2],'LEVEL 3'));
 
   // ---------------------------------------------------------------------------
   // LEVEL 4 · centered symbol corridor. Five rows, exactly three doors per row.
@@ -158,7 +153,7 @@ export function buildGalaxyWorld(api){
   const l4EndZ=-321;
   addPlatform({x:0,y:l4Y,z:(l4StartZ+l4EndZ)/2,w:18,h:.64,d:36,color:0x1c2849,label:'',stage:4,kind:'galaxy-level4-doors'});
   levelHeader(4,l4StartZ+2,l4Y,LEVEL_SPEEDS[3]);
-  addSign('5 SYMBOLTÜREN · FALSCH = LEVELSTART',{x:0,y:l4Y+4.15,z:l4StartZ},0xffffff,.26);
+  addSign('5 TÜREN · FALSCH = LEVELSTART',{x:0,y:l4Y+2.75,z:l4StartZ-1.5},0xffffff,.23);
   addCollider(-9.35,(l4StartZ+l4EndZ)/2,.7,36);
   addCollider(9.35,(l4StartZ+l4EndZ)/2,.7,36);
 
@@ -172,10 +167,16 @@ export function buildGalaxyWorld(api){
   let doorTargets=[];
   let doorStep=0;
   const l4StartPlayerY=l4Y+.64/2+.86;
+  const refreshDoorTargetSigns=()=>{
+    for(let row=0;row<doorTargetSigns.length;row++){
+      const signs=doorTargetSigns[row]||[];
+      for(let s=0;s<signs.length;s++)signs[s].visible=row===doorStep&&s===doorTargets[row];
+    }
+  };
   const resetDoorTargets=()=>{
     doorTargets=doorRows.map(()=>Math.floor(Math.random()*symbols.length));
     doorStep=0;
-    for(let row=0;row<doorRows.length;row++)for(let s=0;s<symbols.length;s++)doorTargetSigns[row][s].visible=s===doorTargets[row];
+    refreshDoorTargetSigns();
   };
   const announceDoor=()=>{
     const target=symbols[doorTargets[Math.min(doorStep,doorTargets.length-1)]||0];
@@ -202,12 +203,13 @@ export function buildGalaxyWorld(api){
         if(symbols[expected]?.id!==sym.id){
           worldToast(`❌ FALSCHE TÜR · gesucht war ${symbols[expected].name}`,'bad',2200);
           doorStep=0;
+          refreshDoorTargetSigns();
           teleportPlayer(0,l4StartPlayerY,l4StartZ+1.8);
           return;
         }
         doorStep++;
+        refreshDoorTargetSigns();
         if(doorStep>=5){
-          awardStage(4,LEVEL_REWARDS[3],'LEVEL 4');
           worldToast('✅ 5/5 RICHTIG · LEVEL 5 OFFEN','good',2500);
         }else announceDoor();
       });
@@ -217,13 +219,13 @@ export function buildGalaxyWorld(api){
 
   // ---------------------------------------------------------------------------
   // LEVEL 5 · Speed 120 gate + rising charge bridge + boss arena. The boss arena
-  // itself is centered at the exact Galaxy center (0,90,-338).
+  // the boss arena stays at the end of the course, while the shell itself is centered around the full run.
   // ---------------------------------------------------------------------------
-  const l5Y=GALAXY_CENTER_Y;
+  const l5Y=l4Y+5.40;
   const l5GateZ=-324;
-  const bossCenterZ=GALAXY_CENTER_Z;
+  const bossCenterZ=-338;
   levelHeader(5,l5GateZ+2,l4Y,LEVEL_SPEEDS[4],true);
-  addSign('SPEED 120 · ZUM BOSS HOCHSPRINGEN',{x:0,y:l4Y+4.2,z:l5GateZ+1},0xff9ae7,.28);
+  addSign('ZUM BOSS HOCHSPRINGEN',{x:0,y:l4Y+2.75,z:l5GateZ},0xff9ae7,.24);
 
   // Three broad ascending approach pads make the Level-5 entrance readable and
   // bring the player from the door corridor up to the central boss arena.
@@ -295,8 +297,8 @@ export function buildGalaxyWorld(api){
   // Official current endpoint: no teaser text anywhere else in the world.
   addPlatform({x:0,y:l5Y,z:-360,w:20,h:.68,d:12,color:0x21163c,label:'',stage:5,kind:'galaxy-current-end'});
   addSign('COMING SOON',{x:-2.0,y:l5Y+5.1,z:-360},0xc99cff,.62);
-  addPlatform({x:6.3,y:l5Y+.10,z:-360,w:5.0,h:.74,d:5.2,color:0xd5a93e,label:'+65B WINS',stage:5,kind:'win-pad',winReward:LEVEL_REWARDS[4],winStage:5});
-  addSign('65.000.000.000 WINS',{x:6.3,y:l5Y+4.65,z:-360},0xffd86b,.27);
+  addPlatform({x:6.3,y:l5Y+.10,z:-360,w:5.0,h:.74,d:5.2,color:0xd5a93e,label:'WINS',stage:5,kind:'win-pad',winReward:FINAL_WIN_REWARD,winStage:5});
+  addSign('WINS ABHOLEN · 65 MRD',{x:6.3,y:l5Y+4.65,z:-360},0xffd86b,.27);
 
   onWorldEnter(()=>{
     resetDoorTargets();

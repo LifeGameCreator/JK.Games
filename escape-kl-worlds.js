@@ -113,17 +113,17 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     accent:0xa978ff,
     background:0x03020a,
     fog:0x05030d,
-    start:{x:0,y:61.45,z:-153},
+    start:{x:0,y:181.45,z:-153},
     laneHalfWidth:18,
     backtrackAllowance:6,
     time2:420,
     time3:300,
     speedRecommendations:Object.freeze([50,70,85,100,120]),
-    stageRewards:Object.freeze([8000000000,14000000000,24000000000,40000000000,65000000000]),
+    stageRewards:Object.freeze([0,0,0,0,65000000000]),
     ownerOnly:false,
     locked:false,
     difficulty:'GALAXY · SPRUNGPARCOURS · LASERSPIRALE · SYMBOLTÜREN · BOSS',
-    description:'Galaxy World ist die offizielle fünfte Escape-Welt. Freischaltung ab Water World Level 1000. Alle Level laufen mittig innerhalb der Galaxy-Kugel: vom Speed-50-Hindernissprint über lange Höhensprünge und eine Laser-Spirale bis zum Speed-120-Boss im Zentrum.'
+    description:'Galaxy World ist die offizielle fünfte Escape-Welt. Freischaltung ab Water World Level 1000. Der komplette Parcours liegt hoch im Inneren der Galaxy-Kugel. Wins gibt es nur einmal nach dem Sieg über Level 5 und müssen am goldenen Pad abgeholt werden; danach startet ein neuer Galaxy-Run.'
   })
 ]);
 
