@@ -1,14 +1,15 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260818-escape-v503-water-complete';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v510-galaxy-world5';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v510-galaxy-world5';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V508 · Butterfly loop + 1 VS 1 Speed Race */
-const VERSION = '2026-08-19-v509';
+/* Escape.kl – JK.Games Top Game V510 · Galaxy World 5 preview */
+const VERSION = '2026-08-24-v510-galaxy-world5';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -39,7 +40,7 @@ const TOUCH_LOOK_SENSITIVITY_Y = .0048;
 const REVIVE_WINDOW_MS = 5000;
 const REVIVE_POST_TELEPORT_GRACE_MS = 1800;
 const REVIVE_GROUND_STABILIZE_MS = 420;
-const REVIVE_COSTS = Object.freeze({'keyboard-lab':10,'candy-keys':20,'toxic-keyboard':30,'world-4':40});
+const REVIVE_COSTS = Object.freeze({'keyboard-lab':10,'candy-keys':20,'toxic-keyboard':30,'world-4':40,'world-5':50});
 const SKYRUN_SPEED_STAT = 100;
 const SKYRUN_FINISH_REWARD = 50000;
 const SKYRUN_MILESTONE_REWARDS = Object.freeze([250,500,1000,2000,3500,5000,7500,10000,15000]);
@@ -204,7 +205,10 @@ const WORLD_SHOP_TIERS = Object.freeze({
   'keyboard-lab':Object.freeze({number:1,name:'Wind World Shop',costMult:1.5,maxStepTier:3,maxItemLevel:2,maxCoreTier:1,dailyMult:1,next:'Candy World'}),
   'candy-keys':Object.freeze({number:2,name:'Candy World Shop',costMult:3.5,maxStepTier:5,maxItemLevel:4,maxCoreTier:2,dailyMult:3,next:'Toxic World'}),
   'toxic-keyboard':Object.freeze({number:3,name:'Toxic World Shop',costMult:8,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:8,next:'World 4'}),
-  'world-4':Object.freeze({number:4,name:'Water World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'World 5',comingSoon:false,ownerOnly:false})
+  'world-4':Object.freeze({number:4,name:'Water World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'Galaxy World',comingSoon:false,ownerOnly:false}),
+  // World 5 is only a preview for now. It deliberately reuses the World-4 shop cap,
+  // so entering Galaxy World can never accidentally fall back to the World-1 shop.
+  'world-5':Object.freeze({number:5,name:'Galaxy World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'MAX',comingSoon:false,ownerOnly:false})
 });
 function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
 function shopTier(worldId=shopWorldId()){return WORLD_SHOP_TIERS[worldId]||WORLD_SHOP_TIERS['keyboard-lab'];}
@@ -217,6 +221,7 @@ const G = {
   overlay:null, scene:null, camera:null, renderer:null, raf:0, lastFrameAt:0,
   sourceDevice:'', state:null, dirty:false, persistTimer:0, lastLocalSave:0,
   player:null, playerRoot:null, character:null, trail:null, trailPoints:[],trailParticles:[],trailEmitCarry:0,auraGroup:null, auraRings:[],specialFxGroup:null, petVisuals:[], petLoadSeq:0, formModel:null, formWrapper:null, formMixer:null, formActions:null, formAction:null, formLoadSeq:0, gltfLoader:null,
+  externalWorldModels:[],
   platforms:[], interactables:[], decorative:[], portalFx:[], colliders:[], hazards:[],
   world:'hub', stage:0, checkpoint:null, deaths:0, runStartedAt:0, runFinished:false, stageClaims:new Set(),
   pos:new THREE.Vector3(0,1.08,8), vel:new THREE.Vector3(), moveVel:new THREE.Vector3(), grounded:false, support:null,lastSupport:null,
@@ -461,7 +466,7 @@ function defaultProgress(){
   return {
     version:16,speed:0,wins:0,lifetimeWins:0,stageWinsCollected:0,runPoints:0,rebirths:0,stepButtonTier:0,bestRunCombo:0,
     trail:'none',ownedTrails:['none'],trailPlacement:'feet',aura:'none',ownedAuras:['none'],worldsUnlocked:['keyboard-lab'],
-    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0},activeTrainingWorld:'keyboard-lab',
+    worldProgress:{'keyboard-lab':emptyWorldProgress(),'candy-keys':emptyWorldProgress(),'toxic-keyboard':emptyWorldProgress(),'world-4':emptyWorldProgress(),'world-5':emptyWorldProgress()},worldRebirths:{'keyboard-lab':0,'candy-keys':0,'toxic-keyboard':0,'world-4':0,'world-5':0},activeTrainingWorld:'keyboard-lab',
     ownedTreadmills:['starter'],ownerEventMultiplier:1,ownerWorldUnlockBypass:false,
     characterChoice:'male',ownedSpecialCharacters:[],demonGalaxyUpgrade:false,
     activePet:'none',activePets:[],ownedPets:['none'],petSlot3Unlocked:false,freeCatLevel:0,freeButterflyLevel:0,freeLegoLevel:0,
@@ -485,7 +490,7 @@ function normalizeProgress(raw){
   d.rebirths=Math.max(0,Math.floor(Number(d.rebirths)||0));
   d.worldRebirths=d.worldRebirths&&typeof d.worldRebirths==='object'?d.worldRebirths:{};
   if(!Object.keys(d.worldRebirths).length&&d.rebirths>0)d.worldRebirths['keyboard-lab']=d.rebirths;
-  for(const wid of ['keyboard-lab','candy-keys','toxic-keyboard','world-4'])d.worldRebirths[wid]=Math.max(0,Math.floor(Number(d.worldRebirths[wid])||0));
+  for(const wid of ['keyboard-lab','candy-keys','toxic-keyboard','world-4','world-5'])d.worldRebirths[wid]=Math.max(0,Math.floor(Number(d.worldRebirths[wid])||0));
   const legacyTier=Math.max(0,Math.floor(Number(d.speedUpgrade)||0));
   d.stepButtonTier=Math.max(0,Math.min(STEP_BUTTONS.length-1,Math.floor(Number(d.stepButtonTier ?? legacyTier)||0)));
   delete d.speedUpgrade;
@@ -951,7 +956,7 @@ function signTexture(key,text,color=0x58ddff){
   x.textAlign='center';x.textBaseline='middle';x.shadowColor=hex;x.shadowBlur=18;x.fillStyle='#f6fbff';x.fillText(text,512,130);x.shadowBlur=0;
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;G.textures.set(key,t);return t;
 }
-function disposeAll(){for(const v of G.geometries.values())v.dispose?.();for(const v of G.materials.values())v.dispose?.();for(const v of G.textures.values())v.dispose?.();G.geometries.clear();G.materials.clear();G.textures.clear();}
+function disposeAll(){for(const root of G.externalWorldModels||[])disposeExternalObject(root);G.externalWorldModels=[];for(const v of G.geometries.values())v.dispose?.();for(const v of G.materials.values())v.dispose?.();for(const v of G.textures.values())v.dispose?.();G.geometries.clear();G.materials.clear();G.textures.clear();}
 
 function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoint=0,stage=0,finish=false,winReward=0,winStage=0,motion=null,blink=false,kind='key',hub=false,jumpBoost=0,speedGate=0,requiredSpeed=0,collapseDelayMs=0,collapseRespawnMs=0}){
   const sharedSide=mat(`side-${color}`,{color:new THREE.Color(color).multiplyScalar(.62),roughness:.68,metalness:.1});const side=blink?sharedSide.clone():sharedSide;if(blink)G.materials.set(`blink-side-${color}-${G.platforms.length}`,side);
@@ -961,6 +966,51 @@ function addPlatform({x=0,y=0,z=0,w=3,h=.45,d=3,color=0x223a58,label='',checkpoi
   const p={mesh,w,h,d,label,base:new THREE.Vector3(x,y,z),motion,blink,active:true,checkpoint,stage,finish,winReward:Math.max(0,Number(winReward)||0),winStage:Math.max(0,Number(winStage)||0),kind,hub,jumpBoost:Math.max(0,Number(jumpBoost)||0),speedGate:Math.max(0,Number(speedGate)||0),requiredSpeed:Math.max(0,Number(requiredSpeed)||0),collapseDelayMs:Math.max(0,Number(collapseDelayMs)||0),collapseRespawnMs:Math.max(500,Number(collapseRespawnMs)||2400),collapseAt:0,collapsedUntil:0,speedGateWarnAt:0,scope:G.buildScope,lastPos:new THREE.Vector3(x,y,z),delta:new THREE.Vector3(),press:0,lastContactAt:0};tagScope(mesh,p.scope);mesh.userData.escapePlatform=p;G.platforms.push(p);return p;
 }
 function tagScope(object,scope=G.buildScope){if(object?.userData)object.userData.escapeScope=scope;return object;}
+function addWorldGlbModel({
+  url='',name='escape-world-model',position={x:0,y:0,z:0},rotation={x:0,y:0,z:0},
+  scale=1,fitWidth=0,centerX=false,centerY=false,centerZ=false,floorY=null,
+  doubleSide=true,frustumCulled=true,castShadow=false,receiveShadow=false
+}={}){
+  const scope=G.buildScope,holder=tagScope(new THREE.Group(),scope);holder.name=`${name}-holder`;
+  holder.position.set(Number(position?.x)||0,Number(position?.y)||0,Number(position?.z)||0);
+  G.scene.add(holder);G.decorative.push(holder);
+  if(!url)return holder;
+  createSharedLoader().load(url,gltf=>{
+    if(!G.scene||holder.parent!==G.scene)return;
+    const root=gltf?.scene||gltf?.scenes?.[0];if(!root)return;
+    root.name=name;
+    root.rotation.set(Number(rotation?.x)||0,Number(rotation?.y)||0,Number(rotation?.z)||0);
+    root.scale.setScalar(Math.max(.0001,Number(scale)||1));
+    root.traverse(obj=>{
+      if(!obj?.isMesh)return;
+      obj.castShadow=!!castShadow;obj.receiveShadow=!!receiveShadow;obj.frustumCulled=!!frustumCulled;
+      const materials=Array.isArray(obj.material)?obj.material:[obj.material];
+      for(const material of materials){
+        if(!material)continue;
+        if(doubleSide)material.side=THREE.DoubleSide;
+        material.needsUpdate=true;
+      }
+    });
+    root.updateMatrixWorld(true);
+    let box=new THREE.Box3().setFromObject(root),size=box.getSize(new THREE.Vector3());
+    if(Number(fitWidth)>0&&size.x>1e-6){
+      const fitted=Number(fitWidth)/size.x;root.scale.multiplyScalar(fitted);root.updateMatrixWorld(true);
+      box=new THREE.Box3().setFromObject(root);size=box.getSize(new THREE.Vector3());
+    }
+    const center=box.getCenter(new THREE.Vector3());
+    if(centerX)root.position.x-=center.x;
+    if(centerY)root.position.y-=center.y;
+    if(centerZ)root.position.z-=center.z;
+    root.updateMatrixWorld(true);
+    if(Number.isFinite(Number(floorY))){
+      box=new THREE.Box3().setFromObject(root);
+      root.position.y+=Number(floorY)-box.min.y;
+      root.updateMatrixWorld(true);
+    }
+    tagScope(root,scope);holder.add(root);G.externalWorldModels.push(root);
+  },undefined,error=>console.warn(`Escape.kl GLB konnte nicht geladen werden: ${url}`,error?.message||error));
+  return holder;
+}
 function addSign(text,pos,color=0x58ddff,scale=1){
   const width=Math.max(3.3,Math.min(9.6,2.6+String(text).length*.18))*scale,height=1.02*scale;
   const tex=signTexture(`sign-v451-${text}-${color}`,text,color),m=new THREE.MeshBasicMaterial({map:tex,transparent:true,toneMapped:false,side:THREE.FrontSide,depthWrite:false});
@@ -1267,7 +1317,7 @@ function refreshHubWorldPortalStatus(){
     const statusId=obj?.userData?.escapeWorldStatusId;
     if(statusId){
       const w=escapeWorldById(statusId);if(!w)continue;const status=worldUnlockStatus(w),unlocked=status.unlocked;
-      const text=w.number===1?'BETRETEN':unlocked?'FREIGESCHALTET':`LEVEL ${status.requiredLevel} + VORWELT`;
+      const text=w.number===1?'BETRETEN':unlocked?'FREIGESCHALTET':status.requiredRuns>0?`LEVEL ${status.requiredLevel} + VORWELT`:`LEVEL ${status.requiredLevel} IN ${escapeWorldById(status.sourceId)?.name?.toUpperCase()||'VORWELT'}`;
       const color=unlocked?0x98efb5:0xffcb66;
       const tex=signTexture(`sign-v458-live-${statusId}-${text}-${color}`,text,color);
       if(obj.material?.map!==tex){obj.material.map=tex;obj.material.needsUpdate=true;}
@@ -1284,9 +1334,9 @@ function setupScene(){
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
   G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(1024,1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
-  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
+  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,addWorldGlbModel,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='duel-race';buildDuelRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
-  G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);buildWorldPetEggStation('keyboard-lab');G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);buildWorldPetEggStation('candy-keys');G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);buildWorldPetEggStation('toxic-keyboard');G.buildScope='world-4';buildWaterWorld(worldApi);buildWorldPetEggStation('world-4');
+  G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);buildWorldPetEggStation('keyboard-lab');G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);buildWorldPetEggStation('candy-keys');G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);buildWorldPetEggStation('toxic-keyboard');G.buildScope='world-4';buildWaterWorld(worldApi);buildWorldPetEggStation('world-4');G.buildScope='world-5';buildGalaxyWorld(worldApi);
   G.buildScope='hub';createPlayer();resize();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
 }
 function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();}
@@ -1350,13 +1400,13 @@ function buildHub(){
     addPlatform({x:b.x,y:.366,z:(frontEdge+sidewalkZ)/2,w:2.45,h:.075,d:len,color:0xc9c6bc,kind:'hub-path',hub:true});
   };
 
-  // --- WORLD STREET: sechs Häuser, World 1–3 aktiv, World 4–6 Coming Soon -------
+  // --- WORLD STREET: World 5 is now the Galaxy preview. World 6 stays Coming Soon. ---
   const worldHouses=[
     {id:'keyboard-lab',number:1,name:'WIND WORLD',x:-45,w:11,d:7,h:6.1,wall:0xd8d0c4,roof:0x3e596b,accent:0x58ddff},
     {id:'candy-keys',number:2,name:'CANDY WORLD',x:-31,w:11,d:7,h:7.0,wall:0xcfc8bc,roof:0x4b535c,accent:0xff77bb},
     {id:'toxic-keyboard',number:3,name:'TOXIC WORLD',x:-15,w:12,d:7,h:6.5,wall:0xe0d8cb,roof:0x46525a,accent:0x75ff72},
     {id:'world-4',number:4,name:'WATER WORLD',ownerOnly:false,x:15,w:12,d:7,h:6.5,wall:0xd8d4c8,roof:0x425866,accent:0x4fd8ff},
-    {id:null,number:5,name:'COMING SOON',x:31,w:11,d:7,h:7.1,wall:0xd6cec0,roof:0x4b5057,accent:0x858bff},
+    {id:'world-5',number:5,name:'GALAXY WORLD',ownerOnly:false,x:31,w:11,d:7,h:7.1,wall:0x27213a,roof:0x151022,accent:0xa978ff},
     {id:null,number:6,name:'COMING SOON',x:45,w:11,d:7,h:6.1,wall:0xd9d1c4,roof:0x3f5361,accent:0x858bff}
   ];
   for(const h of worldHouses){
