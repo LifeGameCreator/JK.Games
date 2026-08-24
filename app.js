@@ -150,8 +150,18 @@ function isDeveloperModeEnabled() {
 // echten Benutzeraktion. Automatische Firebase-, Start- oder Anrufsvorgänge
 // dürfen diese APIs vorher nicht aktivieren.
 function hasTransientUserGesture(event = null) {
-  if (event?.isTrusted === true) return true;
-  return navigator.userActivation?.isActive === true;
+  // Wenn die User-Activation-API vorhanden ist, ist sie die entscheidende
+  // Quelle. Ein `isTrusted` Event allein reicht fuer Chrome/Safari nicht aus:
+  // z. B. touchend/page lifecycle Events koennen trusted sein, obwohl das
+  // kurze Autoplay-Fenster bereits abgelaufen ist.
+  if (navigator.userActivation && typeof navigator.userActivation.isActive === "boolean") {
+    return navigator.userActivation.isActive === true;
+  }
+
+  // Fallback fuer aeltere Browser ohne navigator.userActivation.
+  return event?.isTrusted === true && [
+    "pointerdown", "pointerup", "mousedown", "touchstart", "click", "keydown"
+  ].includes(String(event.type || ""));
 }
 
 let jkUserActivationSeen = navigator.userActivation?.hasBeenActive === true;
@@ -13966,6 +13976,9 @@ function phoneToneContext(event = null) {
   const AudioCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtor) return null;
 
+  // Einen neuen AudioContext wirklich nur innerhalb einer aktuell aktiven
+  // Browser-User-Geste anlegen. Das verhindert Chromes
+  // "AudioContext was not allowed to start" Warnung beim Reload/Autostart.
   const mayUnlock = hasTransientUserGesture(event);
   if (!phoneToneAudioContext) {
     if (!mayUnlock) return null;
@@ -13976,9 +13989,9 @@ function phoneToneContext(event = null) {
     }
   }
 
-  if (phoneToneAudioContext.state === "suspended" && mayUnlock) {
-    phoneToneAudioContext.resume().catch(() => {});
-  }
+  // resume() wird bewusst NICHT hier automatisch ausgefuehrt.
+  // primePhoneAudioV56() macht genau einen Resume-Versuch und nur dann,
+  // wenn die User-Activation in diesem Moment noch aktiv ist.
   return phoneToneAudioContext.state === "closed" ? null : phoneToneAudioContext;
 }
 
@@ -29833,15 +29846,18 @@ function stabilizeMobileCharacterScroll(section = "") {
     const context = phoneToneContext(event);
     if (!context) return Promise.resolve(false);
 
+    // Ein suspendierter Context darf nur innerhalb des kurzen nativen
+    // User-Activation-Fensters resumed werden. Trusted Event != Activation.
     if (context.state === "suspended" && !mayUnlock) {
       return Promise.resolve(false);
     }
 
-    const resume = context.state === "suspended"
-      ? context.resume().catch(() => false)
-      : Promise.resolve(true);
+    const resume = context.state === "suspended" && mayUnlock
+      ? context.resume().then(() => true).catch(() => false)
+      : Promise.resolve(context.state === "running");
 
-    return Promise.resolve(resume).then(() => {
+    return Promise.resolve(resume).then((resumeOk) => {
+      if (!resumeOk && context.state !== "running") return false;
       if (context.state !== "running") return false;
 
       // Der lautlose Impuls wird nur einmal und ausschließlich direkt nach einer
@@ -29903,7 +29919,9 @@ function stabilizeMobileCharacterScroll(section = "") {
   // WebAudio genau einmal direkt innerhalb der ersten echten Benutzeraktion
   // entsperren. Die Listener werden gemeinsam entfernt, damit Pointer- und
   // Touch-Ereignis nicht doppelt denselben AudioContext starten.
-  const phoneAudioGestureEventsV56 = ["pointerdown", "touchend", "keydown"];
+  const phoneAudioGestureEventsV56 = window.PointerEvent
+    ? ["pointerdown", "keydown"]
+    : ["touchstart", "mousedown", "keydown"];
   const unlockPhoneAudioV56 = (event) => {
     if (!hasTransientUserGesture(event)) return;
     phoneAudioGestureEventsV56.forEach((eventName) => {
