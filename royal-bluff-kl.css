@@ -67,3 +67,99 @@
 @keyframes rbklRoundIntro{0%{opacity:0}8%,84%{opacity:1}100%{opacity:0;visibility:hidden}}
 @media(max-width:980px){.rbkl-player{width:215px}.rbkl-opponent-hand .rbkl-card{transform:scale(.56);--deal-end-scale:.56;margin-left:-28px}.seat-top{top:-20px}.seat-left{left:-34px}.seat-right{right:-34px}.rbkl-pile{width:min(600px,74%);gap:6px}.rbkl-pile-play{width:104px;flex-basis:104px}.rbkl-joker-doubt{grid-template-columns:auto 1fr}.rbkl-joker-doubt button{grid-column:1/-1}}
 @media(max-width:680px){.rbkl-player{width:170px}.rbkl-opponent-hand{height:43px}.rbkl-opponent-hand .rbkl-card{transform:scale(.48);--deal-end-scale:.48;margin-left:-32px}.seat-top{top:-24px}.seat-left{left:-58px}.seat-right{right:-58px}.rbkl-pile{top:61%;width:82%;height:128px;gap:3px}.rbkl-pile-play{width:80px;flex-basis:80px;height:118px;padding:5px}.rbkl-pile-play.latest:before{display:none}.rbkl-round-intro{inset:7%;border-radius:38%}.rbkl-round-intro-card .rbkl-card{width:82px;height:118px}.rbkl-joker-doubt{padding:8px}.rbkl-joker-doubt b{font-size:10px}.rbkl-round-transition{gap:5px}}
+
+/* Royal Bluff.KL V6 · iPhone / Dynamic Island / Safe-Area Fix */
+.rbkl-overlay{
+  width:100%;
+  min-height:100vh;
+  min-height:100dvh;
+  height:100dvh;
+  -webkit-overflow-scrolling:touch;
+}
+.rbkl-shell{
+  padding-top:max(clamp(14px,2.2vw,30px),calc(env(safe-area-inset-top,0px) + 12px));
+  padding-right:max(clamp(14px,2.2vw,30px),calc(env(safe-area-inset-right,0px) + 12px));
+  padding-bottom:max(clamp(14px,2.2vw,30px),calc(env(safe-area-inset-bottom,0px) + 12px));
+  padding-left:max(clamp(14px,2.2vw,30px),calc(env(safe-area-inset-left,0px) + 12px));
+}
+.rbkl-close,
+.rbkl-icon-button{
+  min-width:48px;
+  min-height:48px;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.rbkl-close{
+  width:52px;
+  height:52px;
+  right:20px;
+  top:18px;
+  z-index:50;
+}
+.rbkl-game{
+  min-height:100vh;
+  min-height:100dvh;
+}
+.rbkl-game-top{
+  height:auto;
+  min-height:calc(78px + env(safe-area-inset-top,0px));
+  padding-top:calc(12px + env(safe-area-inset-top,0px));
+  padding-right:max(18px,calc(env(safe-area-inset-right,0px) + 12px));
+  padding-left:max(18px,calc(env(safe-area-inset-left,0px) + 12px));
+}
+.rbkl-table-wrap{
+  padding-right:max(20px,calc(env(safe-area-inset-right,0px) + 10px));
+  padding-left:max(20px,calc(env(safe-area-inset-left,0px) + 10px));
+}
+.rbkl-bottom-panel{
+  padding-right:max(18px,calc(env(safe-area-inset-right,0px) + 12px));
+  padding-bottom:max(18px,calc(env(safe-area-inset-bottom,0px) + 12px));
+  padding-left:max(18px,calc(env(safe-area-inset-left,0px) + 12px));
+}
+.rbkl-resolution{
+  padding-top:max(18px,calc(env(safe-area-inset-top,0px) + 12px));
+  padding-right:max(18px,calc(env(safe-area-inset-right,0px) + 12px));
+  padding-bottom:max(18px,calc(env(safe-area-inset-bottom,0px) + 12px));
+  padding-left:max(18px,calc(env(safe-area-inset-left,0px) + 12px));
+}
+@media(max-width:680px){
+  .rbkl-shell{
+    padding-top:max(10px,calc(env(safe-area-inset-top,0px) + 10px));
+    padding-right:max(10px,calc(env(safe-area-inset-right,0px) + 10px));
+    padding-bottom:max(10px,calc(env(safe-area-inset-bottom,0px) + 10px));
+    padding-left:max(10px,calc(env(safe-area-inset-left,0px) + 10px));
+  }
+  .rbkl-close{right:14px;top:14px;width:52px;height:52px}
+  .rbkl-game-top{
+    min-height:calc(70px + env(safe-area-inset-top,0px));
+    padding-top:calc(10px + env(safe-area-inset-top,0px));
+    padding-right:max(10px,calc(env(safe-area-inset-right,0px) + 9px));
+    padding-bottom:9px;
+    padding-left:max(10px,calc(env(safe-area-inset-left,0px) + 9px));
+  }
+  .rbkl-table-wrap{
+    padding-right:max(9px,calc(env(safe-area-inset-right,0px) + 7px));
+    padding-left:max(9px,calc(env(safe-area-inset-left,0px) + 7px));
+  }
+  .rbkl-bottom-panel{
+    padding-top:9px;
+    padding-right:max(9px,calc(env(safe-area-inset-right,0px) + 8px));
+    padding-bottom:max(9px,calc(env(safe-area-inset-bottom,0px) + 10px));
+    padding-left:max(9px,calc(env(safe-area-inset-left,0px) + 8px));
+  }
+}
+@media(orientation:landscape) and (max-height:520px){
+  .rbkl-shell{
+    padding-top:max(8px,calc(env(safe-area-inset-top,0px) + 8px));
+    padding-right:max(10px,calc(env(safe-area-inset-right,0px) + 10px));
+    padding-bottom:max(8px,calc(env(safe-area-inset-bottom,0px) + 8px));
+    padding-left:max(10px,calc(env(safe-area-inset-left,0px) + 10px));
+  }
+  .rbkl-game-top{
+    min-height:calc(58px + env(safe-area-inset-top,0px));
+    padding-top:calc(6px + env(safe-area-inset-top,0px));
+    padding-right:max(10px,calc(env(safe-area-inset-right,0px) + 10px));
+    padding-bottom:6px;
+    padding-left:max(10px,calc(env(safe-area-inset-left,0px) + 10px));
+  }
+}
