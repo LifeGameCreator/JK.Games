@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v512-galaxy-presence-platform';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v514-galaxy-levels-1-5';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v513-performance-galaxy';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v514-galaxy-levels-1-5';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* Escape.kl – JK.Games Top Game V513 · Galaxy performance + lazy GLB loading */
-const VERSION = '2026-08-24-v513-performance-galaxy';
+const VERSION = '2026-08-24-v514-galaxy-levels-1-5';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -227,8 +227,7 @@ const WORLD_SHOP_TIERS = Object.freeze({
   'candy-keys':Object.freeze({number:2,name:'Candy World Shop',costMult:3.5,maxStepTier:5,maxItemLevel:4,maxCoreTier:2,dailyMult:3,next:'Toxic World'}),
   'toxic-keyboard':Object.freeze({number:3,name:'Toxic World Shop',costMult:8,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:8,next:'World 4'}),
   'world-4':Object.freeze({number:4,name:'Water World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'Galaxy World',comingSoon:false,ownerOnly:false}),
-  // World 5 is only a preview for now. It deliberately reuses the World-4 shop cap,
-  // so entering Galaxy World can never accidentally fall back to the World-1 shop.
+  // Galaxy World uses the World-4 endgame shop cap and never falls back to the World-1 shop.
   'world-5':Object.freeze({number:5,name:'Galaxy World Shop',costMult:12,maxStepTier:7,maxItemLevel:5,maxCoreTier:3,dailyMult:16,next:'MAX',comingSoon:false,ownerOnly:false})
 });
 function shopWorldId(){return G.state?.activeTrainingWorld||'keyboard-lab';}
@@ -257,7 +256,7 @@ const G = {
   summonedTreadmill:null,summonedVending:null,vendingLoadSeq:0,duelRacePhase:'idle',duelRaceMode:'solo',duelRaceStartAt:0,duelRaceHits:0,duelRaceShieldVisual:null,duelShieldInvulnerableUntil:0,
   ownerFlyActive:false,ownerVanish:false,ownerFlyVertical:0,ownerFlyLoadSeq:0,ownerFlyWrapper:null,ownerFlyModel:null,ownerFlyMixer:null,ownerFlyAction:null,ownerPetPreviewId:'',ownerPetPreviewWrapper:null,ownerPetPreviewRig:null,
   hemiLight:null,sunLight:null,hubSkyDome:null,hubStars:null,hubMoon:null,hubSun:null,hubAuroraMats:[],lastDayNightMode:'',
-  materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),runFurthestZ:-70,
+  materials:new Map(), geometries:new Map(), textures:new Map(),buildScope:'hub',autoTriggers:[],triggerLocks:new Map(),worldEnterHooks:new Map(),runFurthestZ:-70,galaxyBoundaryWarnAt:0,
   audioCtx:null,audioUnlocked:false,lastMotionLabel:'IDLE',
   onlineFb:null,onlineUser:null,onlineSessionId:'',onlineUnsub:null,onlineWorld:'',onlineTickTimer:0,onlinePollTimer:0,onlineReconnectTimer:0,
   onlineLastWriteAt:0,onlineLastKey:'',onlineWriteInFlight:false,onlineStatus:'offline',onlineLastError:'',remotePlayers:new Map(),
@@ -1409,12 +1408,12 @@ function setupScene(){
   G.renderer.shadowMap.enabled=true;G.renderer.shadowMap.type=escapeLowPowerDevice()?THREE.BasicShadowMap:THREE.PCFShadowMap;
   G.scene=new THREE.Scene();G.scene.background=new THREE.Color(0xb9e3ff);G.scene.fog=new THREE.Fog(0xa7cfe6,70,260);G.camera=new THREE.PerspectiveCamera(63,1,.1,380);
   G.hemiLight=new THREE.HemisphereLight(0xf1fbff,0x73835d,2.15);G.scene.add(G.hemiLight);G.sunLight=new THREE.DirectionalLight(0xfff3d5,2.85);G.sunLight.position.set(-36,62,28);G.sunLight.castShadow=true;G.sunLight.shadow.mapSize.set(escapeLowPowerDevice()?512:1024,escapeLowPowerDevice()?512:1024);G.sunLight.shadow.camera.left=-74;G.sunLight.shadow.camera.right=74;G.sunLight.shadow.camera.top=82;G.sunLight.shadow.camera.bottom=-82;G.scene.add(G.sunLight);
-  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,addWorldGlbModel,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
+  const worldApi={addPlatform,addSign:(text,pos,color,scale)=>addSign(text,new THREE.Vector3(pos.x,pos.y,pos.z),color,scale),boxDeco,addCylinderDeco,addRingDeco,addGlowLight,addCollider,addInteractable,addAutoTrigger,addHazardBox,addChaseWall,addWaterWave,addRisingWater,addMazeBoss,addPulseHazard,addWorldGlbModel,worldToast:(message,toneName='bad',ms=2200)=>toast(message,toneName,ms),awardStage:(stage,reward,label)=>awardWorldStageProgress(stage,reward,label),teleportPlayer:(x,y,z)=>teleport(x,y,z),getCurrentWorldSpeed:()=>currentSpeedStat(G.world),onWorldEnter:fn=>registerWorldEnterHook(fn),returnHub:()=>setWorld('hub'),finishAndReturnHub:()=>finishWorldAndReturnHub()};
   G.buildScope='hub';buildHubSky();buildHub();G.buildScope='race';buildRaceCourse();G.buildScope='duel-race';buildDuelRaceCourse();G.buildScope='only-up';buildOnlyUpCourse();
   G.buildScope='keyboard-lab';buildKeyboardLabWorld(worldApi);buildWorldPetEggStation('keyboard-lab');G.buildScope='candy-keys';buildCandyKeysWorld(worldApi);buildWorldPetEggStation('candy-keys');G.buildScope='toxic-keyboard';buildToxicKeyboardWorld(worldApi);buildWorldPetEggStation('toxic-keyboard');G.buildScope='world-4';buildWaterWorld(worldApi);buildWorldPetEggStation('world-4');G.buildScope='world-5';buildGalaxyWorld(worldApi);
   G.buildScope='hub';createPlayer();resize();applyWorldVisibility();prewarmEscapeScenes();setWorld('hub',true);updateHud(true);
 }
-function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();}
+function clearWorldObjects(){for(const p of G.platforms)G.scene?.remove(p.mesh);for(const d of G.decorative)G.scene?.remove(d);for(const f of G.portalFx)G.scene?.remove(f);G.platforms=[];G.decorative=[];G.portalFx=[];G.interactables=[];G.colliders=[];G.hazards=[];G.autoTriggers=[];G.triggerLocks.clear();G.worldEnterHooks.clear();}
 function applyWorldVisibility(){
   for(const p of G.platforms)p.mesh.visible=p.scope===G.world;
   for(const d of G.decorative){const scope=d?.userData?.escapeScope;if(scope)d.visible=scope===G.world;}
@@ -1427,6 +1426,15 @@ function checkAutoTriggers(){
     if(inside&&!tr.inside){tr.inside=true;try{tr.onEnter?.()}catch(error){console.warn('Escape.kl Auto-Trigger',tr.id,error)}}
     else if(!inside)tr.inside=false;
   }
+}
+function registerWorldEnterHook(fn,scope=G.buildScope){
+  if(typeof fn!=='function')return false;
+  if(!G.worldEnterHooks.has(scope))G.worldEnterHooks.set(scope,[]);
+  G.worldEnterHooks.get(scope).push(fn);return true;
+}
+function runWorldEnterHooks(scope=G.world){
+  const hooks=G.worldEnterHooks.get(scope)||[];
+  for(const hook of hooks){try{hook()}catch(error){console.warn('Escape.kl World-Enter-Hook',scope,error)}}
 }
 function buildHub(){
   // V484 HUB: klare Stadtstruktur. Funktionen sitzen in Häusern statt auf freistehenden Wänden.
@@ -2316,7 +2324,7 @@ function setWorld(id,initial=false){
     G.scene.background.setHex(0x1b0c08);G.scene.fog.color.setHex(0x1b0c08);
     toast('Speed Race gestartet · 5 Race-Checkpoints · Bestzeit zählt!','good',2000);
   }
-  resetHazardsForWorld(id);applyWorldVisibility();activateLazyWorldModels(id);updateDayNight(true);if(id==='world-5')stabilizeGalaxyWorldSpawn();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
+  resetHazardsForWorld(id);applyWorldVisibility();activateLazyWorldModels(id);runWorldEnterHooks(id);updateDayNight(true);if(id==='world-5')stabilizeGalaxyWorldSpawn();if(id==='hub')refreshHubWorldPortalStatus();if(G.hitboxDebugEnabled)rebuildHitboxDebug();updateHud(true);refreshEscapeMultiplayerWorld();
 }
 function enterWorld(id){
   const w=escapeWorldById(id);if(!w)return;
@@ -2878,6 +2886,7 @@ function processMovement(dt,t){
     }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;G.trainingCarry=0;}
   }else{G.trainingStreakSeconds=0;G.trainingStreakTier=0;}
   if(G.grounded&&planarSpeed>.35){G.footstepClock+=dt*(.55+planarSpeed*.11);if(G.footstepClock>=1){G.footstepClock=0;if(G.support&&!G.support.label)tone(118+(G.sprint?18:0),.025,'triangle',.005,-16);}}else G.footstepClock=Math.min(G.footstepClock,.72);
+  enforceGalaxyWorldBoundary();
   if(updateHazards(dt))return;
   const failY=isEscapeWorld()||G.world==='race'||G.world==='only-up'||G.world==='duel-race'?WORLD_FAIL_Y:MAX_FALL;
   if(G.pos.y<failY){
@@ -2888,6 +2897,20 @@ function processMovement(dt,t){
     if(isEscapeWorld())beginReviveOffer();else respawn();return;
   }
   detectCheckpointAndFinish();checkAutoTriggers();consumeBufferedJump();
+}
+function enforceGalaxyWorldBoundary(){
+  if(G.world!=='world-5')return false;
+  // The visible shell is ~520 units wide. Keep the player safely inside it with
+  // a small visual margin, even if extreme Speed or a jump would cross the sphere.
+  const cx=0,cy=0,cz=-70,maxRadius=252;
+  const dx=G.pos.x-cx,dy=G.pos.y-cy,dz=G.pos.z-cz,dist=Math.hypot(dx,dy,dz);
+  if(!Number.isFinite(dist)||dist<=maxRadius)return false;
+  const scale=maxRadius/Math.max(.001,dist);
+  G.pos.set(cx+dx*scale,cy+dy*scale,cz+dz*scale);
+  G.vel.multiplyScalar(.12);G.moveVel.multiplyScalar(.30);
+  if(G.playerRoot)G.playerRoot.position.copy(G.pos);
+  const now=performance.now();if(now-Number(G.galaxyBoundaryWarnAt||0)>1500){G.galaxyBoundaryWarnAt=now;toast('🌌 GALAXY-GRENZE · du bleibst innerhalb der Kugel','bad',1300);}
+  return true;
 }
 function performJump(){
   if(G.ownerFlyActive)return false;
@@ -2915,6 +2938,18 @@ function consumeBufferedJump(){
   return false;
 }
 function jump(){return requestJump();}
+function awardWorldStageProgress(stage,reward,label=''){
+  const w=currentWorldDef();if(!w||!isEscapeWorld())return 0;
+  const value=Math.max(1,Math.min(Number(w.stageCount)||stage,Math.floor(Number(stage)||1)));
+  const amount=Math.max(0,Math.floor(Number(reward)||0)),claimKey=`${w.id}:${value}`;
+  if(!amount||G.stageClaims.has(claimKey))return 0;
+  G.stageClaims.add(claimKey);G.stage=Math.max(G.stage,value);
+  const awarded=awardWins(amount,`${w.name} Level ${value}`,true);
+  awardMainXp(Math.min(10,3+value),`Escape.kl · ${w.name} Level ${value}`,`escape-${w.id}-level-${value}-${Date.now()}`);
+  soundCheckpoint();queuePersist(80);updateHud(true);
+  toast(`🌌 ${label||`LEVEL ${value}`} GESCHAFFT · +${awarded.toLocaleString('de-DE')} WINS`,'good',2600);
+  return awarded;
+}
 function claimStageWin(p){
   const w=currentWorldDef();if(!w||!p?.winReward||!p.winStage)return false;
   const claimKey=`${w.id}:${p.winStage}`;if(G.stageClaims.has(claimKey))return false;

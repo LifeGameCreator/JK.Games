@@ -1,4 +1,4 @@
-/* Escape.kl world registry – Worlds 1–5. World 5 is the first Galaxy World preview. */
+/* Escape.KL world registry – Worlds 1–5. Galaxy World is an official playable world. */
 export const ESCAPE_WORLD_DEFS = Object.freeze([
   Object.freeze({
     id:'keyboard-lab',
@@ -102,7 +102,8 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     id:'world-5',
     name:'Galaxy World',
     number:5,
-    stageCount:1,
+    stageCount:5,
+    totalLevelCount:15,
     requiredLevel:1000,
     unlockFrom:'world-4',
     requiredCompletions:0,
@@ -113,16 +114,16 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     background:0x03020a,
     fog:0x05030d,
     start:{x:0,y:1.50,z:-70},
-    laneHalfWidth:16,
-    backtrackAllowance:5,
-    time2:0,
-    time3:0,
-    speedRecommendations:Object.freeze([100]),
-    stageRewards:Object.freeze([0]),
+    laneHalfWidth:18,
+    backtrackAllowance:6,
+    time2:420,
+    time3:300,
+    speedRecommendations:Object.freeze([50,70,85,100,120]),
+    stageRewards:Object.freeze([8000000000,14000000000,24000000000,40000000000,65000000000]),
     ownerOnly:false,
     locked:false,
-    difficulty:'GALAXY PREVIEW · CENTERED SPACE',
-    description:'Welt 5 · Galaxy World. Freischaltung ab Water World Level 1000. Diese Vorschau besitzt genau eine sichere Plattform. Außenhülle und innere Sternen-Galaxy sind gemeinsam mittig ausgerichtet.'
+    difficulty:'GALAXY · HINDERNISSE · SPIRAL-LASER · SYMBOLTÜREN · BOSS',
+    description:'Galaxy World ist die offizielle fünfte Escape-Welt. Freischaltung ab Water World Level 1000. Level 1 startet mit empfohlenem Speed 50; die Schwierigkeit steigt über vertikale Sprünge, Laser-Spirale und Symboltüren bis zum Speed-120-Boss in Level 5.'
   })
 ]);
 
