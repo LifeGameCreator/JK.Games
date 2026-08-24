@@ -1,4 +1,4 @@
-/* Escape.KL World 5 – GALAXY WORLD V515.
+/* Escape.KL World 5 – GALAXY WORLD V516.
    Official World-5 course. Five playable levels live fully inside the Galaxy shell.
    The world registry keeps the long-term 15-level target as metadata, while the
    current playable course intentionally ends after Level 5 at the single COMING SOON area. */
@@ -17,10 +17,11 @@ export function buildGalaxyWorld(api){
     awardStage=()=>0,
     teleportPlayer=()=>{},
     getCurrentWorldSpeed=()=>0,
-    onWorldEnter=()=>{}
+    onWorldEnter=()=>{},
+    returnHub=()=>{}
   }=api;
 
-  // V515: Raise the complete course by 18 world units. The Galaxy shell itself
+  // V516: Keep the complete course on one shared +18 m vertical offset. The Galaxy shell itself
   // is centered around Level 5, so the start sits safely in the lower/front half
   // and the final boss/end area finishes near the visual middle of the sphere.
   const WORLD_Y_OFFSET=18;
@@ -54,15 +55,19 @@ export function buildGalaxyWorld(api){
   // ---------------------------------------------------------------------------
   // LEVEL 1 · straight obstacle sprint · recommended Speed 50
   // ---------------------------------------------------------------------------
-  const l1=addPlatform({x:0,y:FLOOR_Y,z:-96,w:13,h:.72,d:58,color:0x21133d,label:'',stage:1,kind:'galaxy-space-platform'});
+  // V516: the start surface IS Level 1. It extends a little behind the spawn so
+  // walking backwards can safely hit the Hub-return trigger before the edge.
+  const l1=addPlatform({x:0,y:FLOOR_Y,z:-96,w:13,h:.72,d:64,color:0x21133d,label:'',stage:1,kind:'galaxy-space-platform'});
   // Keep the start surface unmistakably visible even while the GLBs are loading.
   const l1Mats=Array.isArray(l1?.mesh?.material)?l1.mesh.material:[l1?.mesh?.material];
   for(const material of l1Mats){if(!material)continue;material.transparent=false;material.opacity=1;material.depthWrite=true;if(material.emissive?.setHex){material.emissive.setHex(0x44247f);material.emissiveIntensity=.48;}material.needsUpdate=true;}
   levelHeader(1,-69,FLOOR_Y,LEVEL_SPEEDS[0]);
-  addSign('GERADE STRECKE · ÜBER DIE HINDERNISSE SPRINGEN',{x:0,y:3.05,z:-74},0xe9ddff,.28);
+  addSign('GERADE STRECKE · ÜBER DIE HINDERNISSE SPRINGEN',{x:0,y:WORLD_Y_OFFSET+3.05,z:-74},0xe9ddff,.28);
+  addSign('← ZURÜCK ZUM HUB',{x:0,y:FLOOR_Y+3.0,z:-65.2},0x9fdcff,.24);
+  addAutoTrigger('galaxy-world5-return-hub',0,-65.2,12,2.0,()=>returnHub());
   for(const [i,z] of[-82,-91,-100,-109,-118].entries()){
     const low=i%2===0;
-    addHazardBox({x:0,y:low?1.05:1.25,z,w:low?10.4:8.8,h:low?.80:1.15,d:1.0,color:0xb44dff,emissive:0x7c24e8,kind:'galaxy-l1-obstacle'});
+    addHazardBox({x:0,y:WORLD_Y_OFFSET+(low?1.05:1.25),z,w:low?10.4:8.8,h:low?.80:1.15,d:1.0,color:0xb44dff,emissive:0x7c24e8,kind:'galaxy-l1-obstacle'});
   }
   addAutoTrigger('galaxy-level1-complete',0,-123,13,3,()=>awardStage(1,LEVEL_REWARDS[0],'LEVEL 1'));
 
@@ -70,9 +75,11 @@ export function buildGalaxyWorld(api){
   // LEVEL 2 · ascending jump staircase · recommended Speed 70
   // ---------------------------------------------------------------------------
   const l2StartZ=-125.5;
-  levelHeader(2,l2StartZ+2,2.1,LEVEL_SPEEDS[1]);
-  addSign('SCHRITT FÜR SCHRITT HÖHER',{x:0,y:6.0,z:l2StartZ-1},0xaee7ff,.28);
-  let l2Y=.18,l2Z=l2StartZ;
+  levelHeader(2,l2StartZ+2,WORLD_Y_OFFSET+2.1,LEVEL_SPEEDS[1]);
+  addSign('SCHRITT FÜR SCHRITT HÖHER',{x:0,y:WORLD_Y_OFFSET+6.0,z:l2StartZ-1},0xaee7ff,.28);
+  // V516: Level 2 and every level derived from it use the same +18 m course offset.
+  // This fixes the old mismatch where only the Level-1/start platform moved up.
+  let l2Y=FLOOR_Y,l2Z=l2StartZ;
   const l2Platforms=[];
   for(let i=0;i<14;i++){
     const x=(i%4===1?2.5:i%4===3?-2.5:0);

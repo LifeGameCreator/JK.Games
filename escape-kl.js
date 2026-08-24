@@ -4,12 +4,12 @@ import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v515-galaxy-height-center';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v516-start-level1-align';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* Escape.kl – JK.Games Top Game V513 · Galaxy performance + lazy GLB loading */
-const VERSION = '2026-08-24-v515-galaxy-height-center';
+const VERSION = '2026-08-24-v516-start-level1-align';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
