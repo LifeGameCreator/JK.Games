@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v515-galaxy-height-center';
+import { ESCAPE_WORLD_DEFS as WORLD_DEFS, escapeWorldById } from './escape-kl-worlds.js?v=20260824-escape-v517-centered-rebuild';
 import { buildKeyboardLabWorld } from './escape-kl-world-keyboard-lab.js?v=20260818-escape-v494-winpads';
 import { buildCandyKeysWorld } from './escape-kl-world-candy-keys.js?v=20260818-escape-v494-winpads';
 import { buildToxicKeyboardWorld } from './escape-kl-world-toxic-keyboard.js?v=20260818-escape-v494-winpads';
 import { buildWaterWorld } from './escape-kl-world4-prototype.js?v=20260818-escape-v503-water-stages-8-9';
-import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v516-start-level1-align';
+import { buildGalaxyWorld } from './escape-kl-world5-galaxy.js?v=20260824-escape-v517-centered-rebuild';
 import { createEscapeCharacter } from './escape-kl-character.js?v=20260816-escape-v457-animation-sync';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-/* Escape.kl – JK.Games Top Game V513 · Galaxy performance + lazy GLB loading */
-const VERSION = '2026-08-24-v516-start-level1-align';
+/* Escape.kl – JK.Games Top Game V517 · centered Galaxy World rebuild */
+const VERSION = '2026-08-24-v517-centered-rebuild';
 const LOCAL_KEY = 'jk-games-escape-kl-v1';
 const PLAYER_HALF = 0.82;
 const PLAYER_RADIUS = 0.38;
@@ -2902,9 +2902,9 @@ function enforceGalaxyWorldBoundary(){
   if(G.world!=='world-5')return false;
   // The visible shell is ~520 units wide. Keep the player safely inside it with
   // a small visual margin, even if extreme Speed or a jump would cross the sphere.
-  // V515: this matches the visual Galaxy shell center from world5 builder.
-  // Level 5 now ends near the sphere center instead of at its rear/lower edge.
-  const cx=0,cy=66.21,cz=-289,maxRadius=252;
+  // V517: exact center of the rebuilt Galaxy shell and Level-5 boss arena.
+  // The whole playable course stays well inside this radius.
+  const cx=0,cy=90,cz=-338,maxRadius=252;
   const dx=G.pos.x-cx,dy=G.pos.y-cy,dz=G.pos.z-cz,dist=Math.hypot(dx,dy,dz);
   if(!Number.isFinite(dist)||dist<=maxRadius)return false;
   const scale=maxRadius/Math.max(.001,dist);
