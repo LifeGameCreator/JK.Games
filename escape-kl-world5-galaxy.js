@@ -1,4 +1,4 @@
-/* Escape.KL World 5 – GALAXY WORLD V514.
+/* Escape.KL World 5 – GALAXY WORLD V515.
    Official World-5 course. Five playable levels live fully inside the Galaxy shell.
    The world registry keeps the long-term 15-level target as metadata, while the
    current playable course intentionally ends after Level 5 at the single COMING SOON area. */
@@ -20,23 +20,28 @@ export function buildGalaxyWorld(api){
     onWorldEnter=()=>{}
   }=api;
 
-  const START_Z=-70;
-  const CENTER_Z=START_Z;
-  const FLOOR_Y=.18;
+  // V515: Raise the complete course by 18 world units. The Galaxy shell itself
+  // is centered around Level 5, so the start sits safely in the lower/front half
+  // and the final boss/end area finishes near the visual middle of the sphere.
+  const WORLD_Y_OFFSET=18;
+  const FLOOR_Y=WORLD_Y_OFFSET+.18;
+  const GALAXY_CENTER_Y=FLOOR_Y+(14*.86)-.20+(38*.93)+.85; // 66.21
+  const GALAXY_CENTER_Z=-289;
+
   const LEVEL_REWARDS=[8_000_000_000,14_000_000_000,24_000_000_000,40_000_000_000,65_000_000_000];
   const LEVEL_SPEEDS=[50,70,85,100,120];
 
   // Decorative Galaxy volumes. Both share exactly the same center and have no
   // gameplay collision. The physical course below is the only walkable geometry.
   addWorldGlbModel({
-    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v514-galaxy-levels-1-5',
-    name:'world5-inside-galaxy-shell',position:{x:0,y:0,z:CENTER_Z},fitWidth:520,
+    url:'./assets/escape/world5/inside-galaxy.glb?v=20260824-escape-v515-galaxy-height-center',
+    name:'world5-inside-galaxy-shell',position:{x:0,y:GALAXY_CENTER_Y,z:GALAXY_CENTER_Z},fitWidth:520,
     centerX:true,centerY:true,centerZ:true,textureZoom:1.82,doubleSide:true,
     frustumCulled:true,castShadow:false,receiveShadow:false,lazy:true
   });
   addWorldGlbModel({
-    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v514-galaxy-levels-1-5',
-    name:'world5-space-galaxy',position:{x:0,y:0,z:CENTER_Z},fitWidth:470,
+    url:'./assets/escape/world5/space-laufweg.glb?v=20260824-escape-v515-galaxy-height-center',
+    name:'world5-space-galaxy',position:{x:0,y:GALAXY_CENTER_Y,z:GALAXY_CENTER_Z},fitWidth:470,
     pointSize:2.75,pointBudget:26000,centerX:true,centerY:true,centerZ:true,
     doubleSide:true,frustumCulled:true,castShadow:false,receiveShadow:false,lazy:true
   });

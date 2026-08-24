@@ -113,7 +113,7 @@ export const ESCAPE_WORLD_DEFS = Object.freeze([
     accent:0xa978ff,
     background:0x03020a,
     fog:0x05030d,
-    start:{x:0,y:1.50,z:-70},
+    start:{x:0,y:19.45,z:-70},
     laneHalfWidth:18,
     backtrackAllowance:6,
     time2:420,
